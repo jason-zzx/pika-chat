@@ -7,8 +7,9 @@
 
 ## Status of this spec
 
-**Scaffold landed (`08-31-scaffold`).** Conventions were written greenfield and
-the first tree was built to match them. Source of the original decisions:
+**Scaffold landed (`08-31-scaffold`); auth landed (`08-31-auth-users`).**
+Conventions were written greenfield and the first tree was built to match
+them. Source of the original decisions:
 `.trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md`.
 
 Divergences recorded after the scaffold:
@@ -19,7 +20,7 @@ Divergences recorded after the scaffold:
   Every other module under `src/server/` still starts with `import "server-only"`.
 - Route groups `(auth)` / `(app)` and `admin/` exist in this layout as the
   map for later tasks; the scaffold only creates a directory when it places a
-  real file.
+  real file. `08-31-auth-users` placed the auth and admin route files.
 
 ---
 
@@ -31,7 +32,7 @@ Divergences recorded after the scaffold:
 | Language | TypeScript, strict |
 | Database | PostgreSQL |
 | ORM / migrations | Drizzle ORM + drizzle-kit |
-| Auth | Better Auth (JWT session + bearer plugin + admin plugin) |
+| Auth | Better Auth (database session + bearer plugin + admin plugin) |
 | LLM | Vercel AI SDK (`ai@7`, `@ai-sdk/*@4`) |
 | Validation | Zod at the transport boundary |
 | Logging | pino |
@@ -64,6 +65,7 @@ review blocker, not a style nit.
 | Guide | Description |
 |-------|-------------|
 | [Directory Structure](./directory-structure.md) | Layering, where code goes, the transport/domain split |
+| [Auth Guidelines](./auth-guidelines.md) | Actor contract, headerless `createUser`, cookie-cache prohibition |
 | [Database Guidelines](./database-guidelines.md) | Drizzle schema, migrations, ownership isolation, credential encryption |
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logs, levels, redaction |

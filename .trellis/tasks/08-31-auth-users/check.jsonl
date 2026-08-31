@@ -1,2 +1,8 @@
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Authorization tests are mandatory for this task"}
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify ownership isolation and role enforcement"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Authorization tests are mandatory; AC7 must be verified by reading the service, not the UI"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify snake_case plural naming, UUIDv7 ids, and that the migration applies from an empty database"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify no service signature mentions NextRequest/NextResponse and no query sits in a Route Handler"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify no password, hash, token, or cookie reaches a log line"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "Actor contract, headerless createUser, cookie-cache prohibition, and D-ROLE-1 hook coverage"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify a11y basics on the auth forms, \"use client\" placement, and that only rule-encoding components are tested"}
+{"file": ".trellis/tasks/08-31-auth-users/prd.md", "reason": "AC1-AC17 are the acceptance gate; AC2, AC5, AC7, and AC14-AC16 are the security-critical ones"}
+{"file": ".trellis/tasks/08-31-auth-users/design.md", "reason": "Load-bearing: disabledPaths [\"/sign-up/email\"], no session.cookieCache, adminRoles [super_admin, admin], hierarchy hook, headerless createUser skip"}

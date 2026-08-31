@@ -7,6 +7,7 @@ const envSchema = z.object({
   TEST_DATABASE_URL: z.string().min(1).optional(),
   CREDENTIAL_ENCRYPTION_SECRET: z.string().min(32),
   BETTER_AUTH_SECRET: z.string().min(32),
+  BETTER_AUTH_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

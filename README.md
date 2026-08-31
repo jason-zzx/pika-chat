@@ -38,6 +38,13 @@ makes every stored credential permanently unrecoverable — it is not derivable
 from the database. Generate it once, back it up with the rest of the instance,
 and do not rotate it casually.
 
+`BETTER_AUTH_SECRET` signs session tokens. Rotating it invalidates every
+existing session; users will need to sign in again. That is inconvenient, not
+data loss.
+
+A fresh instance has registration closed. Visit `/setup` to create the first
+super admin, then provision other accounts from `/admin/users`.
+
 ## Production compose
 
 ```bash

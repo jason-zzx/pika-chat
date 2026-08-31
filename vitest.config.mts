@@ -26,10 +26,20 @@ export default defineConfig({
       {
         resolve: { alias },
         test: {
+          name: "unit-dom",
+          environment: "jsdom",
+          include: ["src/components/**/*.test.tsx", "src/hooks/**/*.test.ts"],
+          setupFiles: ["./vitest.dom.setup.ts"],
+        },
+      },
+      {
+        resolve: { alias },
+        test: {
           name: "integration",
           environment: "node",
           include: ["src/**/*.integration.test.ts"],
           globalSetup: "./vitest.integration.setup.ts",
+          setupFiles: ["./vitest.integration.env.ts"],
           testTimeout: 30_000,
         },
       },

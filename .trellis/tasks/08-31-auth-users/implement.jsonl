@@ -1,6 +1,16 @@
-{"file": ".trellis/spec/backend/index.md", "reason": "Auth touches layering, schema, error shape, and audit logging"}
-{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Auth touches layering, schema, error shape, and audit logging"}
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Auth touches layering, schema, error shape, and audit logging"}
-{"file": ".trellis/spec/backend/error-handling.md", "reason": "Auth touches layering, schema, error shape, and audit logging"}
-{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Auth touches layering, schema, error shape, and audit logging"}
-{"file": ".trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "Better Auth choice, bearer-token requirement, invite-only registration policy"}
+{"file": ".trellis/spec/backend/index.md", "reason": "The four mobile-client constraints; bearer support and Route-Handler reachability are requirements of this task, not preferences"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "The Actor signature rule this task defines the contract for: services take (input, actor) and never see NextRequest"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Auth tables must follow snake_case plural naming and UUIDv7 ids, which is why the Better Auth schema is hand-written rather than CLI-generated"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "UNAUTHENTICATED and FORBIDDEN flow through the existing withErrorHandling boundary; do not add per-handler try/catch"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Passwords, hashes, session tokens, and cookies must never reach a log line (AC13)"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "This task ships UI (D-SCOPE-1): setup, sign-in, sign-up, and the admin user screen"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Where the (auth) route group, admin pages, and the auth client belong"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Keep \"use client\" at the form leaf; both breakpoints are first-class"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Request/response types come from shared Zod schemas, not hand-written interfaces"}
+{"file": ".trellis/tasks/archive/2026-08/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "D2 rule 3 (bearer alongside cookie), D4 (roles), D5 (invite-only and the registration toggle), D6 (why Better Auth)"}
+{"file": ".trellis/tasks/archive/2026-08/08-31-scaffold/design.md", "reason": "Why app_settings exists and which contracts the scaffold froze; this task implements the read/write path the scaffold deferred"}
+{"file": "src/server/errors.ts", "reason": "AppError and the AppErrorCode union to throw from services"}
+{"file": "src/app/api/_lib/with-error-handling.ts", "reason": "The single error-to-response wrapper every project handler uses"}
+{"file": "src/server/db/schema/app-settings.ts", "reason": "The allow_registration row this task reads per request and lets an admin write"}
+{"file": "src/server/db/client.ts", "reason": "Existing Drizzle connection the auth adapter must reuse; its schema wiring changes in step 2"}
+{"file": "src/server/env.ts", "reason": "BETTER_AUTH_SECRET is already parsed here; add nothing without a Zod entry"}
