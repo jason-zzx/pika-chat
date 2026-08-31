@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify lint/typecheck/test wiring and forbidden patterns"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify lint plugins and frontend tooling wiring"}

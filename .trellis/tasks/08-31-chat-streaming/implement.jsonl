@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Streaming error semantics, disconnect-vs-cancel, and useChat rules"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Streaming error semantics, disconnect-vs-cancel, and useChat rules"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Streaming error semantics, disconnect-vs-cancel, and useChat rules"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Streaming error semantics, disconnect-vs-cancel, and useChat rules"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Streaming error semantics, disconnect-vs-cancel, and useChat rules"}
+{"file": ".trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "Server-authoritative persistence and the future resumable-stream path"}

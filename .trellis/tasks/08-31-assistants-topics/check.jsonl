@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Ownership isolation tests"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Query key and cache invalidation correctness"}

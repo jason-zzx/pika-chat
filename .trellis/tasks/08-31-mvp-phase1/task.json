@@ -1,0 +1,33 @@
+{
+  "id": "mvp-phase1",
+  "name": "mvp-phase1",
+  "title": "Phase 1 MVP: Self-hosted AI Chat",
+  "description": "Parent task owning the phase-1 MVP: text chat, responsive PC/mobile layout, provider and model configuration, assistants and topics, basic user management",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "zzx",
+  "assignee": "zzx",
+  "createdAt": "2026-08-31",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-31-scaffold",
+    "08-31-auth-users",
+    "08-31-app-shell",
+    "08-31-providers",
+    "08-31-assistants-topics",
+    "08-31-chat-streaming"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

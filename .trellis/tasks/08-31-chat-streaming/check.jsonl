@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Mid-stream failure and disconnect handling are the risk here"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Message content must not reach logs"}

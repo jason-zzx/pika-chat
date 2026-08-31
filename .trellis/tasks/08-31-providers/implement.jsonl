@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Visibility rule, credential encryption, and model picker state"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Visibility rule, credential encryption, and model picker state"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Visibility rule, credential encryption, and model picker state"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Visibility rule, credential encryption, and model picker state"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Visibility rule, credential encryption, and model picker state"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Visibility rule, credential encryption, and model picker state"}
+{"file": ".trellis/tasks/08-31-providers/research/model-metadata-sources.md", "reason": "Catalog sourcing layers and the nullable/overridable metadata constraint"}
+{"file": ".trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "Owner+visibility provider model as agreed with the user"}
