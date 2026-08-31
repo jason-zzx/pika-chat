@@ -7,13 +7,17 @@
 
 ## Status of this spec
 
-**Greenfield.** These are committed conventions agreed before the first line of
-code, not observations of existing code. Source of the decisions:
+**Scaffold landed (`08-31-scaffold`).** The remaining follow-up is
+`08-31-app-shell`, which will re-read this file against the authenticated
+layout. Source of the original decisions:
 `.trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md`.
 
-Once `08-31-scaffold` and `08-31-app-shell` land, re-read these against the
-real tree and correct anything the implementation legitimately diverged on.
-Until then the scaffold is expected to match this spec, not the reverse.
+Divergences recorded after the scaffold:
+
+- shadcn/ui CLI v4 defaulted to Base UI (`@base-ui/react`) rather than Radix.
+  `components/ui/` remains generated territory; do not hand-edit those files.
+- Route groups `(auth)` / `(app)` and `admin/` are still the map; they appear
+  on disk when those tasks place files.
 
 ---
 
@@ -23,7 +27,7 @@ Until then the scaffold is expected to match this spec, not the reverse.
 |---|---|
 | Framework | Next.js 16 App Router, React 19 |
 | Styling | Tailwind CSS 4 (config in CSS, not `tailwind.config.js`) |
-| Components | shadcn/ui primitives |
+| Components | shadcn/ui primitives (Base UI under the hood as of CLI v4) |
 | Server state | TanStack Query 5 |
 | Client state | Zustand 5 |
 | Chat streaming | `@ai-sdk/react` `useChat` |

@@ -7,13 +7,19 @@
 
 ## Status of this spec
 
-**Greenfield.** These are committed conventions agreed before the first line of
-code, not observations of existing code. Source of the decisions:
+**Scaffold landed (`08-31-scaffold`).** Conventions were written greenfield and
+the first tree was built to match them. Source of the original decisions:
 `.trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md`.
 
-Once `08-31-scaffold` lands, re-read these files against the real tree and
-correct anything the implementation legitimately diverged on. Until then, treat
-them as binding: the scaffold is expected to match this spec, not the reverse.
+Divergences recorded after the scaffold:
+
+- `src/server/db/schema/**` does **not** import `server-only`. drizzle-kit
+  loads these files in a plain Node process that does not rewrite the
+  `server-only` package, so the guard would make `pnpm db:generate` unusable.
+  Every other module under `src/server/` still starts with `import "server-only"`.
+- Route groups `(auth)` / `(app)` and `admin/` exist in this layout as the
+  map for later tasks; the scaffold only creates a directory when it places a
+  real file.
 
 ---
 

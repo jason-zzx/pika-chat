@@ -1,0 +1,38 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { defineConfig } from "vitest/config";
+
+const root = dirname(fileURLToPath(import.meta.url));
+
+const alias = {
+  "@": resolve(root, "src"),
+  "server-only": resolve(root, "test/server-only-stub.ts"),
+};
+
+export default defineConfig({
+  resolve: { alias },
+  test: {
+    projects: [
+      {
+        resolve: { alias },
+        test: {
+          name: "unit-node",
+          environment: "node",
+          include: ["src/server/**/*.test.ts", "src/lib/**/*.test.ts"],
+          exclude: ["**/*.integration.test.ts"],
+        },
+      },
+      {
+        resolve: { alias },
+        test: {
+          name: "integration",
+          environment: "node",
+          include: ["src/**/*.integration.test.ts"],
+          globalSetup: "./vitest.integration.setup.ts",
+          testTimeout: 30_000,
+        },
+      },
+    ],
+  },
+});

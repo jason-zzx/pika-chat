@@ -1,6 +1,10 @@
-{"file": ".trellis/spec/backend/index.md", "reason": "Scaffold must materialize the layout and conventions this file mandates"}
-{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Scaffold must materialize the layout and conventions this file mandates"}
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Scaffold must materialize the layout and conventions this file mandates"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Scaffold must materialize the layout and conventions this file mandates"}
-{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Scaffold must materialize the layout and conventions this file mandates"}
-{"file": ".trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "Pinned versions and the four mobile-readiness constraints the scaffold must satisfy"}
+{"file": ".trellis/spec/backend/index.md", "reason": "The four mobile-readiness constraints and the stack table the scaffold must materialize"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Exact server tree, the three layers, and the service signature rule the health slice demonstrates"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Schema conventions the app_settings table and migration 0000 must follow"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError shape, error response body, and the withErrorHandling boundary this task creates"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "pino logger config and redaction list for src/server/logger.ts"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "tsconfig strictness, Vitest expectations, and the forbidden patterns the tooling must enforce"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend stack including TanStack Query, which supersedes the research record's D1"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Exact client tree and naming conventions the scaffold creates"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Required ESLint plugins (react-hooks, jsx-a11y) and the testing setup"}
+{"file": ".trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "Pinned version matrix, the ai/@ai-sdk major-offset trap, and the decisions behind the stack"}

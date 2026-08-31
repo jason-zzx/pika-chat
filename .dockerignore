@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.trellis
+*.md
+.env
+.env.*
+!.env.example
+coverage

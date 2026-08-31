@@ -32,8 +32,10 @@ src/
 └── types/
 ```
 
-Add `import "server-only"` at the top of every module under `src/server/`. It
-turns an accidental client import into a build error instead of a leaked secret.
+Add `import "server-only"` at the top of every module under `src/server/`,
+**except** `db/schema/**` (loaded by drizzle-kit) and `db/migrations/**`
+(generated SQL). The guard turns an accidental client import into a build
+error instead of a leaked secret.
 
 ---
 

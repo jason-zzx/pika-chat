@@ -17,8 +17,9 @@ Deployment is Docker Compose — the app container plus a `postgres` container.
 
 ## Schema conventions
 
-One file per domain under `src/server/db/schema/`, re-exported from
-`schema/index.ts`.
+One file per domain under `src/server/db/schema/`. Add `schema/index.ts` as a
+re-export barrel when a second domain file appears; until then `drizzle.config.ts`
+points at the single schema file.
 
 | Rule | Value |
 |---|---|

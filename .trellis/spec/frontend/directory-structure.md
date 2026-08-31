@@ -20,7 +20,7 @@ src/
 │   ├── layout.tsx                  # root: providers, fonts, theme
 │   └── globals.css                 # Tailwind 4 config lives here
 ├── components/
-│   ├── ui/                         # shadcn/ui primitives — generated
+│   ├── ui/                         # shadcn/ui primitives — generated (Base UI)
 │   ├── layout/                     # AppShell, sidebar, mobile drawer, nav
 │   ├── chat/                       # message list, composer, model picker
 │   ├── assistant/

@@ -1,2 +1,5 @@
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify lint/typecheck/test wiring and forbidden patterns"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify lint plugins and frontend tooling wiring"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify lint/typecheck/test wiring, tsconfig strictness, and forbidden patterns"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify ESLint plugins are actually running, not merely installed"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify the tree matches and that the health slice kept logic out of the Route Handler"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify schema conventions and that migration 0000 applies cleanly from an empty database"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Verify the client tree matches the spec"}
