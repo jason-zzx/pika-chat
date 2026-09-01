@@ -14,6 +14,7 @@ type SettingsTab = {
 const TABS: SettingsTab[] = [
   { href: "/settings/general", label: "General" },
   { href: "/settings/account", label: "Account" },
+  { href: "/settings/providers", label: "Providers" },
   { href: "/settings/users", label: "Users", staffOnly: true },
 ];
 

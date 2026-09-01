@@ -19,6 +19,10 @@ describe("SettingsNav", () => {
       "href",
       "/settings/account",
     );
+    expect(screen.getByRole("link", { name: "Providers" })).toHaveAttribute(
+      "href",
+      "/settings/providers",
+    );
   });
 
   it("shows the users tab for staff", () => {
@@ -26,6 +30,10 @@ describe("SettingsNav", () => {
     expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute(
       "href",
       "/settings/users",
+    );
+    expect(screen.getByRole("link", { name: "Providers" })).toHaveAttribute(
+      "href",
+      "/settings/providers",
     );
   });
 

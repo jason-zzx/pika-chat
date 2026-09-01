@@ -3,12 +3,19 @@ import { flattenError, ZodError } from "zod";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 
-type Handler = (request: Request) => Promise<Response> | Response;
+type RouteContext = {
+  params: Promise<Record<string, string>>;
+};
+
+type Handler = (
+  request: Request,
+  context?: RouteContext,
+) => Promise<Response> | Response;
 
 export function withErrorHandling(handler: Handler): Handler {
-  return async (request) => {
+  return async (request, context) => {
     try {
-      return await handler(request);
+      return await handler(request, context);
     } catch (error) {
       if (error instanceof ZodError) {
         return Response.json(

@@ -1,8 +1,21 @@
-{"file": ".trellis/spec/backend/index.md", "reason": "Visibility rule, credential encryption, and model picker state"}
-{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Visibility rule, credential encryption, and model picker state"}
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Visibility rule, credential encryption, and model picker state"}
-{"file": ".trellis/spec/backend/error-handling.md", "reason": "Visibility rule, credential encryption, and model picker state"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Visibility rule, credential encryption, and model picker state"}
-{"file": ".trellis/spec/frontend/state-management.md", "reason": "Visibility rule, credential encryption, and model picker state"}
-{"file": ".trellis/tasks/08-31-providers/research/model-metadata-sources.md", "reason": "Catalog sourcing layers and the nullable/overridable metadata constraint"}
-{"file": ".trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "Owner+visibility provider model as agreed with the user"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "The signature rule this task must obey everywhere: services take (input, actor) and never see a Next.js type; also fixes where src/server/ai/ sits and the <verb><Noun>Schema naming"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "The owner+visibility table, service-layer coercion of shared, ownership isolation as a WHERE clause, and the credential encryption rules. NOTE: its Model catalog storage section is deliberately NOT implemented here — see PRD P1"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "A failed ownership filter is NOT_FOUND not FORBIDDEN; upstream provider bodies must never be echoed, which is why discovery wraps everything as PROVIDER_ERROR"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "The plaintext API key must never reach a log line; AC5 checks this"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "The Actor contract these services receive, and why authorization lives in the service rather than the handler"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Provider configs are server state and belong to TanStack Query; the available-model list must never be mirrored into Zustand"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Keep \"use client\" at the leaf and treat both breakpoints as first-class on /settings/providers"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Request/response types come from the shared Zod schemas in src/lib/schemas/provider.ts, not hand-written interfaces"}
+{"file": ".trellis/tasks/08-31-providers/research/model-metadata-sources.md", "reason": "Why /v1/models returns ids only (drives P5 curated list) and why models.dev is deferred (P1)"}
+{"file": ".trellis/tasks/archive/2026-08/00-bootstrap-guidelines/research/tech-stack-decision.md", "reason": "D4 is the source of the owner+visibility model, the coercion rule, the single resolution function, and the provenance requirement"}
+{"file": "src/server/env.ts", "reason": "CREDENTIAL_ENCRYPTION_SECRET is already parsed here; crypto.ts reads it through getEnv and adds no new variable"}
+{"file": "src/server/errors.ts", "reason": "AppError and the code union; PROVIDER_ERROR already exists for the discovery path"}
+{"file": "src/server/auth/actor.ts", "reason": "resolveActor/requireActor and the ResolvedActor shape every handler passes into the service"}
+{"file": "src/lib/auth-hierarchy.ts", "reason": "isStaffRole is the staff test used by the visibility coercion helper"}
+{"file": "src/lib/id.ts", "reason": "newId() is the UUIDv7 generator both new tables use for primary keys"}
+{"file": "src/server/db/unique-violation.ts", "reason": "Maps the (owner_id, name) unique index violation to CONFLICT instead of a 500"}
+{"file": "src/server/db/schema/auth.ts", "reason": "The users table both new foreign keys reference, and the timestamptz helper and naming conventions to copy"}
+{"file": "src/server/services/instance-settings.service.ts", "reason": "The existing service shape to mirror: staff check inside the service, Drizzle access, AppError on a missing row"}
+{"file": "src/app/api/admin/settings/route.ts", "reason": "The exact four-line handler shape: withErrorHandling, requireX, schema.parse, delegate"}
+{"file": "src/components/admin/AdminUsersScreen.tsx", "reason": "The useQuery + useMutation + invalidateQueries pattern and the shadcn form composition ProviderConfigsScreen should follow"}
+{"file": "src/components/layout/SettingsNav.tsx", "reason": "Where the new Providers tab is registered; it must NOT carry staffOnly (PRD P4)"}

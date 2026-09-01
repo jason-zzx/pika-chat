@@ -1,2 +1,11 @@
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Visibility coercion and model resolution require tests"}
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify shared/private enforcement is server-side"}
+{"file": ".trellis/tasks/08-31-providers/prd.md", "reason": "AC1-AC14 are the acceptance gate; AC2, AC5, AC7, AC8, and AC11 are the security-critical ones"}
+{"file": ".trellis/tasks/08-31-providers/design.md", "reason": "Load-bearing decisions to verify: no metadata columns, no separate test endpoint, v1. envelope with a cached scrypt key, owner filter in WHERE, provenance derived not stored"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Authorization tests are mandatory; AC2 and AC8 must be verified by reading the service, not the UI"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify snake_case plural naming, UUIDv7 text ids, timestamptz, and that 0003 applies from an empty database. Do NOT flag the absent catalog metadata columns — PRD P1 sanctions that deviation"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify a failed ownership filter returns NOT_FOUND rather than FORBIDDEN, and that no upstream provider body reaches a response"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify no plaintext key, envelope, or Authorization header reaches a log line"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify no service signature mentions NextRequest/NextResponse, no query sits in a Route Handler, and no db import escapes src/server/"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Verify provider configs and the available-model list live in TanStack Query and are not mirrored into Zustand or a client-side role check"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify a11y on the provider forms, \"use client\" placement, and that only the rule-encoding share-toggle branch is unit tested"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Discovery and model add/remove cross transport, service, adapter, and UI; check the contract holds end to end"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Step 10 is an explicit ponytail pass; the OwnConfig/SharedConfig mappers and any one-call Drizzle wrappers are the likely cuts"}

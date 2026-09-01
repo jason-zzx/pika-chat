@@ -30,6 +30,8 @@ import {
   APP_SETTINGS_ROW_ID,
   accounts,
   appSettings,
+  providerConfigs,
+  providerModels,
   sessions,
   users,
   verifications,
@@ -103,6 +105,8 @@ const promoteMigrationPath = join(
 );
 
 async function resetAuthState(): Promise<void> {
+  await db.delete(providerModels);
+  await db.delete(providerConfigs);
   await db.delete(sessions);
   await db.delete(accounts);
   await db.delete(verifications);
