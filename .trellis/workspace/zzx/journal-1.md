@@ -138,3 +138,40 @@ Landed encrypted OpenAI-compatible provider configs on feat/scaffold: owner/visi
 ### Next Steps
 
 - Plan and implement remaining Phase 1 tasks: assistants/topics, then chat streaming
+
+
+## Session 5: Assistants and Topics
+<!-- trellis-session: v=2 fp=6e9005c088ee0726 -->
+
+**Date**: 2026-09-01
+**Task**: Assistants and Topics
+**Branch**: `feat/scaffold`
+
+### Summary
+
+Landed assistants and topics on feat/scaffold: private assistant CRUD, topics that belong to one assistant, and a LobeChat-style drill-down sidebar. A ponytail pass then dropped unused collapsible, the one-item Delete menu, and duplicated fetch parsers.
+
+### Main Changes
+
+- assistants + topics schema (0005), lazy first assistant, last-assistant floor in a FOR UPDATE transaction
+- Drill-down sidebar: assistant list, then back / New topic / Profile / topics; no New chat on level 1
+- Ponytail: shared lib/api/parse.ts, update schema via .partial(), Delete as a disabled icon, no collapsible primitive
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3dd0e58` | feat: add assistants and topics so chats group under a private assistant |
+
+### Testing
+
+- [OK] pnpm lint, typecheck, and 80 vitest tests after ponytail
+- [OK] Browser as admin: drill-down, back while conversation stays, Profile editor, Delete labelled only Delete
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Plan and implement 08-31-chat-streaming (messages, composer, streaming)
