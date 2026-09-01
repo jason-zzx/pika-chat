@@ -63,3 +63,41 @@ Landed Better Auth on feat/scaffold: first-run setup mints an immutable super_ad
 ### Next Steps
 
 - Plan and implement 08-31-app-shell (responsive layout and theming of these screens)
+
+
+## Session 3: App shell, cookie theming, and settings routes
+<!-- trellis-session: v=2 fp=585fb3bb933f51ed -->
+
+**Date**: 2026-09-01
+**Task**: App shell, cookie theming, and settings routes
+**Branch**: `feat/scaffold`
+
+### Summary
+
+Landed the responsive app shell on feat/scaffold: shadcn sidebar, cookie light/dark/system theming, and settings as routes. A ponytail pass then dropped Zod cookie parsing and unused layout props.
+
+### Main Changes
+
+- AppShell as a component wrapping (app) routes; same nav tree in a mobile Sheet
+- Settings tabs are routes (/general, /account, /users); staff check on users layout; retired /account and /admin/users pages
+- Hand-rolled pika_theme cookie (mode:resolved); ThemeSync follows OS when mode is system
+- Ponytail: unions instead of Zod for the cookie; persistTheme(mode) only; unused className props removed
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `862ddad` | feat: add a responsive app shell with cookie theming and settings routes |
+
+### Testing
+
+- [OK] pnpm lint, typecheck, and 43 vitest tests after ponytail
+- [OK] Browser login as admin: shell, settings tabs, dark class, collapsed sidebar cookie, mobile drawer close after New chat
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Plan and implement remaining Phase 1 tasks: assistants/topics, providers, then chat streaming
