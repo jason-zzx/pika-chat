@@ -4,6 +4,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   type Actor,
   canAdminister,
@@ -127,44 +136,36 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-medium">Create user</h2>
         <form onSubmit={onCreate} className="flex max-w-lg flex-col gap-2">
-          <label className="flex flex-col gap-1 text-sm">
-            Username
-            <input
-              name="username"
-              required
-              className="rounded-md border border-input bg-background px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Email
-            <input
-              name="email"
-              type="email"
-              required
-              className="rounded-md border border-input bg-background px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Password
-            <input
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="create-username">Username</Label>
+            <Input id="create-username" name="username" required />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="create-email">Email</Label>
+            <Input id="create-email" name="email" type="email" required />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="create-password">Password</Label>
+            <Input
+              id="create-password"
               name="password"
               type="password"
               required
               minLength={8}
-              className="rounded-md border border-input bg-background px-3 py-2"
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Role
-            <select
-              name="role"
-              defaultValue="user"
-              className="rounded-md border border-input bg-background px-3 py-2"
-            >
-              <option value="user">user</option>
-              <option value="admin">admin</option>
-            </select>
-          </label>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="create-role">Role</Label>
+            <Select name="role" defaultValue="user">
+              <SelectTrigger id="create-role" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">user</SelectItem>
+                <SelectItem value="admin">admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Button type="submit" disabled={createUser.isPending}>
             {createUser.isPending ? "Creating…" : "Create"}
           </Button>

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SIGN_IN_FAILED_MESSAGE, authClient } from "@/lib/auth-client";
 
 type SignInFormProps = {
@@ -46,25 +48,25 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
 
   return (
     <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-3">
-      <label className="flex flex-col gap-1 text-sm">
-        Username or email
-        <input
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="identifier">Username or email</Label>
+        <Input
+          id="identifier"
           name="identifier"
           autoComplete="username"
           required
-          className="rounded-md border border-input bg-background px-3 py-2"
         />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Password
-        <input
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
           name="password"
           type="password"
           autoComplete="current-password"
           required
-          className="rounded-md border border-input bg-background px-3 py-2"
         />
-      </label>
+      </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}

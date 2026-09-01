@@ -43,7 +43,7 @@ existing session; users will need to sign in again. That is inconvenient, not
 data loss.
 
 A fresh instance has registration closed. Visit `/setup` to create the first
-super admin, then provision other accounts from `/admin/users`.
+super admin, then provision other accounts from `/settings/users`.
 
 ## Production compose
 

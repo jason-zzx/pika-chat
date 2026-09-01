@@ -13,22 +13,22 @@ src/
 │   │   ├── login/page.tsx
 │   │   └── invite/[token]/page.tsx
 │   ├── (app)/
-│   │   ├── layout.tsx              # AppShell — the responsive frame
+│   │   ├── layout.tsx              # session guard; renders AppShell
 │   │   ├── page.tsx
+│   │   ├── settings/               # general / account / users (staff)
 │   │   └── t/[topicId]/page.tsx    # a topic's conversation
-│   ├── admin/
-│   ├── layout.tsx                  # root: providers, fonts, theme
+│   ├── layout.tsx                  # root: providers, fonts, theme cookie
 │   └── globals.css                 # Tailwind 4 config lives here
 ├── components/
 │   ├── ui/                         # shadcn/ui primitives — generated (Base UI)
-│   ├── layout/                     # AppShell, sidebar, mobile drawer, nav
+│   ├── layout/                     # AppShell, sidebar, page chrome
 │   ├── chat/                       # message list, composer, model picker
 │   ├── assistant/
 │   ├── topic/
 │   ├── provider/
 │   └── common/                     # cross-domain: EmptyState, ErrorState
 ├── hooks/                          # cross-domain hooks only
-├── stores/                         # Zustand stores, one per concern
+├── stores/                         # Zustand stores; create on first real store
 ├── lib/
 │   ├── api/                        # typed fetch client per domain
 │   ├── schemas/                    # Zod contracts shared with the server
@@ -77,8 +77,12 @@ TypeScript interface mirroring a server response — see
 ## Route groups
 
 `(auth)` and `(app)` are route groups, so they share a URL space but not a
-layout. `(app)/layout.tsx` is where the session guard and the AppShell live —
-putting the guard there means a new authenticated page cannot forget it.
+layout. `(app)/layout.tsx` is the session guard; it renders `AppShell` from
+`components/layout/AppShell.tsx`. Putting the guard on the route-group layout
+means a new authenticated page cannot forget it. The shell itself is a
+component so `(auth)` can keep a centred layout with no sidebar.
 
-`admin/` is a real path segment, not a group. Its layout adds the role check on
-top of the session check.
+Settings live under `(app)/settings/` so they inherit the shell and the
+session check. `/settings/users` adds a staff role check in its own layout.
+There is no `admin/` page route; `/api/admin/*` and `/api/auth/admin/*` are
+API paths and are unrelated.

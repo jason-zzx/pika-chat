@@ -7,17 +7,17 @@
 
 ## Status of this spec
 
-**Scaffold landed (`08-31-scaffold`).** The remaining follow-up is
-`08-31-app-shell`, which will re-read this file against the authenticated
-layout. Source of the original decisions:
+**App shell landed (`08-31-app-shell`).** Source of the original decisions:
 `.trellis/tasks/00-bootstrap-guidelines/research/tech-stack-decision.md`.
 
-Divergences recorded after the scaffold:
+Divergences from the first draft of this spec:
 
 - shadcn/ui CLI v4 defaulted to Base UI (`@base-ui/react`) rather than Radix.
   `components/ui/` remains generated territory; do not hand-edit those files.
-- Route groups `(auth)` / `(app)` and `admin/` are still the map; they appear
-  on disk when those tasks place files.
+- AppShell lives at `components/layout/AppShell.tsx`; `(app)/layout.tsx` is the
+  session guard that renders it.
+- Administration is under `(app)/settings/`, not an `admin/` page route. The
+  `/api/admin/*` endpoints are unrelated and stay where they are.
 
 ---
 

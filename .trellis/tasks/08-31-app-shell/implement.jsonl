@@ -1,4 +1,8 @@
-{"file": ".trellis/spec/frontend/index.md", "reason": "Responsive shell, route groups, and the server/client boundary"}
-{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Responsive shell, route groups, and the server/client boundary"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Responsive shell, route groups, and the server/client boundary"}
-{"file": ".trellis/spec/frontend/state-management.md", "reason": "Responsive shell, route groups, and the server/client boundary"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Pre-Development Checklist; both breakpoints are first-class, and the stack table pins Tailwind 4 config-in-CSS plus shadcn on Base UI"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "The binding constraint: one component tree that reflows, no hidden md:block pair, and push \"use client\" to the leaves"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Where components/layout, components/common, and hooks go, plus the rule that components/ui is generated territory"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Justifies D-STATE-1 (no Zustand) and D-STATE-2 (RSC prop); also the source of the active settings tab being URL state"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "The theme cookie is parsed with a shared Zod schema, not a hand-written type"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Rules for the generated use-mobile hook and the matchMedia subscription in ThemeControl"}
+{"file": ".trellis/tasks/08-31-app-shell/research/theme-switching-approach.md", "reason": "Why next-themes is rejected and the exact cookie/first-paint contract to implement instead"}
+{"file": ".trellis/tasks/08-31-app-shell/research/shadcn-sidebar-primitive.md", "reason": "Confirms sidebar exists for base-nova, its exports and cookie behaviour, and the IconPlaceholder import to verify right after shadcn add"}

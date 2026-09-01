@@ -10,9 +10,10 @@
 | Kind | Owner | Examples |
 |---|---|---|
 | Server state | TanStack Query | topics, assistants, messages, provider configs, the current user |
-| Client state | Zustand | sidebar open, active model in the composer, theme, draft text |
+| Client state | Zustand | active model in the composer, draft text |
+| Shell chrome | cookie + leaf | sidebar open (`SidebarProvider`), theme (`ThemeSync` / `ThemeControl`) |
 | Ephemeral UI state | `useState` | input focus, a popover's open flag, hover |
-| URL state | the route | current topic id, admin tab |
+| URL state | the route | current topic id, settings tab |
 
 **The rule: server data is never copied into Zustand.**
 
@@ -80,10 +81,13 @@ edits one. The user's current pick is client state. Do not cache the list in
 Zustand to avoid a refetch; if an admin revokes a shared provider, a stale
 cached list lets the user select a model that will fail.
 
-**The current user and role.** Server state. Fetch it with a query hook.
-Mirroring the role into a store is how a client-side admin check ends up
-reading a stale value — and a client-side admin check was never the real
-enforcement anyway. See `.trellis/spec/backend/database-guidelines.md`.
+**The current user and role.** Server state. A Server Component that already
+called `resolveActor` should pass the identity down as props — that is the
+shell's pattern. A client subtree that does not have those props fetches
+with a query hook. Either way the session lives in one place; mirroring the
+role into Zustand is how a client-side admin check ends up reading a stale
+value — and a client-side admin check was never the real enforcement anyway.
+See `.trellis/spec/backend/database-guidelines.md`.
 
 ---
 

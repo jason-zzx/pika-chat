@@ -1,1 +1,5 @@
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Both breakpoints plus accessibility baseline"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "The Quality Check list: both breakpoints, mobile nav actually opens and closes, \"use client\" placement, no server state in a store"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint/typecheck/test gate, accessibility baseline, forbidden patterns, and the review focus order"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify the single-tree reflow and the server/client boundary were actually honoured, not just intended"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Verify no Zustand store appeared and no server-derived value landed in client state"}
+{"file": ".trellis/tasks/08-31-app-shell/research/shadcn-sidebar-primitive.md", "reason": "The three post-generation risks to re-check: IconPlaceholder import, useIsMobile first render, no hand-edits to components/ui"}
