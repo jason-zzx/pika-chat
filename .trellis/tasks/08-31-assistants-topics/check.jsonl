@@ -1,2 +1,7 @@
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Ownership isolation tests"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Query key and cache invalidation correctness"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality gate; verify ownership isolation is tested per operation and that the migration applies to an empty database (AC1, AC2, AC8)"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality gate including non-negotiable jsx-a11y findings (AC15) and query-key/invalidation correctness across the shared tree payload"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check the schema against the conventions and confirm the assistant to topic cascade matches D8 rather than a default Drizzle option; confirm no owner_id was denormalized onto topics; confirm D12's last-assistant floor is enforced atomically inside a transaction with a row lock, decides NOT_FOUND before CONFLICT, and is not merely a UI-disabled menu item"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Confirm cross-user access returns 404 and not 403, and that no handler carries its own try/catch outside withErrorHandling"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Confirm AC12: no active-assistant client state, no Zustand store, src/stores/ absent, expanded group derived from the route"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Confirm AC16: the three generated primitives are unedited and carry no @/app/(create) import"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Final full-scope pass — the change spans every layer, so check contract drift between Zod schema, service return shape, and what the sidebar actually renders"}

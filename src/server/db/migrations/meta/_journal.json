@@ -36,6 +36,13 @@
       "when": 1788242201493,
       "tag": "0004_sudden_johnny_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788247249122,
+      "tag": "0005_outstanding_romulus",
+      "breakpoints": true
     }
   ]
 }

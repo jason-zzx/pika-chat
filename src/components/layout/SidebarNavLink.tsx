@@ -9,12 +9,14 @@ type SidebarNavLinkProps = {
   href: string;
   children: ReactNode;
   tooltip?: string;
+  isActive?: boolean;
 };
 
 export default function SidebarNavLink({
   href,
   children,
   tooltip,
+  isActive = false,
 }: SidebarNavLinkProps) {
   const { setOpenMobile } = useSidebar();
 
@@ -22,6 +24,7 @@ export default function SidebarNavLink({
     <SidebarMenuButton
       render={<Link href={href} />}
       tooltip={tooltip}
+      isActive={isActive}
       onClick={() => setOpenMobile(false)}
     >
       {children}

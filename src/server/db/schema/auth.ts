@@ -3,12 +3,10 @@ import {
   index,
   pgTable,
   text,
-  timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-const timestamptz = (name: string) =>
-  timestamp(name, { withTimezone: true, mode: "date" });
+import { timestamptz } from "./columns";
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),

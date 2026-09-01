@@ -1,9 +1,12 @@
+import { parseEmpty, parseJson } from "@/lib/api/parse";
 import {
+  availableModelSchema,
   discoverModelsResponseSchema,
   ownProviderConfigSchema,
   providerConfigListSchema,
   providerModelSchema,
   type AddProviderModelInput,
+  type AvailableModel,
   type CreateProviderConfigInput,
   type DiscoverModelsResponse,
   type OwnProviderConfig,
@@ -11,25 +14,6 @@ import {
   type ProviderModel,
   type UpdateProviderConfigInput,
 } from "@/lib/schemas/provider";
-
-async function parseJson<T>(
-  response: Response,
-  parse: (data: unknown) => T,
-): Promise<T> {
-  const data: unknown = await response.json();
-  if (!response.ok) {
-    throw data;
-  }
-  return parse(data);
-}
-
-async function parseEmpty(response: Response): Promise<void> {
-  if (response.ok) {
-    return;
-  }
-  const data: unknown = await response.json();
-  throw data;
-}
 
 export async function listProviderConfigs(): Promise<ProviderConfigList> {
   const response = await fetch("/api/providers");
@@ -103,4 +87,11 @@ export async function removeProviderModel(
     { method: "DELETE" },
   );
   await parseEmpty(response);
+}
+
+export async function listAvailableModels(): Promise<AvailableModel[]> {
+  const response = await fetch("/api/models");
+  return parseJson(response, (data) =>
+    availableModelSchema.array().parse(data),
+  );
 }

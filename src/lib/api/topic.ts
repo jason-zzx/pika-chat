@@ -1,0 +1,35 @@
+import { parseEmpty, parseJson } from "@/lib/api/parse";
+import {
+  topicSchema,
+  type CreateTopicInput,
+  type RenameTopicInput,
+  type Topic,
+} from "@/lib/schemas/topic";
+
+export async function createTopic(input: CreateTopicInput): Promise<Topic> {
+  const response = await fetch("/api/topics", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJson(response, (data) => topicSchema.parse(data));
+}
+
+export async function renameTopic(
+  id: string,
+  input: RenameTopicInput,
+): Promise<Topic> {
+  const response = await fetch(`/api/topics/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJson(response, (data) => topicSchema.parse(data));
+}
+
+export async function deleteTopic(id: string): Promise<void> {
+  const response = await fetch(`/api/topics/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  await parseEmpty(response);
+}

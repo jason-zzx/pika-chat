@@ -3,14 +3,11 @@ import {
   pgEnum,
   pgTable,
   text,
-  timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import { users } from "./auth";
-
-const timestamptz = (name: string) =>
-  timestamp(name, { withTimezone: true, mode: "date" });
+import { timestamptz } from "./columns";
 
 export const providerVisibility = pgEnum("provider_visibility", [
   "private",

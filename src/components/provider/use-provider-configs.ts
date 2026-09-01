@@ -17,6 +17,8 @@ import type {
   UpdateProviderConfigInput,
 } from "@/lib/schemas/provider";
 
+import { availableModelKeys } from "./use-available-models";
+
 export const providerConfigKeys = {
   all: ["provider-configs"] as const,
   list: () => [...providerConfigKeys.all, "list"] as const,
@@ -31,8 +33,10 @@ export function useProviderConfigs() {
 
 function useInvalidateProviderQueries() {
   const queryClient = useQueryClient();
-  return () =>
-    queryClient.invalidateQueries({ queryKey: providerConfigKeys.all });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: providerConfigKeys.all });
+    void queryClient.invalidateQueries({ queryKey: availableModelKeys.all });
+  };
 }
 
 export function useCreateProviderConfig() {
