@@ -101,3 +101,40 @@ Landed the responsive app shell on feat/scaffold: shadcn sidebar, cookie light/d
 ### Next Steps
 
 - Plan and implement remaining Phase 1 tasks: assistants/topics, providers, then chat streaming
+
+
+## Session 4: Provider and model configuration
+<!-- trellis-session: v=2 fp=5194df291e69061d -->
+
+**Date**: 2026-09-01
+**Task**: Provider and model configuration
+**Branch**: `feat/scaffold`
+
+### Summary
+
+Landed encrypted OpenAI-compatible provider configs on feat/scaffold: owner/visibility CRUD, endpoint discovery, curated models, and a single resolution query. A ponytail pass then dropped the unused kind/displayName columns and the dead available-models client cache.
+
+### Main Changes
+
+- AES-256-GCM credential envelope; shared configs coerced private for non-staff; non-owners never see baseUrl or key mask
+- /settings/providers for every role; Discover sheet plus hand-entered model ids; GET /api/models for later pickers
+- Ponytail: no kind enum, no displayName, no unused available-models hook; DELETE uses ?modelId= so slash ids survive
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6dff83f` | feat: add encrypted provider configs so chat can resolve usable models |
+
+### Testing
+
+- [OK] [OK] pnpm lint, typecheck, and 62 vitest tests after ponytail
+- [OK] [OK] Browser as admin: create demo-openai, add and remove openai/gpt-4o, share toggle present, mobile stacked layout
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Plan and implement remaining Phase 1 tasks: assistants/topics, then chat streaming
