@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "pika-chat",
+  title: "Pika chat",
   description: "Self-hosted AI chat",
 };
 

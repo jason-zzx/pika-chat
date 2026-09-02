@@ -15,6 +15,7 @@ import AssistantEditorDialog from "@/components/assistant/AssistantEditorDialog"
 import DeleteAssistantDialog from "@/components/assistant/DeleteAssistantDialog";
 import { useAssistantTree } from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
+import PikaMark from "@/components/common/PikaMark";
 import CloseOnNavigateLink from "@/components/layout/CloseOnNavigateLink";
 import SettingsNav from "@/components/layout/SettingsNav";
 import SidebarNavLink from "@/components/layout/SidebarNavLink";
@@ -89,8 +90,13 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
             onBack={() => router.push("/")}
           />
         ) : (
-          <div className="flex h-8 min-w-0 items-center overflow-hidden px-2">
-            <CloseOnNavigateLink href="/">pika-chat</CloseOnNavigateLink>
+          <div className="flex h-8 min-w-0 items-center overflow-hidden px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <CloseOnNavigateLink href="/">
+              <PikaMark className="size-6" />
+              <span className="truncate group-data-[collapsible=icon]:sr-only">
+                Pika chat
+              </span>
+            </CloseOnNavigateLink>
           </div>
         )}
       </SidebarHeader>
