@@ -1,17 +1,11 @@
+import { requireParam } from "@/app/api/_lib/route-params";
 import { withErrorHandling } from "@/app/api/_lib/with-error-handling";
 import { renameTopicSchema } from "@/lib/schemas/topic";
 import { requireActor } from "@/server/auth/actor";
-import { AppError } from "@/server/errors";
 import { deleteTopic, renameTopic } from "@/server/services/topic.service";
 
-async function topicId(
-  context: { params: Promise<Record<string, string>> } | undefined,
-): Promise<string> {
-  const id = (await context?.params)?.id;
-  if (!id) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
-  }
-  return id;
+function topicId(context: Parameters<typeof requireParam>[0]): Promise<string> {
+  return requireParam(context, "id", "Topic not found");
 }
 
 export const PATCH = withErrorHandling(async (request, context) => {

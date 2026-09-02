@@ -7,15 +7,13 @@ import {
   Trash2Icon,
   UserRoundIcon,
 } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import AssistantEditorDialog from "@/components/assistant/AssistantEditorDialog";
 import DeleteAssistantDialog from "@/components/assistant/DeleteAssistantDialog";
-import {
-  useAssistantTree,
-  useCreateTopic,
-} from "@/components/assistant/use-assistants";
+import { useAssistantTree } from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
 import CloseOnNavigateLink from "@/components/layout/CloseOnNavigateLink";
 import SidebarNavLink from "@/components/layout/SidebarNavLink";
@@ -40,25 +38,22 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiErrorMessage } from "@/lib/api/error-message";
+import {
+  assistantDraftHref,
+  assistantTopicHref,
+  parseAssistantPath,
+} from "@/lib/assistant-path";
 import type { Assistant } from "@/lib/schemas/assistant";
 import type { Topic } from "@/lib/schemas/topic";
 
 export default function AssistantTree() {
   const tree = useAssistantTree();
-  const createTopic = useCreateTopic();
   const router = useRouter();
-  const params = useParams<{ topicId?: string }>();
-  const topicId =
-    typeof params.topicId === "string" ? params.topicId : undefined;
+  const pathname = usePathname();
+  const { assistantId: pathAssistantId, topicId } = parseAssistantPath(pathname);
 
   const assistants = tree.data?.assistants ?? [];
-  const topicAssistantId = assistants.find((assistant) =>
-    assistant.topics.some((topic) => topic.id === topicId),
-  )?.id;
-
-  const [pane, setPane] = useState<"list" | string | null>(null);
-  const viewingId = pane === "list" ? undefined : (pane ?? topicAssistantId);
+  const viewingId = pathAssistantId;
   const viewing = assistants.find((assistant) => assistant.id === viewingId);
 
   const [editor, setEditor] = useState<Assistant | "create" | null>(null);
@@ -67,26 +62,12 @@ export default function AssistantTree() {
   );
   const [renameTopic, setRenameTopic] = useState<Topic | null>(null);
   const [deleteTopic, setDeleteTopic] = useState<Topic | null>(null);
-  const [treeError, setTreeError] = useState<string | null>(null);
 
   const isLastAssistant = assistants.length === 1;
 
   function leaveIfViewingTopic(ids: string[]) {
     if (topicId && ids.includes(topicId)) {
       router.push("/");
-    }
-  }
-
-  async function onNewTopic(assistant: Assistant) {
-    setTreeError(null);
-    try {
-      const created = await createTopic.mutateAsync({
-        assistantId: assistant.id,
-      });
-      setPane(assistant.id);
-      router.push(`/t/${created.id}`);
-    } catch (caught) {
-      setTreeError(apiErrorMessage(caught, "Unable to create topic"));
     }
   }
 
@@ -100,7 +81,7 @@ export default function AssistantTree() {
               variant="ghost"
               size="icon-sm"
               aria-label="Back to assistants"
-              onClick={() => setPane("list")}
+              onClick={() => router.push("/")}
             >
               <ArrowLeftIcon />
             </Button>
@@ -129,9 +110,7 @@ export default function AssistantTree() {
           <AssistantPane
             assistant={viewing}
             activeTopicId={topicId}
-            creating={createTopic.isPending}
             isLastAssistant={isLastAssistant}
-            onNewTopic={() => void onNewTopic(viewing)}
             onEdit={() => setEditor(viewing)}
             onDelete={() => setDeleteAssistant(viewing)}
             onRenameTopic={setRenameTopic}
@@ -140,13 +119,10 @@ export default function AssistantTree() {
         ) : (
           <AssistantList
             assistants={assistants}
-            onOpen={(assistant) => setPane(assistant.id)}
+            onOpen={(assistant) => router.push(assistantDraftHref(assistant.id))}
             onCreate={() => setEditor("create")}
           />
         )}
-        {treeError ? (
-          <p className="px-2 pb-2 text-sm text-destructive">{treeError}</p>
-        ) : null}
       </SidebarContent>
       {editor !== null ? (
         <AssistantEditorDialog
@@ -169,7 +145,6 @@ export default function AssistantTree() {
         }}
         assistant={deleteAssistant}
         onDeleted={(assistant) => {
-          setPane("list");
           leaveIfViewingTopic(assistant.topics.map((topic) => topic.id));
         }}
       />
@@ -258,9 +233,7 @@ function AssistantList({
 function AssistantPane({
   assistant,
   activeTopicId,
-  creating,
   isLastAssistant,
-  onNewTopic,
   onEdit,
   onDelete,
   onRenameTopic,
@@ -268,9 +241,7 @@ function AssistantPane({
 }: {
   assistant: Assistant;
   activeTopicId: string | undefined;
-  creating: boolean;
   isLastAssistant: boolean;
-  onNewTopic: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onRenameTopic: (topic: Topic) => void;
@@ -283,11 +254,10 @@ function AssistantPane({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                disabled={creating}
-                onClick={onNewTopic}
+                render={<Link href={assistantDraftHref(assistant.id)} />}
               >
                 <PlusIcon />
-                <span>{creating ? "Creating…" : "New topic"}</span>
+                <span>New topic</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
@@ -320,7 +290,7 @@ function AssistantPane({
               {assistant.topics.map((topic) => (
                 <SidebarMenuItem key={topic.id}>
                   <SidebarNavLink
-                    href={`/t/${topic.id}`}
+                    href={assistantTopicHref(assistant.id, topic.id)}
                     isActive={topic.id === activeTopicId}
                   >
                     <span className="truncate">{topic.title}</span>

@@ -35,6 +35,7 @@ type TreeRow = {
     id: string;
     title: string;
     createdAt: Date;
+    updatedAt: Date;
   } | null;
 };
 
@@ -101,6 +102,7 @@ async function selectTree(actor: Actor, assistantId?: string): Promise<TreeRow[]
         id: topics.id,
         title: topics.title,
         createdAt: topics.createdAt,
+        updatedAt: topics.updatedAt,
       },
     })
     .from(assistants)
@@ -113,7 +115,7 @@ async function selectTree(actor: Actor, assistantId?: string): Promise<TreeRow[]
           )
         : eq(assistants.ownerId, actor.userId),
     )
-    .orderBy(asc(assistants.createdAt), desc(topics.createdAt));
+    .orderBy(asc(assistants.createdAt), desc(topics.updatedAt));
   return rows;
 }
 

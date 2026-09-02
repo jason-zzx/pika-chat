@@ -8,18 +8,18 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { listAssistantTree } from "@/lib/api/assistant";
-import { createTopic } from "@/lib/api/topic";
 import type { Assistant } from "@/lib/schemas/assistant";
 
 import AssistantTree from "./AssistantTree";
 
-const params = vi.hoisted(() => ({
-  topicId: "topic-active" as string | undefined,
+const nav = vi.hoisted(() => ({
+  pathname: "/",
+  push: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useParams: () => ({ topicId: params.topicId }),
-  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => nav.pathname,
+  useRouter: () => ({ push: nav.push }),
 }));
 
 vi.mock("@/hooks/use-mobile", () => ({
@@ -34,7 +34,6 @@ vi.mock("@/lib/api/assistant", () => ({
 }));
 
 vi.mock("@/lib/api/topic", () => ({
-  createTopic: vi.fn(),
   renameTopic: vi.fn(),
   deleteTopic: vi.fn(),
 }));
@@ -69,7 +68,7 @@ function renderTree() {
 
 describe("AssistantTree", () => {
   it("opens the active topic's assistant pane and hides other assistants", async () => {
-    params.topicId = "topic-active";
+    nav.pathname = "/assistant/a-active/topic-active";
     vi.mocked(listAssistantTree).mockResolvedValue({
       assistants: [
         assistant({
@@ -80,6 +79,7 @@ describe("AssistantTree", () => {
               id: "topic-active",
               title: "Active topic",
               createdAt: new Date("2026-01-01"),
+              updatedAt: new Date("2026-01-01"),
             },
           ],
         }),
@@ -91,6 +91,7 @@ describe("AssistantTree", () => {
               id: "topic-other",
               title: "Other topic",
               createdAt: new Date("2026-01-02"),
+              updatedAt: new Date("2026-01-02"),
             },
           ],
         }),
@@ -102,27 +103,27 @@ describe("AssistantTree", () => {
     expect(await screen.findByRole("button", { name: "Back to assistants" })).toBeInTheDocument();
     expect(screen.getByText("Work")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Active topic" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Active topic" })).toHaveAttribute(
+      "href",
+      "/assistant/a-active/topic-active",
+    );
     expect(screen.queryByText("Play")).toBeNull();
     expect(screen.queryByRole("link", { name: "Other topic" })).toBeNull();
     expect(screen.queryByRole("link", { name: "New chat" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to assistants" }));
-    expect(screen.getByRole("button", { name: "Open Play" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Active topic" })).toBeNull();
+    expect(nav.push).toHaveBeenCalledWith("/");
   });
 
   it("disables delete when there is only one assistant and enables it when there are two", async () => {
-    params.topicId = undefined;
+    nav.pathname = "/assistant/only";
     const only = assistant({ id: "only", name: "Only one" });
     vi.mocked(listAssistantTree).mockResolvedValue({
       assistants: [only],
     });
 
     const { unmount } = renderTree();
-    expect(await screen.findByRole("button", { name: "Open Only one" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open Only one" }));
-    const disabledDelete = screen.getByRole("button", { name: "Delete" });
-    expect(disabledDelete).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Delete" })).toBeDisabled();
     unmount();
 
     vi.mocked(listAssistantTree).mockResolvedValue({
@@ -132,25 +133,19 @@ describe("AssistantTree", () => {
       ],
     });
     renderTree();
-    expect(await screen.findByRole("button", { name: "Open Only one" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open Only one" }));
-    expect(screen.getByRole("button", { name: "Delete" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Delete" })).toBeEnabled();
   });
 
-  it("surfaces an error when creating a topic fails", async () => {
-    params.topicId = undefined;
+  it("links New topic to the assistant draft URL without creating a row", async () => {
+    nav.pathname = "/assistant/only";
     vi.mocked(listAssistantTree).mockResolvedValue({
       assistants: [assistant({ id: "only", name: "Work" })],
     });
-    vi.mocked(createTopic).mockRejectedValue({
-      error: { message: "Assistant not found" },
-    });
 
     renderTree();
-    expect(await screen.findByRole("button", { name: "Open Work" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open Work" }));
-    fireEvent.click(screen.getByRole("button", { name: "New topic" }));
-    expect(await screen.findByText("Assistant not found")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "New topic" })).toHaveAttribute(
+      "href",
+      "/assistant/only",
+    );
   });
-
 });

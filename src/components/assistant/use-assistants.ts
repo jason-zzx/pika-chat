@@ -8,12 +8,12 @@ import {
   listAssistantTree,
   updateAssistant,
 } from "@/lib/api/assistant";
-import { createTopic, deleteTopic, renameTopic } from "@/lib/api/topic";
+import { deleteTopic, renameTopic } from "@/lib/api/topic";
 import type {
   CreateAssistantInput,
   UpdateAssistantInput,
 } from "@/lib/schemas/assistant";
-import type { CreateTopicInput, RenameTopicInput } from "@/lib/schemas/topic";
+import type { RenameTopicInput } from "@/lib/schemas/topic";
 
 export const assistantKeys = {
   all: ["assistants"] as const,
@@ -63,16 +63,6 @@ export function useDeleteAssistant() {
   const invalidate = useInvalidateAssistantTree();
   return useMutation({
     mutationFn: (id: string) => deleteAssistant(id),
-    onSuccess: () => {
-      void invalidate();
-    },
-  });
-}
-
-export function useCreateTopic() {
-  const invalidate = useInvalidateAssistantTree();
-  return useMutation({
-    mutationFn: (input: CreateTopicInput) => createTopic(input),
     onSuccess: () => {
       void invalidate();
     },

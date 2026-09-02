@@ -28,11 +28,13 @@ export default function AppShell({
   return (
     <SidebarProvider defaultOpen={defaultSidebarOpen}>
       <AppSidebar name={user.name} role={user.role} themeMode={themeMode} />
-      <SidebarInset>
+      <SidebarInset className="min-h-0 overflow-hidden">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
           <SidebarTrigger />
         </header>
-        {children}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

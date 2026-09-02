@@ -23,6 +23,7 @@ import {
   accounts,
   appSettings,
   assistants,
+  chatMessages,
   providerConfigs,
   providerModels,
   sessions,
@@ -36,7 +37,8 @@ import {
   listAssistantTree,
   updateAssistant,
 } from "@/server/services/assistant.service";
-import { createTopic } from "@/server/services/topic.service";
+import { appendUserMessage } from "@/server/services/message.service";
+import { createTopicForChat, touchTopicUpdatedAt } from "@/server/services/topic.service";
 import {
   addProviderModel,
   createProviderConfig,
@@ -46,6 +48,7 @@ import { AppError } from "@/server/errors";
 const db = getDb();
 
 async function resetState(): Promise<void> {
+  await db.delete(chatMessages);
   await db.delete(topics);
   await db.delete(assistants);
   await db.delete(providerModels);
@@ -289,7 +292,18 @@ describe("assistant.service", () => {
       { name: "Extra", icon: "2️⃣" },
       userActor,
     );
-    const topic = await createTopic({ assistantId: extra.id }, userActor);
+    const topic = await createTopicForChat({ assistantId: extra.id }, userActor);
+    await appendUserMessage(
+      {
+        topicId: topic.id,
+        message: {
+          id: "msg-cascade",
+          role: "user",
+          parts: [{ type: "text", text: "cascade" }],
+        },
+      },
+      userActor,
+    );
     await deleteAssistant(extra.id, userActor);
 
     const leftover = await db
@@ -297,6 +311,11 @@ describe("assistant.service", () => {
       .from(topics)
       .where(eq(topics.id, topic.id));
     expect(leftover).toEqual([]);
+    const leftoverMessages = await db
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(eq(chatMessages.topicId, topic.id));
+    expect(leftoverMessages).toEqual([]);
     const tree = await listAssistantTree(userActor);
     expect(tree.assistants.map((row) => row.id)).toEqual([primary.id]);
   });
@@ -307,7 +326,7 @@ describe("assistant.service", () => {
       { name: "Only", icon: "🔒" },
       userActor,
     );
-    const topic = await createTopic({ assistantId: only.id }, userActor);
+    const topic = await createTopicForChat({ assistantId: only.id }, userActor);
 
     await expect(deleteAssistant(only.id, userActor)).rejects.toMatchObject({
       code: "CONFLICT",
@@ -359,5 +378,45 @@ describe("assistant.service", () => {
 
     const remaining = await listAssistantTree(userActor);
     expect(remaining.assistants).toHaveLength(1);
+  });
+
+  it("orders topics by recent activity", async () => {
+    const { userActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    const older = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+    );
+    const newer = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+    );
+
+    await db
+      .update(topics)
+      .set({ updatedAt: new Date("2026-01-01T00:00:00.000Z") })
+      .where(eq(topics.id, older.id));
+    await db
+      .update(topics)
+      .set({ updatedAt: new Date("2026-01-02T00:00:00.000Z") })
+      .where(eq(topics.id, newer.id));
+
+    const before = await listAssistantTree(userActor);
+    const listed = before.assistants.find((row) => row.id === assistant.id);
+    expect(listed?.topics.map((topic) => topic.id)).toEqual([
+      newer.id,
+      older.id,
+    ]);
+
+    await touchTopicUpdatedAt(older.id, userActor);
+    const after = await listAssistantTree(userActor);
+    const relisted = after.assistants.find((row) => row.id === assistant.id);
+    expect(relisted?.topics.map((topic) => topic.id)).toEqual([
+      older.id,
+      newer.id,
+    ]);
   });
 });

@@ -20,6 +20,7 @@ import {
   accounts,
   appSettings,
   assistants,
+  chatMessages,
   providerConfigs,
   providerModels,
   sessions,
@@ -29,8 +30,13 @@ import {
 } from "@/server/db/schema";
 import { createAssistant } from "@/server/services/assistant.service";
 import {
-  createTopic,
+  appendUserMessage,
+  listTopicMessages,
+} from "@/server/services/message.service";
+import {
+  createTopicForChat,
   deleteTopic,
+  findTopicContextForActor,
   findTopicForActor,
   renameTopic,
 } from "@/server/services/topic.service";
@@ -38,6 +44,7 @@ import {
 const db = getDb();
 
 async function resetState(): Promise<void> {
+  await db.delete(chatMessages);
   await db.delete(topics);
   await db.delete(assistants);
   await db.delete(providerModels);
@@ -135,7 +142,7 @@ describe("topic.service", () => {
       { name: "Owner", icon: "✨" },
       userActor,
     );
-    const created = await createTopic(
+    const created = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
     );
@@ -161,7 +168,7 @@ describe("topic.service", () => {
       otherAdminActor,
     );
     await expect(
-      createTopic({ assistantId: theirs.id }, userActor),
+      createTopicForChat({ assistantId: theirs.id }, userActor),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     const leftover = await db
@@ -177,7 +184,7 @@ describe("topic.service", () => {
       { name: "Owner", icon: "✨" },
       userActor,
     );
-    const topic = await createTopic({ assistantId: assistant.id }, userActor);
+    const topic = await createTopicForChat({ assistantId: assistant.id }, userActor);
 
     await expect(
       renameTopic(topic.id, { title: "Stolen" }, otherAdminActor),
@@ -190,5 +197,84 @@ describe("topic.service", () => {
       id: topic.id,
       title: DEFAULT_TOPIC_TITLE,
     });
+    expect(await findTopicContextForActor(topic.id, otherAdminActor)).toBeNull();
+    expect(await findTopicContextForActor(topic.id, userActor)).toMatchObject({
+      topic: { id: topic.id, title: DEFAULT_TOPIC_TITLE },
+      assistant: { id: assistant.id },
+    });
+  });
+
+  it("returns NOT_FOUND when another user lists or appends messages", async () => {
+    const { userActor, otherAdminActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    const topic = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+    );
+    await appendUserMessage(
+      {
+        topicId: topic.id,
+        message: {
+          id: "msg-owner",
+          role: "user",
+          parts: [{ type: "text", text: "hello" }],
+        },
+      },
+      userActor,
+    );
+
+    await expect(
+      listTopicMessages({ topicId: topic.id }, otherAdminActor),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      appendUserMessage(
+        {
+          topicId: topic.id,
+          message: {
+            id: "msg-stolen",
+            role: "user",
+            parts: [{ type: "text", text: "nope" }],
+          },
+        },
+        otherAdminActor,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const listed = await listTopicMessages({ topicId: topic.id }, userActor);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe("msg-owner");
+  });
+
+  it("deletes messages when the topic is deleted", async () => {
+    const { userActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    const topic = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+    );
+    await appendUserMessage(
+      {
+        topicId: topic.id,
+        message: {
+          id: "msg-gone",
+          role: "user",
+          parts: [{ type: "text", text: "bye" }],
+        },
+      },
+      userActor,
+    );
+
+    await deleteTopic(topic.id, userActor);
+    const leftover = await db
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(eq(chatMessages.topicId, topic.id));
+    expect(leftover).toEqual([]);
   });
 });

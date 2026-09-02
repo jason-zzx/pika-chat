@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, inArray } from "drizzle-orm";
 
-import { DEFAULT_TOPIC_TITLE, type CreateTopicInput, type RenameTopicInput, type Topic } from "@/lib/schemas/topic";
+import { DEFAULT_TOPIC_TITLE, type RenameTopicInput, type Topic } from "@/lib/schemas/topic";
 import { newId } from "@/lib/id";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
@@ -19,8 +19,8 @@ function ownedAssistantIds(actor: Actor) {
     .where(eq(assistants.ownerId, actor.userId));
 }
 
-export async function createTopic(
-  input: CreateTopicInput,
+export async function createTopicForChat(
+  input: { assistantId: string },
   actor: Actor,
 ): Promise<Topic> {
   const assistant = await requireOwnedAssistant(input.assistantId, actor);
@@ -36,6 +36,7 @@ export async function createTopic(
       id: topics.id,
       title: topics.title,
       createdAt: topics.createdAt,
+      updatedAt: topics.updatedAt,
     });
   const row = inserted[0];
   if (!row) {
@@ -62,6 +63,7 @@ export async function renameTopic(
       id: topics.id,
       title: topics.title,
       createdAt: topics.createdAt,
+      updatedAt: topics.updatedAt,
     });
   const row = updated[0];
   if (!row) {
@@ -93,10 +95,70 @@ export async function findTopicForActor(
       id: topics.id,
       title: topics.title,
       createdAt: topics.createdAt,
+      updatedAt: topics.updatedAt,
     })
     .from(topics)
     .innerJoin(assistants, eq(assistants.id, topics.assistantId))
     .where(and(eq(topics.id, id), eq(assistants.ownerId, actor.userId)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+export type TopicContext = {
+  topic: { id: string; title: string };
+  assistant: {
+    id: string;
+    systemPrompt: string | null;
+    defaultProviderConfigId: string | null;
+    defaultModelId: string | null;
+  };
+};
+
+export async function findTopicContextForActor(
+  id: string,
+  actor: Actor,
+): Promise<TopicContext | null> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      topicId: topics.id,
+      topicTitle: topics.title,
+      assistantId: assistants.id,
+      systemPrompt: assistants.systemPrompt,
+      defaultProviderConfigId: assistants.defaultProviderConfigId,
+      defaultModelId: assistants.defaultModelId,
+    })
+    .from(topics)
+    .innerJoin(assistants, eq(assistants.id, topics.assistantId))
+    .where(and(eq(topics.id, id), eq(assistants.ownerId, actor.userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) {
+    return null;
+  }
+  return {
+    topic: { id: row.topicId, title: row.topicTitle },
+    assistant: {
+      id: row.assistantId,
+      systemPrompt: row.systemPrompt,
+      defaultProviderConfigId: row.defaultProviderConfigId,
+      defaultModelId: row.defaultModelId,
+    },
+  };
+}
+
+export async function touchTopicUpdatedAt(
+  topicId: string,
+  actor: Actor,
+): Promise<void> {
+  const db = getDb();
+  await db
+    .update(topics)
+    .set({ updatedAt: new Date() })
+    .where(
+      and(
+        eq(topics.id, topicId),
+        inArray(topics.assistantId, ownedAssistantIds(actor)),
+      ),
+    );
 }
