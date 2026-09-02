@@ -19,7 +19,7 @@ export default function CloseOnNavigateLink({
   return (
     <Link
       href={href}
-      className="font-semibold tracking-tight"
+      className="flex min-w-0 items-center gap-2 font-semibold tracking-tight"
       onClick={() => setOpenMobile(false)}
     >
       {children}

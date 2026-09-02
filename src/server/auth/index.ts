@@ -15,7 +15,7 @@ import { getEnv } from "@/server/env";
 const env = getEnv();
 
 export const auth = betterAuth({
-  appName: "pika-chat",
+  appName: "Pika chat",
   baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
   secret: env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(getDb(), {
