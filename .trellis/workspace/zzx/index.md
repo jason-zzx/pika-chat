@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
-- **Last Active**: 2026-09-01
+- **Total Sessions**: 6
+- **Last Active**: 2026-09-02
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~177 | Active |
+| `journal-1.md` | ~199 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-09-02 | Implement chat streaming with server-side persistence | `32a574c` | `feat/scaffold` |
 | 5 | 2026-09-01 | Assistants and Topics | `3dd0e58` | `feat/scaffold` |
 | 4 | 2026-09-01 | Provider and model configuration | `6dff83f` | `feat/scaffold` |
 | 3 | 2026-09-01 | App shell, cookie theming, and settings routes | `862ddad` | `feat/scaffold` |

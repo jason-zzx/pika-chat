@@ -175,3 +175,25 @@ Landed assistants and topics on feat/scaffold: private assistant CRUD, topics th
 ### Next Steps
 
 - Plan and implement 08-31-chat-streaming (messages, composer, streaming)
+
+
+## Session 6: Implement chat streaming with server-side persistence
+<!-- trellis-session: v=2 fp=c43f285c697729f7 -->
+
+**Date**: 2026-09-02
+**Task**: Implement chat streaming with server-side persistence
+**Branch**: `feat/scaffold`
+
+### Summary
+
+Implemented the 08-31-chat-streaming task: POST /api/chat streams via AI SDK v7 streamText with server-authoritative persistence of user/assistant messages (jsonb parts), on-demand topic creation on first send, LLM auto-title with truncation fallback, explicit stop via in-process AbortController registry (/api/chat/stop) persisting partial output, sanitized upstream error surfacing, Streamdown markdown rendering, and assistant-scoped routes /assistant/{assistantId}/{topicId} replacing /t/{topicId} (POST /api/topics deleted). Ran a ponytail review pass that removed dead code and redundant checks. Verified with lint, typecheck, tests, and browser walkthrough.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32a574c` | feat: add streaming chat so conversations persist server-side and survive stop or refresh |
+
+### Status
+
+[OK] **Completed**
