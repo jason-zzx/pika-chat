@@ -10,7 +10,7 @@
 | Kind | Owner | Examples |
 |---|---|---|
 | Server state | TanStack Query | topics, assistants, messages, provider configs, the current user |
-| Client state | Zustand | active model in the composer, draft text |
+| Client state | Zustand | active model in the composer, per-conversation draft text |
 | Shell chrome | cookie + leaf | sidebar open (`SidebarProvider`), theme (`ThemeSync` / `ThemeControl`) |
 | Ephemeral UI state | `useState` | input focus, a popover's open flag, hover |
 | URL state | the route | current topic id, settings tab |
@@ -80,6 +80,25 @@ server state — it is derived from provider configs and changes when an admin
 edits one. The user's current pick is client state. Do not cache the list in
 Zustand to avoid a refetch; if an admin revokes a shared provider, a stale
 cached list lets the user select a model that will fail.
+
+The pick is also the assistant's default. Selecting a model in the composer
+PATCHes `assistants.defaultProviderConfigId` / `defaultModelId` immediately
+(not on send). Seed a new topic from that pair; seed an existing topic from
+the last assistant-message model, then the default. Do not seed a draft from
+live `useChat` messages — those belong to another conversation. Do not PATCH
+from the seed effect. Optimistic-update the assistant tree on that write so a
+new topic opened before invalidate returns does not reseed empty.
+
+**Topic titles.** Server state. After `data-topic`, `POST /api/topics/:id/title`
+and patch the assistant tree from the JSON. Do not store a title in Zustand,
+and do not wait for titling inside `useChat` — Stop/`inFlight` follow the
+chat stream only. Request a title once per untitled topic; already-named
+topics skip the LLM on the server.
+
+**Composer drafts.** Client state, keyed `topic:${topicId}` or
+`draft:${assistantId}` (`none` if the assistant is unresolved). Switching
+conversations restores that key; send writes `""` to the active key. Do not
+persist drafts, and do not copy titles or messages into the store.
 
 **The current user and role.** Server state. A Server Component that already
 called `resolveActor` should pass the identity down as props — that is the

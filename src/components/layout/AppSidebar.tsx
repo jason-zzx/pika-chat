@@ -1,5 +1,6 @@
 import AssistantTree from "@/components/assistant/AssistantTree";
 import SidebarUserMenu from "@/components/layout/SidebarUserMenu";
+import ThemeControl from "@/components/layout/ThemeControl";
 import {
   Sidebar,
   SidebarFooter,
@@ -7,7 +8,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import type { ActorRole } from "@/lib/auth-hierarchy";
+import { isStaffRole, type ActorRole } from "@/lib/auth-hierarchy";
 import type { ThemeMode } from "@/lib/theme";
 
 type AppSidebarProps = {
@@ -19,11 +20,18 @@ type AppSidebarProps = {
 export default function AppSidebar({ name, role, themeMode }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" aria-label="Main">
-      <AssistantTree />
+      <AssistantTree showUsers={isStaffRole(role)} />
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarUserMenu name={name} role={role} themeMode={themeMode} />
+            <ThemeControl
+              appearance="sidebar"
+              initialMode={themeMode}
+              className="w-full"
+            />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarUserMenu name={name} role={role} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

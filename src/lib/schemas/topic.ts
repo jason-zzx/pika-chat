@@ -14,3 +14,9 @@ export const renameTopicSchema = z.object({
   title: z.string().trim().min(1),
 });
 export type RenameTopicInput = z.infer<typeof renameTopicSchema>;
+
+export const generateTopicTitleSchema = z.object({
+  providerConfigId: z.string().min(1),
+  modelId: z.string().min(1),
+});
+export type GenerateTopicTitleInput = z.infer<typeof generateTopicTitleSchema>;

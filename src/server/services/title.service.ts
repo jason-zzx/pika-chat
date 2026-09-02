@@ -1,13 +1,20 @@
 import "server-only";
 
-import { generateText, type LanguageModel } from "ai";
+import { generateText } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
+import { DEFAULT_TOPIC_TITLE, type Topic } from "@/lib/schemas/topic";
+import { createChatModelHandle } from "@/server/ai/chat-model";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { assistants, topics } from "@/server/db/schema";
+import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
+import {
+  listTopicMessages,
+  textFromMessage,
+} from "@/server/services/message.service";
+import { findTopicForActor } from "@/server/services/topic.service";
 
 export const TITLE_MAX_LENGTH = 60;
 const GENERATED_TOO_LONG = 200;
@@ -36,50 +43,92 @@ export function fallbackTitleFromMessage(text: string): string {
   return `${collapsed.slice(0, TITLE_MAX_LENGTH).trimEnd()}…`;
 }
 
-export async function titleTopicFromFirstMessage(args: {
-  topicId: string;
-  text: string;
-  model: LanguageModel;
-  actor: Actor;
-}): Promise<void> {
-  let generated: string | null = null;
-  try {
-    const result = await generateText({
-      model: args.model,
-      instructions:
-        "Write a short conversation title from the user's message. Reply with the title only, no quotes, at most 8 words.",
-      prompt: args.text,
-      maxOutputTokens: 40,
-      abortSignal: AbortSignal.timeout(15_000),
-    });
-    generated = sanitizeGeneratedTitle(result.text);
-  } catch {
-    logger.warn(
-      { topicId: args.topicId },
-      "topic title generation failed",
-    );
+export async function titleTopicFromFirstMessage(
+  input: {
+    topicId: string;
+    providerConfigId: string;
+    modelId: string;
+  },
+  actor: Actor,
+): Promise<Topic> {
+  const topic = await findTopicForActor(input.topicId, actor);
+  if (!topic) {
+    throw new AppError("NOT_FOUND", 404, "Topic not found");
+  }
+  if (topic.title !== DEFAULT_TOPIC_TITLE) {
+    return topic;
   }
 
-  const title = generated ?? fallbackTitleFromMessage(args.text);
+  const messages = await listTopicMessages(
+    { topicId: input.topicId },
+    actor,
+  );
+  const firstUser = messages.find((message) => message.role === "user");
+  const text = firstUser ? textFromMessage(firstUser) : "";
+
+  let generated: string | null = null;
+  if (text.trim().length > 0) {
+    try {
+      const handle = await createChatModelHandle(
+        {
+          providerConfigId: input.providerConfigId,
+          modelId: input.modelId,
+        },
+        actor,
+      );
+      const result = await generateText({
+        model: handle.model,
+        instructions:
+          "Write a short conversation title from the user's message. Reply with the title only, no quotes, at most 8 words.",
+        prompt: text,
+        maxOutputTokens: 40,
+        abortSignal: AbortSignal.timeout(15_000),
+      });
+      generated = sanitizeGeneratedTitle(result.text);
+    } catch {
+      logger.warn(
+        { topicId: input.topicId },
+        "topic title generation failed",
+      );
+    }
+  }
+
+  const title = generated ?? fallbackTitleFromMessage(text);
   try {
     const db = getDb();
-    await db
+    const updated = await db
       .update(topics)
       .set({ title, updatedAt: new Date() })
       .where(
         and(
-          eq(topics.id, args.topicId),
+          eq(topics.id, input.topicId),
           eq(topics.title, DEFAULT_TOPIC_TITLE),
           inArray(
             topics.assistantId,
             db
               .select({ id: assistants.id })
               .from(assistants)
-              .where(eq(assistants.ownerId, args.actor.userId)),
+              .where(eq(assistants.ownerId, actor.userId)),
           ),
         ),
-      );
+      )
+      .returning({
+        id: topics.id,
+        title: topics.title,
+        createdAt: topics.createdAt,
+        updatedAt: topics.updatedAt,
+      });
+    const row = updated[0];
+    if (row) {
+      return row;
+    }
   } catch {
-    logger.warn({ topicId: args.topicId }, "topic title write failed");
+    logger.warn({ topicId: input.topicId }, "topic title write failed");
   }
+
+  const current = await findTopicForActor(input.topicId, actor);
+  if (!current) {
+    throw new AppError("NOT_FOUND", 404, "Topic not found");
+  }
+  return current;
 }

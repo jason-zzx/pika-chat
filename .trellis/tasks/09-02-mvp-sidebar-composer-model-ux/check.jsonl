@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Quality check section for frontend work"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Icon buttons, responsive footer, no ui/ hand-edits"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "No server data in Zustand; seed vs persist split"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint/typecheck/test and a11y bar"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Mutation invalidation and optimistic rollback"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Assistant default flows client pick → PATCH → tree cache → new-topic seed"}
+{"file": ".trellis/spec/backend/index.md", "reason": "No Server Action; conversation state stays server-authoritative"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Title failure must not fail the chat turn"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "lint/typecheck/test still required after route changes"}

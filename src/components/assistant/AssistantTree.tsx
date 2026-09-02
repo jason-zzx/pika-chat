@@ -16,6 +16,7 @@ import DeleteAssistantDialog from "@/components/assistant/DeleteAssistantDialog"
 import { useAssistantTree } from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
 import CloseOnNavigateLink from "@/components/layout/CloseOnNavigateLink";
+import SettingsNav from "@/components/layout/SettingsNav";
 import SidebarNavLink from "@/components/layout/SidebarNavLink";
 import DeleteTopicDialog from "@/components/topic/DeleteTopicDialog";
 import RenameTopicDialog from "@/components/topic/RenameTopicDialog";
@@ -46,11 +47,16 @@ import {
 import type { Assistant } from "@/lib/schemas/assistant";
 import type { Topic } from "@/lib/schemas/topic";
 
-export default function AssistantTree() {
+type AssistantTreeProps = {
+  showUsers: boolean;
+};
+
+export default function AssistantTree({ showUsers }: AssistantTreeProps) {
   const tree = useAssistantTree();
   const router = useRouter();
   const pathname = usePathname();
   const { assistantId: pathAssistantId, topicId } = parseAssistantPath(pathname);
+  const isSettings = pathname === "/settings" || pathname.startsWith("/settings/");
 
   const assistants = tree.data?.assistants ?? [];
   const viewingId = pathAssistantId;
@@ -73,33 +79,25 @@ export default function AssistantTree() {
 
   return (
     <>
-      <SidebarHeader>
-        {viewing ? (
-          <div className="flex items-center gap-1 px-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Back to assistants"
-              onClick={() => router.push("/")}
-            >
-              <ArrowLeftIcon />
-            </Button>
-            <span aria-hidden="true" className="shrink-0">
-              {viewing.icon}
-            </span>
-            <span className="truncate font-semibold tracking-tight">
-              {viewing.name}
-            </span>
-          </div>
+      <SidebarHeader className="overflow-hidden">
+        {isSettings ? (
+          <PaneHeader title="Settings" onBack={() => router.push("/")} />
+        ) : viewing ? (
+          <PaneHeader
+            title={viewing.name}
+            icon={viewing.icon}
+            onBack={() => router.push("/")}
+          />
         ) : (
-          <div className="flex h-8 items-center px-2">
+          <div className="flex h-8 min-w-0 items-center overflow-hidden px-2">
             <CloseOnNavigateLink href="/">pika-chat</CloseOnNavigateLink>
           </div>
         )}
       </SidebarHeader>
-      <SidebarContent>
-        {tree.isPending ? (
+      <SidebarContent className="overflow-hidden">
+        {isSettings ? (
+          <SettingsNav showUsers={showUsers} />
+        ) : tree.isPending ? (
           <LoadingRows />
         ) : tree.isError ? (
           <EmptyState
@@ -174,6 +172,38 @@ export default function AssistantTree() {
   );
 }
 
+function PaneHeader({
+  title,
+  icon,
+  onBack,
+}: {
+  title: string;
+  icon?: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Back to assistants"
+        onClick={onBack}
+      >
+        <ArrowLeftIcon />
+      </Button>
+      {icon ? (
+        <span aria-hidden="true" className="shrink-0">
+          {icon}
+        </span>
+      ) : null}
+      <span className="min-w-0 truncate font-semibold tracking-tight group-data-[collapsible=icon]:sr-only">
+        {title}
+      </span>
+    </div>
+  );
+}
+
 function LoadingRows() {
   return (
     <SidebarGroup>
@@ -198,10 +228,10 @@ function AssistantList({
   onCreate: () => void;
 }) {
   return (
-    <SidebarGroup>
+    <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SidebarGroupLabel>Assistants</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
+      <SidebarGroupContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <SidebarMenu className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
           {assistants.map((assistant) => (
             <SidebarMenuItem key={assistant.id}>
               <SidebarMenuButton
@@ -214,7 +244,7 @@ function AssistantList({
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-        <div className="pt-1">
+        <div className="shrink-0 pt-1">
           <Button
             type="button"
             variant="ghost"
@@ -249,7 +279,7 @@ function AssistantPane({
 }) {
   return (
     <>
-      <SidebarGroup>
+      <SidebarGroup className="shrink-0">
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -277,9 +307,9 @@ function AssistantPane({
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
-      <SidebarGroup>
+      <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SidebarGroupLabel>Topics</SidebarGroupLabel>
-        <SidebarGroupContent>
+        <SidebarGroupContent className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
           {assistant.topics.length === 0 ? (
             <EmptyState
               title="No topics yet"

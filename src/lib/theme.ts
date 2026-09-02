@@ -36,3 +36,14 @@ export function serializeThemeCookie(value: ThemeCookie): string {
 export function themeDocumentCookie(value: ThemeCookie): string {
   return `${THEME_COOKIE_NAME}=${serializeThemeCookie(value)}; path=/; max-age=${THEME_COOKIE_MAX_AGE}; SameSite=Lax`;
 }
+
+export function nextThemeMode(mode: ThemeMode): ThemeMode {
+  switch (mode) {
+    case "light":
+      return "dark";
+    case "dark":
+      return "system";
+    case "system":
+      return "light";
+  }
+}

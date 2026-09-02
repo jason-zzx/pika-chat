@@ -22,7 +22,12 @@ export default function SidebarNavLink({
 
   return (
     <SidebarMenuButton
-      render={<Link href={href} />}
+      render={
+        <Link
+          href={href}
+          aria-current={isActive ? "page" : undefined}
+        />
+      }
       tooltip={tooltip}
       isActive={isActive}
       onClick={() => setOpenMobile(false)}

@@ -19,7 +19,12 @@ export default defineConfig({
         test: {
           name: "unit-node",
           environment: "node",
-          include: ["src/server/**/*.test.ts", "src/lib/**/*.test.ts"],
+          include: [
+            "src/server/**/*.test.ts",
+            "src/lib/**/*.test.ts",
+            "src/components/**/*.test.ts",
+            "src/stores/**/*.test.ts",
+          ],
           exclude: ["**/*.integration.test.ts"],
         },
       },

@@ -114,3 +114,7 @@ it wrong now means a mobile user loses every answer they switch away from.
 
 Persist the assistant message on stream completion **server-side**, in the
 `onFinish` callback — not from a client callback. The client may be gone.
+
+Topic titles are a separate `POST /api/topics/:id/title` request. Do not
+await title generation in the chat stream `onEnd` — that couples Stop and
+`inFlight` to titling. A slow or failed title call must not fail the turn.

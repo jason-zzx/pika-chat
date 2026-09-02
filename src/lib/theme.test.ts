@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_THEME_COOKIE,
+  nextThemeMode,
   parseThemeCookie,
   serializeThemeCookie,
 } from "./theme";
@@ -44,5 +45,13 @@ describe("serializeThemeCookie", () => {
   it("round-trips through parseThemeCookie", () => {
     const value = { mode: "system" as const, resolved: "dark" as const };
     expect(parseThemeCookie(serializeThemeCookie(value))).toEqual(value);
+  });
+});
+
+describe("nextThemeMode", () => {
+  it("cycles light → dark → system → light", () => {
+    expect(nextThemeMode("light")).toBe("dark");
+    expect(nextThemeMode("dark")).toBe("system");
+    expect(nextThemeMode("system")).toBe("light");
   });
 });

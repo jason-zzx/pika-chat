@@ -1,9 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { cn } from "@/lib/utils";
+import SidebarNavLink from "@/components/layout/SidebarNavLink";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
 type SettingsTab = {
   href: string;
@@ -11,7 +16,7 @@ type SettingsTab = {
   staffOnly?: boolean;
 };
 
-const TABS: SettingsTab[] = [
+const SETTINGS_TABS: SettingsTab[] = [
   { href: "/settings/general", label: "General" },
   { href: "/settings/account", label: "Account" },
   { href: "/settings/providers", label: "Providers" },
@@ -26,25 +31,26 @@ export default function SettingsNav({ showUsers }: SettingsNavProps) {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Settings" className="flex flex-wrap gap-1">
-      {TABS.filter((tab) => !tab.staffOnly || showUsers).map((tab) => {
-        const active = pathname === tab.href;
-        return (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
-              active
-                ? "bg-muted font-medium text-foreground"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+    <SidebarGroup>
+      <SidebarGroupContent>
+        <nav aria-label="Settings">
+          <SidebarMenu>
+            {SETTINGS_TABS.filter((tab) => !tab.staffOnly || showUsers).map(
+              (tab) => (
+                <SidebarMenuItem key={tab.href}>
+                  <SidebarNavLink
+                    href={tab.href}
+                    tooltip={tab.label}
+                    isActive={pathname === tab.href}
+                  >
+                    <span>{tab.label}</span>
+                  </SidebarNavLink>
+                </SidebarMenuItem>
+              ),
             )}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
-    </nav>
+          </SidebarMenu>
+        </nav>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }

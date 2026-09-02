@@ -1,6 +1,7 @@
 import { parseEmpty, parseJson } from "@/lib/api/parse";
 import {
   topicSchema,
+  type GenerateTopicTitleInput,
   type RenameTopicInput,
   type Topic,
 } from "@/lib/schemas/topic";
@@ -14,6 +15,21 @@ export async function renameTopic(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
+  return parseJson(response, (data) => topicSchema.parse(data));
+}
+
+export async function generateTopicTitle(
+  id: string,
+  input: GenerateTopicTitleInput,
+): Promise<Topic> {
+  const response = await fetch(
+    `/api/topics/${encodeURIComponent(id)}/title`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
   return parseJson(response, (data) => topicSchema.parse(data));
 }
 

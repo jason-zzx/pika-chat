@@ -21,10 +21,10 @@ export default function MessageItem({ message }: MessageItemProps) {
     >
       <div
         className={cn(
-          "max-w-[min(100%,42rem)] rounded-lg px-3 py-2 text-sm",
+          "text-sm",
           isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-foreground",
+            ? "max-w-[min(100%,42rem)] rounded-lg bg-muted px-3 py-2 text-foreground"
+            : "w-full",
         )}
       >
         {textParts.length === 0 ? (
@@ -43,10 +43,10 @@ export default function MessageItem({ message }: MessageItemProps) {
           ))
         )}
       </div>
-      {outcome === "stopped" ? (
+      {!isUser && outcome === "stopped" ? (
         <p className="text-xs text-muted-foreground">Stopped</p>
       ) : null}
-      {outcome === "failed" ? (
+      {!isUser && outcome === "failed" ? (
         <p className="text-xs text-destructive" role="alert">
           {message.metadata?.errorMessage ?? "The model failed to respond."}
         </p>

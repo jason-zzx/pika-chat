@@ -1,0 +1,13 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend pre-dev checklist and stack boundary"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Server/client boundary, a11y for icon buttons, no hand-edit of ui/"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "pickedModel is client state; model list stays Query; do not mirror server data"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Mutations invalidate Query keys; optimistic only where latency is felt"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Domain folders; ui/ is generated; promote shared picker on second use"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint, tests, icon-only labels, both breakpoints"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Collapse duplicated model encode/label between picker and editor"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Picker change writes assistant default through existing PATCH"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Reuse Route Handler PATCH; no Server Action; no new endpoint"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Stream onEnd must not await title; titling must not fail the turn"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Route Handler tests and typed errors for chat/title changes"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Chat stays a Route Handler; title stays in the service layer"}
+{"file": ".trellis/tasks/archive/2026-09/08-31-chat-streaming/prd.md", "reason": "Original D6/D7: title must not block first token and should travel on the stream"}

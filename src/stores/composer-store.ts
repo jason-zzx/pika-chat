@@ -6,17 +6,30 @@ export type ComposerModelPick = {
 };
 
 type ComposerState = {
-  draft: string;
-  setDraft: (draft: string) => void;
+  drafts: Record<string, string>;
+  setDraft: (key: string, value: string) => void;
   recentAssistantId: string | null;
   setRecentAssistantId: (id: string | null) => void;
   pickedModel: ComposerModelPick | null;
   setPickedModel: (pick: ComposerModelPick | null) => void;
 };
 
+export function composerDraftKey(
+  topicId: string | undefined,
+  assistantId: string | undefined | null,
+): string {
+  if (topicId) {
+    return `topic:${topicId}`;
+  }
+  return `draft:${assistantId ?? "none"}`;
+}
+
 export const useComposerStore = create<ComposerState>((set) => ({
-  draft: "",
-  setDraft: (draft) => set({ draft }),
+  drafts: {},
+  setDraft: (key, value) =>
+    set((state) => ({
+      drafts: { ...state.drafts, [key]: value },
+    })),
   recentAssistantId: null,
   setRecentAssistantId: (recentAssistantId) => set({ recentAssistantId }),
   pickedModel: null,

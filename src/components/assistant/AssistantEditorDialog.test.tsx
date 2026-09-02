@@ -65,13 +65,21 @@ describe("AssistantEditorDialog", () => {
     renderEditor(null);
 
     expect(await screen.findByLabelText("Name")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Default model"));
+    const modelTrigger = screen.getByLabelText("Default model");
+    await vi.waitFor(() => expect(modelTrigger).toBeEnabled());
+    fireEvent.click(modelTrigger);
+    expect(await screen.findByText("my-keys")).toBeInTheDocument();
+    expect(screen.getByText("local-llama")).toBeInTheDocument();
     expect(
-      await screen.findByText("local-llama · my-keys"),
+      screen.getByText("instance-openai (shared by operator)"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("gpt-4o · instance-openai (shared by operator)"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("gpt-4o")).toBeInTheDocument();
+    expect(screen.getByText("No default model")).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByLabelText("Search models"), {
+      key: "Enter",
+    });
+    expect(createAssistant).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Draft" },

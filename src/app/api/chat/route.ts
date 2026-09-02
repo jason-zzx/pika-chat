@@ -14,7 +14,6 @@ import {
   type ChatMessageOutcome,
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
-import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
 import { createChatModelHandle } from "@/server/ai/chat-model";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
@@ -24,9 +23,7 @@ import {
   appendAssistantMessage,
   appendUserMessage,
   listTopicMessages,
-  textFromMessage,
 } from "@/server/services/message.service";
-import { titleTopicFromFirstMessage } from "@/server/services/title.service";
 import {
   createTopicForChat,
   findTopicContextForActor,
@@ -64,7 +61,6 @@ export const POST = withErrorHandling(async (request) => {
   );
 
   let topicId = input.topicId;
-  let topicTitle = DEFAULT_TOPIC_TITLE;
   let systemPrompt: string | null = null;
 
   if (topicId) {
@@ -72,7 +68,6 @@ export const POST = withErrorHandling(async (request) => {
     if (!context || context.assistant.id !== input.assistantId) {
       throw new AppError("NOT_FOUND", 404, "Topic not found");
     }
-    topicTitle = context.topic.title;
     systemPrompt = context.assistant.systemPrompt;
   } else {
     const created = await createTopicForChat(
@@ -97,17 +92,6 @@ export const POST = withErrorHandling(async (request) => {
 
   const streamId = newId();
   const abortSignal = registerStream(streamId, actor.userId);
-
-  const userText = textFromMessage(storedUser);
-  const titlePromise =
-    topicTitle === DEFAULT_TOPIC_TITLE
-      ? titleTopicFromFirstMessage({
-          topicId,
-          text: userText,
-          model: handle.model,
-          actor,
-        })
-      : Promise.resolve();
 
   logger.info(
     {
@@ -210,7 +194,6 @@ export const POST = withErrorHandling(async (request) => {
           },
           actor,
         );
-        await titlePromise;
         await touchTopicUpdatedAt(persistedTopicId, actor);
       } finally {
         releaseStream(streamId);

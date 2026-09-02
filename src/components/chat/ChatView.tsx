@@ -5,15 +5,31 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState } from "react";
 
-import { assistantKeys, useAssistantTree } from "@/components/assistant/use-assistants";
+import {
+  assistantKeys,
+  useAssistantTree,
+  useGenerateTopicTitle,
+  useSetAssistantDefaultModel,
+} from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
+import InsetHeader from "@/components/layout/InsetHeader";
+import { useAvailableModels } from "@/components/provider/use-available-models";
 import { stopChatStream } from "@/lib/api/chat";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import { assistantTopicHref } from "@/lib/assistant-path";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
-import { useComposerStore } from "@/stores/composer-store";
+import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
+import {
+  composerDraftKey,
+  useComposerStore,
+  type ComposerModelPick,
+} from "@/stores/composer-store";
 
 import Composer from "./Composer";
 import MessageList from "./MessageList";
+import { pairFromIds, sameModelPick } from "./model-pick";
+import { resolveComposerModel } from "./resolve-composer-model";
+import { shouldRequestTopicTitle } from "./should-request-topic-title";
 import { chatKeys, useChatHistory } from "./use-chat-history";
 
 function markLastAssistant(
@@ -48,18 +64,35 @@ export default function ChatView({
 }: ChatViewProps) {
   const queryClient = useQueryClient();
   const tree = useAssistantTree();
+  const models = useAvailableModels();
+  const setAssistantDefault = useSetAssistantDefaultModel();
+  const generateTitle = useGenerateTopicTitle();
+  const generateTitleMutateRef = useRef(generateTitle.mutate);
   const history = useChatHistory(topicId);
   const chatId = topicId ?? "draft";
-  const [activeTopicId, setActiveTopicId] = useState(topicId);
+  const [createdTopicId, setCreatedTopicId] = useState<string | undefined>(
+    undefined,
+  );
+  const activeTopicId = topicId ?? createdTopicId;
   const [streamId, setStreamId] = useState<string | null>(null);
-  const seededHistory = useRef(false);
+  const [defaultModelError, setDefaultModelError] = useState<string | null>(
+    null,
+  );
+  const seededHistoryFor = useRef<string | null>(null);
   const seededModel = useRef<string | null>(null);
-  const latestRef = useRef({
+  const titleRequestedRef = useRef(new Set<string>());
+  const latestRef = useRef<{
+    assistantId: string;
+    topicId: string | undefined;
+    shouldRequestTitle: boolean;
+    titlePick: ComposerModelPick | null;
+  }>({
     assistantId: assistantId ?? "",
     topicId,
+    shouldRequestTitle: false,
+    titlePick: null,
   });
 
-  const draft = useComposerStore((state) => state.draft);
   const setDraft = useComposerStore((state) => state.setDraft);
   const pickedModel = useComposerStore((state) => state.pickedModel);
   const setPickedModel = useComposerStore((state) => state.setPickedModel);
@@ -70,8 +103,11 @@ export default function ChatView({
 
   const assistants = tree.data?.assistants ?? [];
   const resolvedAssistantId = assistantId ?? recentAssistantId ?? assistants[0]?.id;
+  const draftKey = composerDraftKey(activeTopicId, resolvedAssistantId);
+  const draft = useComposerStore((state) => state.drafts[draftKey] ?? "");
   const resolvedAssistant = assistants.find((row) => row.id === resolvedAssistantId);
   const showAssistantPicker = assistantId === undefined;
+  const showChatTitle = Boolean(assistantId || activeTopicId);
   const headerTitle =
     (activeTopicId
       ? assistants
@@ -79,7 +115,7 @@ export default function ChatView({
           .find((topic) => topic.id === activeTopicId)?.title
       : undefined) ??
     topicTitle ??
-    "New topic";
+    DEFAULT_TOPIC_TITLE;
 
   const [transport] = useState(
     () =>
@@ -103,9 +139,27 @@ export default function ChatView({
           return;
         }
         latestRef.current.topicId = part.data.topicId;
-        setActiveTopicId(part.data.topicId);
+        setCreatedTopicId(part.data.topicId);
         setStreamId(part.data.streamId);
-        const assistant = latestRef.current.assistantId;
+        void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
+        const latest = latestRef.current;
+        const requested = titleRequestedRef.current;
+        if (
+          latest.shouldRequestTitle &&
+          latest.titlePick &&
+          !requested.has(part.data.topicId)
+        ) {
+          requested.add(part.data.topicId);
+          void generateTitleMutateRef.current({
+            id: part.data.topicId,
+            input: {
+              providerConfigId: latest.titlePick.configId,
+              modelId: latest.titlePick.modelId,
+            },
+          });
+        }
+        latest.shouldRequestTitle = false;
+        const assistant = latest.assistantId;
         if (assistant.length === 0) {
           return;
         }
@@ -127,16 +181,20 @@ export default function ChatView({
     });
 
   useEffect(() => {
+    generateTitleMutateRef.current = generateTitle.mutate;
+  }, [generateTitle.mutate]);
+
+  useEffect(() => {
     if (assistantId) {
       setRecentAssistantId(assistantId);
     }
   }, [assistantId, setRecentAssistantId]);
 
   useEffect(() => {
-    if (!topicId || !history.data || seededHistory.current) {
+    if (!topicId || !history.data || seededHistoryFor.current === topicId) {
       return;
     }
-    seededHistory.current = true;
+    seededHistoryFor.current = topicId;
     setMessages(history.data.messages);
   }, [history.data, setMessages, topicId]);
 
@@ -145,10 +203,16 @@ export default function ChatView({
     if (topicId && history.isPending) {
       return;
     }
+    if (models.data === undefined) {
+      return;
+    }
+    if (!resolvedAssistant && tree.isPending) {
+      return;
+    }
     if (seededModel.current === key) {
       return;
     }
-    const historyMessages = history.data?.messages ?? messages;
+    const historyMessages = topicId ? (history.data?.messages ?? []) : [];
     const lastAssistant = [...historyMessages]
       .reverse()
       .find(
@@ -157,39 +221,40 @@ export default function ChatView({
           message.metadata?.providerConfigId &&
           message.metadata.modelId,
       );
-    const fromHistory =
-      lastAssistant?.metadata?.providerConfigId && lastAssistant.metadata.modelId
-        ? {
-            configId: lastAssistant.metadata.providerConfigId,
-            modelId: lastAssistant.metadata.modelId,
-          }
-        : null;
-    const fromAssistant =
-      (assistantDefaultProviderConfigId && assistantDefaultModelId
-        ? {
-            configId: assistantDefaultProviderConfigId,
-            modelId: assistantDefaultModelId,
-          }
-        : null) ??
-      (resolvedAssistant?.defaultProviderConfigId &&
-      resolvedAssistant.defaultModelId
-        ? {
-            configId: resolvedAssistant.defaultProviderConfigId,
-            modelId: resolvedAssistant.defaultModelId,
-          }
-        : null);
+    const fromHistory = topicId
+      ? pairFromIds(
+          lastAssistant?.metadata?.providerConfigId,
+          lastAssistant?.metadata?.modelId,
+        )
+      : null;
+    const fromAssistant = resolvedAssistant
+      ? pairFromIds(
+          resolvedAssistant.defaultProviderConfigId,
+          resolvedAssistant.defaultModelId,
+        )
+      : pairFromIds(
+          assistantDefaultProviderConfigId,
+          assistantDefaultModelId,
+        );
     seededModel.current = key;
-    setPickedModel(fromHistory ?? fromAssistant);
+    setPickedModel(
+      resolveComposerModel({
+        topicLastAssistantPair: fromHistory,
+        assistantDefaultPair: fromAssistant,
+        available: models.data,
+      }),
+    );
   }, [
     assistantDefaultModelId,
     assistantDefaultProviderConfigId,
     history.data?.messages,
     history.isPending,
-    messages,
+    models.data,
     resolvedAssistant,
     resolvedAssistantId,
     setPickedModel,
     topicId,
+    tree.isPending,
   ]);
 
   useEffect(() => {
@@ -206,6 +271,46 @@ export default function ChatView({
     Boolean(pickedModel) &&
     !inFlight &&
     (!topicId || history.isSuccess);
+
+  function handleModelChange(pick: ComposerModelPick | null) {
+    const previous = pickedModel;
+    const key = topicId ?? `draft:${resolvedAssistantId ?? "none"}`;
+    seededModel.current = key;
+    setPickedModel(pick);
+    setDefaultModelError(null);
+    if (!pick || !resolvedAssistantId || inFlight) {
+      return;
+    }
+    const stored = pairFromIds(
+      resolvedAssistant?.defaultProviderConfigId,
+      resolvedAssistant?.defaultModelId,
+    );
+    if (sameModelPick(pick, stored)) {
+      return;
+    }
+    setAssistantDefault.mutate(
+      {
+        id: resolvedAssistantId,
+        defaultProviderConfigId: pick.configId,
+        defaultModelId: pick.modelId,
+      },
+      {
+        onError: (caught, variables) => {
+          const current = useComposerStore.getState().pickedModel;
+          if (
+            current?.configId !== variables.defaultProviderConfigId ||
+            current?.modelId !== variables.defaultModelId
+          ) {
+            return;
+          }
+          setPickedModel(previous);
+          setDefaultModelError(
+            apiErrorMessage(caught, "Unable to save default model"),
+          );
+        },
+      },
+    );
+  }
 
   async function handleStop() {
     if (streamId) {
@@ -227,9 +332,15 @@ export default function ChatView({
     latestRef.current = {
       assistantId: resolvedAssistantId,
       topicId: activeTopicId,
+      shouldRequestTitle: shouldRequestTopicTitle({
+        activeTopicId,
+        displayedTitle: headerTitle,
+        requestedTopicIds: titleRequestedRef.current,
+      }),
+      titlePick: pickedModel,
     };
     const text = draft.trim();
-    setDraft("");
+    setDraft(draftKey, "");
     void sendMessage(
       { text },
       {
@@ -246,6 +357,7 @@ export default function ChatView({
   if (topicId && history.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
+        <InsetHeader title={showChatTitle ? headerTitle : null} />
         <EmptyState
           title="Unable to load conversation"
           description="Refresh the page to try again."
@@ -258,13 +370,9 @@ export default function ChatView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-border px-4 py-3">
-        <h1 className="truncate text-lg font-semibold tracking-tight">
-          {headerTitle}
-        </h1>
-      </div>
+      <InsetHeader title={showChatTitle ? headerTitle : null} />
       {historyPending ? (
-        <div className="flex flex-1 items-center justify-center p-6">
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <p className="text-sm text-muted-foreground">
             Loading conversation…
           </p>
@@ -273,19 +381,29 @@ export default function ChatView({
         <MessageList messages={messages} streaming={status === "streaming"} />
       )}
       {error ? (
-        <p className="px-4 pb-2 text-sm text-destructive" role="alert">
+        <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">
           {error.message}
         </p>
       ) : null}
+      {defaultModelError ? (
+        <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">
+          {defaultModelError}
+        </p>
+      ) : null}
       <Composer
+        key={draftKey}
         draft={draft}
-        onDraftChange={setDraft}
+        onDraftChange={(value) => setDraft(draftKey, value)}
         model={pickedModel}
-        onModelChange={setPickedModel}
+        onModelChange={handleModelChange}
         assistantId={resolvedAssistantId}
         onAssistantChange={setRecentAssistantId}
         showAssistantPicker={showAssistantPicker}
         inFlight={inFlight}
+        modelPickerDisabled={
+          setAssistantDefault.isPending ||
+          (!resolvedAssistantId && tree.isPending)
+        }
         canSend={canSend}
         onSend={handleSend}
         onStop={() => {

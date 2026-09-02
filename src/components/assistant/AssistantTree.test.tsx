@@ -49,7 +49,7 @@ function assistant(partial: Partial<Assistant> & Pick<Assistant, "id" | "name">)
   };
 }
 
-function renderTree() {
+function renderTree(options?: { showUsers?: boolean }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -58,7 +58,7 @@ function renderTree() {
       <TooltipProvider>
         <SidebarProvider>
           <Sidebar>
-            <AssistantTree />
+            <AssistantTree showUsers={options?.showUsers ?? false} />
           </Sidebar>
         </SidebarProvider>
       </TooltipProvider>
@@ -136,6 +136,31 @@ describe("AssistantTree", () => {
     expect(await screen.findByRole("button", { name: "Delete" })).toBeEnabled();
   });
 
+  it("does not show New topic on the home assistant list", async () => {
+    nav.pathname = "/";
+    vi.mocked(listAssistantTree).mockResolvedValue({
+      assistants: [assistant({ id: "only", name: "Work" })],
+    });
+
+    renderTree();
+    expect(await screen.findByText("Assistants")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "New topic" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Open Work" })).toBeInTheDocument();
+  });
+
+  it("wraps the assistant emoji under Back when the pane header stacks", async () => {
+    nav.pathname = "/assistant/only";
+    vi.mocked(listAssistantTree).mockResolvedValue({
+      assistants: [assistant({ id: "only", name: "Work", icon: "✨" })],
+    });
+
+    renderTree();
+    expect(await screen.findByRole("button", { name: "Back to assistants" })).toBeInTheDocument();
+    const name = screen.getByText("Work");
+    expect(name.className).toContain("group-data-[collapsible=icon]:sr-only");
+    expect(name.parentElement?.className).toContain("flex-wrap");
+  });
+
   it("links New topic to the assistant draft URL without creating a row", async () => {
     nav.pathname = "/assistant/only";
     vi.mocked(listAssistantTree).mockResolvedValue({
@@ -147,5 +172,54 @@ describe("AssistantTree", () => {
       "href",
       "/assistant/only",
     );
+  });
+
+  it("replaces the assistant list with a settings pane on settings routes", async () => {
+    nav.pathname = "/settings/general";
+    vi.mocked(listAssistantTree).mockResolvedValue({
+      assistants: [assistant({ id: "only", name: "Work" })],
+    });
+
+    renderTree({ showUsers: true });
+
+    expect(screen.getByRole("button", { name: "Back to assistants" })).toBeInTheDocument();
+    expect(screen.getByText("Settings")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "General" })).toHaveAttribute(
+      "href",
+      "/settings/general",
+    );
+    expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute(
+      "href",
+      "/settings/account",
+    );
+    expect(screen.getByRole("link", { name: "Providers" })).toHaveAttribute(
+      "href",
+      "/settings/providers",
+    );
+    expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute(
+      "href",
+      "/settings/users",
+    );
+    expect(screen.getByRole("link", { name: "General" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.queryByText("Work")).toBeNull();
+    expect(screen.queryByText("Assistants")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to assistants" }));
+    expect(nav.push).toHaveBeenCalledWith("/");
+  });
+
+  it("hides the Users settings row for non-staff", () => {
+    nav.pathname = "/settings/account";
+    vi.mocked(listAssistantTree).mockResolvedValue({
+      assistants: [assistant({ id: "only", name: "Work" })],
+    });
+
+    renderTree({ showUsers: false });
+
+    expect(screen.getByRole("link", { name: "Account" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
   });
 });

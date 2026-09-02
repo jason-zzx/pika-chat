@@ -84,5 +84,7 @@ component so `(auth)` can keep a centred layout with no sidebar.
 
 Settings live under `(app)/settings/` so they inherit the shell and the
 session check. `/settings/users` adds a staff role check in its own layout.
-There is no `admin/` page route; `/api/admin/*` and `/api/auth/admin/*` are
-API paths and are unrelated.
+On `/settings/*` the sidebar replaces the assistant list with Back + Settings
+tab rows; the settings page itself has no top tab bar. There is no `admin/`
+page route; `/api/admin/*` and `/api/auth/admin/*` are API paths and are
+unrelated.

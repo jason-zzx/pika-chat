@@ -1,9 +1,9 @@
 "use client";
 
+import { CircleUserRoundIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import ThemeControl from "@/components/layout/ThemeControl";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,19 +16,13 @@ import {
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
 import type { ActorRole } from "@/lib/auth-hierarchy";
-import type { ThemeMode } from "@/lib/theme";
 
 type SidebarUserMenuProps = {
   name: string;
   role: ActorRole;
-  themeMode: ThemeMode;
 };
 
-export default function SidebarUserMenu({
-  name,
-  role,
-  themeMode,
-}: SidebarUserMenuProps) {
+export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
 
@@ -40,36 +34,39 @@ export default function SidebarUserMenu({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<SidebarMenuButton size="lg" />}
-        aria-label={`Account menu for ${name}`}
-      >
-        <span className="truncate">{name}</span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="min-w-56">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>
-            {name} · {role === "super_admin" ? "super admin" : role}
-          </DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          render={<Link href="/settings" />}
-          onClick={() => setOpenMobile(false)}
+    <div className="flex w-full min-w-0 items-center gap-1 group-data-[collapsible=icon]:flex-col">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <SidebarMenuButton className="flex-1" tooltip={name} />
+          }
+          aria-label={`Account menu for ${name}`}
         >
-          Settings
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <div className="px-1.5 py-1">
-          <p className="px-0.5 pb-1 text-xs text-muted-foreground">Theme</p>
-          <ThemeControl initialMode={themeMode} />
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => void onSignOut()}>
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <CircleUserRoundIcon aria-hidden="true" />
+          <span className="truncate">{name}</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="min-w-56">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              {name} · {role === "super_admin" ? "super admin" : role}
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => void onSignOut()}>
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <SidebarMenuButton
+        render={<Link href="/settings" />}
+        tooltip="Settings"
+        aria-label="Settings"
+        className="size-8 shrink-0"
+        onClick={() => setOpenMobile(false)}
+      >
+        <SettingsIcon aria-hidden="true" />
+        <span className="sr-only">Settings</span>
+      </SidebarMenuButton>
+    </div>
   );
 }
