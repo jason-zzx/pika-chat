@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-09-02
+- **Total Sessions**: 7
+- **Last Active**: 2026-09-03
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~199 | Active |
+| `journal-1.md` | ~236 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-09-03 | MVP leftover sidebar, composer, and model UX | `b12664e` | `feat/mvp-sidebar-composer-model-ux` |
 | 6 | 2026-09-02 | Implement chat streaming with server-side persistence | `32a574c` | `feat/scaffold` |
 | 5 | 2026-09-01 | Assistants and Topics | `3dd0e58` | `feat/scaffold` |
 | 4 | 2026-09-01 | Provider and model configuration | `6dff83f` | `feat/scaffold` |

@@ -197,3 +197,40 @@ Implemented the 08-31-chat-streaming task: POST /api/chat streams via AI SDK v7 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: MVP leftover sidebar, composer, and model UX
+<!-- trellis-session: v=2 fp=c53598643cff5106 -->
+
+**Date**: 2026-09-03
+**Task**: MVP leftover sidebar, composer, and model UX
+**Branch**: `feat/mvp-sidebar-composer-model-ux`
+
+### Summary
+
+Landed signed-in chat chrome on feat/mvp-sidebar-composer-model-ux: footer theme and settings, in-box composer, picker-writes-default, independent title HTTP, viewport-locked column, per-topic drafts, and settings as a sidebar pane. A ponytail pass then dropped encode/decode, the claim helper, and the page-theme Tooltip.
+
+### Main Changes
+
+- Sidebar footer: theme cycle, username menu with Sign out only, gear to settings
+- Composer send/expand/pickers, muted user bubbles, 840px column, keyed in-memory drafts
+- POST /api/topics/:id/title separate from chat stream; Stop no longer waits on titling
+- Settings replaces the assistant list; only assistant/topic lists and MessageList scroll
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b12664e` | feat: polish sidebar, composer, and model UX for the signed-in MVP |
+
+### Testing
+
+- [OK] pnpm lint, typecheck, and unit tests; browser-checked chrome, drafts, title timing, and theme cycle
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Open a PR for feat/mvp-sidebar-composer-model-ux when ready to merge
