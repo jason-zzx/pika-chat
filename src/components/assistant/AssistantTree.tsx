@@ -234,18 +234,20 @@ function AssistantList({
   onCreate: () => void;
 }) {
   return (
-    <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
       <SidebarGroupLabel>Assistants</SidebarGroupLabel>
       <SidebarGroupContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <SidebarMenu className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
+        <SidebarMenu className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto">
           {assistants.map((assistant) => (
-            <SidebarMenuItem key={assistant.id}>
+            <SidebarMenuItem key={assistant.id} className="min-w-0 overflow-hidden">
               <SidebarMenuButton
                 onClick={() => onOpen(assistant)}
                 aria-label={`Open ${assistant.name}`}
               >
                 <span aria-hidden="true">{assistant.icon}</span>
-                <span className="truncate">{assistant.name}</span>
+                <span className="truncate group-data-[collapsible=icon]:hidden">
+                  {assistant.name}
+                </span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
@@ -254,11 +256,12 @@ function AssistantList({
           <Button
             type="button"
             variant="ghost"
-            className="w-full justify-start"
+            className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+            aria-label="New assistant"
             onClick={onCreate}
           >
             <PlusIcon aria-hidden="true" />
-            New assistant
+            <span className="group-data-[collapsible=icon]:hidden">New assistant</span>
           </Button>
         </div>
       </SidebarGroupContent>
@@ -285,21 +288,22 @@ function AssistantPane({
 }) {
   return (
     <>
-      <SidebarGroup className="shrink-0">
+      <SidebarGroup className="shrink-0 group-data-[collapsible=icon]:p-1.5">
         <SidebarGroupContent>
           <SidebarMenu>
-            <SidebarMenuItem>
+            <SidebarMenuItem className="min-w-0 overflow-hidden">
               <SidebarMenuButton
                 render={<Link href={assistantDraftHref(assistant.id)} />}
+                aria-label="New topic"
               >
                 <PlusIcon />
-                <span>New topic</span>
+                <span className="group-data-[collapsible=icon]:hidden">New topic</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton onClick={onEdit}>
+            <SidebarMenuItem className="min-w-0 overflow-hidden">
+              <SidebarMenuButton onClick={onEdit} aria-label="Profile">
                 <UserRoundIcon />
-                <span>Profile</span>
+                <span className="group-data-[collapsible=icon]:hidden">Profile</span>
               </SidebarMenuButton>
               <SidebarMenuAction
                 showOnHover
@@ -313,9 +317,9 @@ function AssistantPane({
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
-      <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
         <SidebarGroupLabel>Topics</SidebarGroupLabel>
-        <SidebarGroupContent className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
+        <SidebarGroupContent className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto">
           {assistant.topics.length === 0 ? (
             <EmptyState
               title="No topics yet"
@@ -324,7 +328,7 @@ function AssistantPane({
           ) : (
             <SidebarMenu>
               {assistant.topics.map((topic) => (
-                <SidebarMenuItem key={topic.id}>
+                <SidebarMenuItem key={topic.id} className="min-w-0 overflow-hidden">
                   <SidebarNavLink
                     href={assistantTopicHref(assistant.id, topic.id)}
                     isActive={topic.id === activeTopicId}
