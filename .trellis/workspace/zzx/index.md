@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
-- **Last Active**: 2026-09-03
+- **Total Sessions**: 9
+- **Last Active**: 2026-09-04
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~272 | Active |
+| `journal-1.md` | ~295 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-09-04 | Model metadata, vendor icons, and reasoning UI | `226d4d6`, `2236ed1` | `feat/model-metadata` |
 | 8 | 2026-09-03 | Assistant emoji picker | `2120b90` | `feat/assistant-emoji-picker` |
 | 7 | 2026-09-03 | MVP leftover sidebar, composer, and model UX | `b12664e` | `feat/mvp-sidebar-composer-model-ux` |
 | 6 | 2026-09-02 | Implement chat streaming with server-side persistence | `32a574c` | `feat/scaffold` |

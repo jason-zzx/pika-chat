@@ -270,3 +270,26 @@ Replaced the assistant emoji text field with a Frimousse picker, raised the icon
 ### Next Steps
 
 - Push feat/assistant-emoji-picker and open a PR if this should land.
+
+
+## Session 9: Model metadata, vendor icons, and reasoning UI
+<!-- trellis-session: v=2 fp=a6b381125c847cc3 -->
+
+**Date**: 2026-09-04
+**Task**: Model metadata, vendor icons, and reasoning UI
+**Branch**: `feat/model-metadata`
+
+### Summary
+
+Provider models became editable cards: context/modality/reasoning/effort/vendor fields filled from models.dev with a deterministic vendor tie-break, lazy backfill, and owner PATCH/reset. Picker gained vendor marks and 1M/vision/reasoning icon cues, the composer an Auto-plus-stored-effort control, and streamed reasoning an auto-following collapsible thinking block. User-review rounds fixed the glm-sensenova vendor mix, full-width full-row reasoning toggle, auto-follow scroll, and a portal popup fix (positionMethod=fixed) that stopped pickers from growing the page; trellis-check, ponytail-review, and frontend spec updates (popup positioning convention) landed with the fix commit.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `226d4d6` | feat: persist model metadata with vendor icons and reasoning UI |
+| `2236ed1` | fix: keep portal popups from growing the document scroll area |
+
+### Status
+
+[OK] **Completed**
