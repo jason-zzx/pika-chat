@@ -234,3 +234,39 @@ Landed signed-in chat chrome on feat/mvp-sidebar-composer-model-ux: footer theme
 ### Next Steps
 
 - Open a PR for feat/mvp-sidebar-composer-model-ux when ready to merge
+
+
+## Session 8: Assistant emoji picker
+<!-- trellis-session: v=2 fp=191f7996ca69ca83 -->
+
+**Date**: 2026-09-03
+**Task**: Assistant emoji picker
+**Branch**: `feat/assistant-emoji-picker`
+
+### Summary
+
+Replaced the assistant emoji text field with a Frimousse picker, raised the icon Zod bound to 32, and slimmed tests after a complexity review.
+
+### Main Changes
+
+- Emoji field in create/edit is a labelled picker button; Save still persists icon.
+- Shared createAssistantSchema.icon max is 32 UTF-16 units for ZWJ sequences.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2120b90` | feat: replace assistant emoji typing with a searchable picker |
+
+### Testing
+
+- [OK] Editor dialog unit tests: no emoji textbox, select updates Save, Enter in search does not submit.
+- [OK] createAssistantSchema accepts length 11 and 32, rejects 33.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Push feat/assistant-emoji-picker and open a PR if this should land.
