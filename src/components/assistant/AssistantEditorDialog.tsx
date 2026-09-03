@@ -25,6 +25,7 @@ import {
 } from "@/lib/schemas/assistant";
 import type { ComposerModelPick } from "@/stores/composer-store";
 
+import AssistantEmojiPicker from "./AssistantEmojiPicker";
 import {
   useCreateAssistant,
   useUpdateAssistant,
@@ -119,13 +120,10 @@ export default function AssistantEditorDialog({
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="assistant-icon">Emoji</Label>
-            <Input
+            <AssistantEmojiPicker
               id="assistant-icon"
-              name="icon"
-              required
-              maxLength={8}
               value={icon}
-              onChange={(event) => setIcon(event.target.value)}
+              onChange={setIcon}
             />
           </div>
           <div className="flex flex-col gap-1">

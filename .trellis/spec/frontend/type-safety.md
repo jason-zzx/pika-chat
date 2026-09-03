@@ -41,6 +41,9 @@ the entire point.
 A hand-written `interface Topic` mirroring a server response is forbidden. It
 compiles happily while being wrong.
 
+**Assistant `icon`:** `createAssistantSchema.icon` is UTF-16 `.max(32)` so ZWJ
+picker sequences save; do not add grapheme parsing.
+
 ---
 
 ## Parse at the edge

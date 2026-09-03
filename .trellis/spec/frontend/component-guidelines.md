@@ -128,3 +128,10 @@ that the mobile drawer opens, closes, and closes again after navigation.
 - Hardcoded colors that look fine until dark mode is enabled.
 - Building the desktop layout first and treating mobile as cleanup, which is
   how mobile ends up with an unreachable control.
+- A search field inside a Dialog `<form>` (`ModelPicker`,
+  `AssistantEmojiPicker`): Enter submits Save unless that key is
+  `preventDefault`ed on the popover.
+- Copying Radix `PopoverTrigger asChild` from upstream docs. This repo's
+  popover is Base UI — use `render={<Button type="button" … />}` like
+  `ModelPicker`. Generated `components/ui/emoji-picker.tsx` is Frimousse via
+  the shadcn CLI; compose it, do not restyle by hand.

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Quality check: client boundary, a11y, both breakpoints"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Icon/label a11y and no ui/ hand-edits"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Generated ui/ and domain placement"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint, typecheck, test; no markup snapshots"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Icon max change must stay on the shared schema"}
+{"file": ".trellis/tasks/09-03-assistant-emoji-picker/research/frimousse-shadcn-emoji-picker.md", "reason": "Enter-in-search and Popover-in-Dialog traps"}
