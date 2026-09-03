@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { AvailableModel } from "@/lib/schemas/provider";
+import {
+  defaultModelMetadata,
+  type AvailableModel,
+} from "@/lib/schemas/provider";
 
 import {
   groupAvailableModels,
@@ -16,6 +19,7 @@ const ownLlama: AvailableModel = {
   modelId: "local-llama",
   provenance: "own",
   ownerName: null,
+  ...defaultModelMetadata(),
 };
 
 const ownOther: AvailableModel = {
@@ -24,6 +28,7 @@ const ownOther: AvailableModel = {
   modelId: "other-model",
   provenance: "own",
   ownerName: null,
+  ...defaultModelMetadata(),
 };
 
 const sharedGpt: AvailableModel = {
@@ -32,6 +37,7 @@ const sharedGpt: AvailableModel = {
   modelId: "gpt-4o",
   provenance: "shared",
   ownerName: "operator",
+  ...defaultModelMetadata(),
 };
 
 describe("pairFromIds", () => {

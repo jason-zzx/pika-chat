@@ -3,13 +3,17 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PATCH as patchProvider, DELETE as deleteProvider } from "@/app/api/providers/[id]/route";
+import { newId } from "@/lib/id";
+import { DEFAULT_MODEL_CONTEXT_TOKENS } from "@/lib/schemas/provider";
 import { POST as postDiscover } from "@/app/api/providers/[id]/discover/route";
+import { PATCH as patchProvider, DELETE as deleteProvider } from "@/app/api/providers/[id]/route";
 import {
   POST as postProviderModel,
+  PATCH as patchProviderModel,
   DELETE as deleteProviderModel,
 } from "@/app/api/providers/[id]/models/route";
 import { POST as postProvider } from "@/app/api/providers/route";
+import { resetModelCatalogCache } from "@/server/ai/model-catalog";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { requireActor } from "@/server/auth/actor";
 import {
@@ -40,6 +44,7 @@ import {
   deleteProviderConfig,
   listProviderConfigs,
   updateProviderConfig,
+  updateProviderModel,
 } from "@/server/services/provider.service";
 
 const db = getDb();
@@ -60,6 +65,47 @@ function errorCode(payload: unknown): string {
     }
   }
   throw new Error("expected error.code");
+}
+
+function stubModelsDevCatalog(body: unknown): () => void {
+  const previous = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
+    if (url.includes("models.dev")) {
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+    return previous(input, init);
+  }) as typeof fetch;
+  resetModelCatalogCache();
+  return () => {
+    globalThis.fetch = previous;
+    resetModelCatalogCache();
+  };
+}
+
+function gpt4oCatalog() {
+  return {
+    openai: {
+      id: "openai",
+      models: {
+        "gpt-4o": {
+          reasoning: false,
+          modalities: { input: ["text", "image"], output: ["text"] },
+          limit: { context: 128000, output: 16384 },
+        },
+      },
+    },
+  };
 }
 
 async function resetState(): Promise<void> {
@@ -148,6 +194,7 @@ async function seedActors() {
 describe("provider.service", () => {
   beforeEach(async () => {
     await resetState();
+    resetModelCatalogCache();
   });
 
   afterAll(async () => {
@@ -408,5 +455,259 @@ describe("provider.service", () => {
     await expect(
       updateProviderConfig(config.id, { name: "nope" }, userActor),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("fills unmatched adds with defaults and catalog hits from models.dev", async () => {
+    const { userActor } = await seedActors();
+    const config = await createProviderConfig(
+      {
+        name: "manual",
+        baseUrl: "https://relay.example.com/v1",
+        visibility: "private",
+      },
+      userActor,
+    );
+
+    const missed = await addProviderModel(
+      config.id,
+      { modelId: "local-llama" },
+      userActor,
+    );
+    expect(missed).toMatchObject({
+      modelId: "local-llama",
+      contextTokens: DEFAULT_MODEL_CONTEXT_TOKENS,
+      inputModalities: ["text"],
+      outputModalities: ["text"],
+      reasoning: false,
+      reasoningOptions: [],
+      metadataSource: "default",
+    });
+
+    const restore = stubModelsDevCatalog(gpt4oCatalog());
+    try {
+      const hit = await addProviderModel(
+        config.id,
+        { modelId: "gpt-4o" },
+        userActor,
+      );
+      expect(hit).toMatchObject({
+        modelId: "gpt-4o",
+        contextTokens: 128000,
+        outputTokens: 16384,
+        inputModalities: ["text", "image"],
+        reasoning: false,
+        vendorKey: "openai",
+        metadataSource: "catalog",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("lets the owner patch metadata and returns NOT_FOUND for everyone else", async () => {
+    const { superActor, userActor, userCookie, otherAdminCookie } =
+      await seedActors();
+    const config = await createProviderConfig(
+      {
+        name: "owned",
+        baseUrl: "https://api.example.com/v1",
+        visibility: "private",
+      },
+      userActor,
+    );
+    await addProviderModel(config.id, { modelId: "local-llama" }, userActor);
+
+    const patched = await patchProviderModel(
+      jsonRequest(
+        `/api/providers/${config.id}/models?modelId=${encodeURIComponent("local-llama")}`,
+        {
+          method: "PATCH",
+          cookie: userCookie,
+          body: {
+            contextTokens: 32000,
+            reasoning: true,
+            vendorKey: "meta",
+          },
+        },
+      ),
+      { params: Promise.resolve({ id: config.id }) },
+    );
+    expect(patched.status).toBe(200);
+    expect(asObject(await readJson(patched))).toMatchObject({
+      contextTokens: 32000,
+      reasoning: true,
+      reasoningOptions: ["low", "medium", "high"],
+      vendorKey: "meta",
+      metadataSource: "user",
+    });
+
+    const shared = await createProviderConfig(
+      {
+        name: "shared-meta",
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-admin",
+        visibility: "shared",
+      },
+      superActor,
+    );
+    await addProviderModel(shared.id, { modelId: "gpt-4o" }, superActor);
+    const hijack = await patchProviderModel(
+      jsonRequest(
+        `/api/providers/${shared.id}/models?modelId=${encodeURIComponent("gpt-4o")}`,
+        {
+          method: "PATCH",
+          cookie: otherAdminCookie,
+          body: { reasoning: true },
+        },
+      ),
+      { params: Promise.resolve({ id: shared.id }) },
+    );
+    expect(hijack.status).toBe(404);
+    expect(errorCode(await readJson(hijack))).toBe("NOT_FOUND");
+  });
+
+  it("lazy-fills unsourced rows once and does not overwrite user rows", async () => {
+    const { userActor } = await seedActors();
+    const config = await createProviderConfig(
+      {
+        name: "legacy",
+        baseUrl: "https://relay.example.com/v1",
+        visibility: "private",
+      },
+      userActor,
+    );
+
+    const unsourcedId = newId();
+    await db.insert(providerModels).values({
+      id: unsourcedId,
+      providerConfigId: config.id,
+      modelId: "legacy-id",
+    });
+
+    const listed = await listProviderConfigs(userActor);
+    const filled = listed.own[0]?.models.find(
+      (model) => model.modelId === "legacy-id",
+    );
+    expect(filled).toMatchObject({
+      contextTokens: DEFAULT_MODEL_CONTEXT_TOKENS,
+      metadataSource: "default",
+    });
+    const persisted = await db
+      .select({
+        metadataSource: providerModels.metadataSource,
+      })
+      .from(providerModels)
+      .where(eq(providerModels.id, unsourcedId));
+    expect(persisted[0]?.metadataSource).toBe("default");
+
+    await addProviderModel(config.id, { modelId: "kept-user" }, userActor);
+    const userRow = await updateProviderModel(
+      config.id,
+      "kept-user",
+      { contextTokens: 111, reasoning: true },
+      userActor,
+    );
+    expect(userRow.metadataSource).toBe("user");
+
+    const restore = stubModelsDevCatalog({
+      openai: {
+        id: "openai",
+        models: {
+          "kept-user": {
+            reasoning: false,
+            modalities: { input: ["text"], output: ["text"] },
+            limit: { context: 999 },
+          },
+        },
+      },
+    });
+    try {
+      const again = await listProviderConfigs(userActor);
+      const kept = again.own[0]?.models.find(
+        (model) => model.modelId === "kept-user",
+      );
+      expect(kept).toMatchObject({
+        contextTokens: 111,
+        reasoning: true,
+        metadataSource: "user",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("resets metadata from the catalog when the owner asks", async () => {
+    const { userActor } = await seedActors();
+    const config = await createProviderConfig(
+      {
+        name: "reset",
+        baseUrl: "https://relay.example.com/v1",
+        visibility: "private",
+      },
+      userActor,
+    );
+    await addProviderModel(config.id, { modelId: "gpt-4o" }, userActor);
+    await updateProviderModel(
+      config.id,
+      "gpt-4o",
+      { contextTokens: 42, reasoning: true, vendorKey: "meta" },
+      userActor,
+    );
+
+    const restore = stubModelsDevCatalog(gpt4oCatalog());
+    try {
+      const reset = await updateProviderModel(
+        config.id,
+        "gpt-4o",
+        { resetFromCatalog: true },
+        userActor,
+      );
+      expect(reset).toMatchObject({
+        contextTokens: 128000,
+        outputTokens: 16384,
+        inputModalities: ["text", "image"],
+        vendorKey: "openai",
+        metadataSource: "catalog",
+        reasoning: false,
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("upgrades default rows when a later catalog lookup hits", async () => {
+    const { userActor } = await seedActors();
+    const config = await createProviderConfig(
+      {
+        name: "stale-default",
+        baseUrl: "https://relay.example.com/v1",
+        visibility: "private",
+      },
+      userActor,
+    );
+    const staleId = newId();
+    await db.insert(providerModels).values({
+      id: staleId,
+      providerConfigId: config.id,
+      modelId: "gpt-4o",
+      metadataSource: "default",
+    });
+
+    const restore = stubModelsDevCatalog(gpt4oCatalog());
+    try {
+      const listed = await listProviderConfigs(userActor);
+      const gpt = listed.own[0]?.models.find(
+        (model) => model.modelId === "gpt-4o",
+      );
+      expect(gpt).toMatchObject({
+        contextTokens: 128000,
+        outputTokens: 16384,
+        inputModalities: ["text", "image"],
+        vendorKey: "openai",
+        metadataSource: "catalog",
+      });
+    } finally {
+      restore();
+    }
   });
 });

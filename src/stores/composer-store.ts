@@ -12,6 +12,8 @@ type ComposerState = {
   setRecentAssistantId: (id: string | null) => void;
   pickedModel: ComposerModelPick | null;
   setPickedModel: (pick: ComposerModelPick | null) => void;
+  reasoningEffort: string | null;
+  setReasoningEffort: (effort: string | null) => void;
 };
 
 export function composerDraftKey(
@@ -34,4 +36,6 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setRecentAssistantId: (recentAssistantId) => set({ recentAssistantId }),
   pickedModel: null,
   setPickedModel: (pickedModel) => set({ pickedModel }),
+  reasoningEffort: null,
+  setReasoningEffort: (reasoningEffort) => set({ reasoningEffort }),
 }));

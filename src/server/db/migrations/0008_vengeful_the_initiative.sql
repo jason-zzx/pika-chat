@@ -1,0 +1,1 @@
+ALTER TABLE "provider_models" ADD COLUMN "output_tokens" integer DEFAULT 65536 NOT NULL;

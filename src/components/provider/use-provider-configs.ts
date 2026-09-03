@@ -10,11 +10,13 @@ import {
   listProviderConfigs,
   removeProviderModel,
   updateProviderConfig,
+  updateProviderModel,
 } from "@/lib/api/provider";
 import type {
   AddProviderModelInput,
   CreateProviderConfigInput,
   UpdateProviderConfigInput,
+  UpdateProviderModelInput,
 } from "@/lib/schemas/provider";
 
 import { availableModelKeys } from "./use-available-models";
@@ -108,6 +110,24 @@ export function useRemoveProviderModel() {
       configId: string;
       modelId: string;
     }) => removeProviderModel(configId, modelId),
+    onSuccess: () => {
+      void invalidate();
+    },
+  });
+}
+
+export function useUpdateProviderModel() {
+  const invalidate = useInvalidateProviderQueries();
+  return useMutation({
+    mutationFn: ({
+      configId,
+      modelId,
+      input,
+    }: {
+      configId: string;
+      modelId: string;
+      input: UpdateProviderModelInput;
+    }) => updateProviderModel(configId, modelId, input),
     onSuccess: () => {
       void invalidate();
     },

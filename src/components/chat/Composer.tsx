@@ -14,13 +14,24 @@ import {
   useState,
 } from "react";
 
+import { useAvailableModels } from "@/components/provider/use-available-models";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ComposerModelPick } from "@/stores/composer-store";
 
 import AssistantPicker from "./AssistantPicker";
+import { findAvailableModel } from "./model-pick";
 import ModelPicker from "./ModelPicker";
+
+const AUTO_EFFORT = "__auto";
 
 const MIN_ROWS = 2;
 
@@ -37,6 +48,8 @@ type ComposerProps = {
   canSend: boolean;
   onSend: () => void;
   onStop: () => void;
+  reasoningEffort: string | null;
+  onReasoningEffortChange: (value: string | null) => void;
 };
 
 export default function Composer({
@@ -52,7 +65,11 @@ export default function Composer({
   canSend,
   onSend,
   onStop,
+  reasoningEffort,
+  onReasoningEffortChange,
 }: ComposerProps) {
+  const models = useAvailableModels();
+  const selected = findAvailableModel(models.data, model);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowsCollapsed, setOverflowsCollapsed] = useState(false);
@@ -139,6 +156,14 @@ export default function Composer({
                 onChange={onModelChange}
                 disabled={inFlight || modelPickerDisabled}
               />
+              {selected?.reasoning ? (
+                <ReasoningEffortSelect
+                  options={selected.reasoningOptions}
+                  value={reasoningEffort}
+                  onChange={onReasoningEffortChange}
+                  disabled={inFlight}
+                />
+              ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
               {showExpandToggle ? (
@@ -183,5 +208,42 @@ export default function Composer({
         </div>
       </div>
     </form>
+  );
+}
+
+function ReasoningEffortSelect({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: string[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+  disabled: boolean;
+}) {
+  return (
+    <Select
+      value={value ?? AUTO_EFFORT}
+      onValueChange={(next) => {
+        if (typeof next !== "string") {
+          return;
+        }
+        onChange(next === AUTO_EFFORT ? null : next);
+      }}
+      disabled={disabled}
+    >
+      <SelectTrigger size="sm" aria-label="Reasoning effort">
+        <SelectValue>{value ?? "Auto"}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={AUTO_EFFORT}>Auto</SelectItem>
+        {options.map((option) => (
+          <SelectItem key={option} value={option}>
+            {option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

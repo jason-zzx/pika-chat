@@ -27,7 +27,12 @@ import {
 
 import Composer from "./Composer";
 import MessageList from "./MessageList";
-import { pairFromIds, sameModelPick } from "./model-pick";
+import {
+  findAvailableModel,
+  pairFromIds,
+  sameModelPick,
+} from "./model-pick";
+import { reasoningEffortRequestValue } from "./reasoning-effort";
 import { resolveComposerModel } from "./resolve-composer-model";
 import { shouldRequestTopicTitle } from "./should-request-topic-title";
 import { chatKeys, useChatHistory } from "./use-chat-history";
@@ -96,6 +101,10 @@ export default function ChatView({
   const setDraft = useComposerStore((state) => state.setDraft);
   const pickedModel = useComposerStore((state) => state.pickedModel);
   const setPickedModel = useComposerStore((state) => state.setPickedModel);
+  const reasoningEffort = useComposerStore((state) => state.reasoningEffort);
+  const setReasoningEffort = useComposerStore(
+    (state) => state.setReasoningEffort,
+  );
   const recentAssistantId = useComposerStore((state) => state.recentAssistantId);
   const setRecentAssistantId = useComposerStore(
     (state) => state.setRecentAssistantId,
@@ -258,6 +267,27 @@ export default function ChatView({
   ]);
 
   useEffect(() => {
+    const selected = findAvailableModel(models.data, pickedModel);
+    if (!selected?.reasoning) {
+      if (reasoningEffort !== null) {
+        setReasoningEffort(null);
+      }
+      return;
+    }
+    if (
+      reasoningEffort !== null &&
+      !selected.reasoningOptions.includes(reasoningEffort)
+    ) {
+      setReasoningEffort(null);
+    }
+  }, [
+    models.data,
+    pickedModel,
+    reasoningEffort,
+    setReasoningEffort,
+  ]);
+
+  useEffect(() => {
     if (status !== "error") {
       return;
     }
@@ -341,6 +371,8 @@ export default function ChatView({
     };
     const text = draft.trim();
     setDraft(draftKey, "");
+    const selected = findAvailableModel(models.data, pickedModel);
+    const effort = reasoningEffortRequestValue(selected, reasoningEffort);
     void sendMessage(
       { text },
       {
@@ -349,6 +381,7 @@ export default function ChatView({
           topicId: activeTopicId,
           providerConfigId: pickedModel.configId,
           modelId: pickedModel.modelId,
+          ...(effort === undefined ? {} : { reasoningEffort: effort }),
         },
       },
     );
@@ -409,6 +442,8 @@ export default function ChatView({
         onStop={() => {
           void handleStop();
         }}
+        reasoningEffort={reasoningEffort}
+        onReasoningEffortChange={setReasoningEffort}
       />
     </div>
   );

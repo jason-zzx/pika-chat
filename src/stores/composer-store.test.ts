@@ -16,6 +16,7 @@ describe("useComposerStore drafts", () => {
       drafts: {},
       recentAssistantId: null,
       pickedModel: null,
+      reasoningEffort: null,
     });
   });
 
@@ -35,5 +36,12 @@ describe("useComposerStore drafts", () => {
     useComposerStore.getState().setDraft(topicA, "");
     expect(useComposerStore.getState().drafts[topicA]).toBe("");
     expect(useComposerStore.getState().drafts[topicB]).toBe("hello B");
+  });
+
+  it("stores reasoning effort separately from the model pick", () => {
+    useComposerStore.getState().setReasoningEffort("high");
+    expect(useComposerStore.getState().reasoningEffort).toBe("high");
+    useComposerStore.getState().setReasoningEffort(null);
+    expect(useComposerStore.getState().reasoningEffort).toBeNull();
   });
 });

@@ -7,13 +7,24 @@ import { newId } from "@/lib/id";
 import type {
   AddProviderModelInput,
   CreateProviderConfigInput,
+  ModelMetadataFields,
   OwnProviderConfig,
   ProviderConfigList,
   ProviderModel,
   SharedProviderConfig,
   UpdateProviderConfigInput,
+  UpdateProviderModelInput,
 } from "@/lib/schemas/provider";
+import { SEEDED_REASONING_OPTIONS } from "@/lib/schemas/provider";
 import { fetchServedModelIds } from "@/server/ai/discovery";
+import { fillMetadataForModelId } from "@/server/ai/model-catalog";
+import {
+  fillValues,
+  hydrateUnsourcedModels,
+  providerModelColumns,
+  toProviderModel,
+  type StoredProviderModel,
+} from "@/server/ai/model-fill";
 import type { Actor } from "@/server/auth/actor";
 import { decryptSecret, encryptSecret } from "@/server/crypto";
 import { getDb } from "@/server/db/client";
@@ -104,10 +115,7 @@ async function loadOwnConfig(
         visibility: providerConfigs.visibility,
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       },
-      model: {
-        id: providerModels.id,
-        modelId: providerModels.modelId,
-      },
+      model: providerModelColumns,
     })
     .from(providerConfigs)
     .leftJoin(
@@ -124,12 +132,9 @@ async function loadOwnConfig(
   if (!first) {
     throw new AppError("NOT_FOUND", 404, "Provider not found");
   }
-  const models: ProviderModel[] = [];
-  for (const row of rows) {
-    if (row.model?.id) {
-      models.push({ id: row.model.id, modelId: row.model.modelId });
-    }
-  }
+  const models: ProviderModel[] = await hydrateUnsourcedModels(
+    rows.flatMap((row) => (row.model?.id ? [row.model] : [])),
+  );
   return toOwnConfig(first.config, models);
 }
 
@@ -148,10 +153,7 @@ export async function listProviderConfigs(
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       },
       ownerName: users.username,
-      model: {
-        id: providerModels.id,
-        modelId: providerModels.modelId,
-      },
+      model: providerModelColumns,
     })
     .from(providerConfigs)
     .innerJoin(users, eq(users.id, providerConfigs.ownerId))
@@ -165,6 +167,15 @@ export async function listProviderConfigs(
         eq(providerConfigs.visibility, "shared"),
       ),
     );
+
+  const storedModels: StoredProviderModel[] = [];
+  for (const row of rows) {
+    if (row.model?.id) {
+      storedModels.push(row.model);
+    }
+  }
+  const hydrated = await hydrateUnsourcedModels(storedModels);
+  const byId = new Map(hydrated.map((model) => [model.id, model]));
 
   const grouped = new Map<
     string,
@@ -181,7 +192,10 @@ export async function listProviderConfigs(
       grouped.set(row.config.id, entry);
     }
     if (row.model?.id) {
-      entry.models.push({ id: row.model.id, modelId: row.model.modelId });
+      const model = byId.get(row.model.id);
+      if (model) {
+        entry.models.push(model);
+      }
     }
   }
 
@@ -339,6 +353,7 @@ export async function addProviderModel(
   actor: Actor,
 ): Promise<ProviderModel> {
   await requireOwnedConfig(configId, actor);
+  const fill = await fillMetadataForModelId(input.modelId);
   const db = getDb();
   try {
     const inserted = await db
@@ -347,16 +362,14 @@ export async function addProviderModel(
         id: newId(),
         providerConfigId: configId,
         modelId: input.modelId,
+        ...fillValues(fill),
       })
-      .returning({
-        id: providerModels.id,
-        modelId: providerModels.modelId,
-      });
+      .returning(providerModelColumns);
     const row = inserted[0];
     if (!row) {
       throw new AppError("INTERNAL", 500, "Failed to add model");
     }
-    return row;
+    return toProviderModel(row);
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw new AppError(
@@ -367,6 +380,70 @@ export async function addProviderModel(
     }
     throw error;
   }
+}
+
+export async function updateProviderModel(
+  configId: string,
+  modelId: string,
+  input: UpdateProviderModelInput,
+  actor: Actor,
+): Promise<ProviderModel> {
+  await requireOwnedConfig(configId, actor);
+  const db = getDb();
+  const existingRows = await db
+    .select(providerModelColumns)
+    .from(providerModels)
+    .where(
+      and(
+        eq(providerModels.providerConfigId, configId),
+        eq(providerModels.modelId, modelId),
+      ),
+    )
+    .limit(1);
+  const existing = existingRows[0];
+  if (!existing) {
+    throw new AppError("NOT_FOUND", 404, "Model not found");
+  }
+
+  let next: ModelMetadataFields;
+  if (input.resetFromCatalog) {
+    next = await fillMetadataForModelId(modelId);
+  } else {
+    const current = toProviderModel(existing);
+    next = {
+      contextTokens: input.contextTokens ?? current.contextTokens,
+      outputTokens: input.outputTokens ?? current.outputTokens,
+      inputModalities: input.inputModalities ?? current.inputModalities,
+      outputModalities: input.outputModalities ?? current.outputModalities,
+      reasoning: input.reasoning ?? current.reasoning,
+      reasoningOptions: input.reasoningOptions ?? current.reasoningOptions,
+      vendorKey:
+        input.vendorKey === undefined ? current.vendorKey : input.vendorKey,
+      metadataSource: "user",
+    };
+    if (next.reasoning && next.reasoningOptions.length === 0) {
+      next = { ...next, reasoningOptions: [...SEEDED_REASONING_OPTIONS] };
+    }
+  }
+
+  const updated = await db
+    .update(providerModels)
+    .set({
+      ...fillValues(next),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(providerModels.providerConfigId, configId),
+        eq(providerModels.modelId, modelId),
+      ),
+    )
+    .returning(providerModelColumns);
+  const row = updated[0];
+  if (!row) {
+    throw new AppError("NOT_FOUND", 404, "Model not found");
+  }
+  return toProviderModel(row);
 }
 
 export async function removeProviderModel(

@@ -11,6 +11,7 @@ vi.mock("@/lib/api/provider", () => ({
   deleteProviderConfig: vi.fn(),
   discoverProviderModels: vi.fn(),
   addProviderModel: vi.fn(),
+  updateProviderModel: vi.fn(),
   removeProviderModel: vi.fn(),
 }));
 

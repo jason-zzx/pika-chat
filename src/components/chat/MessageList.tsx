@@ -26,8 +26,16 @@ export default function MessageList({ messages, streaming }: MessageListProps) {
         <div className="sr-only" aria-live="polite">
           {streaming ? "Assistant is responding" : ""}
         </div>
-        {messages.map((message) => (
-          <MessageItem key={message.id} message={message} />
+        {messages.map((message, index) => (
+          <MessageItem
+            key={message.id}
+            message={message}
+            streaming={
+              streaming &&
+              index === messages.length - 1 &&
+              message.role === "assistant"
+            }
+          />
         ))}
       </div>
     </div>

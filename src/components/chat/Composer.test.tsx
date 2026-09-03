@@ -3,6 +3,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { listAvailableModels } from "@/lib/api/provider";
+import {
+  defaultModelMetadata,
+  type AvailableModel,
+} from "@/lib/schemas/provider";
 
 import Composer from "./Composer";
 
@@ -14,13 +18,16 @@ function renderComposer(options?: {
   inFlight?: boolean;
   canSend?: boolean;
   draft?: string;
+  models?: AvailableModel[];
+  reasoningEffort?: string | null;
 }) {
-  vi.mocked(listAvailableModels).mockResolvedValue([]);
+  vi.mocked(listAvailableModels).mockResolvedValue(options?.models ?? []);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const onSend = vi.fn();
   const onStop = vi.fn();
+  const onReasoningEffortChange = vi.fn();
   render(
     <QueryClientProvider client={client}>
       <Composer
@@ -33,10 +40,12 @@ function renderComposer(options?: {
         canSend={options?.canSend ?? true}
         onSend={onSend}
         onStop={onStop}
+        reasoningEffort={options?.reasoningEffort ?? null}
+        onReasoningEffortChange={onReasoningEffortChange}
       />
     </QueryClientProvider>,
   );
-  return { onSend, onStop };
+  return { onSend, onStop, onReasoningEffortChange };
 }
 
 describe("Composer", () => {
@@ -109,6 +118,55 @@ describe("Composer", () => {
     expect(
       screen.queryByRole("button", { name: "Expand composer" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("hides reasoning effort when the selected model does not reason", async () => {
+    renderComposer({
+      models: [
+        {
+          configId: "cfg",
+          configName: "my-keys",
+          modelId: "local-llama",
+          provenance: "own",
+          ownerName: null,
+          ...defaultModelMetadata(),
+        },
+      ],
+    });
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "local-llama" }),
+      ).toBeEnabled(),
+    );
+    expect(
+      screen.queryByRole("combobox", { name: "Reasoning effort" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Auto plus stored effort options for a reasoning model", async () => {
+    renderComposer({
+      models: [
+        {
+          configId: "cfg",
+          configName: "my-keys",
+          modelId: "local-llama",
+          provenance: "own",
+          ownerName: null,
+          ...defaultModelMetadata({
+            reasoning: true,
+            reasoningOptions: ["low", "high"],
+          }),
+        },
+      ],
+    });
+    const effort = await screen.findByRole("combobox", {
+      name: "Reasoning effort",
+    });
+    expect(effort).toHaveTextContent("Auto");
+    fireEvent.click(effort);
+    expect(await screen.findByRole("option", { name: "Auto" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "low" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "high" })).toBeInTheDocument();
   });
 
   it("places expand on the send row, left of send, with no extra row above the textarea", () => {

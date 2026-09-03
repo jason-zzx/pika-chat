@@ -3,6 +3,10 @@ import "server-only";
 import { eq, or } from "drizzle-orm";
 
 import type { AvailableModel } from "@/lib/schemas/provider";
+import {
+  hydrateUnsourcedModels,
+  providerModelColumns,
+} from "@/server/ai/model-fill";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { providerConfigs, providerModels, users } from "@/server/db/schema";
@@ -17,7 +21,7 @@ export async function resolveAvailableModels(
       configName: providerConfigs.name,
       ownerId: providerConfigs.ownerId,
       ownerName: users.username,
-      modelId: providerModels.modelId,
+      model: providerModelColumns,
     })
     .from(providerModels)
     .innerJoin(
@@ -32,14 +36,31 @@ export async function resolveAvailableModels(
       ),
     );
 
-  return rows.map((row) => {
+  const hydrated = await hydrateUnsourcedModels(rows.map((row) => row.model));
+  const byId = new Map(hydrated.map((model) => [model.id, model]));
+
+  return rows.flatMap((row) => {
+    const model = byId.get(row.model.id);
+    if (!model) {
+      return [];
+    }
     const provenance = row.ownerId === actor.userId ? "own" : "shared";
-    return {
-      configId: row.configId,
-      configName: row.configName,
-      modelId: row.modelId,
-      provenance,
-      ownerName: provenance === "shared" ? row.ownerName : null,
-    };
+    return [
+      {
+        configId: row.configId,
+        configName: row.configName,
+        modelId: model.modelId,
+        provenance,
+        ownerName: provenance === "shared" ? row.ownerName : null,
+        contextTokens: model.contextTokens,
+        outputTokens: model.outputTokens,
+        inputModalities: model.inputModalities,
+        outputModalities: model.outputModalities,
+        reasoning: model.reasoning,
+        reasoningOptions: model.reasoningOptions,
+        vendorKey: model.vendorKey,
+        metadataSource: model.metadataSource,
+      },
+    ];
   });
 }

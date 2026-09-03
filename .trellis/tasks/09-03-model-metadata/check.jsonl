@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "lint/type/test bar; no any or non-null assertions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "a11y, both breakpoints, no snapshots of markup"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Quality Check: ownership filters, Zod at boundary, generated migration from empty DB"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Quality Check: no server state in Zustand, use client at the leaf"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Source discriminator vs user override; still one resolution function"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Effort not on the row is VALIDATION_FAILED; stream errors stay inside the stream"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Effort stayed client state; metadata stayed on AvailableModel from Query"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Picker and chat POST used inferred schema types"}
+{"file": ".trellis/tasks/09-03-model-metadata/research/catalog-icons-reasoning.md", "reason": "sendReasoning true; providerOptions key openaiCompatible; Auto omits the field"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Same metadata shape from row to picker to chat validation"}

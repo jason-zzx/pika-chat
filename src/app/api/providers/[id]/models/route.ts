@@ -1,10 +1,14 @@
 import { withErrorHandling } from "@/app/api/_lib/with-error-handling";
-import { addProviderModelSchema } from "@/lib/schemas/provider";
+import {
+  addProviderModelSchema,
+  updateProviderModelSchema,
+} from "@/lib/schemas/provider";
 import { AppError } from "@/server/errors";
 import { requireActor } from "@/server/auth/actor";
 import {
   addProviderModel,
   removeProviderModel,
+  updateProviderModel,
 } from "@/server/services/provider.service";
 
 export const POST = withErrorHandling(async (request, context) => {
@@ -16,6 +20,18 @@ export const POST = withErrorHandling(async (request, context) => {
   const input = addProviderModelSchema.parse(await request.json());
   const model = await addProviderModel(id, input, actor);
   return Response.json(model, { status: 201 });
+});
+
+export const PATCH = withErrorHandling(async (request, context) => {
+  const actor = await requireActor(request.headers);
+  const id = (await context?.params)?.id;
+  const modelId = new URL(request.url).searchParams.get("modelId");
+  if (!id || !modelId) {
+    throw new AppError("NOT_FOUND", 404, "Model not found");
+  }
+  const input = updateProviderModelSchema.parse(await request.json());
+  const model = await updateProviderModel(id, modelId, input, actor);
+  return Response.json(model);
 });
 
 export const DELETE = withErrorHandling(async (request, context) => {
