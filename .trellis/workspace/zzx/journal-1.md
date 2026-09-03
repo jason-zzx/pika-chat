@@ -293,3 +293,25 @@ Provider models became editable cards: context/modality/reasoning/effort/vendor 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 10: Chat message meta info
+<!-- trellis-session: v=2 fp=811d1d8d9755fdac -->
+
+**Date**: 2026-09-04
+**Task**: Chat message meta info
+**Branch**: `main`
+
+### Summary
+
+Messages read as transcripts: topic title at 1rem, assistant messages open with emoji+name header (hover-revealed time beside it) and close with the bare model id, every message gets hover-revealed copy and timestamp (relative under a day, dated beyond, exact tooltip), and the reasoning toggle reports Thought (X.Xs). createdAt rides shared ChatMetadata (optimistic client stamp, server stream-start persisted so reloads agree) and a nullable reasoning_ms column stores the server-measured duration emitted early via a message-metadata chunk. Ponytail pass removed ~55 lines (unused className props, unmount timer effect, conditional spread over drizzle undefined-skip, full-shape test asserts). trellis-check PASS; spec updates: frontend hover-reveal convention, backend chat-message-metadata contract.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `581961e` | feat: surface per-message meta in the chat view |
+
+### Status
+
+[OK] **Completed**
