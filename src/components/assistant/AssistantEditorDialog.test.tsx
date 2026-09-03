@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAssistant } from "@/lib/api/assistant";
 import { listAvailableModels } from "@/lib/api/provider";
 import type { Assistant } from "@/lib/schemas/assistant";
+import { defaultModelMetadata } from "@/lib/schemas/provider";
 
 import AssistantEditorDialog from "./AssistantEditorDialog";
 
@@ -74,6 +75,7 @@ describe("AssistantEditorDialog", () => {
         modelId: "local-llama",
         provenance: "own",
         ownerName: null,
+        ...defaultModelMetadata(),
       },
       {
         configId: "cfg-shared",
@@ -81,6 +83,7 @@ describe("AssistantEditorDialog", () => {
         modelId: "gpt-4o",
         provenance: "shared",
         ownerName: "operator",
+        ...defaultModelMetadata(),
       },
     ]);
     vi.mocked(createAssistant).mockResolvedValue({
@@ -138,6 +141,7 @@ describe("AssistantEditorDialog", () => {
         modelId: "local-llama",
         provenance: "own",
         ownerName: null,
+        ...defaultModelMetadata(),
       },
     ]);
 

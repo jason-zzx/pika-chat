@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { listAvailableModels } from "@/lib/api/provider";
+import { defaultModelMetadata } from "@/lib/schemas/provider";
 
 import ModelPicker from "./ModelPicker";
 
@@ -39,6 +40,7 @@ describe("ModelPicker", () => {
         modelId: "local-llama",
         provenance: "own",
         ownerName: null,
+        ...defaultModelMetadata(),
       },
       {
         configId: "cfg-own",
@@ -46,6 +48,7 @@ describe("ModelPicker", () => {
         modelId: "other-model",
         provenance: "own",
         ownerName: null,
+        ...defaultModelMetadata(),
       },
       {
         configId: "cfg-shared",
@@ -53,6 +56,10 @@ describe("ModelPicker", () => {
         modelId: "gpt-4o",
         provenance: "shared",
         ownerName: "operator",
+        ...defaultModelMetadata({
+          contextTokens: 128000,
+          inputModalities: ["text", "image"],
+        }),
       },
     ]);
 
@@ -97,6 +104,7 @@ describe("ModelPicker", () => {
         modelId: "local-llama",
         provenance: "own",
         ownerName: null,
+        ...defaultModelMetadata(),
       },
     ]);
 
@@ -108,5 +116,68 @@ describe("ModelPicker", () => {
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByText("No default model"));
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it("shows a 1M context label, hides labels under 1M, and renders vision and reasoning as icons", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([
+      {
+        configId: "cfg-own",
+        configName: "my-keys",
+        modelId: "small-context",
+        provenance: "own",
+        ownerName: null,
+        ...defaultModelMetadata({ contextTokens: 200_000 }),
+      },
+      {
+        configId: "cfg-own",
+        configName: "my-keys",
+        modelId: "image-only",
+        provenance: "own",
+        ownerName: null,
+        ...defaultModelMetadata({
+          contextTokens: 200_000,
+          inputModalities: ["text", "image"],
+        }),
+      },
+      {
+        configId: "cfg-own",
+        configName: "my-keys",
+        modelId: "big-context",
+        provenance: "own",
+        ownerName: null,
+        ...defaultModelMetadata({
+          contextTokens: 1_048_576,
+          inputModalities: ["text", "image"],
+          reasoning: true,
+          reasoningOptions: ["low", "medium", "high"],
+        }),
+      },
+    ]);
+
+    renderPicker();
+    const trigger = await screen.findByRole("button", {
+      name: "Select a model",
+    });
+    await vi.waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+
+    expect(screen.getByText("1M")).toBeInTheDocument();
+    expect(screen.queryByText("200K")).not.toBeInTheDocument();
+    expect(screen.queryByText("1M · vision")).not.toBeInTheDocument();
+
+    expect(screen.getAllByTitle("Vision")).toHaveLength(2);
+    expect(screen.getAllByTitle("Vision")[0]).toHaveAccessibleName("Vision");
+
+    const bigRow = screen.getByRole("button", { name: /big-context/ });
+    expect(bigRow).toHaveAccessibleName(/Vision/);
+    expect(bigRow).toHaveAccessibleName(/Reasoning/);
+
+    const imageRow = screen.getByRole("button", { name: /image-only/ });
+    expect(imageRow).toHaveAccessibleName(/Vision/);
+    expect(imageRow).not.toHaveAccessibleName(/Reasoning/);
+    expect(imageRow).not.toHaveAccessibleName(/1M/);
+
+    expect(screen.queryByText("vision")).not.toBeInTheDocument();
+    expect(screen.queryByText("reasoning")).not.toBeInTheDocument();
   });
 });

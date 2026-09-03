@@ -15,6 +15,9 @@ import {
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
 import { createChatModelHandle } from "@/server/ai/chat-model";
+import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
+import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
+import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
@@ -52,6 +55,24 @@ export const POST = withErrorHandling(async (request) => {
   const input = chatRequestSchema.parse(await request.json());
 
   // Before any topic row exists: an unusable model must not leave a draft behind.
+  const available = await resolveAvailableModels(actor);
+  const selected = available.find(
+    (model) =>
+      model.configId === input.providerConfigId &&
+      model.modelId === input.modelId,
+  );
+  if (!selected) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      400,
+      "Selected model is not available",
+    );
+  }
+  const reasoningEffort = resolvedReasoningEffort(
+    selected,
+    input.reasoningEffort,
+  );
+
   const handle = await createChatModelHandle(
     {
       providerConfigId: input.providerConfigId,
@@ -110,6 +131,13 @@ export const POST = withErrorHandling(async (request) => {
     messages: modelMessages,
     instructions: systemPrompt ?? undefined,
     abortSignal,
+    maxOutputTokens: resolvedMaxOutputTokens(selected),
+    providerOptions:
+      reasoningEffort === undefined
+        ? undefined
+        : {
+            openaiCompatible: { reasoningEffort },
+          },
     onError: ({ error }) => {
       logger.error(
         {
@@ -143,7 +171,7 @@ export const POST = withErrorHandling(async (request) => {
           originalMessages,
           generateMessageId: newId,
           sendStart: false,
-          sendReasoning: false,
+          sendReasoning: true,
           messageMetadata: ({ part }) => {
             if (part.type !== "finish") {
               return undefined;
@@ -152,6 +180,7 @@ export const POST = withErrorHandling(async (request) => {
               providerConfigId: input.providerConfigId,
               modelId: input.modelId,
               totalTokens: part.totalUsage.totalTokens,
+              finishReason: part.finishReason,
             };
           },
         }),

@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Metadata columns must be nullable/overridable per row with a source discriminator; availability stays one query"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Catalog lookup lives in server/ai; services take (input, actor); shared Zod naming"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Owner miss is NOT_FOUND; catalog/upstream bodies never echoed"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Catalog fetch failure is warn; no catalog payload or keys in logs"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Metadata is Query; picked model and effort are Zustand; do not copy AvailableModel into the store"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "use client at the leaf; both breakpoints; Base UI trigger render prop; reduced motion"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Extend shared Zod in lib/schemas; no parallel interfaces"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useChat owns the in-flight turn; effort goes in the send body; transport stays injectable"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Metadata crosses db, service, GET /api/models, picker, composer, and chat POST"}
+{"file": ".trellis/tasks/09-03-model-metadata/research/catalog-icons-reasoning.md", "reason": "models.dev match, openaiCompatible.reasoningEffort, no antd icons"}
+{"file": ".trellis/tasks/archive/2026-09/08-31-providers/research/model-metadata-sources.md", "reason": "Why /v1/models is ids-only and why catalog miss is the self-hosted tail"}

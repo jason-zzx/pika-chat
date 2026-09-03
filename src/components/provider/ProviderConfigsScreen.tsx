@@ -9,10 +9,13 @@ import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import type {
   OwnProviderConfig,
+  ProviderModel,
   SharedProviderConfig,
 } from "@/lib/schemas/provider";
 
 import DiscoverModelsSheet from "./DiscoverModelsSheet";
+import ModelEditorDialog from "./ModelEditorDialog";
+import ModelVendorIcon from "./ModelVendorIcon";
 import ProviderConfigForm from "./ProviderConfigForm";
 import {
   useAddProviderModel,
@@ -121,6 +124,9 @@ function OwnProviderCard({
   const removeModel = useRemoveProviderModel();
   const [editing, setEditing] = useState(false);
   const [discoverOpen, setDiscoverOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<ProviderModel | null>(
+    null,
+  );
   const [manualId, setManualId] = useState("");
 
   return (
@@ -205,7 +211,18 @@ function OwnProviderCard({
                 key={model.id}
                 className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-sm"
               >
-                <span>{model.modelId}</span>
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-1.5"
+                  aria-label={`Edit ${model.modelId}`}
+                  onClick={() => setEditingModel(model)}
+                >
+                  <ModelVendorIcon
+                    modelId={model.modelId}
+                    vendorKey={model.vendorKey}
+                  />
+                  <span className="truncate">{model.modelId}</span>
+                </button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -270,6 +287,19 @@ function OwnProviderCard({
         open={discoverOpen}
         onOpenChange={setDiscoverOpen}
       />
+      {editingModel ? (
+        <ModelEditorDialog
+          key={editingModel.id}
+          open
+          onOpenChange={(next) => {
+            if (!next) {
+              setEditingModel(null);
+            }
+          }}
+          configId={config.id}
+          model={editingModel}
+        />
+      ) : null}
     </article>
   );
 }
@@ -288,8 +318,12 @@ function SharedProviderCard({ config }: { config: SharedProviderConfig }) {
           {config.models.map((model) => (
             <li
               key={model.id}
-              className="rounded-md bg-muted px-2 py-1 text-sm"
+              className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-sm"
             >
+              <ModelVendorIcon
+                modelId={model.modelId}
+                vendorKey={model.vendorKey}
+              />
               {model.modelId}
             </li>
           ))}

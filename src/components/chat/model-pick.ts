@@ -29,6 +29,16 @@ export function sameModelPick(
   return left.configId === right.configId && left.modelId === right.modelId;
 }
 
+export function findAvailableModel(
+  available: AvailableModel[] | undefined,
+  pick: ComposerModelPick | null,
+): AvailableModel | undefined {
+  if (!available || pick === null) {
+    return undefined;
+  }
+  return available.find((model) => sameModelPick(model, pick));
+}
+
 export function groupAvailableModels(models: AvailableModel[]): ModelGroup[] {
   const groups = new Map<string, ModelGroup>();
   for (const model of models) {

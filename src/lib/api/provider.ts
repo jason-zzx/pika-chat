@@ -13,6 +13,7 @@ import {
   type ProviderConfigList,
   type ProviderModel,
   type UpdateProviderConfigInput,
+  type UpdateProviderModelInput,
 } from "@/lib/schemas/provider";
 
 export async function listProviderConfigs(): Promise<ProviderConfigList> {
@@ -70,6 +71,23 @@ export async function addProviderModel(
     `/api/providers/${encodeURIComponent(configId)}/models`,
     {
       method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(response, (data) => providerModelSchema.parse(data));
+}
+
+export async function updateProviderModel(
+  configId: string,
+  modelId: string,
+  input: UpdateProviderModelInput,
+): Promise<ProviderModel> {
+  const params = new URLSearchParams({ modelId });
+  const response = await fetch(
+    `/api/providers/${encodeURIComponent(configId)}/models?${params}`,
+    {
+      method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
     },

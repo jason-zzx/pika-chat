@@ -7,6 +7,7 @@ export {
   chatMessages,
 } from "./chat";
 export {
+  modelMetadataSource,
   providerConfigs,
   providerModels,
   providerVisibility,

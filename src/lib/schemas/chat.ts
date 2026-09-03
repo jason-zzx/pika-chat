@@ -14,6 +14,7 @@ export const chatMetadataSchema = z.object({
   providerConfigId: z.string().optional(),
   modelId: z.string().optional(),
   totalTokens: z.number().optional(),
+  finishReason: z.string().optional(),
 });
 export type ChatMetadata = z.infer<typeof chatMetadataSchema>;
 
@@ -39,6 +40,7 @@ export const chatRequestSchema = z.object({
   topicId: z.string().min(1).optional(),
   providerConfigId: z.string().min(1),
   modelId: z.string().min(1),
+  reasoningEffort: z.string().trim().min(1).optional(),
   message: chatRequestMessageSchema,
 });
 export const stopChatRequestSchema = z.object({

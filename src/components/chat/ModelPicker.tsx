@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronDownIcon } from "lucide-react";
+import { BrainIcon, ChevronDownIcon, EyeIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useAvailableModels } from "@/components/provider/use-available-models";
+import ModelVendorIcon from "@/components/provider/ModelVendorIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,10 +12,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  formatContextTokens,
+  modelHasVision,
+} from "@/lib/model-vendor";
 import { cn } from "@/lib/utils";
 import type { ComposerModelPick } from "@/stores/composer-store";
 
 import {
+  findAvailableModel,
   groupAvailableModels,
   modelGroupHeading,
   modelMatchesQuery,
@@ -38,12 +44,7 @@ export default function ModelPicker({
 }: ModelPickerProps) {
   const models = useAvailableModels();
   const available = models.data ?? [];
-  const selected = available.find(
-    (model) =>
-      value !== null &&
-      model.configId === value.configId &&
-      model.modelId === value.modelId,
-  );
+  const selected = findAvailableModel(available, value);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const filtered = available.filter((model) => modelMatchesQuery(model, query));
@@ -78,8 +79,18 @@ export default function ModelPicker({
           />
         }
       >
-        <span className="truncate">
-          {selected ? selected.modelId : "Select a model"}
+        <span className="flex min-w-0 items-center gap-1.5 truncate">
+          {selected ? (
+            <>
+              <ModelVendorIcon
+                modelId={selected.modelId}
+                vendorKey={selected.vendorKey}
+              />
+              <span className="truncate">{selected.modelId}</span>
+            </>
+          ) : (
+            "Select a model"
+          )}
         </span>
         <ChevronDownIcon aria-hidden="true" className="size-4 text-muted-foreground" />
       </PopoverTrigger>
@@ -136,17 +147,52 @@ export default function ModelPicker({
                     modelId: model.modelId,
                   };
                   const isSelected = sameModelPick(value, pick);
+                  const contextLabel = formatContextTokens(model.contextTokens);
+                  const hasVision = modelHasVision(model.inputModalities);
+                  const hasCues =
+                    contextLabel !== null || hasVision || model.reasoning;
                   return (
                     <button
                       key={`${model.configId}::${model.modelId}`}
                       type="button"
                       className={cn(
-                        "w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
                         isSelected && "bg-accent text-accent-foreground",
                       )}
                       onClick={() => closeAndSelect(pick)}
                     >
-                      {model.modelId}
+                      <ModelVendorIcon
+                        modelId={model.modelId}
+                        vendorKey={model.vendorKey}
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {model.modelId}
+                      </span>
+                      {hasCues ? (
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          {contextLabel !== null ? (
+                            <span>{contextLabel}</span>
+                          ) : null}
+                          {hasVision ? (
+                            <span title="Vision" className="flex items-center">
+                              <EyeIcon
+                                aria-hidden="true"
+                                className="size-3.5"
+                              />
+                              <span className="sr-only">Vision</span>
+                            </span>
+                          ) : null}
+                          {model.reasoning ? (
+                            <span title="Reasoning" className="flex items-center">
+                              <BrainIcon
+                                aria-hidden="true"
+                                className="size-3.5"
+                              />
+                              <span className="sr-only">Reasoning</span>
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}

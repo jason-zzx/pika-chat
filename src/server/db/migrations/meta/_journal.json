@@ -50,6 +50,20 @@
       "when": 1788316945254,
       "tag": "0006_nebulous_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788433605311,
+      "tag": "0007_shallow_diamondback",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788438251171,
+      "tag": "0008_vengeful_the_initiative",
+      "breakpoints": true
     }
   ]
 }
