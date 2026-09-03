@@ -23,7 +23,7 @@ export type AssistantTree = z.infer<typeof assistantTreeSchema>;
 
 export const createAssistantSchema = z.object({
   name: z.string().trim().min(1),
-  icon: z.string().trim().min(1).max(8),
+  icon: z.string().trim().min(1).max(32),
   systemPrompt: z.string().nullable().optional(),
   defaultProviderConfigId: z.string().nullable().optional(),
   defaultModelId: z.string().nullable().optional(),

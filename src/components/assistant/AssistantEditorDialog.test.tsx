@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { type InputHTMLAttributes, type ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAssistant } from "@/lib/api/assistant";
 import { listAvailableModels } from "@/lib/api/provider";
@@ -19,6 +20,32 @@ vi.mock("@/lib/api/assistant", () => ({
   deleteAssistant: vi.fn(),
 }));
 
+vi.mock("@/components/ui/emoji-picker", () => ({
+  EmojiPicker: ({
+    children,
+    onEmojiSelect,
+  }: {
+    children?: ReactNode;
+    onEmojiSelect?: (value: { emoji: string }) => void;
+  }) => (
+    <div>
+      {children}
+      <button
+        type="button"
+        role="gridcell"
+        aria-label="Grinning face"
+        onClick={() => onEmojiSelect?.({ emoji: "😀" })}
+      >
+        😀
+      </button>
+    </div>
+  ),
+  EmojiPickerSearch: (props: InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
+  EmojiPickerContent: () => null,
+}));
+
 function renderEditor(assistant: Assistant | null) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -35,6 +62,10 @@ function renderEditor(assistant: Assistant | null) {
 }
 
 describe("AssistantEditorDialog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("shows provenance on model options and can save with no model", async () => {
     vi.mocked(listAvailableModels).mockResolvedValue([
       {
@@ -65,6 +96,8 @@ describe("AssistantEditorDialog", () => {
     renderEditor(null);
 
     expect(await screen.findByLabelText("Name")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Emoji" })).toBeNull();
+    expect(screen.getByLabelText("Emoji")).toHaveTextContent("✨");
     const modelTrigger = screen.getByLabelText("Default model");
     await vi.waitFor(() => expect(modelTrigger).toBeEnabled());
     fireEvent.click(modelTrigger);
@@ -123,7 +156,70 @@ describe("AssistantEditorDialog", () => {
         "The previously selected model is no longer available.",
       ),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Emoji" })).toBeNull();
+    expect(screen.getByLabelText("Emoji")).toHaveTextContent("🤖");
     fireEvent.click(screen.getByLabelText("Default model"));
     expect(await screen.findByText("No default model")).toBeInTheDocument();
+  });
+
+  it("updates the saved icon when an emoji is selected", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([]);
+    vi.mocked(createAssistant).mockResolvedValue({
+      id: "new",
+      name: "Draft",
+      icon: "😀",
+      systemPrompt: null,
+      defaultProviderConfigId: null,
+      defaultModelId: null,
+      topics: [],
+    });
+
+    renderEditor(null);
+
+    const emojiTrigger = await screen.findByLabelText("Emoji");
+    fireEvent.click(emojiTrigger);
+    fireEvent.click(
+      await screen.findByRole("gridcell", { name: "Grinning face" }),
+    );
+    expect(emojiTrigger).toHaveTextContent("😀");
+    expect(createAssistant).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Draft" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(() => {
+      expect(createAssistant).toHaveBeenCalledWith({
+        name: "Draft",
+        icon: "😀",
+        systemPrompt: null,
+        defaultProviderConfigId: null,
+        defaultModelId: null,
+      });
+    });
+  });
+
+  it("does not submit the form when Enter is pressed in emoji search", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([]);
+    vi.mocked(createAssistant).mockResolvedValue({
+      id: "new",
+      name: "Draft",
+      icon: "✨",
+      systemPrompt: null,
+      defaultProviderConfigId: null,
+      defaultModelId: null,
+      topics: [],
+    });
+
+    renderEditor(null);
+
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Draft" },
+    });
+    fireEvent.click(screen.getByLabelText("Emoji"));
+    const search = await screen.findByLabelText("Search emoji");
+    expect(fireEvent.keyDown(search, { key: "Enter" })).toBe(false);
+    expect(createAssistant).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Pre-dev checklist; ui/ is generated; both breakpoints"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Labelled controls, no div-onClick, Base UI composition"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Domain folder; promote on second use; do not hand-edit ui/"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Observable tests, icon-button labels, lint/typecheck/test"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared Zod icon contract; no hand-written duplicate type"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse ModelPicker Popover/Enter-guard pattern; do not invent a second overlay"}
+{"file": ".trellis/tasks/09-03-assistant-emoji-picker/research/frimousse-shadcn-emoji-picker.md", "reason": "shadcn add, CDN data, Base UI trigger vs asChild"}
