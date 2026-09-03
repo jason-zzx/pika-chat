@@ -148,6 +148,30 @@ same. This is the one sanctioned hand edit inside the generated
 
 ---
 
+## Hover-reveal rows
+
+Chat message meta rows (timestamps, message actions) are always mounted with a
+fixed height and fade in on hover of the whole message — never conditionally
+mounted, which shifts the layout under the pointer exactly when the user aims
+at the row. Scope the hover to one message with a named group so nested groups
+do not collide, and include `group-focus-within` so keyboard users can reach
+and see the icon-only buttons (a11y rule above).
+
+**Convention** (from `chat/MessageTimestamp.tsx` / `chat/MessageActions.tsx`,
+landed in `09-04-chat-message-meta`): the message `<article>` carries
+`group/message`; every reveal row renders unconditionally with
+
+```tsx
+"h-5 shrink-0 opacity-0 transition-opacity duration-150 motion-reduce:transition-none group-hover/message:opacity-100 group-focus-within/message:opacity-100"
+```
+
+Extract a shared constant or wrapper only when a third reveal row appears —
+with two occurrences the duplication is cheaper than the abstraction. Content
+that can be absent (a message without a recorded timestamp) may return `null`;
+rows whose existence is data-driven do not need phantom placeholders.
+
+---
+
 ## Common Mistakes
 
 - `"use client"` on a layout or page "to make it work". It works, and it ships

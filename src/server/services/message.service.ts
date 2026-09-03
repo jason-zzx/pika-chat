@@ -34,15 +34,19 @@ export function metadataFromRow(row: {
   errorMessage: ChatMessageRow["errorMessage"];
   providerConfigId: ChatMessageRow["providerConfigId"];
   modelId: ChatMessageRow["modelId"];
+  reasoningMs: ChatMessageRow["reasoningMs"];
+  createdAt: ChatMessageRow["createdAt"];
 }): ChatMetadata | undefined {
   if (row.role !== "assistant") {
-    return undefined;
+    return { createdAt: row.createdAt.toISOString() };
   }
   return {
     outcome: row.outcome ?? undefined,
     errorMessage: row.errorMessage ?? undefined,
     providerConfigId: row.providerConfigId ?? undefined,
     modelId: row.modelId ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    reasoningMs: row.reasoningMs ?? undefined,
   };
 }
 
@@ -118,6 +122,8 @@ export async function appendAssistantMessage(
     errorMessage?: string | null;
     providerConfigId: string;
     modelId: string;
+    reasoningMs?: number;
+    createdAt?: Date;
   },
   actor: Actor,
 ): Promise<ChatUIMessage> {
@@ -135,6 +141,11 @@ export async function appendAssistantMessage(
       errorMessage: input.errorMessage ?? null,
       providerConfigId: input.providerConfigId,
       modelId: input.modelId,
+      // Undefined falls back to the column default (null / defaultNow());
+      // createdAt is the stream-start time so a reloaded history shows the
+      // same value the live stream announced.
+      reasoningMs: input.reasoningMs,
+      createdAt: input.createdAt,
     })
     .returning();
   const row = inserted[0];

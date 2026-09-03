@@ -9,6 +9,7 @@ type ReasoningBlockProps = {
   text: string;
   streaming: boolean;
   hasAnswer: boolean;
+  reasoningMs?: number;
 };
 
 // Distance from the bottom (px) within which the view still counts as
@@ -20,6 +21,7 @@ export default function ReasoningBlock({
   text,
   streaming,
   hasAnswer,
+  reasoningMs,
 }: ReasoningBlockProps) {
   const contentId = useId();
   const autoOpen = streaming && !hasAnswer;
@@ -58,6 +60,12 @@ export default function ReasoningBlock({
     followingRef.current = distanceFromBottom <= FOLLOW_THRESHOLD_PX;
   }
 
+  const label = streaming
+    ? "Thinking"
+    : reasoningMs === undefined
+      ? "Thought"
+      : `Thought (${(reasoningMs / 1000).toFixed(1)}s)`;
+
   return (
     <div className="w-full text-sm text-muted-foreground">
       <button
@@ -67,7 +75,7 @@ export default function ReasoningBlock({
         aria-controls={contentId}
         onClick={() => setUserOpen(!open)}
       >
-        <span>{streaming ? "Thinking" : "Thought"}</span>
+        <span>{label}</span>
         <ChevronDownIcon
           aria-hidden="true"
           className={cn(

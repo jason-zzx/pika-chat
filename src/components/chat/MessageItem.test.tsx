@@ -9,11 +9,19 @@ vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
 }));
 
-function userMessage(text: string): ChatUIMessage {
+function recentIso(): string {
+  return new Date(Date.now() - 10_000).toISOString();
+}
+
+function userMessage(
+  text: string,
+  metadata?: ChatUIMessage["metadata"],
+): ChatUIMessage {
   return {
     id: "user-1",
     role: "user",
     parts: [{ type: "text", text }],
+    metadata,
   };
 }
 
@@ -36,8 +44,7 @@ describe("MessageItem", () => {
     const article = screen.getByRole("article", { name: "You" });
     expect(article).toHaveClass("items-end");
     expect(article).toHaveTextContent("Hello there");
-    const bubble = article.querySelector("div");
-    expect(bubble).toHaveClass("bg-muted");
+    const bubble = article.querySelector("div.bg-muted");
     expect(bubble).toHaveClass("rounded-lg");
     expect(bubble).not.toHaveClass("w-full");
   });
@@ -48,10 +55,77 @@ describe("MessageItem", () => {
     const article = screen.getByRole("article", { name: "Assistant" });
     expect(article).toHaveClass("items-start");
     expect(article).toHaveTextContent("Here is an answer");
-    const body = article.querySelector("div");
-    expect(body).toHaveClass("w-full");
+    const body = article.querySelector("div.w-full");
     expect(body).not.toHaveClass("bg-muted");
     expect(body).not.toHaveClass("rounded-lg");
+    expect(screen.queryByText("gpt-5.2")).not.toBeInTheDocument();
+  });
+
+  it("shows the assistant name header and hides the timestamp without createdAt", () => {
+    render(<MessageItem message={assistantMessage("Here is an answer")} />);
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    expect(screen.getByText("✨ Assistant")).toBeInTheDocument();
+    expect(article.querySelector("time")).toBeNull();
+  });
+
+  it("orders the assistant rows: header, body, model id, copy action", () => {
+    render(
+      <MessageItem
+        message={assistantMessage("Here is an answer", {
+          modelId: "gpt-5.2",
+          createdAt: recentIso(),
+        })}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    const childTexts = Array.from(article.children).map(
+      (child) => child.textContent ?? "",
+    );
+    expect(childTexts).toEqual([
+      expect.stringContaining("✨ Assistant"),
+      "Here is an answer",
+      "gpt-5.2",
+      "",
+    ]);
+    expect(childTexts[0]).toContain("just now");
+
+    const time = screen.getByText("just now");
+    expect(time).toHaveClass("opacity-0");
+    expect(time).toHaveClass("group-hover/message:opacity-100");
+  });
+
+  it("shows the user timestamp above the bubble and copy below it", () => {
+    const createdAt = recentIso();
+    render(<MessageItem message={userMessage("Hello", { createdAt })} />);
+
+    const article = screen.getByRole("article", { name: "You" });
+    const children = Array.from(article.children);
+    expect(children).toHaveLength(3);
+    expect(children[0]?.tagName).toBe("TIME");
+    expect(children[1]).toHaveClass("bg-muted");
+    expect(children[2]).toHaveClass("opacity-0");
+
+    const time = screen.getByText("just now");
+    expect(time).toHaveAttribute("datetime", createdAt);
+    expect(time.getAttribute("title")).toMatch(
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+    );
+  });
+
+  it("offers a labelled copy action for both roles", () => {
+    const { rerender } = render(
+      <MessageItem message={userMessage("Hello")} />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Copy message" }),
+    ).toBeInTheDocument();
+
+    rerender(<MessageItem message={assistantMessage("Answer")} />);
+    expect(
+      screen.getByRole("button", { name: "Copy message" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps stopped and failed captions under the assistant message", () => {
@@ -146,5 +220,48 @@ describe("MessageItem", () => {
     expect(
       screen.getByText("Output stopped at the token limit."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("MessageItem thinking duration", () => {
+  it("shows the recorded duration once thinking has finished", () => {
+    render(
+      <MessageItem
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            { type: "reasoning", text: "planning the steps" },
+            { type: "text", text: "Here is the answer" },
+          ],
+          metadata: { reasoningMs: 3210 },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Thought (3.2s)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows Thinking without a duration while still streaming", () => {
+    render(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [{ type: "reasoning", text: "planning the steps" }],
+          metadata: { reasoningMs: 3210 },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Thinking" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Thought/ }),
+    ).not.toBeInTheDocument();
   });
 });

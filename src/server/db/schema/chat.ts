@@ -1,4 +1,11 @@
-import { index, jsonb, pgEnum, pgTable, text } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+} from "drizzle-orm/pg-core";
 
 import { topics } from "./assistant";
 import { timestamptz } from "./columns";
@@ -31,6 +38,7 @@ export const chatMessages = pgTable(
       { onDelete: "set null" },
     ),
     modelId: text("model_id"),
+    reasoningMs: integer("reasoning_ms"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

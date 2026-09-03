@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend pre-dev checklist, stack facts, and quality bar for chat UI changes"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component file/prop/styling/a11y/popup rules; hover-reveal rows and new chat components must follow these"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Zod schema sharing rules for extending chatMetadataSchema and threading types"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint/typecheck/test expectations and a11y non-negotiables for the final check"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Drizzle schema + migration conventions for the new reasoning_ms column"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend layering and service conventions for message.service/route changes"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Schema -> service -> route -> component data flow spans layers; keep contracts consistent"}

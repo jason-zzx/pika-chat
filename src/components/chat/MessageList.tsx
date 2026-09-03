@@ -7,9 +7,16 @@ import MessageItem from "./MessageItem";
 type MessageListProps = {
   messages: ChatUIMessage[];
   streaming: boolean;
+  assistantName?: string;
+  assistantIcon?: string;
 };
 
-export default function MessageList({ messages, streaming }: MessageListProps) {
+export default function MessageList({
+  messages,
+  streaming,
+  assistantName,
+  assistantIcon,
+}: MessageListProps) {
   if (messages.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -35,6 +42,8 @@ export default function MessageList({ messages, streaming }: MessageListProps) {
               index === messages.length - 1 &&
               message.role === "assistant"
             }
+            assistantName={assistantName}
+            assistantIcon={assistantIcon}
           />
         ))}
       </div>

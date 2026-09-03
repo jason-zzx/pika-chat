@@ -68,6 +68,7 @@ review blocker, not a style nit.
 | [Auth Guidelines](./auth-guidelines.md) | Actor contract, headerless `createUser`, cookie-cache prohibition |
 | [Database Guidelines](./database-guidelines.md) | Drizzle schema, migrations, ownership isolation, credential encryption |
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
+| [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logs, levels, redaction |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, types, tests, forbidden patterns |
 

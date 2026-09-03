@@ -11,7 +11,7 @@ export default function InsetHeader({ title }: InsetHeaderProps) {
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
       <SidebarTrigger />
       {title ? (
-        <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight">
+        <h1 className="min-w-0 truncate text-base font-semibold tracking-tight">
           {title}
         </h1>
       ) : null}

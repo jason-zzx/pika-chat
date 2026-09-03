@@ -374,7 +374,7 @@ export default function ChatView({
     const selected = findAvailableModel(models.data, pickedModel);
     const effort = reasoningEffortRequestValue(selected, reasoningEffort);
     void sendMessage(
-      { text },
+      { text, metadata: { createdAt: new Date().toISOString() } },
       {
         body: {
           assistantId: resolvedAssistantId,
@@ -411,7 +411,12 @@ export default function ChatView({
           </p>
         </div>
       ) : (
-        <MessageList messages={messages} streaming={status === "streaming"} />
+        <MessageList
+          messages={messages}
+          streaming={status === "streaming"}
+          assistantName={resolvedAssistant?.name}
+          assistantIcon={resolvedAssistant?.icon}
+        />
       )}
       {error ? (
         <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">

@@ -17,6 +17,7 @@ import {
 import { createChatModelHandle } from "@/server/ai/chat-model";
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
+import { createReasoningTimer } from "@/server/ai/reasoning-timer";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
@@ -126,6 +127,14 @@ export const POST = withErrorHandling(async (request) => {
 
   let accumulatedText = "";
   let streamErrorMessage: string | null = null;
+  // Captured before the model call so the persisted assistant createdAt
+  // matches what a history reload will return.
+  const streamStartedAt = new Date();
+  const reasoningTimer = createReasoningTimer();
+  let reasoningMsEmitted = false;
+  // Assigned from the UI stream's execute closure, where the writer exists.
+  let emitReasoningMetadata: (() => void) | null = null;
+
   const result = streamText({
     model: handle.model,
     messages: modelMessages,
@@ -151,6 +160,11 @@ export const POST = withErrorHandling(async (request) => {
       if (chunk.type === "text-delta") {
         accumulatedText += chunk.text;
       }
+      reasoningTimer.onChunk(chunk);
+      // Emit the duration as soon as thinking ends so the label updates
+      // before the whole stream finishes; emitReasoningMetadata is a no-op
+      // until the timer has measured.
+      emitReasoningMetadata?.();
     },
   });
 
@@ -165,6 +179,20 @@ export const POST = withErrorHandling(async (request) => {
         type: "data-topic",
         data: { topicId: persistedTopicId, streamId },
       });
+      emitReasoningMetadata = () => {
+        if (reasoningMsEmitted) {
+          return;
+        }
+        const reasoningMs = reasoningTimer.measure();
+        if (reasoningMs === undefined) {
+          return;
+        }
+        reasoningMsEmitted = true;
+        writer.write({
+          type: "message-metadata",
+          messageMetadata: { reasoningMs },
+        });
+      };
       writer.merge(
         toUIMessageStream<ToolSet, ChatUIMessage>({
           stream: result.stream,
@@ -181,6 +209,8 @@ export const POST = withErrorHandling(async (request) => {
               modelId: input.modelId,
               totalTokens: part.totalUsage.totalTokens,
               finishReason: part.finishReason,
+              createdAt: streamStartedAt.toISOString(),
+              reasoningMs: reasoningTimer.measure(),
             };
           },
         }),
@@ -220,6 +250,8 @@ export const POST = withErrorHandling(async (request) => {
             errorMessage,
             providerConfigId: input.providerConfigId,
             modelId: input.modelId,
+            reasoningMs: reasoningTimer.measure(),
+            createdAt: streamStartedAt,
           },
           actor,
         );

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality bar: lint/typecheck/tests, a11y (aria-label on icon-only buttons, keyboard reachability)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify new components follow styling (cn, theme tokens), a11y, and file conventions"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify migration and nullable-column conventions"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check copy/timestamp/hover-reveal logic is reused across user and assistant branches instead of duplicated"}

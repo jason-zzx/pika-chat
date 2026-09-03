@@ -15,6 +15,10 @@ export const chatMetadataSchema = z.object({
   modelId: z.string().optional(),
   totalTokens: z.number().optional(),
   finishReason: z.string().optional(),
+  // ISO 8601, message creation time (server-persisted or stream-start).
+  createdAt: z.string().optional(),
+  // Reasoning phase duration in milliseconds.
+  reasoningMs: z.number().int().nonnegative().optional(),
 });
 export type ChatMetadata = z.infer<typeof chatMetadataSchema>;
 
