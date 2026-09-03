@@ -117,6 +117,37 @@ that the mobile drawer opens, closes, and closes again after navigation.
 
 ---
 
+## Popup positioning
+
+Base UI `Positioner` defaults to `positionMethod: "absolute"`: the portal
+wrapper renders as `position: absolute; top: 0; left: 0` plus
+`transform: translate(x, y)`, and its scrollable overflow participates in the
+document scroll area. A popup anchored near the bottom of the viewport then
+grows `documentElement.scrollHeight` and a page scrollbar appears even though
+the popup itself fits — measured on the chat composer, opening the model
+picker grew the document from 800 to 806 px.
+
+**Convention**: every shared popup wrapper passes `positionMethod="fixed"` —
+`ui/popover.tsx`, `ui/select.tsx`, `ui/dropdown-menu.tsx`, `ui/tooltip.tsx`.
+Fixed boxes never contribute to document scroll, and floating-ui keeps them
+glued to the trigger while the page scrolls. New popup wrappers must do the
+same. This is the one sanctioned hand edit inside the generated
+`components/ui/` territory (recorded in the index "Status of this spec").
+
+#### Wrong
+
+```tsx
+<PopoverPrimitive.Positioner className="isolate z-50">
+```
+
+#### Correct
+
+```tsx
+<PopoverPrimitive.Positioner positionMethod="fixed" className="isolate z-50">
+```
+
+---
+
 ## Common Mistakes
 
 - `"use client"` on a layout or page "to make it work". It works, and it ships
@@ -135,3 +166,6 @@ that the mobile drawer opens, closes, and closes again after navigation.
   popover is Base UI — use `render={<Button type="button" … />}` like
   `ModelPicker`. Generated `components/ui/emoji-picker.tsx` is Frimousse via
   the shadcn CLI; compose it, do not restyle by hand.
+- Adding a popup wrapper without `positionMethod="fixed"`. The absolute
+  default grows the document and shows a page scrollbar when the trigger sits
+  near the viewport bottom — see Popup positioning above.
