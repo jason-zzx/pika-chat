@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-09-04
+- **Total Sessions**: 11
+- **Last Active**: 2026-09-05
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~317 | Active |
+| `journal-1.md` | ~339 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-09-05 | Chat message regenerate/delete: versioned answers, action menu, mobile reveal, clipboard fallback | `7b0a1b7` | `main` |
 | 10 | 2026-09-04 | Chat message meta info | `581961e` | `main` |
 | 9 | 2026-09-04 | Model metadata, vendor icons, and reasoning UI | `226d4d6`, `2236ed1` | `feat/model-metadata` |
 | 8 | 2026-09-03 | Assistant emoji picker | `2120b90` | `feat/assistant-emoji-picker` |

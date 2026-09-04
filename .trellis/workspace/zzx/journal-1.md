@@ -315,3 +315,25 @@ Messages read as transcripts: topic title at 1rem, assistant messages open with 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 11: Chat message regenerate/delete: versioned answers, action menu, mobile reveal, clipboard fallback
+<!-- trellis-session: v=2 fp=07cb92cf5705bd47 -->
+
+**Date**: 2026-09-05
+**Task**: Chat message regenerate/delete: versioned answers, action menu, mobile reveal, clipboard fallback
+**Branch**: `main`
+
+### Summary
+
+Shipped regenerate-as-versions (group_id/is_selected + selected-version view), delete/select/regenerate endpoints with sendStart id contract, switcher + overflow menu, single-active tap reveal keyed by groupId, immediate Thinking shimmer placeholder, clipboard execCommand fallback, activeTopicId reseed fix. Ponytail shrink pass (z.infer types, ChatView guard helper). Spec: chat-message-versions.md, metadata sendStart fix, component-guidelines reveal/clipboard conventions. 297 tests green.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7b0a1b7` | feat: regenerate chat answers as switchable versions, with message delete and action menu |
+
+### Status
+
+[OK] **Completed**
