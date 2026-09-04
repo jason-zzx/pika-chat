@@ -162,13 +162,28 @@ landed in `09-04-chat-message-meta`): the message `<article>` carries
 `group/message`; every reveal row renders unconditionally with
 
 ```tsx
-"h-5 shrink-0 opacity-0 transition-opacity duration-150 motion-reduce:transition-none group-hover/message:opacity-100 group-focus-within/message:opacity-100"
+"h-5 shrink-0 opacity-0 transition-opacity duration-150 motion-reduce:transition-none group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100"
 ```
 
-Extract a shared constant or wrapper only when a third reveal row appears —
-with two occurrences the duplication is cheaper than the abstraction. Content
-that can be absent (a message without a recorded timestamp) may return `null`;
-rows whose existence is data-driven do not need phantom placeholders.
+The class string is duplicated across the reveal rows on purpose — three
+occurrences still beat a shared wrapper here. Content that can be absent (a
+message without a recorded timestamp) may return `null`; rows whose existence
+is data-driven do not need phantom placeholders.
+
+**Tap reveal (touch has no hover; landed in
+`09-04-chat-message-regenerate-delete`)**: tapping a message body reveals its
+meta rows by setting `data-revealed` on the article. The state is
+*single-active*: `MessageList` owns one `revealedKey` and a tap only ever
+sets it — never toggles off — so at most one message is revealed and it stays
+revealed until a different message is tapped. Key the state (and the React
+element key) by `metadata.groupId ?? message.id`, never by the per-version
+message id: switching versions swaps in a different-id row, and id-keying
+remounts the item and drops the reveal. Ignore taps on nested
+buttons/links and non-collapsed text selections. Opening a portaled dropdown
+or showing transient copy feedback must also force the row visible (both
+drop focus/hover from the article), so those states lift into the reveal
+condition. Desktop hover/focus-within stays instantaneous and independent of
+the tap state.
 
 ---
 
@@ -183,6 +198,15 @@ rows whose existence is data-driven do not need phantom placeholders.
 - Hardcoded colors that look fine until dark mode is enabled.
 - Building the desktop layout first and treating mobile as cleanup, which is
   how mobile ends up with an unreachable control.
+- Calling `navigator.clipboard.writeText` directly: the API is absent on
+  insecure contexts (http over a LAN IP, e.g. testing from a phone) and the
+  copy silently fails. Use `copyTextToClipboard` (`src/lib/clipboard.ts`),
+  which falls back to a hidden textarea + `execCommand("copy")` and reports
+  failure only when both paths fail.
+- Assuming `history.replaceState` navigates: it rewrites the URL without
+  re-rendering the route, so route props (e.g. `topicId`) stay stale. State
+  that depends on the effective id must derive it (`topicId ?? createdId`)
+  rather than reading the route prop alone.
 - A search field inside a Dialog `<form>` (`ModelPicker`,
   `AssistantEmojiPicker`): Enter submits Save unless that key is
   `preventDefault`ed on the popover.

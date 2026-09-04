@@ -7,43 +7,31 @@ import {
   type ToolSet,
 } from "ai";
 
+import { requireParam } from "@/app/api/_lib/route-params";
 import { withErrorHandling } from "@/app/api/_lib/with-error-handling";
 import { newId } from "@/lib/id";
 import {
-  chatRequestSchema,
+  regenerateMessageRequestSchema,
   type ChatMessageOutcome,
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
 import { createChatModelHandle } from "@/server/ai/chat-model";
-import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
-import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
-import { createReasoningTimer } from "@/server/ai/reasoning-timer";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
+import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
+import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
+import { createReasoningTimer } from "@/server/ai/reasoning-timer";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import {
   appendAssistantMessage,
-  appendUserMessage,
-  listTopicMessages,
+  resolveRegenerateTarget,
 } from "@/server/services/message.service";
 import {
-  createTopicForChat,
   findTopicContextForActor,
   touchTopicUpdatedAt,
 } from "@/server/services/topic.service";
-
-function requestToUserMessage(message: {
-  id: string;
-  parts: Array<{ type: "text"; text: string }>;
-}): ChatUIMessage {
-  return {
-    id: message.id,
-    role: "user",
-    parts: message.parts.map((part) => ({ type: "text", text: part.text })),
-  };
-}
 
 function partsHaveText(message: ChatUIMessage): boolean {
   return message.parts.some(
@@ -51,11 +39,20 @@ function partsHaveText(message: ChatUIMessage): boolean {
   );
 }
 
-export const POST = withErrorHandling(async (request) => {
+/**
+ * Streams a new version for the answer at `messageId`. Same skeleton as
+ * /api/chat (model availability → handle → registerStream → streamText →
+ * createUIMessageStream → onEnd persists), minus topic creation, user-message
+ * append, and title generation. The stream contains only the new assistant
+ * message; the stream id travels in the x-pika-stream-id response header so
+ * the client (which consumes the stream manually, not via useChat) can stop it.
+ */
+export const POST = withErrorHandling(async (request, context) => {
   const actor = await requireActor(request.headers);
-  const input = chatRequestSchema.parse(await request.json());
+  const topicId = await requireParam(context, "id", "Topic not found");
+  const messageId = await requireParam(context, "messageId", "Message not found");
+  const input = regenerateMessageRequestSchema.parse(await request.json());
 
-  // Before any topic row exists: an unusable model must not leave a draft behind.
   const available = await resolveAvailableModels(actor);
   const selected = available.find(
     (model) =>
@@ -82,35 +79,16 @@ export const POST = withErrorHandling(async (request) => {
     actor,
   );
 
-  let topicId = input.topicId;
-  let systemPrompt: string | null = null;
-
-  if (topicId) {
-    const context = await findTopicContextForActor(topicId, actor);
-    if (!context || context.assistant.id !== input.assistantId) {
-      throw new AppError("NOT_FOUND", 404, "Topic not found");
-    }
-    systemPrompt = context.assistant.systemPrompt;
-  } else {
-    const created = await createTopicForChat(
-      { assistantId: input.assistantId },
-      actor,
-    );
-    topicId = created.id;
-    const context = await findTopicContextForActor(topicId, actor);
-    systemPrompt = context?.assistant.systemPrompt ?? null;
+  const topicContext = await findTopicContextForActor(topicId, actor);
+  if (!topicContext) {
+    throw new AppError("NOT_FOUND", 404, "Topic not found");
   }
 
-  const history = await listTopicMessages({ topicId }, actor);
-  const userMessage = requestToUserMessage(input.message);
-  const storedUser = await appendUserMessage(
-    { topicId, message: userMessage },
+  const { targetGroupId, history } = await resolveRegenerateTarget(
+    { topicId, messageId },
     actor,
   );
-  await touchTopicUpdatedAt(topicId, actor);
-
-  const originalMessages: ChatUIMessage[] = [...history, storedUser];
-  const modelMessages = await convertToModelMessages(originalMessages);
+  const modelMessages = await convertToModelMessages(history);
 
   const streamId = newId();
   const abortSignal = registerStream(streamId, actor.userId);
@@ -119,10 +97,12 @@ export const POST = withErrorHandling(async (request) => {
     {
       userId: actor.userId,
       topicId,
+      messageId,
+      targetGroupId,
       model: input.modelId,
       providerConfigId: input.providerConfigId,
     },
-    "chat completion started",
+    "chat regeneration started",
   );
 
   let accumulatedText = "";
@@ -138,7 +118,7 @@ export const POST = withErrorHandling(async (request) => {
   const result = streamText({
     model: handle.model,
     messages: modelMessages,
-    instructions: systemPrompt ?? undefined,
+    instructions: topicContext.assistant.systemPrompt ?? undefined,
     abortSignal,
     maxOutputTokens: resolvedMaxOutputTokens(selected),
     providerOptions:
@@ -161,24 +141,15 @@ export const POST = withErrorHandling(async (request) => {
         accumulatedText += chunk.text;
       }
       reasoningTimer.onChunk(chunk);
-      // Emit the duration as soon as thinking ends so the label updates
-      // before the whole stream finishes; emitReasoningMetadata is a no-op
-      // until the timer has measured.
       emitReasoningMetadata?.();
     },
   });
 
   void result.consumeStream();
 
-  const persistedTopicId = topicId;
   const stream = createUIMessageStream<ChatUIMessage>({
-    originalMessages,
     generateId: newId,
     execute: ({ writer }) => {
-      writer.write({
-        type: "data-topic",
-        data: { topicId: persistedTopicId, streamId },
-      });
       emitReasoningMetadata = () => {
         if (reasoningMsEmitted) {
           return;
@@ -196,14 +167,9 @@ export const POST = withErrorHandling(async (request) => {
       writer.merge(
         toUIMessageStream<ToolSet, ChatUIMessage>({
           stream: result.stream,
-          originalMessages,
           generateMessageId: newId,
-          // sendStart must stay enabled: the start chunk carries the
-          // server-generated message id to the client, so actions on the
-          // message (regenerate/delete/select) reference the id the onEnd
-          // persistence writes — with sendStart: false the client invents
-          // its own id and the server 404s (B6). Only one stream is merged
-          // here, so no duplicate start chunk is emitted.
+          // sendStart must stay enabled so the streamed message id matches
+          // the row onEnd persists (see /api/chat; B6).
           sendStart: true,
           sendReasoning: true,
           messageMetadata: ({ part }) => {
@@ -244,13 +210,12 @@ export const POST = withErrorHandling(async (request) => {
         } else if (outcome.status === "failed") {
           turnOutcome = "failed";
           errorMessage =
-            streamErrorMessage ??
-            handle.describeError(outcome.error).message;
+            streamErrorMessage ?? handle.describeError(outcome.error).message;
         }
 
         await appendAssistantMessage(
           {
-            topicId: persistedTopicId,
+            topicId,
             message: persisted,
             outcome: turnOutcome,
             errorMessage,
@@ -258,15 +223,19 @@ export const POST = withErrorHandling(async (request) => {
             modelId: input.modelId,
             reasoningMs: reasoningTimer.measure(),
             createdAt: streamStartedAt,
+            groupId: targetGroupId ?? undefined,
           },
           actor,
         );
-        await touchTopicUpdatedAt(persistedTopicId, actor);
+        await touchTopicUpdatedAt(topicId, actor);
       } finally {
         releaseStream(streamId);
       }
     },
   });
 
-  return createUIMessageStreamResponse({ stream });
+  return createUIMessageStreamResponse({
+    stream,
+    headers: { "x-pika-stream-id": streamId },
+  });
 });

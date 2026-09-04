@@ -69,6 +69,7 @@ review blocker, not a style nit.
 | [Database Guidelines](./database-guidelines.md) | Drizzle schema, migrations, ownership isolation, credential encryption |
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
 | [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit |
+| [Chat Message Versions](./chat-message-versions.md) | Regenerate-as-versions contract: group_id/is_selected, selected-version view, regenerate/select/delete endpoints, reseed rule |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logs, levels, redaction |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, types, tests, forbidden patterns |
 

@@ -1,10 +1,13 @@
+import { sql } from "drizzle-orm";
 import {
+  boolean,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import { topics } from "./assistant";
@@ -39,9 +42,18 @@ export const chatMessages = pgTable(
     ),
     modelId: text("model_id"),
     reasoningMs: integer("reasoning_ms"),
+    // Version group: rows sharing a groupId are versions of the same answer
+    // slot; a standalone message forms a single-version group (groupId = id).
+    groupId: text("group_id").notNull(),
+    // Exactly one selected version per group (partial unique index below).
+    isSelected: boolean("is_selected").notNull().default(true),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     index("chat_messages_topic_created_idx").on(table.topicId, table.createdAt),
+    index("chat_messages_topic_group_idx").on(table.topicId, table.groupId),
+    uniqueIndex("chat_messages_selected_version_idx")
+      .on(table.groupId)
+      .where(sql`${table.isSelected}`),
   ],
 );

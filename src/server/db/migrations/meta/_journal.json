@@ -71,6 +71,13 @@
       "when": 1788464783667,
       "tag": "0009_harsh_morbius",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788518812584,
+      "tag": "0010_unknown_scarecrow",
+      "breakpoints": true
     }
   ]
 }

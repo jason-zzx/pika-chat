@@ -19,6 +19,13 @@ export const chatMetadataSchema = z.object({
   createdAt: z.string().optional(),
   // Reasoning phase duration in milliseconds.
   reasoningMs: z.number().int().nonnegative().optional(),
+  // Version group the message belongs to (assistant rows only).
+  groupId: z.string().optional(),
+  // 1-based position of the selected version within its group.
+  versionIndex: z.number().int().positive().optional(),
+  versionCount: z.number().int().positive().optional(),
+  // All version ids in the group, oldest first.
+  versionIds: z.array(z.string()).optional(),
 });
 export type ChatMetadata = z.infer<typeof chatMetadataSchema>;
 
@@ -49,6 +56,12 @@ export const chatRequestSchema = z.object({
 });
 export const stopChatRequestSchema = z.object({
   streamId: z.string().min(1),
+});
+
+export const regenerateMessageRequestSchema = z.object({
+  providerConfigId: z.string().min(1),
+  modelId: z.string().min(1),
+  reasoningEffort: z.string().trim().min(1).optional(),
 });
 
 export const chatStoredPartSchema = z.union([

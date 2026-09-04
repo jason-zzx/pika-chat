@@ -30,8 +30,12 @@ them together or the live and reloaded views disagree.
   (`...(input.createdAt ? { createdAt: input.createdAt } : {})` so omitted
   fields fall back to column defaults).
 - Live metadata: route `messageMetadata: ({ part }) => part.type === "finish"
-  ? {...} : undefined` inside `toUIMessageStream` — it runs **only on
-  `start`/`finish`**, and `sendStart: false` means effectively finish-only.
+  ? {...} : undefined` inside `toUIMessageStream` — it runs on `start` and
+  `finish`; returning `undefined` for start keeps it effectively finish-only.
+  `sendStart` is **true** on both streaming routes: the start chunk carries
+  the server-generated message id the client needs for follow-up actions
+  (regenerate/delete/select). Do not set `sendStart: false` — with it the
+  client invents its own id and the server 404s on that id (B6).
 - Persistence input: `appendAssistantMessage({ topicId, message, outcome,
   errorMessage, providerConfigId, modelId, reasoningMs, createdAt }, actor)`.
 

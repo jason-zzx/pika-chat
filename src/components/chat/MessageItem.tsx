@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Streamdown } from "streamdown";
 
 import {
@@ -17,6 +18,15 @@ type MessageItemProps = {
   streaming?: boolean;
   assistantName?: string;
   assistantIcon?: string;
+  /** Single-active tap reveal (R9/B7): owned by the parent list, which keeps
+   * at most one message revealed. Undefined behaves as not revealed. */
+  revealed?: boolean;
+  /** The message body was tapped; the parent decides which message reveals. */
+  onReveal?: () => void;
+  onRegenerate?: (message: ChatUIMessage) => void;
+  onDelete?: (message: ChatUIMessage) => void;
+  onDeleteRegenerate?: (message: ChatUIMessage) => void;
+  onSelectVersion?: (message: ChatUIMessage, versionId: string) => void;
 };
 
 export default function MessageItem({
@@ -24,7 +34,20 @@ export default function MessageItem({
   streaming = false,
   assistantName,
   assistantIcon,
+  revealed = false,
+  onReveal,
+  onRegenerate,
+  onDelete,
+  onDeleteRegenerate,
+  onSelectVersion,
 }: MessageItemProps) {
+  // Opening the dropdown moves focus into the portaled menu, dropping
+  // hover/focus-within; keep the row visible while the menu is open (B2).
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Keep the row visible for the whole copy-feedback window so the 2s check
+  // icon is seen even when the pointer/focus has left the message (B4).
+  const [copyFeedback, setCopyFeedback] = useState(false);
+  const revealedAny = revealed || menuOpen || copyFeedback;
   const isUser = message.role === "user";
   const metadata = message.metadata;
   const outcome = metadata?.outcome;
@@ -37,14 +60,66 @@ export default function MessageItem({
   );
   const reasoningText = reasoningParts.map((part) => part.text).join("");
   const hasAnswer = textParts.some((part) => part.text.length > 0);
+  const showThinkingShimmer =
+    streaming && textParts.length === 0 && reasoningParts.length === 0;
   const finishReason = metadata?.finishReason;
   const plainText = textParts.map((part) => part.text).join("");
+  const versionIndex = metadata?.versionIndex;
+  const versionCount = metadata?.versionCount;
+  const versionIds = metadata?.versionIds;
+  const version =
+    versionIndex !== undefined &&
+    versionCount !== undefined &&
+    versionIds !== undefined
+      ? { versionIndex, versionCount, versionIds }
+      : undefined;
+
+  function handleArticleClick(event: ReactMouseEvent<HTMLElement>) {
+    // Buttons and links inside the message (actions, reasoning toggle,
+    // streamdown copy buttons, anchors) handle their own clicks.
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest("button, a")
+    ) {
+      return;
+    }
+    // Don't flicker the rows when the click was a text selection.
+    if (window.getSelection()?.isCollapsed === false) {
+      return;
+    }
+    // Single-active semantics (R9): a tap only ever reveals; it never hides.
+    onReveal?.();
+  }
+
+  const actions = (
+    <MessageActions
+      text={plainText}
+      messageRole={isUser ? "user" : "assistant"}
+      version={version}
+      onSelectVersion={
+        onSelectVersion
+          ? (versionId) => onSelectVersion(message, versionId)
+          : undefined
+      }
+      onRegenerate={onRegenerate ? () => onRegenerate(message) : undefined}
+      onDelete={onDelete ? () => onDelete(message) : undefined}
+      onDeleteRegenerate={
+        !isUser && onDeleteRegenerate
+          ? () => onDeleteRegenerate(message)
+          : undefined
+      }
+      onMenuOpenChange={setMenuOpen}
+      onCopyFeedbackChange={setCopyFeedback}
+    />
+  );
 
   if (isUser) {
     return (
       <article
         className="group/message flex flex-col items-end gap-1"
         aria-label="You"
+        data-revealed={revealedAny ? "true" : "false"}
+        onClick={handleArticleClick}
       >
         <MessageTimestamp createdAt={createdAt} />
         <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
@@ -54,7 +129,7 @@ export default function MessageItem({
             </p>
           ))}
         </div>
-        <MessageActions text={plainText} />
+        {actions}
       </article>
     );
   }
@@ -63,6 +138,8 @@ export default function MessageItem({
     <article
       className="group/message flex flex-col items-start gap-1"
       aria-label="Assistant"
+      data-revealed={revealedAny ? "true" : "false"}
+      onClick={handleArticleClick}
     >
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium">
@@ -81,8 +158,10 @@ export default function MessageItem({
       ) : null}
       <div className="w-full text-sm">
         {textParts.length === 0 ? (
-          streaming ? (
-            <span className="inline-block h-4 w-1 bg-foreground/50 motion-safe:animate-pulse" />
+          showThinkingShimmer ? (
+            <span className="inline-block animate-thinking-shimmer bg-linear-to-r from-muted-foreground/40 via-foreground to-muted-foreground/40 bg-[length:200%_100%] bg-clip-text font-medium text-transparent motion-reduce:animate-none">
+              Thinking…
+            </span>
           ) : null
         ) : (
           textParts.map((part, index) => (
@@ -114,7 +193,7 @@ export default function MessageItem({
       {modelId ? (
         <p className="text-xs text-muted-foreground">{modelId}</p>
       ) : null}
-      <MessageActions text={plainText} />
+      {actions}
     </article>
   );
 }

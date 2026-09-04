@@ -26,6 +26,17 @@ const eslintConfig = defineConfig([
       "react-hooks/set-state-in-effect": "off",
     },
   },
+  {
+    files: ["src/components/chat/MessageItem.tsx"],
+    rules: {
+      // Tap-to-reveal: tapping the message toggles its meta/actions rows on
+      // touch devices. The article is not an interactive control — keyboard
+      // users reach the same rows via Tab (group-focus-within) — so the
+      // click handler is intentionally pointer-only.
+      "jsx-a11y/click-events-have-key-events": "off",
+      "jsx-a11y/no-noninteractive-element-interactions": "off",
+    },
+  },
   globalIgnores([
     ".next/**",
     "out/**",

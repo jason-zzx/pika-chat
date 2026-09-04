@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { newId } from "@/lib/id";
 import {
@@ -50,12 +50,30 @@ export function metadataFromRow(row: {
   };
 }
 
-export function rowToChatUIMessage(row: ChatMessageRow): ChatUIMessage {
+/** Version metadata attached to assistant messages of a group. */
+export type VersionInfo = {
+  groupId: string;
+  /** 1-based position of this version within the group. */
+  versionIndex: number;
+  versionCount: number;
+  /** All version ids in the group, oldest first. */
+  versionIds: string[];
+};
+
+export function rowToChatUIMessage(
+  row: ChatMessageRow,
+  version?: VersionInfo,
+): ChatUIMessage {
+  const metadata = metadataFromRow(row);
   return {
     id: row.id,
     role: row.role,
     parts: uiPartsFromJson(row.parts),
-    metadata: metadataFromRow(row),
+    // Version metadata is assistant-only; user rows stay single-version.
+    metadata:
+      version && row.role === "assistant"
+        ? { ...metadata, ...version }
+        : metadata,
   };
 }
 
@@ -76,18 +94,72 @@ async function requireOwnedTopic(
   }
 }
 
+/**
+ * Groups rows (already ordered by createdAt, id) by groupId, preserving the
+ * position of each group's earliest version. Returns the groups in order.
+ */
+function groupRows(rows: ChatMessageRow[]): ChatMessageRow[][] {
+  const byGroup = new Map<string, ChatMessageRow[]>();
+  for (const row of rows) {
+    const group = byGroup.get(row.groupId);
+    if (group) {
+      group.push(row);
+    } else {
+      byGroup.set(row.groupId, [row]);
+    }
+  }
+  return [...byGroup.values()];
+}
+
+/** Selected version of a group; falls back to the latest version. */
+function selectedRowOf(group: ChatMessageRow[]): ChatMessageRow {
+  const selected =
+    group.find((row) => row.isSelected) ?? group[group.length - 1];
+  if (!selected) {
+    throw new AppError("INTERNAL", 500, "Empty version group");
+  }
+  return selected;
+}
+
+function versionInfoOf(
+  group: ChatMessageRow[],
+  selected: ChatMessageRow,
+): VersionInfo {
+  const versionIds = group.map((row) => row.id);
+  return {
+    groupId: selected.groupId,
+    versionIndex: versionIds.indexOf(selected.id) + 1,
+    versionCount: group.length,
+    versionIds,
+  };
+}
+
+async function listTopicRows(topicId: string): Promise<ChatMessageRow[]> {
+  const db = getDb();
+  return db
+    .select()
+    .from(chatMessages)
+    .where(eq(chatMessages.topicId, topicId))
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+}
+
+/**
+ * Returns the selected-version view of a topic: one message per version group
+ * (the group's `isSelected` row, or the latest version when nothing is
+ * selected), ordered by each group's earliest version. Assistant messages
+ * carry version metadata; single-version groups return exactly what the
+ * pre-grouping query returned, plus that metadata.
+ */
 export async function listTopicMessages(
   input: { topicId: string },
   actor: Actor,
 ): Promise<ChatUIMessage[]> {
   await requireOwnedTopic(input.topicId, actor);
-  const db = getDb();
-  const rows = await db
-    .select()
-    .from(chatMessages)
-    .where(eq(chatMessages.topicId, input.topicId))
-    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
-  return rows.map(rowToChatUIMessage);
+  const rows = await listTopicRows(input.topicId);
+  return groupRows(rows).map((group) => {
+    const selected = selectedRowOf(group);
+    return rowToChatUIMessage(selected, versionInfoOf(group, selected));
+  });
 }
 
 export async function appendUserMessage(
@@ -105,6 +177,8 @@ export async function appendUserMessage(
       topicId: input.topicId,
       role: "user",
       parts,
+      // User messages are always single-version groups keyed by their own id.
+      groupId: id,
     })
     .returning();
   const row = inserted[0];
@@ -124,33 +198,191 @@ export async function appendAssistantMessage(
     modelId: string;
     reasoningMs?: number;
     createdAt?: Date;
+    /** Existing group to add a version to; omit for a new single-version group. */
+    groupId?: string;
   },
   actor: Actor,
 ): Promise<ChatUIMessage> {
   await requireOwnedTopic(input.topicId, actor);
   const db = getDb();
   const id = input.message.id.length > 0 ? input.message.id : newId();
-  const inserted = await db
-    .insert(chatMessages)
-    .values({
-      id,
-      topicId: input.topicId,
-      role: "assistant",
-      parts: input.message.parts,
-      outcome: input.outcome,
-      errorMessage: input.errorMessage ?? null,
-      providerConfigId: input.providerConfigId,
-      modelId: input.modelId,
-      // Undefined falls back to the column default (null / defaultNow());
-      // createdAt is the stream-start time so a reloaded history shows the
-      // same value the live stream announced.
-      reasoningMs: input.reasoningMs,
-      createdAt: input.createdAt,
-    })
-    .returning();
-  const row = inserted[0];
+  const values = {
+    id,
+    topicId: input.topicId,
+    role: "assistant" as const,
+    parts: input.message.parts,
+    outcome: input.outcome,
+    errorMessage: input.errorMessage ?? null,
+    providerConfigId: input.providerConfigId,
+    modelId: input.modelId,
+    // Undefined falls back to the column default (null / defaultNow());
+    // createdAt is the stream-start time so a reloaded history shows the
+    // same value the live stream announced.
+    reasoningMs: input.reasoningMs,
+    createdAt: input.createdAt,
+    groupId: input.groupId ?? id,
+  };
+  const existingGroupId = input.groupId;
+  const row = existingGroupId
+    ? // New version of an existing group: deselect siblings and insert the
+      // new selected version atomically (partial unique index on the group).
+      await db.transaction(async (tx) => {
+        await tx
+          .update(chatMessages)
+          .set({ isSelected: false })
+          .where(
+            and(
+              eq(chatMessages.topicId, input.topicId),
+              eq(chatMessages.groupId, existingGroupId),
+            ),
+          );
+        const inserted = await tx.insert(chatMessages).values(values).returning();
+        return inserted[0];
+      })
+    : (await db.insert(chatMessages).values(values).returning())[0];
   if (!row) {
     throw new AppError("INTERNAL", 500, "Failed to store message");
   }
   return rowToChatUIMessage(row);
+}
+
+export async function deleteMessage(
+  input: { topicId: string; messageId: string },
+  actor: Actor,
+): Promise<{ deleted: true; groupEmpty: boolean }> {
+  await requireOwnedTopic(input.topicId, actor);
+  const db = getDb();
+  return db.transaction(async (tx) => {
+    const targets = await tx
+      .select()
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.topicId, input.topicId),
+          eq(chatMessages.id, input.messageId),
+        ),
+      )
+      .limit(1);
+    const target = targets[0];
+    if (!target) {
+      // Missing and foreign messages are indistinguishable to the caller.
+      throw new AppError("NOT_FOUND", 404, "Message not found");
+    }
+    await tx.delete(chatMessages).where(eq(chatMessages.id, target.id));
+    const remaining = await tx
+      .select()
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.topicId, input.topicId),
+          eq(chatMessages.groupId, target.groupId),
+        ),
+      )
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+    const groupEmpty = remaining.length === 0;
+    const latest = remaining[remaining.length - 1];
+    if (target.isSelected && latest) {
+      // Fall back to the newest remaining version.
+      await tx
+        .update(chatMessages)
+        .set({ isSelected: true })
+        .where(eq(chatMessages.id, latest.id));
+    }
+    return { deleted: true, groupEmpty };
+  });
+}
+
+export async function selectMessageVersion(
+  input: { topicId: string; messageId: string },
+  actor: Actor,
+): Promise<void> {
+  await requireOwnedTopic(input.topicId, actor);
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    const targets = await tx
+      .select({ id: chatMessages.id, groupId: chatMessages.groupId })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.topicId, input.topicId),
+          eq(chatMessages.id, input.messageId),
+        ),
+      )
+      .limit(1);
+    const target = targets[0];
+    if (!target) {
+      throw new AppError("NOT_FOUND", 404, "Message not found");
+    }
+    // Deselect first so the partial unique index never sees two selected
+    // versions of the same group.
+    await tx
+      .update(chatMessages)
+      .set({ isSelected: false })
+      .where(
+        and(
+          eq(chatMessages.topicId, input.topicId),
+          eq(chatMessages.groupId, target.groupId),
+        ),
+      );
+    await tx
+      .update(chatMessages)
+      .set({ isSelected: true })
+      .where(eq(chatMessages.id, target.id));
+  });
+}
+
+export type RegenerateTarget = {
+  /** Group to append the new version to; null opens a new answer slot. */
+  targetGroupId: string | null;
+  /** Selected-version history the new version is generated from. */
+  history: ChatUIMessage[];
+};
+
+/**
+ * Resolves what a regenerate request on `messageId` means:
+ * - assistant message: add a version to its group; history is every selected
+ *   message before that group.
+ * - user message followed by an assistant group: add a version to that group;
+ *   history runs through the user message.
+ * - user message with no following assistant answer: new answer slot
+ *   (targetGroupId null); history runs through the user message.
+ */
+export async function resolveRegenerateTarget(
+  input: { topicId: string; messageId: string },
+  actor: Actor,
+): Promise<RegenerateTarget> {
+  await requireOwnedTopic(input.topicId, actor);
+  const rows = await listTopicRows(input.topicId);
+  const target = rows.find((row) => row.id === input.messageId);
+  if (!target) {
+    throw new AppError("NOT_FOUND", 404, "Message not found");
+  }
+  const groups = groupRows(rows);
+  const targetGroupIndex = groups.findIndex((group) =>
+    group.some((row) => row.id === target.id),
+  );
+  const selectedView = (upToExclusive: number): ChatUIMessage[] =>
+    groups
+      .slice(0, upToExclusive)
+      .map((group) => rowToChatUIMessage(selectedRowOf(group)));
+
+  if (target.role === "assistant") {
+    return {
+      targetGroupId: target.groupId,
+      history: selectedView(targetGroupIndex),
+    };
+  }
+
+  const nextGroup = groups[targetGroupIndex + 1];
+  const nextSelected = nextGroup ? selectedRowOf(nextGroup) : undefined;
+  if (nextGroup && nextSelected?.role === "assistant") {
+    return {
+      targetGroupId: nextSelected.groupId,
+      history: selectedView(targetGroupIndex + 1),
+    };
+  }
+  return {
+    targetGroupId: null,
+    history: selectedView(targetGroupIndex + 1),
+  };
 }

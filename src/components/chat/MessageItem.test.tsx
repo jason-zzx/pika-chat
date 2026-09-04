@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
@@ -105,7 +105,8 @@ describe("MessageItem", () => {
     expect(children).toHaveLength(3);
     expect(children[0]?.tagName).toBe("TIME");
     expect(children[1]).toHaveClass("bg-muted");
-    expect(children[2]).toHaveClass("opacity-0");
+    const revealRow = children[2]?.querySelector("div.opacity-0");
+    expect(revealRow).toHaveClass("group-hover/message:opacity-100");
 
     const time = screen.getByText("just now");
     expect(time).toHaveAttribute("datetime", createdAt);
@@ -220,6 +221,323 @@ describe("MessageItem", () => {
     expect(
       screen.getByText("Output stopped at the token limit."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("MessageItem version and action wiring", () => {
+  it("shows the version switcher from assistant metadata and forwards selection", () => {
+    const onSelectVersion = vi.fn();
+    const message = assistantMessage("Answer", {
+      versionIndex: 2,
+      versionCount: 2,
+      versionIds: ["v1", "v2"],
+    });
+    render(
+      <MessageItem message={message} onSelectVersion={onSelectVersion} />,
+    );
+
+    expect(
+      screen.getByRole("group", { name: "Version 2 of 2" }),
+    ).toHaveTextContent("2/2");
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous version" }));
+    expect(onSelectVersion).toHaveBeenCalledWith(message, "v1");
+  });
+
+  it("hides the version switcher without version metadata", () => {
+    render(<MessageItem message={assistantMessage("Answer")} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Next version" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("forwards regenerate and delete with the message", async () => {
+    const onRegenerate = vi.fn();
+    const onDelete = vi.fn();
+    const message = assistantMessage("Answer");
+    render(
+      <MessageItem
+        message={message}
+        onRegenerate={onRegenerate}
+        onDelete={onDelete}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Regenerate response" }),
+    );
+    expect(onRegenerate).toHaveBeenCalledWith(message);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    expect(onDelete).toHaveBeenCalledWith(message);
+  });
+
+  it("offers delete-and-regenerate only on assistant messages", async () => {
+    const onDeleteRegenerate = vi.fn();
+    const message = assistantMessage("Answer");
+    const { rerender } = render(
+      <MessageItem message={message} onDeleteRegenerate={onDeleteRegenerate} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Delete and regenerate" }),
+    );
+    expect(onDeleteRegenerate).toHaveBeenCalledWith(message);
+
+    rerender(
+      <MessageItem
+        message={userMessage("Hello")}
+        onDeleteRegenerate={onDeleteRegenerate}
+        onDelete={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete and regenerate" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("MessageItem thinking shimmer", () => {
+  function contentlessAssistant(): ChatUIMessage {
+    return { id: "assistant-1", role: "assistant", parts: [] };
+  }
+
+  it("shows the shimmering Thinking placeholder while a stream has no content", () => {
+    render(<MessageItem streaming message={contentlessAssistant()} />);
+
+    const shimmer = screen.getByText("Thinking…");
+    expect(shimmer).toHaveClass("animate-thinking-shimmer");
+    expect(shimmer).toHaveClass("motion-reduce:animate-none");
+    expect(shimmer).toHaveClass("bg-clip-text");
+    // B5: the sweep must be clearly visible — dim ends against a bright band.
+    expect(shimmer).toHaveClass("from-muted-foreground/40");
+    expect(shimmer).toHaveClass("via-foreground");
+  });
+
+  it("replaces the shimmer as soon as a text part arrives", () => {
+    const { rerender } = render(
+      <MessageItem streaming message={contentlessAssistant()} />,
+    );
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+
+    rerender(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "Here is the answer" }],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(screen.getByText("Here is the answer")).toBeInTheDocument();
+  });
+
+  it("replaces the shimmer as soon as a reasoning part arrives", () => {
+    const { rerender } = render(
+      <MessageItem streaming message={contentlessAssistant()} />,
+    );
+
+    rerender(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [{ type: "reasoning", text: "planning the steps" }],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Thinking" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no placeholder for a contentless message that is not streaming", () => {
+    render(<MessageItem message={contentlessAssistant()} />);
+
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+  });
+});
+
+describe("MessageItem tap-to-reveal", () => {
+  it("reports taps through onReveal and renders the controlled revealed state (R9)", () => {
+    const onReveal = vi.fn();
+    const { rerender } = render(
+      <MessageItem
+        message={assistantMessage("Answer", { createdAt: recentIso() })}
+        revealed={false}
+        onReveal={onReveal}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    expect(article).toHaveAttribute("data-revealed", "false");
+
+    fireEvent.click(article);
+    expect(onReveal).toHaveBeenCalledTimes(1);
+    // Single-active semantics: the item never toggles itself off — a repeat
+    // tap just reports again and the state stays where the parent put it.
+    fireEvent.click(article);
+    expect(onReveal).toHaveBeenCalledTimes(2);
+    expect(article).toHaveAttribute("data-revealed", "false");
+
+    rerender(
+      <MessageItem
+        message={assistantMessage("Answer", { createdAt: recentIso() })}
+        revealed
+        onReveal={onReveal}
+      />,
+    );
+    expect(article).toHaveAttribute("data-revealed", "true");
+
+    fireEvent.click(article);
+    // Still no local hide: the row remains revealed until the parent moves
+    // the single reveal slot to another message.
+    expect(article).toHaveAttribute("data-revealed", "true");
+  });
+
+  it("marks the reveal rows with the data-revealed variant", () => {
+    render(
+      <MessageItem message={assistantMessage("Answer", { createdAt: recentIso() })} />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    const revealRows = article.querySelectorAll("div.opacity-0, time.opacity-0");
+    expect(revealRows.length).toBeGreaterThan(0);
+    for (const row of revealRows) {
+      expect(row).toHaveClass("group-data-[revealed=true]/message:opacity-100");
+      expect(row).toHaveClass("group-hover/message:opacity-100");
+    }
+  });
+
+  it("renders user messages revealed when the prop is set", () => {
+    const onReveal = vi.fn();
+    render(<MessageItem message={userMessage("Hello")} revealed onReveal={onReveal} />);
+
+    const article = screen.getByRole("article", { name: "You" });
+    expect(article).toHaveAttribute("data-revealed", "true");
+
+    fireEvent.click(article);
+    expect(onReveal).toHaveBeenCalledTimes(1);
+    expect(article).toHaveAttribute("data-revealed", "true");
+  });
+
+  it("does not report a reveal when an action button is clicked", () => {
+    const onReveal = vi.fn();
+    render(
+      <MessageItem
+        message={assistantMessage("Answer")}
+        revealed={false}
+        onReveal={onReveal}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    // The copy button is covered by the B4 feedback test (its transient
+    // feedback legitimately reveals the row); here the regenerate button
+    // must not trigger the tap-to-reveal path.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Regenerate response" }),
+    );
+
+    expect(onReveal).not.toHaveBeenCalled();
+    expect(article).toHaveAttribute("data-revealed", "false");
+  });
+
+  it("does not report a reveal when the click selected text", () => {
+    const getSelection = vi
+      .spyOn(window, "getSelection")
+      .mockReturnValue({ isCollapsed: false } as Selection);
+    const onReveal = vi.fn();
+    render(
+      <MessageItem
+        message={assistantMessage("Answer")}
+        revealed={false}
+        onReveal={onReveal}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    fireEvent.click(article);
+
+    expect(onReveal).not.toHaveBeenCalled();
+    expect(article).toHaveAttribute("data-revealed", "false");
+    getSelection.mockRestore();
+  });
+
+  it("keeps the actions row visible while the dropdown menu is open (B2)", async () => {
+    render(
+      <MessageItem
+        message={assistantMessage("Answer")}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    expect(article).toHaveAttribute("data-revealed", "false");
+
+    // Opening the menu moves focus into the portaled popup; without the
+    // menu-open state counting as revealed, the row would vanish here.
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+    expect(article).toHaveAttribute("data-revealed", "true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await screen.findByRole("article", { name: "Assistant" });
+    await vi.waitFor(() => {
+      expect(
+        screen.getByRole("article", { name: "Assistant" }),
+      ).toHaveAttribute("data-revealed", "false");
+    });
+  });
+
+  it("keeps the actions row visible for the copy feedback window, then hides it again (B4)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    try {
+      render(<MessageItem message={assistantMessage("Answer")} />);
+
+      const article = screen.getByRole("article", { name: "Assistant" });
+      expect(article).toHaveAttribute("data-revealed", "false");
+
+      fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
+
+      // The 2s check-icon feedback must stay visible even though the pointer
+      // and focus may have left the message row.
+      await vi.waitFor(() => {
+        expect(screen.getByTitle("Copied")).toBeInTheDocument();
+      });
+      expect(article).toHaveAttribute("data-revealed", "true");
+
+      await act(async () => {
+        vi.advanceTimersByTime(2_100);
+      });
+      expect(screen.getByTitle("Copy message")).toBeInTheDocument();
+      expect(article).toHaveAttribute("data-revealed", "false");
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(navigator, "clipboard", {
+        value: undefined,
+        configurable: true,
+      });
+    }
   });
 });
 

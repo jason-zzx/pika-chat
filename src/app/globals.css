@@ -131,6 +131,19 @@
   }
 }
 
+@theme {
+  --animate-thinking-shimmer: thinking-shimmer 1.6s linear infinite;
+
+  @keyframes thinking-shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
 @utility thin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
