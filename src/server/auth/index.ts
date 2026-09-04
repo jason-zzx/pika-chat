@@ -54,4 +54,8 @@ export const auth = betterAuth({
   telemetry: {
     enabled: false,
   },
+  trustedOrigins: [
+    "http://localhost:3000",
+    "http://192.168.99.203:3000"
+  ],
 });
