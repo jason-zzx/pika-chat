@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "版本元数据（groupId/versionIndex/versionCount/versionIds）必须按此契约走 zod optional 字段 + DB 列 + metadataFromRow + 组件消费的完整链路，保证流式与刷新后视图一致"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "chat_messages 加列、backfill、部分唯一索引、迁移规范（additive、空库可应用、schema 与 migration 同 commit）、归属过滤"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "新路由的 404/校验错误处理与 AppError 约定，missing 与 forbidden 不可区分"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新路由与 service 函数的落位约定"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "regen 流式状态归属（useState/组件树）、服务端状态不复制进 Zustand、seed/invalidate 策略的依据"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "MessageActions/MessageItem/MessageList 改造的可访问性与组件拆分约定"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "ChatUIMessage metadata 扩展与 API 响应解析的类型约定"}

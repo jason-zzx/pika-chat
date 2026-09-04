@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端完成度核对：测试覆盖、错误路径、服务层边界"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "核对 live 流式视图与 reload 视图收敛、per-role metadata、未知字段容错"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核对迁移 additive/空库可应用、所有权过滤、无 SELECT *、无未授权级联删除"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端完成度核对：lint/typecheck/test 全绿、可访问性"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对服务端状态未进 Zustand、Query 失效与 reseed 时机正确"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对操作容器/菜单/切换器的组件约定与 aria 命名"}
