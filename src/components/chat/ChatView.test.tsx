@@ -11,6 +11,12 @@ import type {
 
 import ChatView from "./ChatView";
 
+const nav = vi.hoisted(() => ({ pathname: "/" }));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => nav.pathname,
+}));
+
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
 }));
@@ -100,21 +106,40 @@ function assistantVersion(
   };
 }
 
-function renderChatView() {
+function renderChatView(props?: { assistantId?: string }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
-      <ChatView />
+      <ChatView {...props} />
     </QueryClientProvider>,
   );
-  return client;
+  return { client, ...view };
 }
 
 describe("ChatView session-created topic history (B8)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    nav.pathname = "/";
+  });
+
+  it("adopts the topic URL through Next's history patch by passing null state", () => {
+    // Forwarding window.history.state (which carries Next's __NA marker)
+    // makes Next's replaceState patch skip the router sync entirely, so the
+    // New topic button becomes a same-page no-op. null keeps the patch active.
+    const replaceSpy = vi.spyOn(window.history, "replaceState");
+    renderChatView({ assistantId: "a1" });
+
+    act(() => {
+      captured.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "s1" },
+      });
+    });
+
+    expect(replaceSpy).toHaveBeenCalledWith(null, "", "/assistant/a1/t1");
+    replaceSpy.mockRestore();
   });
 
   it("enables the history query for the created topic and reseeds version metadata without a refresh", async () => {
@@ -180,5 +205,49 @@ describe("ChatView session-created topic history (B8)", () => {
       await screen.findByRole("group", { name: "Version 2 of 2" }),
     ).toHaveTextContent("2/2");
     expect(screen.getByText("second answer")).toBeInTheDocument();
+  });
+
+  it("resets to a clean draft when the URL leaves the session-created topic", async () => {
+    // After history.replaceState moved the URL to the created topic, the
+    // router still holds the draft route tree, so the New topic button
+    // navigates without remounting this view.
+    vi.mocked(listTopicMessages).mockResolvedValue({ messages: [] });
+    nav.pathname = "/assistant/a1";
+    const view = renderChatView({ assistantId: "a1" });
+
+    act(() => {
+      captured.setMessages?.([
+        userMessage("u1", "question"),
+        assistantVersion("srv-a1", "first answer", 1, ["srv-a1"]),
+      ]);
+    });
+    act(() => {
+      captured.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "s1" },
+      });
+    });
+
+    // The replaceState'd topic URL becomes visible to the router.
+    nav.pathname = "/assistant/a1/t1";
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <ChatView assistantId="a1" />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("first answer")).toBeInTheDocument();
+
+    // Clicking New topic navigates to the draft URL without a remount.
+    nav.pathname = "/assistant/a1";
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <ChatView assistantId="a1" />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("first answer")).toBeNull();
+      expect(screen.queryByText("question")).toBeNull();
+    });
   });
 });

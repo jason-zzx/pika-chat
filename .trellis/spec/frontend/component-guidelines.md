@@ -206,7 +206,19 @@ the tap state.
 - Assuming `history.replaceState` navigates: it rewrites the URL without
   re-rendering the route, so route props (e.g. `topicId`) stay stale. State
   that depends on the effective id must derive it (`topicId ?? createdId`)
-  rather than reading the route prop alone.
+  rather than reading the route prop alone. Two further contracts when
+  syncing a session-created topic into the URL this way (`ChatView`):
+  - Pass `null` as the state, never `window.history.state`. Next's history
+    patch treats state carrying its `__NA` marker as an internal call and
+    skips the router sync, leaving `canonicalUrl` (and `usePathname`) stuck
+    on the old URL; a later link to that URL then becomes a same-page
+    navigation. With `null` the patch copies its internals over itself and
+    adopts the new URL.
+  - The router still holds the draft route tree afterwards, so navigating
+    back to the draft URL (New topic, delete-then-go-draft) diffs to the
+    same tree and does not remount the view. `ChatView` watches
+    `usePathname` and resets to a clean draft state once the URL leaves the
+    session-created topic (`urlShownForCreatedTopic`).
 - A search field inside a Dialog `<form>` (`ModelPicker`,
   `AssistantEmojiPicker`): Enter submits Save unless that key is
   `preventDefault`ed on the popover.

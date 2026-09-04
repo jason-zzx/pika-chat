@@ -72,10 +72,19 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
 
   const isLastAssistant = assistants.length === 1;
 
-  function leaveIfViewingTopic(ids: string[]) {
-    if (topicId && ids.includes(topicId)) {
+  function leaveIfViewingAssistant(assistant: Assistant) {
+    if (topicId && assistant.topics.some((topic) => topic.id === topicId)) {
       router.push("/");
     }
+  }
+
+  function leaveForNewTopicIfViewing(id: string) {
+    if (topicId !== id) {
+      return;
+    }
+    router.push(
+      pathAssistantId ? assistantDraftHref(pathAssistantId) : "/",
+    );
   }
 
   return (
@@ -148,9 +157,7 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
           }
         }}
         assistant={deleteAssistant}
-        onDeleted={(assistant) => {
-          leaveIfViewingTopic(assistant.topics.map((topic) => topic.id));
-        }}
+        onDeleted={leaveIfViewingAssistant}
       />
       <RenameTopicDialog
         key={renameTopic?.id ?? "rename-closed"}
@@ -170,9 +177,7 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
           }
         }}
         topic={deleteTopic}
-        onDeleted={(id) => {
-          leaveIfViewingTopic([id]);
-        }}
+        onDeleted={leaveForNewTopicIfViewing}
       />
     </>
   );

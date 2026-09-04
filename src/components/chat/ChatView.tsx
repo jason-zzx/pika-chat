@@ -2,6 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import {
   DefaultChatTransport,
   parseJsonEventStream,
@@ -27,7 +28,10 @@ import {
   stopChatStream,
 } from "@/lib/api/chat";
 import { apiErrorMessage } from "@/lib/api/error-message";
-import { assistantTopicHref } from "@/lib/assistant-path";
+import {
+  assistantTopicHref,
+  parseAssistantPath,
+} from "@/lib/assistant-path";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
 import {
@@ -115,6 +119,7 @@ export default function ChatView({
   // undefined and a query keyed on it would never enable. Drive everything
   // that needs the effective topic off activeTopicId instead.
   const activeTopicId = topicId ?? createdTopicId;
+  const pathname = usePathname();
   const history = useChatHistory(activeTopicId);
   const chatId = topicId ?? "draft";
   const [streamId, setStreamId] = useState<string | null>(null);
@@ -130,6 +135,10 @@ export default function ChatView({
   // stream id; the id is stopped as soon as it arrives (B5).
   const regenStopRequestedRef = useRef(false);
   const seededHistoryFor = useRef<string | null>(null);
+  // Set once the replaceState'd URL of a session-created topic is visible to
+  // the router (usePathname), so a later same-tree navigation away from it
+  // can be told apart from the render before the patch applied.
+  const urlShownForCreatedTopic = useRef<string | null>(null);
   const seededModel = useRef<string | null>(null);
   const titleRequestedRef = useRef(new Set<string>());
   const latestRef = useRef<{
@@ -223,8 +232,13 @@ export default function ChatView({
         if (assistant.length === 0) {
           return;
         }
+        // Pass null, not window.history.state: Next's history patch treats
+        // state carrying its __NA marker as an internal call and skips
+        // syncing the router (canonicalUrl would stay on the draft URL and
+        // New topic would become a same-page no-op). With null the patch
+        // copies the internals over itself and adopts the topic URL.
         window.history.replaceState(
-          window.history.state,
+          null,
           "",
           assistantTopicHref(assistant, part.data.topicId),
         );
@@ -249,6 +263,30 @@ export default function ChatView({
       setRecentAssistantId(assistantId);
     }
   }, [assistantId, setRecentAssistantId]);
+
+  useEffect(() => {
+    if (createdTopicId === undefined) {
+      return;
+    }
+    if (parseAssistantPath(pathname).topicId === createdTopicId) {
+      urlShownForCreatedTopic.current = createdTopicId;
+      return;
+    }
+    if (urlShownForCreatedTopic.current !== createdTopicId) {
+      return;
+    }
+    // The URL pointed at the session-created topic and no longer does. The
+    // router still holds the draft route tree (the topic id only reached the
+    // URL via history.replaceState), so navigating to the draft URL — the
+    // New topic button, or deleting this topic and being routed to a fresh
+    // draft — diffs to the same tree and does not remount this view. Reset
+    // to a clean draft state instead of showing the old topic's messages.
+    urlShownForCreatedTopic.current = null;
+    setCreatedTopicId(undefined);
+    setStreamId(null);
+    setMessages([]);
+    seededHistoryFor.current = null;
+  }, [pathname, createdTopicId, setMessages]);
 
   useEffect(() => {
     if (
