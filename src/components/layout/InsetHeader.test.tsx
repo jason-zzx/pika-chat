@@ -9,10 +9,10 @@ vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
 
-function renderHeader(title?: string | null) {
+function renderHeader(title?: string | null, subtitle?: string | null) {
   return render(
     <SidebarProvider>
-      <InsetHeader title={title} />
+      <InsetHeader title={title} subtitle={subtitle} />
     </SidebarProvider>,
   );
 }
@@ -35,6 +35,18 @@ describe("InsetHeader", () => {
     expect(heading.compareDocumentPosition(trigger)).toBe(
       Node.DOCUMENT_POSITION_PRECEDING,
     );
-    expect(heading.parentElement).toContainElement(trigger);
+    expect(heading.closest("header")).toContainElement(trigger);
+  });
+
+  it("renders the subtitle under the title", () => {
+    renderHeader("Why the Sky Appears Blue", "gpt-4o · my-keys");
+    const heading = screen.getByRole("heading", {
+      name: "Why the Sky Appears Blue",
+    });
+    const subtitle = screen.getByText("gpt-4o · my-keys");
+    expect(heading.compareDocumentPosition(subtitle)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(heading.parentElement).toContainElement(subtitle);
   });
 });

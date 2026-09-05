@@ -2,6 +2,7 @@
 
 import {
   ArrowUpIcon,
+  BrainIcon,
   Maximize2Icon,
   Minimize2Icon,
   SquareIcon,
@@ -155,6 +156,7 @@ export default function Composer({
                 value={model}
                 onChange={onModelChange}
                 disabled={inFlight || modelPickerDisabled}
+                iconOnly
               />
               {selected?.reasoning ? (
                 <ReasoningEffortSelect
@@ -233,8 +235,14 @@ function ReasoningEffortSelect({
       }}
       disabled={disabled}
     >
-      <SelectTrigger size="sm" aria-label="Reasoning effort">
-        <SelectValue>{value ?? "Auto"}</SelectValue>
+      <SelectTrigger
+        size="sm"
+        aria-label="Reasoning effort"
+        title={value ?? "Auto"}
+      >
+        <SelectValue>
+          <BrainIcon aria-hidden="true" />
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={AUTO_EFFORT}>Auto</SelectItem>

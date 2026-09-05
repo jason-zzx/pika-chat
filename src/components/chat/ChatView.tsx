@@ -171,7 +171,6 @@ export default function ChatView({
   const draft = useComposerStore((state) => state.drafts[draftKey] ?? "");
   const resolvedAssistant = assistants.find((row) => row.id === resolvedAssistantId);
   const showAssistantPicker = assistantId === undefined;
-  const showChatTitle = Boolean(assistantId || activeTopicId);
   const headerTitle =
     (activeTopicId
       ? assistants
@@ -180,6 +179,10 @@ export default function ChatView({
       : undefined) ??
     topicTitle ??
     DEFAULT_TOPIC_TITLE;
+  const headerModel = findAvailableModel(models.data, pickedModel);
+  const headerSubtitle = headerModel
+    ? `${headerModel.modelId} · ${headerModel.configName}`
+    : null;
 
   const [transport] = useState(
     () =>
@@ -793,7 +796,7 @@ export default function ChatView({
   if (topicId && history.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <InsetHeader title={showChatTitle ? headerTitle : null} />
+        <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
         <EmptyState
           title="Unable to load conversation"
           description="Refresh the page to try again."
@@ -806,7 +809,7 @@ export default function ChatView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <InsetHeader title={showChatTitle ? headerTitle : null} />
+      <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
       {historyPending ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <p className="text-sm text-muted-foreground">

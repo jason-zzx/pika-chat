@@ -33,6 +33,8 @@ type ModelPickerProps = {
   disabled?: boolean;
   allowClear?: boolean;
   id?: string;
+  /** Show only the vendor icon in the collapsed trigger. */
+  iconOnly?: boolean;
 };
 
 export default function ModelPicker({
@@ -41,6 +43,7 @@ export default function ModelPicker({
   disabled = false,
   allowClear = false,
   id,
+  iconOnly = false,
 }: ModelPickerProps) {
   const models = useAvailableModels();
   const available = models.data ?? [];
@@ -50,6 +53,7 @@ export default function ModelPicker({
   const filtered = available.filter((model) => modelMatchesQuery(model, query));
   const groups = groupAvailableModels(filtered);
   const pickerDisabled = disabled || models.isPending;
+  const triggerLabel = selected ? selected.modelId : "Select a model";
 
   function closeAndSelect(next: ComposerModelPick | null) {
     onChange(next);
@@ -70,6 +74,12 @@ export default function ModelPicker({
       <PopoverTrigger
         id={id}
         disabled={pickerDisabled}
+        aria-label={iconOnly ? triggerLabel : undefined}
+        title={
+          iconOnly && selected
+            ? `${selected.modelId} · ${selected.configName}`
+            : undefined
+        }
         render={
           <Button
             type="button"
@@ -79,19 +89,26 @@ export default function ModelPicker({
           />
         }
       >
-        <span className="flex min-w-0 items-center gap-1.5 truncate">
-          {selected ? (
-            <>
-              <ModelVendorIcon
-                modelId={selected.modelId}
-                vendorKey={selected.vendorKey}
-              />
-              <span className="truncate">{selected.modelId}</span>
-            </>
-          ) : (
-            "Select a model"
-          )}
-        </span>
+        {iconOnly ? (
+          <ModelVendorIcon
+            modelId={selected?.modelId ?? ""}
+            vendorKey={selected?.vendorKey ?? null}
+          />
+        ) : (
+          <span className="flex min-w-0 items-center gap-1.5 truncate">
+            {selected ? (
+              <>
+                <ModelVendorIcon
+                  modelId={selected.modelId}
+                  vendorKey={selected.vendorKey}
+                />
+                <span className="truncate">{selected.modelId}</span>
+              </>
+            ) : (
+              "Select a model"
+            )}
+          </span>
+        )}
         <ChevronDownIcon aria-hidden="true" className="size-4 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent

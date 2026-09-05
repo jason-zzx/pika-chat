@@ -1,5 +1,7 @@
 "use client";
 
+import { BotIcon } from "lucide-react";
+
 import { useAssistantTree } from "@/components/assistant/use-assistants";
 import {
   Select,
@@ -35,9 +37,15 @@ export default function AssistantPicker({
       }}
       disabled={disabled || tree.isPending}
     >
-      <SelectTrigger size="sm" aria-label="Assistant">
-        <SelectValue placeholder="Select an assistant">
-          {selected ? `${selected.icon} ${selected.name}` : null}
+      <SelectTrigger
+        size="sm"
+        aria-label="Assistant"
+        title={selected?.name}
+      >
+        <SelectValue
+          placeholder={<BotIcon aria-hidden="true" className="size-4" />}
+        >
+          {selected ? selected.icon : null}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>

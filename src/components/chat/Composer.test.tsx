@@ -162,7 +162,7 @@ describe("Composer", () => {
     const effort = await screen.findByRole("combobox", {
       name: "Reasoning effort",
     });
-    expect(effort).toHaveTextContent("Auto");
+    expect(effort).toHaveAttribute("title", "Auto");
     fireEvent.click(effort);
     expect(await screen.findByRole("option", { name: "Auto" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "low" })).toBeInTheDocument();
