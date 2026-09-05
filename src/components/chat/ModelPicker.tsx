@@ -85,7 +85,9 @@ export default function ModelPicker({
             type="button"
             variant="outline"
             size="sm"
-            className="max-w-full justify-between gap-1.5 font-normal"
+            // bg-transparent matches the Select-based pickers on the muted
+            // composer container (outline variant defaults to bg-background).
+            className="max-w-full justify-between gap-1.5 bg-transparent font-normal"
           />
         }
       >

@@ -21,8 +21,17 @@ vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
 }));
 
+const composerProps = vi.hoisted(() => ({
+  latest: undefined as { showAssistantPicker?: boolean } | undefined,
+}));
+
 // Keep the test focused on the history/reseed plumbing.
-vi.mock("./Composer", () => ({ default: () => null }));
+vi.mock("./Composer", () => ({
+  default: (props: { showAssistantPicker?: boolean }) => {
+    composerProps.latest = props;
+    return null;
+  },
+}));
 vi.mock("@/components/layout/InsetHeader", () => ({ default: () => null }));
 
 vi.mock("@/components/assistant/use-assistants", () => ({
@@ -205,6 +214,40 @@ describe("ChatView session-created topic history (B8)", () => {
       await screen.findByRole("group", { name: "Version 2 of 2" }),
     ).toHaveTextContent("2/2");
     expect(screen.getByText("second answer")).toBeInTheDocument();
+  });
+
+  it("hides the assistant picker once a session-created topic exists", async () => {
+    vi.mocked(listTopicMessages).mockResolvedValue({ messages: [] });
+    const view = renderChatView();
+    expect(composerProps.latest?.showAssistantPicker).toBe(true);
+
+    act(() => {
+      captured.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "s1" },
+      });
+    });
+    // The topic now belongs to a fixed assistant; the picker must go away
+    // even though the route never re-rendered (replaceState only).
+    expect(composerProps.latest?.showAssistantPicker).toBe(false);
+
+    // Leaving the session-created topic resets to a fresh draft, and the
+    // picker comes back.
+    nav.pathname = "/assistant/a1/t1";
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <ChatView />
+      </QueryClientProvider>,
+    );
+    nav.pathname = "/";
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <ChatView />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(composerProps.latest?.showAssistantPicker).toBe(true);
+    });
   });
 
   it("resets to a clean draft when the URL leaves the session-created topic", async () => {

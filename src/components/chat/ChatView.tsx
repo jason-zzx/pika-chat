@@ -170,7 +170,11 @@ export default function ChatView({
   const draftKey = composerDraftKey(activeTopicId, resolvedAssistantId);
   const draft = useComposerStore((state) => state.drafts[draftKey] ?? "");
   const resolvedAssistant = assistants.find((row) => row.id === resolvedAssistantId);
-  const showAssistantPicker = assistantId === undefined;
+  // Once a session-created topic exists the topic's assistant is fixed; the
+  // picker only belongs on a fresh draft. createdTopicId resets when the URL
+  // leaves the topic, which restores the picker for the next draft.
+  const showAssistantPicker =
+    assistantId === undefined && activeTopicId === undefined;
   const headerTitle =
     (activeTopicId
       ? assistants

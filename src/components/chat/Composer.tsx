@@ -226,6 +226,9 @@ function ReasoningEffortSelect({
 }) {
   return (
     <Select
+      // Non-modal: an outside tap closes this popup and activates the tapped
+      // picker in one gesture; modal selects swallow the first press.
+      modal={false}
       value={value ?? AUTO_EFFORT}
       onValueChange={(next) => {
         if (typeof next !== "string") {
