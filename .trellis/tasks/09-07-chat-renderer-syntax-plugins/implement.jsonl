@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "新增 Markdown.tsx 客户端组件需遵循组件规范"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "新文件 markdown-plugins.ts / Markdown.tsx 的落位依据"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "测试与验证要求"}
+{"file": ".trellis/tasks/09-07-chat-renderer-syntax-plugins/design.md", "reason": "实现的技术设计依据"}

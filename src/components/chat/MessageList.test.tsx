@@ -9,6 +9,12 @@ vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
 }));
 
+// Keep the plugin chunks (shiki/katex/mermaid) out of the test runtime.
+vi.mock("./markdown-plugins", () => ({
+  textNeedsMermaid: () => false,
+  useStreamdownPlugins: () => undefined,
+}));
+
 function userMessage(id: string, text: string): ChatUIMessage {
   return {
     id,

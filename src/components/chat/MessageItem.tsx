@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
-import { Streamdown } from "streamdown";
 
 import {
   DEFAULT_ASSISTANT_ICON,
@@ -9,6 +8,7 @@ import {
 } from "@/lib/schemas/assistant";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 
+import Markdown from "./Markdown";
 import MessageActions from "./MessageActions";
 import MessageTimestamp from "./MessageTimestamp";
 import ReasoningBlock from "./ReasoningBlock";
@@ -165,7 +165,7 @@ export default function MessageItem({
           ) : null
         ) : (
           textParts.map((part, index) => (
-            <Streamdown key={index}>{part.text}</Streamdown>
+            <Markdown key={index} text={part.text} />
           ))
         )}
       </div>

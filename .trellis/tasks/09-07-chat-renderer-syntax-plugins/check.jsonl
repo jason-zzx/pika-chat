@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "验收时的 lint/typecheck/test 标准"}
+{"file": ".trellis/tasks/09-07-chat-renderer-syntax-plugins/prd.md", "reason": "验收标准来源"}
+{"file": ".trellis/tasks/09-07-chat-renderer-syntax-plugins/design.md", "reason": "核对实现是否符合设计（懒加载、主题、降级）"}

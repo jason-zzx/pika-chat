@@ -18,10 +18,15 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
       // Permission denied or transient failure: try the legacy path.
     }
   }
-  return legacyCopy(text);
+  return legacyCopyTextToClipboard(text);
 }
 
-function legacyCopy(text: string): boolean {
+/**
+ * Copy via the hidden-textarea + execCommand fallback only. Exported for
+ * `clipboard-polyfill.ts`; callers should prefer `copyTextToClipboard`,
+ * which tries the async Clipboard API first.
+ */
+export function legacyCopyTextToClipboard(text: string): boolean {
   if (typeof document === "undefined") {
     return false;
   }

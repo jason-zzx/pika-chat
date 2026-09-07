@@ -117,6 +117,34 @@ that the mobile drawer opens, closes, and closes again after navigation.
 
 ---
 
+## Markdown rendering (Streamdown)
+
+Assistant messages render through `chat/Markdown.tsx`, the single entry point
+that wraps Streamdown; user bubbles stay plain text. Render markdown only
+through that component — do not import `streamdown` elsewhere.
+
+Contracts that are easy to break (from `09-07-chat-renderer-syntax-plugins`):
+
+- **Plugins are opt-in and heavy.** Streamdown core ships GFM only; code
+  highlighting (Shiki), math (KaTeX), mermaid, and CJK-friendly emphasis come
+  from `@streamdown/*` packages. They are loaded via dynamic `import()` in
+  `chat/markdown-plugins.ts` so they never enter the first-load chunk, and
+  mermaid loads only when the text contains a mermaid fence. Keep it that way:
+  a static plugin import is a bundle-size regression.
+- **Plugin identity must be stable.** Streamdown's memo compares the `plugins`
+  prop by reference; module-level promise caches in `markdown-plugins.ts`
+  hand every message the same object. Creating plugins inline per render
+  reparses every block on every render.
+- **The memo comparator ignores the `mermaid` prop.** A rendered diagram keeps
+  its baked-in theme across a dark/light toggle, so mermaid-containing
+  messages pass a theme `key` to force remount. Do not key non-mermaid
+  messages — that remounts (and reparses) every block on each theme toggle.
+- Until plugins arrive, Streamdown renders its plain fallback; content stays
+  readable and upgrades in place. Preserve that degraded path when touching
+  the loader.
+
+---
+
 ## Popup positioning
 
 Base UI `Positioner` defaults to `positionMethod: "absolute"`: the portal
@@ -202,7 +230,11 @@ the tap state.
   insecure contexts (http over a LAN IP, e.g. testing from a phone) and the
   copy silently fails. Use `copyTextToClipboard` (`src/lib/clipboard.ts`),
   which falls back to a hidden textarea + `execCommand("copy")` and reports
-  failure only when both paths fail.
+  failure only when both paths fail. Third-party UI that copies internally
+  (Streamdown's code/mermaid/table copy buttons call the Clipboard API
+  directly and cannot be given our helper) is covered by
+  `lib/clipboard-polyfill.ts`, installed once from `AppProviders`: it defines
+  a legacy-backed `navigator.clipboard` only when the native one is absent.
 - Assuming `history.replaceState` navigates: it rewrites the URL without
   re-rendering the route, so route props (e.g. `topicId`) stay stale. State
   that depends on the effective id must derive it (`topicId ?? createdId`)
