@@ -128,6 +128,9 @@ export default function ChatView({
     streamingId: string;
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Bumped on every send so MessageList scrolls the new message to the top
+  // of the viewport and pins follow-output auto-scroll for the reply.
+  const [sendSignal, setSendSignal] = useState(0);
   const [defaultModelError, setDefaultModelError] = useState<string | null>(
     null,
   );
@@ -768,6 +771,7 @@ export default function ChatView({
     if (!canSend || !pickedModel || !resolvedAssistantId) {
       return;
     }
+    setSendSignal((count) => count + 1);
     setRecentAssistantId(resolvedAssistantId);
     latestRef.current = {
       assistantId: resolvedAssistantId,
@@ -827,6 +831,7 @@ export default function ChatView({
           streamingMessageId={
             regen && regen.streamingId.length > 0 ? regen.streamingId : undefined
           }
+          sendSignal={sendSignal}
           assistantName={resolvedAssistant?.name}
           assistantIcon={resolvedAssistant?.icon}
           onRegenerate={(message) => void handleRegenerate(message)}

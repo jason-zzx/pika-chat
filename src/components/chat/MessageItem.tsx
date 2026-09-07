@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type Ref,
+} from "react";
 
 import {
   DEFAULT_ASSISTANT_ICON,
@@ -27,6 +31,14 @@ type MessageItemProps = {
   onDelete?: (message: ChatUIMessage) => void;
   onDeleteRegenerate?: (message: ChatUIMessage) => void;
   onSelectVersion?: (message: ChatUIMessage, versionId: string) => void;
+  /** Ref attached to the root article element (used by the list to locate
+   * the latest user message for scroll positioning). */
+  articleRef?: Ref<HTMLElement>;
+  /** Reserved minimum height for the article (the list applies the
+   * viewport-minus-sent-message reserve to the streaming reply so the sent
+   * message stays pinned to the viewport top while the reply grows inside
+   * the reserved area). */
+  minHeight?: number;
 };
 
 export default function MessageItem({
@@ -40,6 +52,8 @@ export default function MessageItem({
   onDelete,
   onDeleteRegenerate,
   onSelectVersion,
+  articleRef,
+  minHeight,
 }: MessageItemProps) {
   // Opening the dropdown moves focus into the portaled menu, dropping
   // hover/focus-within; keep the row visible while the menu is open (B2).
@@ -116,6 +130,7 @@ export default function MessageItem({
   if (isUser) {
     return (
       <article
+        ref={articleRef}
         className="group/message flex flex-col items-end gap-1"
         aria-label="You"
         data-revealed={revealedAny ? "true" : "false"}
@@ -136,6 +151,8 @@ export default function MessageItem({
 
   return (
     <article
+      ref={articleRef}
+      style={minHeight !== undefined ? { minHeight } : undefined}
       className="group/message flex flex-col items-start gap-1"
       aria-label="Assistant"
       data-revealed={revealedAny ? "true" : "false"}
