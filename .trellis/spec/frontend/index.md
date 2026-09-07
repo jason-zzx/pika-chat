@@ -49,6 +49,7 @@ Handlers it calls.
 |-------|-------------|
 | [Directory Structure](./directory-structure.md) | Where components, hooks, and stores go |
 | [Component Guidelines](./component-guidelines.md) | Server/client boundary, composition, responsive layout |
+| [Chat Scroll Behavior](./chat-scroll-behavior.md) | Message-list pin/reserve auto-scroll contracts |
 | [Hook Guidelines](./hook-guidelines.md) | Query hooks, `useChat`, custom hook rules |
 | [State Management](./state-management.md) | The Zustand / TanStack Query boundary |
 | [Type Safety](./type-safety.md) | Shared Zod contracts, inference, forbidden escapes |
