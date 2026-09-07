@@ -337,3 +337,19 @@ Shipped regenerate-as-versions (group_id/is_selected + selected-version view), d
 ### Status
 
 [OK] **Completed**
+
+---
+
+## 2026-09-08 · chat-renderer-syntax-plugins
+
+### Completed
+
+为聊天渲染器接入 streamdown 四个插件（@streamdown/code 高亮 / math KaTeX / mermaid / cjk），全部动态 import 不进首屏 chunk，mermaid 按围栏条件加载。新增 `chat/Markdown.tsx`（assistant 渲染唯一入口）+ `markdown-plugins.ts`（模块级 promise 缓存保插件身份稳定）。手动验证修复两 bug：streamdown 内建复制按钮在局域网 http 失败 → `lib/clipboard-polyfill.ts`（AppProviders 安装，writeText/write 走 execCommand 兜底）；mermaid 暗色主题混杂 → base + themeVariables 对齐 .dark token，主题切换经 key remount 重渲染。spec 增补 Streamdown 契约章节。
+
+| Commit | Summary |
+|---|---|
+| `29d0931` | feat: streamdown syntax plugins for chat renderer (highlight/math/mermaid/cjk) |
+
+### Status
+
+[OK] **Completed**
