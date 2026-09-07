@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
-- **Last Active**: 2026-09-05
+- **Total Sessions**: 12
+- **Last Active**: 2026-09-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~339 | Active |
+| `journal-1.md` | ~378 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-09-07 | 聊天滚动行为对齐主流 AI 聊天 | `76661a9`, `c2264ce` | `main` |
 | 11 | 2026-09-05 | Chat message regenerate/delete: versioned answers, action menu, mobile reveal, clipboard fallback | `7b0a1b7` | `main` |
 | 10 | 2026-09-04 | Chat message meta info | `581961e` | `main` |
 | 9 | 2026-09-04 | Model metadata, vendor icons, and reasoning UI | `226d4d6`, `2236ed1` | `feat/model-metadata` |

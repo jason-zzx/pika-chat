@@ -353,3 +353,26 @@ Shipped regenerate-as-versions (group_id/is_selected + selected-version view), d
 ### Status
 
 [OK] **Completed**
+
+
+## Session 12: 聊天滚动行为对齐主流 AI 聊天
+<!-- trellis-session: v=2 fp=427bf2bcc8d0d8b6 -->
+
+**Date**: 2026-09-07
+**Task**: 聊天滚动行为对齐主流 AI 聊天
+**Branch**: `main`
+
+### Summary
+
+聊天消息列表滚动行为全面对齐主流 AI 聊天（ChatGPT/LobeHub）：发送后将用户消息钉在视口顶部（流式回复 article 的 min-height reserve，回复在预留区内生长）；ResizeObserver 跟随尾部流式增长（修复 RO effect 依赖 [] 导致首挂载 bail 永不连接的根因）；unpin 仅由用户滚轮/触摸上滑手势触发，re-pin 限向下滚到底；回答结束后上滚等量排干 reserve（同步直写 DOM 消除抖动）；进入 topic 自动落底且异步渲染（mermaid/数学/图片）期间保持吸底。全程浏览器插桩实测（admin + sensenova-6.8-flash-lite），tsc/eslint/115 单测全过。补写任务 prd/design/implement 文档，沉淀 spec/frontend/chat-scroll-behavior.md 滚动契约。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `76661a9` | feat: chat scroll behavior — send-to-top pin, stream follow, reserve drain, topic-entry bottom |
+| `c2264ce` | docs(spec): chat scroll behavior contracts |
+
+### Status
+
+[OK] **Completed**
