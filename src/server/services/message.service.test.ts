@@ -93,6 +93,50 @@ describe("uiPartsFromJson", () => {
       { type: "reasoning", text: "think" },
     ]);
   });
+
+  it("keeps persisted searchWeb tool parts in every stream state", () => {
+    const parts = uiPartsFromJson([
+      {
+        type: "tool-searchWeb",
+        toolCallId: "call-1",
+        state: "input-streaming",
+        input: { query: "pika" },
+      },
+      {
+        type: "tool-searchWeb",
+        toolCallId: "call-2",
+        state: "output-available",
+        input: { query: "pika" },
+        output: {
+          provider: "tavily",
+          query: "pika",
+          results: [{ title: "A", url: "https://a.example", snippet: "a" }],
+        },
+      },
+      {
+        type: "tool-searchWeb",
+        toolCallId: "call-3",
+        state: "output-error",
+        input: { query: "pika" },
+        errorText: "all providers failed",
+      },
+      // Unknown tool names and malformed tool parts are dropped.
+      { type: "tool-other", toolCallId: "call-4", state: "output-available" },
+      { type: "tool-searchWeb", state: "output-available" },
+    ]);
+
+    expect(parts).toHaveLength(3);
+    expect(parts[1]).toMatchObject({
+      type: "tool-searchWeb",
+      state: "output-available",
+      output: { provider: "tavily" },
+    });
+    expect(parts[2]).toMatchObject({
+      type: "tool-searchWeb",
+      state: "output-error",
+      errorText: "all providers failed",
+    });
+  });
 });
 
 describe("rowToChatUIMessage", () => {
@@ -141,6 +185,49 @@ describe("rowToChatUIMessage", () => {
       versionIndex: 2,
       versionCount: 3,
       versionIds: ["v1", "v2", "v3"],
+    });
+  });
+
+  it("derives per-phase reasoningDurations from persisted reasoning parts", () => {
+    const message = rowToChatUIMessage(
+      row({
+        reasoningMs: 2_900,
+        parts: [
+          { type: "reasoning", text: "first thought", durationMs: 2_000 },
+          {
+            type: "tool-searchWeb",
+            toolCallId: "call-1",
+            state: "output-available",
+            input: { query: "pika" },
+            output: { provider: "tavily", query: "pika", results: [] },
+          },
+          { type: "reasoning", text: "second thought", durationMs: 900 },
+          { type: "text", text: "Answer" },
+        ],
+      }),
+    );
+
+    expect(message.metadata).toMatchObject({
+      reasoningMs: 2_900,
+      reasoningDurations: [2_000, 900],
+    });
+  });
+
+  it("omits reasoningDurations when no persisted part carries one", () => {
+    const message = rowToChatUIMessage(
+      row({
+        reasoningMs: 3_200,
+        parts: [
+          { type: "reasoning", text: "think" },
+          { type: "text", text: "Answer" },
+        ],
+      }),
+    );
+
+    expect(message.metadata).toEqual({
+      outcome: "completed",
+      reasoningMs: 3_200,
+      createdAt: "2026-01-01T00:00:00.000Z",
     });
   });
 

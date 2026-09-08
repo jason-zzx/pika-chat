@@ -30,13 +30,13 @@ function mockScrollMetrics(el: HTMLElement) {
 describe("ReasoningBlock auto-follow", () => {
   it("pins the scroll view to the bottom while streaming", () => {
     const { rerender } = render(
-      <ReasoningBlock text="step one" streaming hasAnswer={false} />,
+      <ReasoningBlock text="step one" streaming ended={false} />,
     );
     const container = screen.getByText("step one");
     mockScrollMetrics(container);
 
     rerender(
-      <ReasoningBlock text="step one step two" streaming hasAnswer={false} />,
+      <ReasoningBlock text="step one step two" streaming ended={false} />,
     );
 
     expect(container.scrollTop).toBe(SCROLL_HEIGHT);
@@ -44,13 +44,13 @@ describe("ReasoningBlock auto-follow", () => {
 
   it("stops following when the user scrolls up and resumes at the bottom", () => {
     const { rerender } = render(
-      <ReasoningBlock text="step one" streaming hasAnswer={false} />,
+      <ReasoningBlock text="step one" streaming ended={false} />,
     );
     const container = screen.getByText("step one");
     mockScrollMetrics(container);
 
     rerender(
-      <ReasoningBlock text="step one step two" streaming hasAnswer={false} />,
+      <ReasoningBlock text="step one step two" streaming ended={false} />,
     );
     expect(container.scrollTop).toBe(SCROLL_HEIGHT);
 
@@ -61,7 +61,7 @@ describe("ReasoningBlock auto-follow", () => {
       <ReasoningBlock
         text="step one step two step three"
         streaming
-        hasAnswer={false}
+        ended={false}
       />,
     );
     expect(container.scrollTop).toBe(400);
@@ -73,7 +73,7 @@ describe("ReasoningBlock auto-follow", () => {
       <ReasoningBlock
         text="step one step two step three step four"
         streaming
-        hasAnswer={false}
+        ended={false}
       />,
     );
     expect(container.scrollTop).toBe(SCROLL_HEIGHT);
@@ -81,7 +81,7 @@ describe("ReasoningBlock auto-follow", () => {
 
   it("re-pins to the latest output when the block is reopened mid-stream", () => {
     const { rerender } = render(
-      <ReasoningBlock text="step one" streaming hasAnswer={false} />,
+      <ReasoningBlock text="step one" streaming ended={false} />,
     );
     const container = screen.getByText("step one");
     mockScrollMetrics(container);
@@ -91,7 +91,7 @@ describe("ReasoningBlock auto-follow", () => {
     fireEvent.scroll(container);
     fireEvent.click(toggle);
     rerender(
-      <ReasoningBlock text="step one step two" streaming hasAnswer={false} />,
+      <ReasoningBlock text="step one step two" streaming ended={false} />,
     );
     expect(container.scrollTop).toBe(400);
 
@@ -104,7 +104,7 @@ describe("ReasoningBlock auto-follow", () => {
       <ReasoningBlock
         text="finished thought"
         streaming={false}
-        hasAnswer={true}
+        ended={true}
       />,
     );
     const toggle = screen.getByRole("button", { name: "Thought" });

@@ -7,6 +7,8 @@ import MessageItem from "./MessageItem";
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
+  // citations.ts reads the default remark plugin list at module scope.
+  defaultRemarkPlugins: {},
 }));
 
 // Keep the plugin chunks (shiki/katex/mermaid) out of the test runtime.
@@ -183,7 +185,9 @@ describe("MessageItem", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Thinking" })).toHaveAttribute(
+    // The phase ended when the answer text started: it collapses and its
+    // label switches to "Thought" even though the turn is still streaming.
+    expect(screen.getByRole("button", { name: "Thought" })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
@@ -547,6 +551,276 @@ describe("MessageItem tap-to-reveal", () => {
   });
 });
 
+describe("MessageItem tool parts", () => {
+  function searchMessage(): ChatUIMessage {
+    return {
+      id: "assistant-1",
+      role: "assistant",
+      parts: [
+        { type: "text", text: "Let me look that up." },
+        {
+          type: "tool-searchWeb",
+          toolCallId: "call-1",
+          state: "output-available",
+          input: { query: "pika chat" },
+          output: {
+            provider: "tavily",
+            query: "pika chat",
+            results: [
+              {
+                title: "pika-chat on GitHub",
+                url: "https://github.com/example/pika-chat",
+                snippet: "repo",
+              },
+            ],
+          },
+        },
+        { type: "text", text: "Here is what I found." },
+      ],
+    };
+  }
+
+  it("renders parts interleaved in part order", () => {
+    render(<MessageItem message={searchMessage()} />);
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    const before = screen.getByText("Let me look that up.");
+    const toolHeader = screen.getByRole("button", {
+      name: /Searched the web/,
+    });
+    const after = screen.getByText("Here is what I found.");
+
+    expect(article).toContainElement(before);
+    expect(article).toContainElement(toolHeader);
+    expect(article).toContainElement(after);
+    expect(
+      before.compareDocumentPosition(toolHeader) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      toolHeader.compareDocumentPosition(after) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Finished tool blocks load collapsed; expanding shows the sources.
+    expect(toolHeader).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toolHeader);
+    expect(
+      screen.getByRole("link", { name: /pika-chat on GitHub/ }),
+    ).toHaveAttribute("href", "https://github.com/example/pika-chat");
+  });
+
+  it("suppresses the thinking shimmer while a search tool call is running", () => {
+    render(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-searchWeb",
+              toolCallId: "call-1",
+              state: "input-available",
+              input: { query: "pika chat" },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Searching the web/ }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("shows the thinking shimmer while waiting for the step after a tool result (R8)", () => {
+    render(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-searchWeb",
+              toolCallId: "call-1",
+              state: "output-available",
+              input: { query: "pika chat" },
+              output: { provider: "tavily", query: "pika chat", results: [] },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+  });
+
+  it("hides the post-tool shimmer as soon as the next reasoning or text starts (R8)", () => {
+    const toolPart = {
+      type: "tool-searchWeb" as const,
+      toolCallId: "call-1",
+      state: "output-available" as const,
+      input: { query: "pika chat" },
+      output: { provider: "tavily" as const, query: "pika chat", results: [] },
+    };
+    const { rerender } = render(
+      <MessageItem
+        streaming
+        message={{ id: "assistant-1", role: "assistant", parts: [toolPart] }}
+      />,
+    );
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+
+    rerender(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [toolPart, { type: "reasoning", text: "next step" }],
+        }}
+      />,
+    );
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+
+    rerender(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [toolPart, { type: "text", text: "answering" }],
+        }}
+      />,
+    );
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+  });
+
+  it("shows no post-tool shimmer once the stream has ended (R8)", () => {
+    render(
+      <MessageItem
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-searchWeb",
+              toolCallId: "call-1",
+              state: "output-available",
+              input: { query: "pika chat" },
+              output: { provider: "tavily", query: "pika chat", results: [] },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+  });
+
+  it("renders a fetchPage tool block interleaved in part order (R12)", () => {
+    render(
+      <MessageItem
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            { type: "text", text: "Reading that page." },
+            {
+              type: "tool-fetchPage",
+              toolCallId: "call-1",
+              state: "output-available",
+              input: { url: "https://pika.example.com/docs" },
+              output: {
+                provider: "exa",
+                url: "https://pika.example.com/docs",
+                title: "pika docs",
+                content: "Full documentation text.",
+                truncated: false,
+              },
+            },
+            { type: "text", text: "Here is the summary." },
+          ],
+        }}
+      />,
+    );
+
+    const before = screen.getByText("Reading that page.");
+    const toolHeader = screen.getByRole("button", {
+      name: "Toggle page fetch details",
+    });
+    const after = screen.getByText("Here is the summary.");
+
+    expect(toolHeader).toHaveAttribute("aria-expanded", "false");
+    expect(
+      before.compareDocumentPosition(toolHeader) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      toolHeader.compareDocumentPosition(after) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "pika docs" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the thinking shimmer after a finished fetchPage call while streaming (R8)", () => {
+    render(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-fetchPage",
+              toolCallId: "call-1",
+              state: "output-available",
+              input: { url: "https://pika.example.com/docs" },
+              output: {
+                provider: "tavily",
+                url: "https://pika.example.com/docs",
+                content: "text",
+                truncated: false,
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+  });
+
+  it("suppresses the thinking shimmer while a fetchPage call is running", () => {
+    render(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-fetchPage",
+              toolCallId: "call-1",
+              state: "input-available",
+              input: { url: "https://pika.example.com/docs" },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Toggle page fetch details" }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
 describe("MessageItem thinking duration", () => {
   it("shows the recorded duration once thinking has finished", () => {
     render(
@@ -587,5 +861,99 @@ describe("MessageItem thinking duration", () => {
     expect(
       screen.queryByRole("button", { name: /Thought/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows each reasoning phase its own duration from live metadata (R6)", () => {
+    render(
+      <MessageItem
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            { type: "reasoning", text: "first thought" },
+            {
+              type: "tool-searchWeb",
+              toolCallId: "call-1",
+              state: "output-available",
+              input: { query: "pika chat" },
+              output: { provider: "tavily", query: "pika chat", results: [] },
+            },
+            { type: "reasoning", text: "second thought" },
+            { type: "text", text: "Here is the answer" },
+          ],
+          metadata: { reasoningDurations: [2000, 900] },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Thought (2.0s)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Thought (0.9s)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("collapses a finished phase to its own duration while the next step still streams (R6)", () => {
+    render(
+      <MessageItem
+        streaming
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            { type: "reasoning", text: "first thought" },
+            {
+              type: "tool-searchWeb",
+              toolCallId: "call-1",
+              state: "output-available",
+              input: { query: "pika chat" },
+              output: { provider: "tavily", query: "pika chat", results: [] },
+            },
+            { type: "reasoning", text: "second thought" },
+          ],
+          metadata: { reasoningDurations: [2000] },
+        }}
+      />,
+    );
+
+    // The first phase ended: collapsed, labelled with its own duration even
+    // though the turn is still streaming.
+    const first = screen.getByRole("button", { name: "Thought (2.0s)" });
+    expect(first).toHaveAttribute("aria-expanded", "false");
+    // The second phase is the active one: open and still "Thinking".
+    const second = screen.getByRole("button", { name: "Thinking" });
+    expect(second).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("reads per-phase durations from persisted reasoning parts on reload (R6)", () => {
+    // Discriminators pinned with `as const` so the hoisted literals stay
+    // narrow enough for the UIMessage part union (a plain array would widen
+    // `type` to string); durationMs lives in the stored-part schema, outside
+    // the SDK's part type, and is carried through structurally.
+    const parts = [
+      { type: "reasoning" as const, text: "first thought", durationMs: 2000 },
+      {
+        type: "tool-searchWeb" as const,
+        toolCallId: "call-1",
+        state: "output-available" as const,
+        input: { query: "pika chat" },
+        output: { provider: "tavily" as const, query: "pika chat", results: [] },
+      },
+      { type: "reasoning" as const, text: "second thought", durationMs: 900 },
+      { type: "text" as const, text: "Here is the answer" },
+    ];
+    render(
+      <MessageItem
+        message={{ id: "assistant-1", role: "assistant", parts }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Thought (2.0s)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Thought (0.9s)" }),
+    ).toBeInTheDocument();
   });
 });

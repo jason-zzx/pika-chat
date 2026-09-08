@@ -19,6 +19,8 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
+  // citations.ts reads the default remark plugin list at module scope.
+  defaultRemarkPlugins: {},
 }));
 
 // Keep the plugin chunks (shiki/katex/mermaid) out of the test runtime.

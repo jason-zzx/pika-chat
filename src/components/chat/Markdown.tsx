@@ -3,10 +3,22 @@
 import { useSyncExternalStore } from "react";
 import { Streamdown } from "streamdown";
 
+import { CITATION_COMPONENTS } from "./CitationSup";
+import {
+  CitationSourcesContext,
+  REMARK_PLUGINS_WITH_CITATIONS,
+  type CitationSource,
+} from "./citations";
 import { textNeedsMermaid, useStreamdownPlugins } from "./markdown-plugins";
 
 type MarkdownProps = {
   text: string;
+  /** The turn's numbered tool sources (R14). When present, `[n]` markers in
+   * the text that resolve to a source render as citation chips opening the
+   * external-link dialog; unresolvable markers stay literal text. When
+   * absent, the render path is byte-identical to plain markdown — no extra
+   * plugins or component overrides are passed to Streamdown. */
+  citations?: readonly CitationSource[];
 };
 
 // Mermaid's built-in `dark` theme mixes light and dark node fills that clash
@@ -79,7 +91,7 @@ function getDarkSnapshot() {
   return document.documentElement.classList.contains("dark");
 }
 
-export default function Markdown({ text }: MarkdownProps) {
+export default function Markdown({ text, citations }: MarkdownProps) {
   const plugins = useStreamdownPlugins(text);
   // SSR always reports light; mermaid only renders client-side, so there is
   // no hydration mismatch.
@@ -97,20 +109,60 @@ export default function Markdown({ text }: MarkdownProps) {
     },
   };
 
-  // Streamdown's memo comparator does not include the `mermaid` prop, so an
+  // Streamdown's memo comparator ignores the `mermaid` prop, so an
   // already-rendered diagram would keep its old theme when isDark flips.
   // Remount via key, but only for messages that actually contain a mermaid
   // fence — keying every message would remount the whole subtree (and reparse
   // every block) on each theme toggle for no benefit.
-  const streamdownKey = textNeedsMermaid(text)
-    ? isDark
-      ? "dark"
-      : "light"
-    : undefined;
+  const keySegments: string[] = [];
+  if (textNeedsMermaid(text)) {
+    keySegments.push(isDark ? "dark" : "light");
+  }
 
-  return (
-    <Streamdown key={streamdownKey} plugins={plugins} mermaid={mermaidOptions}>
+  const hasCitations = citations !== undefined && citations.length > 0;
+  // The same comparator also ignores remarkPlugins/components, so a text
+  // block that parsed before its sources arrived would keep `[n]` markers
+  // literal forever. Fold citation presence into the key: the block remounts
+  // and reparses exactly once when sources first appear. The
+  // no-citations-ever path keeps `undefined` and never remounts.
+  if (hasCitations) {
+    keySegments.push("cited");
+  }
+  const streamdownKey =
+    keySegments.length > 0 ? keySegments.join("|") : undefined;
+
+  // Plugin and component identities are module-level constants, and
+  // Streamdown's memo comparator ignores remarkPlugins/components, so the
+  // cited path reparses only when `children` changes or the citation key
+  // segment first appears — during streaming the answer text (and with it
+  // the chips) typically arrives after its sources exist, and the key
+  // remount covers the reverse order.
+  const streamdown = (
+    <Streamdown
+      key={streamdownKey}
+      plugins={plugins}
+      mermaid={mermaidOptions}
+      {...(hasCitations
+        ? {
+            remarkPlugins: REMARK_PLUGINS_WITH_CITATIONS,
+            components: CITATION_COMPONENTS,
+          }
+        : {})}
+    >
       {text}
     </Streamdown>
+  );
+
+  // The sup override reads the source map from context rather than props so
+  // an updated source list still reaches already-rendered chips (context
+  // updates propagate across Streamdown's memo boundary). The first
+  // appearance of sources is covered by the key remount above; context
+  // handles subsequent list growth (e.g. a second search adding sources).
+  return hasCitations ? (
+    <CitationSourcesContext.Provider value={citations ?? []}>
+      {streamdown}
+    </CitationSourcesContext.Provider>
+  ) : (
+    streamdown
   );
 }

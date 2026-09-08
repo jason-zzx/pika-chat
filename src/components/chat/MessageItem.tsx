@@ -13,9 +13,103 @@ import {
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 
 import Markdown from "./Markdown";
+import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
 import MessageActions from "./MessageActions";
 import MessageTimestamp from "./MessageTimestamp";
 import ReasoningBlock from "./ReasoningBlock";
+import SearchToolCall, { type SearchWebToolPart } from "./SearchToolCall";
+import { collectCitationSources } from "./citations";
+
+type ContentBlock =
+  | {
+      kind: "reasoning";
+      key: string;
+      text: string;
+      /** 0-based position among the message's reasoning blocks — indexes
+       * the per-phase duration lists (metadata / persisted parts). */
+      order: number;
+      /** Per-phase duration persisted on the reasoning part (reloaded
+       * history); the live stream announces durations via metadata instead. */
+      durationMs?: number;
+    }
+  | { kind: "text"; key: string; text: string }
+  | { kind: "tool-searchWeb"; key: string; part: SearchWebToolPart }
+  | { kind: "tool-fetchPage"; key: string; part: FetchPageToolPart };
+
+/** Reads the persisted per-phase duration off a reasoning part (the field
+ * lives in the stored-part schema, outside the SDK's UIMessage part type). */
+function durationMsOf(part: object): number | undefined {
+  if ("durationMs" in part && typeof part.durationMs === "number") {
+    return part.durationMs;
+  }
+  return undefined;
+}
+
+/** True once a tool part has a final outcome (output or error) — i.e. the
+ * tool stopped running and the model's next step has not started yet. */
+function toolPartFinished(part: SearchWebToolPart | FetchPageToolPart): boolean {
+  return (
+    part.state !== "input-streaming" &&
+    part.state !== "input-available" &&
+    part.state !== "approval-requested"
+  );
+}
+
+/**
+ * Folds message parts into renderable blocks in part order: adjacent
+ * reasoning parts collapse into one block (the previous single-block
+ * behavior), text renders as Markdown, searchWeb/fetchPage tool calls render
+ * as collapsible blocks; step-start and unknown parts render nothing.
+ */
+function buildContentBlocks(parts: ChatUIMessage["parts"]): ContentBlock[] {
+  const blocks: ContentBlock[] = [];
+  let reasoningStart = -1;
+  let reasoningTexts: string[] = [];
+  let reasoningDurationMs: number | undefined;
+  const flushReasoning = () => {
+    if (reasoningStart < 0) {
+      return;
+    }
+    blocks.push({
+      kind: "reasoning",
+      key: `reasoning-${reasoningStart}`,
+      text: reasoningTexts.join(""),
+      order: blocks.filter((block) => block.kind === "reasoning").length,
+      durationMs: reasoningDurationMs,
+    });
+    reasoningStart = -1;
+    reasoningTexts = [];
+    reasoningDurationMs = undefined;
+  };
+  parts.forEach((part, index) => {
+    if (part.type === "reasoning") {
+      if (reasoningStart < 0) {
+        reasoningStart = index;
+        reasoningDurationMs = durationMsOf(part);
+      }
+      reasoningTexts.push(part.text);
+      return;
+    }
+    flushReasoning();
+    if (part.type === "text") {
+      blocks.push({ kind: "text", key: `text-${index}`, text: part.text });
+    } else if (part.type === "tool-searchWeb") {
+      blocks.push({
+        kind: "tool-searchWeb",
+        key: part.toolCallId,
+        part,
+      });
+    } else if (part.type === "tool-fetchPage") {
+      blocks.push({
+        kind: "tool-fetchPage",
+        key: part.toolCallId,
+        part,
+      });
+    }
+  });
+  flushReasoning();
+  return blocks;
+}
 
 type MessageItemProps = {
   message: ChatUIMessage;
@@ -68,14 +162,28 @@ export default function MessageItem({
   const modelId = metadata?.modelId;
   const createdAt = metadata?.createdAt;
   const reasoningMs = metadata?.reasoningMs;
+  const reasoningDurations = metadata?.reasoningDurations;
   const textParts = message.parts.filter((part) => part.type === "text");
   const reasoningParts = message.parts.filter(
     (part) => part.type === "reasoning",
   );
-  const reasoningText = reasoningParts.map((part) => part.text).join("");
   const hasAnswer = textParts.some((part) => part.text.length > 0);
+  const contentBlocks = buildContentBlocks(message.parts);
+  // R14: the turn's numbered tool sources, walked in part order; text
+  // blocks render `[n]` markers resolving to them as citation chips.
+  const citations = collectCitationSources(message.parts);
+  // Waiting indicator: while the tail message streams, show the shimmer
+  // when nothing has arrived yet OR the last block is a finished tool call
+  // (the model is composing the next step). A running tool block shows its
+  // own spinner instead, and the shimmer hides as soon as new reasoning or
+  // text trails the tool result (R8).
+  const lastBlock = contentBlocks[contentBlocks.length - 1];
   const showThinkingShimmer =
-    streaming && textParts.length === 0 && reasoningParts.length === 0;
+    streaming &&
+    (lastBlock === undefined ||
+      ((lastBlock.kind === "tool-searchWeb" ||
+        lastBlock.kind === "tool-fetchPage") &&
+        toolPartFinished(lastBlock.part)));
   const finishReason = metadata?.finishReason;
   const plainText = textParts.map((part) => part.text).join("");
   const versionIndex = metadata?.versionIndex;
@@ -165,27 +273,60 @@ export default function MessageItem({
         </span>
         <MessageTimestamp createdAt={createdAt} />
       </div>
-      {reasoningParts.length > 0 ? (
-        <ReasoningBlock
-          text={reasoningText}
-          streaming={streaming}
-          hasAnswer={hasAnswer}
-          reasoningMs={reasoningMs}
-        />
+      {contentBlocks.map((block, blockIndex) => {
+        if (block.kind === "reasoning") {
+          // Block i shows phase duration i: live from the early-emitted
+          // metadata list, reloaded from the persisted part, falling back
+          // to the message-level reasoningMs total on the first block for
+          // legacy rows (R6).
+          const durationMs =
+            reasoningDurations?.[block.order] ??
+            block.durationMs ??
+            (block.order === 0 ? reasoningMs : undefined);
+          // A phase ends when a later block exists or the stream finished;
+          // only the actively streaming last block stays open as "Thinking".
+          const ended = !streaming || blockIndex < contentBlocks.length - 1;
+          return (
+            <ReasoningBlock
+              key={block.key}
+              text={block.text}
+              streaming={streaming}
+              ended={ended}
+              reasoningMs={durationMs}
+            />
+          );
+        }
+        if (block.kind === "text") {
+          return (
+            <div key={block.key} className="w-full text-sm">
+              <Markdown text={block.text} citations={citations} />
+            </div>
+          );
+        }
+        if (block.kind === "tool-searchWeb") {
+          return (
+            <SearchToolCall
+              key={block.key}
+              part={block.part}
+              streaming={streaming}
+            />
+          );
+        }
+        return (
+          <FetchToolCall
+            key={block.key}
+            part={block.part}
+            streaming={streaming}
+          />
+        );
+      })}
+      {showThinkingShimmer ? (
+        <div className="w-full text-sm">
+          <span className="inline-block animate-thinking-shimmer bg-linear-to-r from-muted-foreground/40 via-foreground to-muted-foreground/40 bg-[length:200%_100%] bg-clip-text font-medium text-transparent motion-reduce:animate-none">
+            Thinking…
+          </span>
+        </div>
       ) : null}
-      <div className="w-full text-sm">
-        {textParts.length === 0 ? (
-          showThinkingShimmer ? (
-            <span className="inline-block animate-thinking-shimmer bg-linear-to-r from-muted-foreground/40 via-foreground to-muted-foreground/40 bg-[length:200%_100%] bg-clip-text font-medium text-transparent motion-reduce:animate-none">
-              Thinking…
-            </span>
-          ) : null
-        ) : (
-          textParts.map((part, index) => (
-            <Markdown key={index} text={part.text} />
-          ))
-        )}
-      </div>
       {!streaming && !hasAnswer && finishReason === "length" ? (
         <p className="text-xs text-muted-foreground">
           Output stopped at the token limit.

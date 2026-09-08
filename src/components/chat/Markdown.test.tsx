@@ -9,6 +9,8 @@ type MermaidOptions = {
 
 let lastMermaidProp: MermaidOptions | undefined;
 vi.mock("streamdown", () => ({
+  // citations.ts reads the default remark plugin list at module scope.
+  defaultRemarkPlugins: {},
   Streamdown: ({
     children,
     mermaid,

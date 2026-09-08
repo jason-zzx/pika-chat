@@ -4,6 +4,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { eq } from "drizzle-orm";
 
+import { withBuiltinWebSearch } from "@/server/ai/builtin-search";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { describeProviderError } from "@/server/ai/provider-error";
 import type { Actor } from "@/server/auth/actor";
@@ -39,6 +40,7 @@ async function loadConfigRow(providerConfigId: string) {
 export async function createChatModelHandle(
   pair: { providerConfigId: string; modelId: string },
   actor: Actor,
+  options?: { builtinSearch?: boolean },
 ): Promise<ChatModelHandle> {
   const available = await resolveAvailableModels(actor);
   const allowed = available.some(
@@ -70,6 +72,7 @@ export async function createChatModelHandle(
     baseURL: config.baseUrl,
     apiKey: apiKey.length > 0 ? apiKey : undefined,
     includeUsage: true,
+    ...(options?.builtinSearch ? { fetch: withBuiltinWebSearch() } : {}),
   });
   const model: LanguageModel = provider.chatModel(pair.modelId);
   return {

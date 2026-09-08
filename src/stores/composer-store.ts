@@ -1,4 +1,14 @@
 import { create } from "zustand";
+import {
+  createJSONStorage,
+  persist,
+  type StateStorage,
+} from "zustand/middleware";
+
+import {
+  searchModeSchema,
+  type SearchMode,
+} from "@/lib/schemas/search-provider";
 
 export type ComposerModelPick = {
   configId: string;
@@ -14,6 +24,12 @@ type ComposerState = {
   setPickedModel: (pick: ComposerModelPick | null) => void;
   reasoningEffort: string | null;
   setReasoningEffort: (effort: string | null) => void;
+  searchMode: SearchMode;
+  setSearchMode: (mode: SearchMode) => void;
+};
+
+type PersistedComposerState = {
+  searchMode: SearchMode;
 };
 
 export function composerDraftKey(
@@ -26,16 +42,52 @@ export function composerDraftKey(
   return `draft:${assistantId ?? "none"}`;
 }
 
-export const useComposerStore = create<ComposerState>((set) => ({
-  drafts: {},
-  setDraft: (key, value) =>
-    set((state) => ({
-      drafts: { ...state.drafts, [key]: value },
-    })),
-  recentAssistantId: null,
-  setRecentAssistantId: (recentAssistantId) => set({ recentAssistantId }),
-  pickedModel: null,
-  setPickedModel: (pickedModel) => set({ pickedModel }),
-  reasoningEffort: null,
-  setReasoningEffort: (reasoningEffort) => set({ reasoningEffort }),
-}));
+// Server-side rendering has no localStorage; persist must stay silent there
+// instead of warning on every SSR store creation.
+const noopStorage: StateStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+};
+
+export const useComposerStore = create<ComposerState>()(
+  persist(
+    (set) => ({
+      drafts: {},
+      setDraft: (key, value) =>
+        set((state) => ({
+          drafts: { ...state.drafts, [key]: value },
+        })),
+      recentAssistantId: null,
+      setRecentAssistantId: (recentAssistantId) => set({ recentAssistantId }),
+      pickedModel: null,
+      setPickedModel: (pickedModel) => set({ pickedModel }),
+      reasoningEffort: null,
+      setReasoningEffort: (reasoningEffort) => set({ reasoningEffort }),
+      searchMode: "off",
+      setSearchMode: (searchMode) => set({ searchMode }),
+    }),
+    {
+      name: "pika-composer",
+      version: 1,
+      storage: createJSONStorage(() =>
+        typeof window === "undefined" ? noopStorage : window.localStorage,
+      ),
+      // Drafts and the model pick stay session-only; only the search mode
+      // survives reloads.
+      partialize: (state): PersistedComposerState => ({
+        searchMode: state.searchMode,
+      }),
+      migrate: (persisted): PersistedComposerState => {
+        const raw =
+          typeof persisted === "object" &&
+          persisted !== null &&
+          "searchMode" in persisted
+            ? persisted.searchMode
+            : undefined;
+        const parsed = searchModeSchema.safeParse(raw);
+        return { searchMode: parsed.success ? parsed.data : "off" };
+      },
+    },
+  ),
+);

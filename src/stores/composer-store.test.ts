@@ -44,4 +44,12 @@ describe("useComposerStore drafts", () => {
     useComposerStore.getState().setReasoningEffort(null);
     expect(useComposerStore.getState().reasoningEffort).toBeNull();
   });
+
+  it("defaults search mode to off and stores changes", () => {
+    expect(useComposerStore.getState().searchMode).toBe("off");
+    useComposerStore.getState().setSearchMode("tool");
+    expect(useComposerStore.getState().searchMode).toBe("tool");
+    useComposerStore.getState().setSearchMode("off");
+    expect(useComposerStore.getState().searchMode).toBe("off");
+  });
 });

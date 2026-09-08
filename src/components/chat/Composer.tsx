@@ -31,6 +31,7 @@ import type { ComposerModelPick } from "@/stores/composer-store";
 import AssistantPicker from "./AssistantPicker";
 import { findAvailableModel } from "./model-pick";
 import ModelPicker from "./ModelPicker";
+import SearchModePicker from "./SearchModePicker";
 
 const AUTO_EFFORT = "__auto";
 
@@ -158,6 +159,7 @@ export default function Composer({
                 disabled={inFlight || modelPickerDisabled}
                 iconOnly
               />
+              <SearchModePicker disabled={inFlight} />
               {selected?.reasoning ? (
                 <ReasoningEffortSelect
                   options={selected.reasoningOptions}

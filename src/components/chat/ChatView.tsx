@@ -549,12 +549,16 @@ export default function ChatView({
     };
     const selected = findAvailableModel(models.data, pick);
     const effort = reasoningEffortRequestValue(selected, reasoningEffort);
+    // Regeneration inherits the composer's current search mode, matching the
+    // existing rule that it uses the composer's current model and effort.
+    const searchMode = useComposerStore.getState().searchMode;
     let response: Response;
     try {
       response = await regenerateTopicMessage(topic, target.id, {
         providerConfigId: pick.configId,
         modelId: pick.modelId,
         ...(effort === undefined ? {} : { reasoningEffort: effort }),
+        searchMode,
       });
     } catch (caught) {
       failStart(caught);
@@ -787,6 +791,7 @@ export default function ChatView({
     setDraft(draftKey, "");
     const selected = findAvailableModel(models.data, pickedModel);
     const effort = reasoningEffortRequestValue(selected, reasoningEffort);
+    const searchMode = useComposerStore.getState().searchMode;
     void sendMessage(
       { text, metadata: { createdAt: new Date().toISOString() } },
       {
@@ -796,6 +801,7 @@ export default function ChatView({
           providerConfigId: pickedModel.configId,
           modelId: pickedModel.modelId,
           ...(effort === undefined ? {} : { reasoningEffort: effort }),
+          searchMode,
         },
       },
     );

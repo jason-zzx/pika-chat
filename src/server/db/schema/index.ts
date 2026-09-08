@@ -12,3 +12,4 @@ export {
   providerModels,
   providerVisibility,
 } from "./provider";
+export { searchProvider, searchProviderSettings } from "./search-provider";

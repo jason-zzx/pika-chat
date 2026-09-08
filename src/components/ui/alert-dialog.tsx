@@ -40,14 +40,22 @@ function AlertDialogOverlay({
 
 function AlertDialogContent({
   className,
+  overlayClassName,
+  onOverlayClick,
   size = "default",
   ...props
 }: AlertDialogPrimitive.Popup.Props & {
   size?: "default" | "sm"
+  /** Restyles the backdrop for dialogs that need a different scrim (e.g.
+   * ExternalLinkDialog matching Streamdown's linkSafety modal). */
+  overlayClassName?: string
+  /** Click handler for the backdrop. Alert dialogs disable pointer dismissal
+   * by default; pass this to close on backdrop click. */
+  onOverlayClick?: AlertDialogPrimitive.Backdrop.Props["onClick"]
 }) {
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay className={overlayClassName} onClick={onOverlayClick} />
       <AlertDialogPrimitive.Popup
         data-slot="alert-dialog-content"
         data-size={size}

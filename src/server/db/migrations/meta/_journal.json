@@ -78,6 +78,13 @@
       "when": 1788518812584,
       "tag": "0010_unknown_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788787130746,
+      "tag": "0011_typical_terror",
+      "breakpoints": true
     }
   ]
 }

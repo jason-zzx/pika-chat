@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { listAvailableModels } from "@/lib/api/provider";
+import { listSearchProviders } from "@/lib/api/search-provider";
 import {
   defaultModelMetadata,
   type AvailableModel,
@@ -12,6 +13,13 @@ import Composer from "./Composer";
 
 vi.mock("@/lib/api/provider", () => ({
   listAvailableModels: vi.fn(),
+}));
+
+vi.mock("@/lib/api/search-provider", () => ({
+  listSearchProviders: vi.fn().mockResolvedValue({ providers: [] }),
+  upsertSearchProvider: vi.fn(),
+  deleteSearchProvider: vi.fn(),
+  reorderSearchProviders: vi.fn(),
 }));
 
 function renderComposer(options?: {
@@ -111,6 +119,51 @@ describe("Composer", () => {
       return;
     }
     expect(form.className).not.toMatch(/border-t/);
+  });
+
+  it("offers three search modes and links to settings when the tool mode has no providers", async () => {
+    renderComposer();
+
+    fireEvent.click(screen.getByRole("button", { name: "Web search mode" }));
+
+    expect(
+      await screen.findByRole("button", { name: /Off/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Model built-in/ }),
+    ).toBeEnabled();
+    // No providers configured (mocked above): the tool mode dead-ends into a
+    // settings link instead of silently failing at send time.
+    expect(
+      screen.getByRole("button", { name: /Search tool/ }),
+    ).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Add one in settings" })).toHaveAttribute(
+      "href",
+      "/settings/search",
+    );
+  });
+
+  it("enables the search tool mode when a provider is configured", async () => {
+    vi.mocked(listSearchProviders).mockResolvedValue({
+      providers: [
+        {
+          provider: "tavily",
+          baseUrl: null,
+          apiKeyLastFour: "1234",
+          position: 0,
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    });
+    renderComposer();
+
+    fireEvent.click(screen.getByRole("button", { name: "Web search mode" }));
+
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Search tool/ }),
+      ).toBeEnabled(),
+    );
   });
 
   it("does not show expand for a short draft", () => {

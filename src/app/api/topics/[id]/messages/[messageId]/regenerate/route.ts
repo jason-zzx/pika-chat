@@ -1,5 +1,4 @@
 import {
-  convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
   streamText,
@@ -17,9 +16,22 @@ import {
 } from "@/lib/schemas/chat";
 import { createChatModelHandle } from "@/server/ai/chat-model";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
+import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
-import { createReasoningTimer } from "@/server/ai/reasoning-timer";
+import {
+  createReasoningTimer,
+  withReasoningDurations,
+} from "@/server/ai/reasoning-timer";
+import {
+  stripMarkupFromTextParts,
+  stripToolCallMarkupTransform,
+} from "@/server/ai/search/markup-sanitizer";
+import {
+  buildSearchTools,
+  toolTurnStepSettings,
+  withCitationDirective,
+} from "@/server/ai/search/tool";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
@@ -28,6 +40,7 @@ import {
   appendAssistantMessage,
   resolveRegenerateTarget,
 } from "@/server/services/message.service";
+import { resolveSearchProviderCredentials } from "@/server/services/search-provider.service";
 import {
   findTopicContextForActor,
   touchTopicUpdatedAt,
@@ -77,7 +90,24 @@ export const POST = withErrorHandling(async (request, context) => {
       modelId: input.modelId,
     },
     actor,
+    { builtinSearch: input.searchMode === "builtin" },
   );
+
+  // Tool mode: resolve the caller's search credentials once per request. With
+  // none configured the turn degrades gracefully to a tool-less run.
+  const searchMode = input.searchMode ?? "off";
+  let searchTools: ReturnType<typeof buildSearchTools> | null = null;
+  if (searchMode === "tool") {
+    const credentials = await resolveSearchProviderCredentials(actor);
+    if (credentials.length > 0) {
+      searchTools = buildSearchTools(credentials);
+    } else {
+      logger.info(
+        { userId: actor.userId },
+        "search mode 'tool' requested without configured providers; running without tools",
+      );
+    }
+  }
 
   const topicContext = await findTopicContextForActor(topicId, actor);
   if (!topicContext) {
@@ -88,7 +118,7 @@ export const POST = withErrorHandling(async (request, context) => {
     { topicId, messageId },
     actor,
   );
-  const modelMessages = await convertToModelMessages(history);
+  const modelMessages = await replayModelMessages(history);
 
   const streamId = newId();
   const abortSignal = registerStream(streamId, actor.userId);
@@ -111,14 +141,21 @@ export const POST = withErrorHandling(async (request, context) => {
   // matches what a history reload will return.
   const streamStartedAt = new Date();
   const reasoningTimer = createReasoningTimer();
-  let reasoningMsEmitted = false;
+  // Count of phase durations already announced via early message-metadata;
+  // each newly closed reasoning phase re-emits the cumulative list.
+  let emittedReasoningPhaseCount = 0;
   // Assigned from the UI stream's execute closure, where the writer exists.
   let emitReasoningMetadata: (() => void) | null = null;
 
   const result = streamText({
     model: handle.model,
     messages: modelMessages,
-    instructions: topicContext.assistant.systemPrompt ?? undefined,
+    // Tool-mode turns carry the citation directive (R14) so the model cites
+    // sources inline as [n]; the forced final step's instructions override
+    // retains it (appendForcedStepDirective appends, never replaces).
+    instructions: searchTools
+      ? withCitationDirective(topicContext.assistant.systemPrompt ?? undefined)
+      : (topicContext.assistant.systemPrompt ?? undefined),
     abortSignal,
     maxOutputTokens: resolvedMaxOutputTokens(selected),
     providerOptions:
@@ -127,6 +164,15 @@ export const POST = withErrorHandling(async (request, context) => {
         : {
             openaiCompatible: { reasoningEffort },
           },
+    ...(searchTools
+      ? {
+          tools: searchTools,
+          ...toolTurnStepSettings(),
+          // R9 sanitization: strip Hermes-style tool-call markup weak
+          // models leak as plain text (the forced answer step especially).
+          experimental_transform: stripToolCallMarkupTransform(),
+        }
+      : {}),
     onError: ({ error }) => {
       logger.error(
         {
@@ -151,17 +197,14 @@ export const POST = withErrorHandling(async (request, context) => {
     generateId: newId,
     execute: ({ writer }) => {
       emitReasoningMetadata = () => {
-        if (reasoningMsEmitted) {
+        const reasoningDurations = reasoningTimer.durations();
+        if (reasoningDurations.length === emittedReasoningPhaseCount) {
           return;
         }
-        const reasoningMs = reasoningTimer.measure();
-        if (reasoningMs === undefined) {
-          return;
-        }
-        reasoningMsEmitted = true;
+        emittedReasoningPhaseCount = reasoningDurations.length;
         writer.write({
           type: "message-metadata",
-          messageMetadata: { reasoningMs },
+          messageMetadata: { reasoningDurations },
         });
       };
       writer.merge(
@@ -183,6 +226,9 @@ export const POST = withErrorHandling(async (request, context) => {
               finishReason: part.finishReason,
               createdAt: streamStartedAt.toISOString(),
               reasoningMs: reasoningTimer.measure(),
+              ...(reasoningTimer.durations().length > 0
+                ? { reasoningDurations: reasoningTimer.durations() }
+                : {}),
             };
           },
         }),
@@ -194,7 +240,7 @@ export const POST = withErrorHandling(async (request, context) => {
     },
     onEnd: async ({ responseMessage, outcome, isAborted }) => {
       try {
-        const persisted = partsHaveText(responseMessage)
+        const withText = partsHaveText(responseMessage)
           ? responseMessage
           : accumulatedText.length > 0
             ? {
@@ -202,6 +248,22 @@ export const POST = withErrorHandling(async (request, context) => {
                 parts: [{ type: "text" as const, text: accumulatedText }],
               }
             : responseMessage;
+        // R9 persistence safety net: the live transform already strips
+        // leaked tool-call markup; re-run it here and drop text parts that
+        // sanitize to nothing so markup never reaches the DB.
+        const cleaned = searchTools
+          ? { ...withText, parts: stripMarkupFromTextParts(withText.parts) }
+          : withText;
+        // Zip per-phase reasoning durations into the reasoning parts so the
+        // per-step Thought durations survive reloads (parts jsonb, no
+        // dedicated column); the reasoningMs column keeps the total.
+        const persisted = {
+          ...cleaned,
+          parts: withReasoningDurations(
+            cleaned.parts,
+            reasoningTimer.durations(),
+          ),
+        };
 
         let turnOutcome: ChatMessageOutcome = "completed";
         let errorMessage: string | null = null;

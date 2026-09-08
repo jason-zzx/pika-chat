@@ -7,6 +7,8 @@ import MessageList from "./MessageList";
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
+  // citations.ts reads the default remark plugin list at module scope.
+  defaultRemarkPlugins: {},
 }));
 
 // Keep the plugin chunks (shiki/katex/mermaid) out of the test runtime.
@@ -211,6 +213,108 @@ describe("MessageList single-active tap reveal (R9/B7)", () => {
     expect(article).toHaveAttribute("data-revealed", "false");
     fireEvent.click(article);
     expect(article).toHaveAttribute("data-revealed", "true");
+  });
+});
+
+describe("MessageList tool-part messages", () => {
+  // jsdom has no layout engine and no ResizeObserver, so the pin/reserve
+  // contracts from .trellis/spec/frontend/chat-scroll-behavior.md cannot be
+  // exercised here — tool-block growth while bottom-pinned needs the
+  // browser-level verification the spec requires. What this covers: a
+  // message containing tool parts mounts through the same list code path
+  // (group keys, observer setup, streaming flags) without breaking.
+  function searchMessage(
+    id: string,
+    part: ChatUIMessage["parts"][number],
+  ): ChatUIMessage {
+    return {
+      id,
+      role: "assistant",
+      parts: [
+        { type: "text", text: "Let me look that up." },
+        part,
+        { type: "text", text: "Here is what I found." },
+      ],
+      metadata: { createdAt: new Date().toISOString() },
+    };
+  }
+
+  it("renders a finished search tool block inside the list", () => {
+    render(
+      <MessageList
+        messages={[
+          userMessage("u1", "question"),
+          searchMessage("a1", {
+            type: "tool-searchWeb",
+            toolCallId: "call-1",
+            state: "output-available",
+            input: { query: "pika chat" },
+            output: {
+              provider: "tavily",
+              query: "pika chat",
+              results: [
+                {
+                  title: "pika-chat on GitHub",
+                  url: "https://github.com/example/pika-chat",
+                  snippet: "repo",
+                },
+              ],
+            },
+          } as ChatUIMessage["parts"][number]),
+        ]}
+        streaming={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Searched the web/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Here is what I found.")).toBeInTheDocument();
+  });
+
+  it("renders a running tool call on the streaming tail message", () => {
+    const tail = searchMessage("a1", {
+      type: "tool-searchWeb",
+      toolCallId: "call-1",
+      state: "input-available",
+      input: { query: "pika chat" },
+    } as ChatUIMessage["parts"][number]);
+    tail.parts = tail.parts.slice(0, 2);
+
+    render(
+      <MessageList
+        messages={[userMessage("u1", "question"), tail]}
+        streaming
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Searching the web/ }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("renders a persisted interrupted tool call without spinning", () => {
+    const interrupted = searchMessage("a1", {
+      type: "tool-searchWeb",
+      toolCallId: "call-1",
+      state: "input-available",
+      input: { query: "pika chat" },
+    } as ChatUIMessage["parts"][number]);
+    interrupted.metadata = {
+      ...interrupted.metadata,
+      outcome: "stopped",
+    };
+
+    render(
+      <MessageList
+        messages={[userMessage("u1", "question"), interrupted]}
+        streaming={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Search interrupted/ }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 });
 

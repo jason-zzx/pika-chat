@@ -20,6 +20,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { href: "/settings/general", label: "General" },
   { href: "/settings/account", label: "Account" },
   { href: "/settings/providers", label: "Providers" },
+  { href: "/settings/search", label: "Search" },
   { href: "/settings/users", label: "Users", staffOnly: true },
 ];
 

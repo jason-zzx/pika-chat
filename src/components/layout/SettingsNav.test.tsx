@@ -44,6 +44,14 @@ describe("SettingsNav", () => {
     );
   });
 
+  it("shows the search tab for everyone and the users tab only for staff", () => {
+    renderNav(false);
+    expect(screen.getByRole("link", { name: "Search" })).toHaveAttribute(
+      "href",
+      "/settings/search",
+    );
+  });
+
   it("shows the users tab for staff", () => {
     renderNav(true);
     expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute(
@@ -53,6 +61,10 @@ describe("SettingsNav", () => {
     expect(screen.getByRole("link", { name: "Providers" })).toHaveAttribute(
       "href",
       "/settings/providers",
+    );
+    expect(screen.getByRole("link", { name: "Search" })).toHaveAttribute(
+      "href",
+      "/settings/search",
     );
   });
 

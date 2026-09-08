@@ -1,6 +1,12 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 
+import {
+  fetchPageToolOutputSchema,
+  searchModeSchema,
+  searchWebToolOutputSchema,
+} from "@/lib/schemas/search-provider";
+
 export const chatMessageOutcomeSchema = z.enum([
   "completed",
   "stopped",
@@ -17,8 +23,11 @@ export const chatMetadataSchema = z.object({
   finishReason: z.string().optional(),
   // ISO 8601, message creation time (server-persisted or stream-start).
   createdAt: z.string().optional(),
-  // Reasoning phase duration in milliseconds.
+  // Reasoning phase duration in milliseconds (total across phases).
   reasoningMs: z.number().int().nonnegative().optional(),
+  // Per-phase reasoning durations in phase order (multi-step tool turns
+  // produce one reasoning phase per step).
+  reasoningDurations: z.array(z.number().int().nonnegative()).optional(),
   // Version group the message belongs to (assistant rows only).
   groupId: z.string().optional(),
   // 1-based position of the selected version within its group.
@@ -52,6 +61,7 @@ export const chatRequestSchema = z.object({
   providerConfigId: z.string().min(1),
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),
+  searchMode: searchModeSchema.optional(),
   message: chatRequestMessageSchema,
 });
 export const stopChatRequestSchema = z.object({
@@ -62,7 +72,67 @@ export const regenerateMessageRequestSchema = z.object({
   providerConfigId: z.string().min(1),
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),
+  searchMode: searchModeSchema.optional(),
 });
+
+// Persisted shape of a tool invocation (searchWeb / fetchPage). Mirrors the
+// AI SDK's static ToolUIPart states minus approval variants (the tools never
+// request approval); discriminated by `state` so the inferred type stays
+// assignable to the SDK's per-state part union. `input` is partial because
+// `input-streaming` parts carry an incrementally parsed query/url.
+const searchWebToolInputPartSchema = z.object({ query: z.string().optional() });
+
+/** Shared state-discriminated tool-part builder for a one-input-field tool. */
+function toolPartSchema<
+  TType extends string,
+  TInput extends z.ZodType,
+  TOutput extends z.ZodType,
+>(
+  type: TType,
+  inputSchema: TInput,
+  outputSchema: TOutput,
+) {
+  return z.discriminatedUnion("state", [
+    z.object({
+      type: z.literal(type),
+      toolCallId: z.string(),
+      state: z.literal("input-streaming"),
+      input: inputSchema.optional(),
+    }),
+    z.object({
+      type: z.literal(type),
+      toolCallId: z.string(),
+      state: z.literal("input-available"),
+      input: inputSchema,
+    }),
+    z.object({
+      type: z.literal(type),
+      toolCallId: z.string(),
+      state: z.literal("output-available"),
+      input: inputSchema,
+      output: outputSchema,
+    }),
+    z.object({
+      type: z.literal(type),
+      toolCallId: z.string(),
+      state: z.literal("output-error"),
+      input: inputSchema,
+      errorText: z.string(),
+    }),
+  ]);
+}
+
+const chatToolSearchWebPartSchema = toolPartSchema(
+  "tool-searchWeb",
+  searchWebToolInputPartSchema,
+  searchWebToolOutputSchema,
+);
+const fetchPageToolInputPartSchema = z.object({ url: z.string().optional() });
+const chatToolFetchPagePartSchema = toolPartSchema(
+  "tool-fetchPage",
+  fetchPageToolInputPartSchema,
+  fetchPageToolOutputSchema,
+);
 
 export const chatStoredPartSchema = z.union([
   chatTextPartSchema,
@@ -70,10 +140,16 @@ export const chatStoredPartSchema = z.union([
     type: z.literal("reasoning"),
     text: z.string(),
     id: z.string().optional(),
+    // Per-phase thinking duration in ms, zipped in at persistence time so
+    // reloaded history shows the same per-step durations the live stream
+    // announced (no dedicated column needed).
+    durationMs: z.number().int().nonnegative().optional(),
   }),
   z.object({
     type: z.literal("step-start"),
   }),
+  chatToolSearchWebPartSchema,
+  chatToolFetchPagePartSchema,
 ]);
 
 export const chatUIMessageSchema = z.object({

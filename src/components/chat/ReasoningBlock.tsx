@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils";
 type ReasoningBlockProps = {
   text: string;
   streaming: boolean;
-  hasAnswer: boolean;
+  /** True once this thinking phase has ended — a later content block exists
+   * or the stream finished. An ended phase collapses to its "Thought" label
+   * (with its own duration when known) even while the turn keeps streaming. */
+  ended: boolean;
   reasoningMs?: number;
 };
 
@@ -20,11 +23,13 @@ const FOLLOW_THRESHOLD_PX = 24;
 export default function ReasoningBlock({
   text,
   streaming,
-  hasAnswer,
+  ended,
   reasoningMs,
 }: ReasoningBlockProps) {
   const contentId = useId();
-  const autoOpen = streaming && !hasAnswer;
+  // Open only while this block is the actively streaming phase; a finished
+  // phase collapses as soon as the next step's content starts.
+  const autoOpen = streaming && !ended;
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? autoOpen;
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -60,7 +65,7 @@ export default function ReasoningBlock({
     followingRef.current = distanceFromBottom <= FOLLOW_THRESHOLD_PX;
   }
 
-  const label = streaming
+  const label = !ended
     ? "Thinking"
     : reasoningMs === undefined
       ? "Thought"

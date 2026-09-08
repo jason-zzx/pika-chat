@@ -28,6 +28,27 @@ export function uiPartsFromJson(value: unknown): ChatUIMessage["parts"] {
   });
 }
 
+/**
+ * Per-phase reasoning durations persisted on the reasoning parts themselves
+ * (zipped in at stream end — see withReasoningDurations). Undefined when no
+ * part carries a duration, so legacy rows fall back to the reasoningMs
+ * column for their single block.
+ */
+function reasoningDurationsFromParts(parts: unknown): number[] | undefined {
+  if (!Array.isArray(parts)) {
+    return undefined;
+  }
+  const durations = parts.flatMap((item) => {
+    const parsed = chatStoredPartSchema.safeParse(item);
+    return parsed.success &&
+      parsed.data.type === "reasoning" &&
+      parsed.data.durationMs !== undefined
+      ? [parsed.data.durationMs]
+      : [];
+  });
+  return durations.length > 0 ? durations : undefined;
+}
+
 export function metadataFromRow(row: {
   role: ChatMessageRow["role"];
   outcome: ChatMessageRow["outcome"];
@@ -36,6 +57,7 @@ export function metadataFromRow(row: {
   modelId: ChatMessageRow["modelId"];
   reasoningMs: ChatMessageRow["reasoningMs"];
   createdAt: ChatMessageRow["createdAt"];
+  parts?: unknown;
 }): ChatMetadata | undefined {
   if (row.role !== "assistant") {
     return { createdAt: row.createdAt.toISOString() };
@@ -47,6 +69,7 @@ export function metadataFromRow(row: {
     modelId: row.modelId ?? undefined,
     createdAt: row.createdAt.toISOString(),
     reasoningMs: row.reasoningMs ?? undefined,
+    reasoningDurations: reasoningDurationsFromParts(row.parts),
   };
 }
 
