@@ -142,6 +142,22 @@ Contracts that are easy to break (from `09-07-chat-renderer-syntax-plugins`):
 - Until plugins arrive, Streamdown renders its plain fallback; content stays
   readable and upgrades in place. Preserve that degraded path when touching
   the loader.
+- **Inline citations** (landed in `09-07-web-search-tools` R14):
+  `MessageItem` collects a `num → source` map from the message's tool
+  parts and passes it to `Markdown` as `citations`. The `[n]` → chip
+  transform is AST-level only (`remarkCitations` walks mdast text nodes;
+  code/inline-code/html carry text in `value` and link/image subtrees are
+  explicitly skipped — a whole-string regex would corrupt `a[1]`). Chips
+  are `<sup>` buttons (`CitationSup`) opening `ExternalLinkDialog`;
+  unresolvable markers render literally. Three non-obvious contracts:
+  the remark plugin and components override are module-level constants
+  (memo identity); sources travel via React context so late-arriving
+  source maps propagate across Streamdown's memo boundary; and the
+  remount key gains a `"cited"` segment when citations first appear —
+  Streamdown's memo does NOT compare `remarkPlugins`/`components`, so
+  without the key segment an already-rendered text block would never
+  reparse and its markers would stay literal. The no-citations path keeps
+  `key={undefined}` (never remounts) and byte-identical props.
 
 ---
 

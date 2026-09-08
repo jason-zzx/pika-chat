@@ -52,6 +52,20 @@ them together or the live and reloaded views disagree.
   reasoningMs } })`; `useChat` merges it into the current assistant message.
   Wire it to a signal observed in `streamText`'s `onChunk`
   (`createReasoningTimer` + `emitReasoningMetadata?.()`), emit-once.
+  Multi-step tool turns (R6): `createReasoningTimer` measures **every**
+  reasoning phase (`durations(): number[]`, one entry per closed phase;
+  `measure()` is the total and feeds the `reasoningMs` column/finish
+  metadata). The early emit re-fires as each phase closes with the
+  cumulative `reasoningDurations` list (track the emitted count instead of a
+  once-flag), and the finish metadata carries the full list. An early
+  `message-metadata` write **replaces the whole metadata object** client-side
+  — every mid-stream emit must carry all currently-relevant fields, and any
+  future mid-stream field must be included in every emit (the finish chunk
+  always carries the full authoritative object). At `onEnd` the
+  durations are zipped into the reasoning parts via `withReasoningDurations`
+  (`durationMs` on the reasoning variant of `chatStoredPartSchema` — no new
+  column); `metadataFromRow` derives `reasoningDurations` from the parts on
+  history load so live and reloaded views converge.
 - Optimistic user message: `sendMessage({ text, metadata: { createdAt: new
   Date().toISOString() } })` (`CreateUIMessage` carries metadata). The server
   persists its own `defaultNow()` value for the user row; sub-second skew vs
