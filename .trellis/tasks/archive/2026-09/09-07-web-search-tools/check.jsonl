@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend done-criteria: lint/type/test, zod boundaries, ownership filters, no secret logging"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend done-criteria: breakpoints, keyboard/touch reachability, no secrets in client props"}
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "Regenerate with searchMode must respect version group contracts"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "Verify tool-block rendering does not regress scroll pinning behavior"}

@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Layering rules for the new search-providers Route Handlers, service, and schema files"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "search_provider_settings table: ownership isolation, credential encryption, migration rules"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Typed errors and streaming failure handling for the search chain and new endpoints"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "Actor contract and bearer/cookie auth for /api/search-providers/**"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "Cross-layer message contract that tool-searchWeb parts join"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "SearchProvidersScreen, composer popover, SearchToolCall block conventions"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "searchMode in zustand composer store vs TanStack Query for provider settings"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared zod contracts for search provider DTOs and the new stored part"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "Tool block growth inside MessageList must respect pin/reserve scroll contracts"}
