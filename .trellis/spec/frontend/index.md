@@ -14,10 +14,11 @@ Divergences from the first draft of this spec:
 
 - shadcn/ui CLI v4 defaulted to Base UI (`@base-ui/react`) rather than Radix.
   `components/ui/` remains generated territory; do not hand-edit those files,
-  with one recorded exception: the shared popup Positioners pass
+  with two recorded exceptions: the shared popup Positioners pass
   `positionMethod="fixed"` so portal popups cannot grow the document scroll
-  area — see [Component Guidelines](./component-guidelines.md), "Popup
-  positioning".
+  area, and the `cursor-default` → `cursor-pointer` edits for pointer-cursor
+  affordance — both in [Component Guidelines](./component-guidelines.md)
+  ("Popup positioning", "Cursor affordance").
 - AppShell lives at `components/layout/AppShell.tsx`; `(app)/layout.tsx` is the
   session guard that renders it.
 - Administration is under `(app)/settings/`, not an `admin/` page route. The
@@ -48,7 +49,7 @@ Handlers it calls.
 | Guide | Description |
 |-------|-------------|
 | [Directory Structure](./directory-structure.md) | Where components, hooks, and stores go |
-| [Component Guidelines](./component-guidelines.md) | Server/client boundary, composition, responsive layout |
+| [Component Guidelines](./component-guidelines.md) | Server/client boundary, composition, responsive layout, cursor affordance |
 | [Chat Scroll Behavior](./chat-scroll-behavior.md) | Message-list pin/reserve auto-scroll contracts |
 | [Hook Guidelines](./hook-guidelines.md) | Query hooks, `useChat`, custom hook rules |
 | [State Management](./state-management.md) | The Zustand / TanStack Query boundary |

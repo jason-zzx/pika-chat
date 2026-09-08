@@ -192,6 +192,55 @@ same. This is the one sanctioned hand edit inside the generated
 
 ---
 
+## Cursor affordance
+
+Every clickable control must show the pointer cursor. Native `<button>` renders
+the default arrow in all major browsers, so a button-only UI reads as
+non-interactive — this was the actual state of the chat UI (reasoning toggle,
+model/assistant pickers, tool-call headers) until the fix landed.
+
+**Convention** (two layers, in `src/app/globals.css` plus the ui primitives):
+
+1. A `@layer base` rule in `globals.css` maps `cursor: pointer` onto every
+   interactive control — `button:not(:disabled)`, plus the ARIA roles Base UI
+   renders as divs (`option`, `menuitem`, `menuitemcheckbox`, `menuitemradio`,
+   `checkbox`, `radio`, `switch`, `tab`, `combobox`, `button`). New raw
+   `<button>`s and role-based items need no per-component cursor class.
+2. Where a ui primitive class string carries `cursor-default` (utilities layer
+   beats base), it is changed to `cursor-pointer` — currently 4 occurrences in
+   `ui/dropdown-menu.tsx` and 3 in `ui/select.tsx` (items + scroll buttons).
+   These are hand edits inside generated `components/ui/` territory (see
+   "Popup positioning" for the first): a `shadcn` regen would silently revert
+   them, so re-apply after any regen.
+
+Semantic cursors keep winning: `:not(:disabled)` excludes disabled controls
+(`disabled:cursor-not-allowed` on `ui/select.tsx` still applies), and explicit
+utilities such as the `SidebarRail` resize cursors (`cursor-w-resize` /
+`cursor-e-resize`) live in the utilities layer and override the base rule.
+Anchors with `href` already point natively. Do **not** put `cursor: pointer` on
+large content regions whose click is a secondary affordance (the message
+`<article>` tap-to-reveal) — it poisons text-selection gestures.
+
+#### Wrong
+
+```tsx
+// hoping the browser shows a pointer
+<button type="button" onClick={toggle}>{label}</button>
+```
+
+#### Correct
+
+```css
+/* globals.css @layer base */
+button:not(:disabled),
+[role='menuitem']:not(:disabled),
+/* ...full role list in globals.css... */ {
+  cursor: pointer;
+}
+```
+
+---
+
 ## Hover-reveal rows
 
 Chat message meta rows (timestamps, message actions) are always mounted with a
