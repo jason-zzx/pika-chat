@@ -376,3 +376,27 @@ Shipped regenerate-as-versions (group_id/is_selected + selected-version view), d
 ### Status
 
 [OK] **Completed**
+
+
+## Session 13: Web 搜索工具与工具调用渲染
+<!-- trellis-session: v=2 fp=web-search-tools -->
+
+**Date**: 2026-09-07
+**Task**: web-search-tools
+**Branch**: `main`
+
+### Summary
+
+为 LLM 接入 Web 搜索（function calling）并在聊天中渲染工具调用。R1-R5 基线：search_provider_settings 表（用户级加密 key、可选 base URL、position 排序）+ /settings/search 页面 + /api/search-providers/**；searchWeb 工具按优先级链 fallback（空结果不 fallback）；composer 三态搜索开关（off/builtin/tool，builtin 经 fetch 包装注入 web_search_options）；SearchToolCall 折叠块按 part 顺序交织渲染。R6-R9 修复多轮工具轮次：每个推理阶段独立计时折叠为 Thought（durationMs 入 parts jsonb）；步预算 5 且末步 prepareStep 强制 toolChoice none + 清空工具 + 指令覆盖；工具间隙显示 thinking shimmer；弱模型泄漏的 <tool_call> 标记经流式 holdback transform + onEnd 双通道清洗。R10-R12：Brave 切 LLM Context 端点（查询驱动、含页面内容块）；新增 fetchPage 工具（Tavily/Exa/Firecrawl 链式 fallback，8000 字符截断，无可抓取供应商时不注册）；FetchToolCall 渲染。R13：FetchToolCall 头部对齐整行展开 + 外链确认弹窗（复刻 Streamdown linkSafety 样式）。R14：正文内联 [n] 来源标注——请求级共享计数器编号、引用指令注入（强制步保留）、AST 级 chip 变换（代码块豁免、点击弹外链确认、无法解析原样显示）。收尾 ponytail 简化：chain 双 runner 合并为泛型 runChain、抽取 ToolCallShell/tool-part 去重、numbering 必填化。全程浏览器实测（admin + sensenova-6.8-flash-lite / gemini-3.8-flash），497 测试全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fc7d76c` | feat: web search tools, page fetch, tool-call rendering with inline citations |
+| `ee6b954` | docs(spec): search tools, message metadata, and component contracts |
+| `1ffaf4c` | chore(task): archive 09-07-web-search-tools |
+
+### Status
+
+[OK] **Completed**
