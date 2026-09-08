@@ -129,6 +129,22 @@
   html {
     @apply font-sans;
   }
+  /* Interactive controls get the pointer cursor; explicit semantic cursors
+     (not-allowed, resize) are set in the utilities layer and still win. */
+  button:not(:disabled),
+  [role='button']:not(:disabled),
+  [role='checkbox']:not(:disabled),
+  [role='combobox']:not(:disabled),
+  [role='menuitem']:not(:disabled),
+  [role='menuitemcheckbox']:not(:disabled),
+  [role='menuitemradio']:not(:disabled),
+  [role='option']:not(:disabled),
+  [role='radio']:not(:disabled),
+  [role='switch']:not(:disabled),
+  [role='tab']:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
 }
 
 @theme {
