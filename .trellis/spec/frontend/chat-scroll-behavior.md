@@ -61,6 +61,24 @@ The once-created observer callback follows growth when
   streaming one) must never match — yanking the view to the bottom while the
   user watches an older message regenerate is a bug.
 
+## Jump/positioning operations must release the pin first
+
+Any operation that moves the view somewhere other than the bottom (chat-map
+jump, anchor navigation, "scroll to message N") must set `pinnedRef.current =
+false` **before** scrolling.
+
+The follow condition is `pinned && (tailStreaming || sendTurnActive ||
+!streaming)`, and `!streaming` is true whenever the conversation is idle — so
+with the pin still engaged, every asynchronous height change after the jump
+(mermaid diagrams, images, math) is read by the ResizeObserver as "follow the
+output" and yanks the view back to the bottom. The jump silently undoes
+itself, and only in real browsers with async renderers — jsdom cannot
+reproduce it.
+
+Re-engaging the pin afterwards is the opposite operation ("back to latest"),
+and landing on the last message re-pins naturally through the existing
+downward-scroll rule in `handleScroll`.
+
 ## Effect declaration order
 
 The topic-entry effect (scroll to bottom once when messages first appear)
