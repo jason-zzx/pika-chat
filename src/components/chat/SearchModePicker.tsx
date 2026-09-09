@@ -1,6 +1,6 @@
 "use client";
 
-import { GlobeIcon } from "lucide-react";
+import { GlobeIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
@@ -8,12 +8,13 @@ import { useSearchProviders } from "@/components/search/use-search-providers";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
-  PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { SearchMode } from "@/lib/schemas/search-provider";
 import { cn } from "@/lib/utils";
 import { useComposerStore } from "@/stores/composer-store";
+
+import ComposerPickerContent from "./ComposerPickerContent";
 
 const SEARCH_MODE_OPTIONS: {
   value: SearchMode;
@@ -74,29 +75,33 @@ export default function SearchModePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        aria-label="Web search mode"
+        aria-label={`Web search mode: ${modeLabel}`}
         title={`Web search: ${modeLabel}`}
         disabled={disabled}
         render={
           <Button
             type="button"
             variant="outline"
-            size="sm"
-            // bg-transparent matches the other pickers on the muted composer
-            // container (outline variant defaults to bg-background).
-            className="bg-transparent"
+            size="icon-sm"
+            className={cn(
+              "bg-transparent",
+              // Active: highlight the icon itself in primary (near-black in
+              // light mode) instead of filling the button; inactive is a
+              // lighter muted tint.
+              mode === "off"
+                ? "text-muted-foreground/70"
+                : "text-primary hover:text-primary aria-expanded:text-primary",
+            )}
           />
         }
       >
-        <GlobeIcon
-          aria-hidden="true"
-          className={cn(mode !== "off" && "text-primary")}
-        />
-        {mode !== "off" ? (
-          <span className="text-xs">{modeLabel}</span>
-        ) : null}
+        {mode === "builtin" ? (
+          <SearchIcon aria-hidden="true" />
+        ) : (
+          <GlobeIcon aria-hidden="true" />
+        )}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 gap-1 p-2">
+      <ComposerPickerContent className="w-80 gap-1">
         {SEARCH_MODE_OPTIONS.map((option) => {
           const optionDisabled = option.value === "tool" && !toolAvailable;
           const selected = mode === option.value;
@@ -131,7 +136,7 @@ export default function SearchModePicker({
             </Link>
           </p>
         ) : null}
-      </PopoverContent>
+      </ComposerPickerContent>
     </Popover>
   );
 }

@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
-  PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
@@ -19,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ComposerModelPick } from "@/stores/composer-store";
 
+import ComposerPickerContent from "./ComposerPickerContent";
 import {
   findAvailableModel,
   groupAvailableModels,
@@ -84,10 +84,13 @@ export default function ModelPicker({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size={iconOnly ? "icon-sm" : "sm"}
             // bg-transparent matches the Select-based pickers on the muted
             // composer container (outline variant defaults to bg-background).
-            className="max-w-full justify-between gap-1.5 bg-transparent font-normal"
+            className={cn(
+              "max-w-full bg-transparent font-normal",
+              !iconOnly && "justify-between gap-1.5",
+            )}
           />
         }
       >
@@ -111,11 +114,16 @@ export default function ModelPicker({
             )}
           </span>
         )}
-        <ChevronDownIcon aria-hidden="true" className="size-4 text-muted-foreground" />
+        {!iconOnly ? (
+          <ChevronDownIcon
+            aria-hidden="true"
+            className="size-4 text-muted-foreground"
+          />
+        ) : null}
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-80 gap-2 p-2"
+      <ComposerPickerContent
+        side={iconOnly ? "top" : "bottom"}
+        className="w-80 gap-2"
         onKeyDown={(event) => {
           if (
             event.key === "Enter" &&
@@ -133,7 +141,10 @@ export default function ModelPicker({
           aria-label="Search models"
           autoComplete="off"
         />
-        <div className="max-h-64 overflow-y-auto">
+        {/* relative: popup enter/exit animations apply a transform, making
+            the popup the containing block of this list's sr-only icons and
+            flashing a second scrollbar. Keep them inside this scroller. */}
+        <div className="relative max-h-64 overflow-y-auto">
           {allowClear ? (
             <button
               type="button"
@@ -219,7 +230,7 @@ export default function ModelPicker({
             ))
           )}
         </div>
-      </PopoverContent>
+      </ComposerPickerContent>
     </Popover>
   );
 }

@@ -82,6 +82,11 @@ describe("ModelPicker", () => {
     expect(screen.getByText("gpt-4o")).toBeInTheDocument();
     expect(screen.queryByText("local-llama")).not.toBeInTheDocument();
 
+    // Model search can be nested inside the composer or assistant edit form.
+    expect(
+      fireEvent.keyDown(screen.getByLabelText("Search models"), { key: "Enter" }),
+    ).toBe(false);
+
     fireEvent.change(screen.getByLabelText("Search models"), {
       target: { value: "my-keys" },
     });

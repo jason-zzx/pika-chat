@@ -5,11 +5,12 @@ import { BotIcon } from "lucide-react";
 import { useAssistantTree } from "@/components/assistant/use-assistants";
 import {
   Select,
-  SelectContent,
   SelectItem,
-  SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+import ComposerPickerContent from "./ComposerPickerContent";
+import ComposerSelectTrigger from "./ComposerSelectTrigger";
 
 type AssistantPickerProps = {
   value: string | undefined;
@@ -40,24 +41,21 @@ export default function AssistantPicker({
       }}
       disabled={disabled || tree.isPending}
     >
-      <SelectTrigger
-        size="sm"
-        aria-label="Assistant"
-        title={selected?.name}
-      >
+      <ComposerSelectTrigger label="Assistant" title={selected?.name}>
         <SelectValue
+          className="justify-center text-center"
           placeholder={<BotIcon aria-hidden="true" className="size-4" />}
         >
           {selected ? selected.icon : null}
         </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
+      </ComposerSelectTrigger>
+      <ComposerPickerContent variant="select">
         {assistants.map((assistant) => (
           <SelectItem key={assistant.id} value={assistant.id}>
             {assistant.icon} {assistant.name}
           </SelectItem>
         ))}
-      </SelectContent>
+      </ComposerPickerContent>
     </Select>
   );
 }

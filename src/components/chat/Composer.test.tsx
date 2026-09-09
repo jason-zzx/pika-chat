@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listAvailableModels } from "@/lib/api/provider";
 import { listSearchProviders } from "@/lib/api/search-provider";
@@ -8,6 +8,7 @@ import {
   defaultModelMetadata,
   type AvailableModel,
 } from "@/lib/schemas/provider";
+import { useComposerStore } from "@/stores/composer-store";
 
 import Composer from "./Composer";
 
@@ -57,6 +58,11 @@ function renderComposer(options?: {
 }
 
 describe("Composer", () => {
+  beforeEach(() => {
+    useComposerStore.getState().setSearchMode("off");
+    vi.mocked(listSearchProviders).mockResolvedValue({ providers: [] });
+  });
+
   it("sends with the in-box control and Enter, and inserts a newline with Shift+Enter", () => {
     const { onSend } = renderComposer();
 
@@ -124,18 +130,18 @@ describe("Composer", () => {
   it("offers three search modes and links to settings when the tool mode has no providers", async () => {
     renderComposer();
 
-    fireEvent.click(screen.getByRole("button", { name: "Web search mode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Web search mode: Off" }));
 
     expect(
-      await screen.findByRole("button", { name: /Off/ }),
+      await screen.findByRole("button", { name: /^Off/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Model built-in/ }),
+      screen.getByRole("button", { name: /^Model built-in/ }),
     ).toBeEnabled();
     // No providers configured (mocked above): the tool mode dead-ends into a
     // settings link instead of silently failing at send time.
     expect(
-      screen.getByRole("button", { name: /Search tool/ }),
+      screen.getByRole("button", { name: /^Search tool/ }),
     ).toBeDisabled();
     expect(screen.getByRole("link", { name: "Add one in settings" })).toHaveAttribute(
       "href",
@@ -143,7 +149,7 @@ describe("Composer", () => {
     );
   });
 
-  it("enables the search tool mode when a provider is configured", async () => {
+  it("switches the icon-only search trigger between off, built-in search, and the configured search tool", async () => {
     vi.mocked(listSearchProviders).mockResolvedValue({
       providers: [
         {
@@ -157,13 +163,48 @@ describe("Composer", () => {
     });
     renderComposer();
 
-    fireEvent.click(screen.getByRole("button", { name: "Web search mode" }));
+    const expectTrigger = (
+      mode: "Off" | "Model built-in" | "Search tool",
+      icon: "lucide-globe" | "lucide-search",
+    ) => {
+      const trigger = screen.getByRole("button", {
+        name: `Web search mode: ${mode}`,
+      });
+      expect(trigger).toHaveAttribute("title", `Web search: ${mode}`);
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+      expect(trigger.textContent).toBe("");
+      const otherIcon =
+        icon === "lucide-globe" ? "lucide-search" : "lucide-globe";
+      expect(trigger.querySelector(`.${icon}`)).toBeInTheDocument();
+      expect(trigger.querySelector(`.${otherIcon}`)).not.toBeInTheDocument();
+      return trigger;
+    };
+
+    const trigger = expectTrigger("Off", "lucide-globe");
+    fireEvent.click(trigger);
 
     await vi.waitFor(() =>
       expect(
-        screen.getByRole("button", { name: /Search tool/ }),
+        screen.getByRole("button", { name: /^Search tool/ }),
       ).toBeEnabled(),
     );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Model built-in/ }));
+    expect(useComposerStore.getState().searchMode).toBe("builtin");
+    expectTrigger("Model built-in", "lucide-search");
+
+    fireEvent.click(trigger);
+    expect(
+      await screen.findByRole("button", { name: /^Model built-in/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: /^Search tool/ }));
+    expect(useComposerStore.getState().searchMode).toBe("tool");
+    expectTrigger("Search tool", "lucide-globe");
+
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("button", { name: /^Off/ }));
+    expect(useComposerStore.getState().searchMode).toBe("off");
+    expectTrigger("Off", "lucide-globe");
   });
 
   it("does not show expand for a short draft", () => {
@@ -196,8 +237,8 @@ describe("Composer", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows Auto plus stored effort options for a reasoning model", async () => {
-    renderComposer({
+  it("offers Auto and model effort options, preserving keyboard selection without submitting", async () => {
+    const { onReasoningEffortChange, onSend } = renderComposer({
       models: [
         {
           configId: "cfg",
@@ -216,10 +257,17 @@ describe("Composer", () => {
       name: "Reasoning effort",
     });
     expect(effort).toHaveAttribute("title", "Auto");
-    fireEvent.click(effort);
-    expect(await screen.findByRole("option", { name: "Auto" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "low" })).toBeInTheDocument();
+    fireEvent.keyDown(effort, { key: "ArrowDown" });
+    const auto = await screen.findByRole("option", { name: "Auto" });
+    const low = screen.getByRole("option", { name: "low" });
     expect(screen.getByRole("option", { name: "high" })).toBeInTheDocument();
+    await vi.waitFor(() => expect(auto).toHaveFocus());
+    fireEvent.keyDown(auto, { key: "ArrowDown" });
+    await vi.waitFor(() => expect(low).toHaveFocus());
+    fireEvent.keyDown(low, { key: "Enter" });
+    expect(onReasoningEffortChange).toHaveBeenCalledWith("low");
+    expect(onSend).not.toHaveBeenCalled();
+    expect(effort).toHaveAttribute("aria-expanded", "false");
   });
 
   it("places expand on the send row, left of send, with no extra row above the textarea", () => {

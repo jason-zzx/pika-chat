@@ -19,16 +19,15 @@ import { useAvailableModels } from "@/components/provider/use-available-models";
 import { Button } from "@/components/ui/button";
 import {
   Select,
-  SelectContent,
   SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ComposerModelPick } from "@/stores/composer-store";
 
 import AssistantPicker from "./AssistantPicker";
+import ComposerPickerContent from "./ComposerPickerContent";
+import ComposerSelectTrigger from "./ComposerSelectTrigger";
 import { findAvailableModel } from "./model-pick";
 import ModelPicker from "./ModelPicker";
 import SearchModePicker from "./SearchModePicker";
@@ -240,23 +239,20 @@ function ReasoningEffortSelect({
       }}
       disabled={disabled}
     >
-      <SelectTrigger
-        size="sm"
-        aria-label="Reasoning effort"
+      <ComposerSelectTrigger
+        label="Reasoning effort"
         title={value ?? "Auto"}
       >
-        <SelectValue>
-          <BrainIcon aria-hidden="true" />
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
+        <BrainIcon aria-hidden="true" />
+      </ComposerSelectTrigger>
+      <ComposerPickerContent variant="select">
         <SelectItem value={AUTO_EFFORT}>Auto</SelectItem>
         {options.map((option) => (
           <SelectItem key={option} value={option}>
             {option}
           </SelectItem>
         ))}
-      </SelectContent>
+      </ComposerPickerContent>
     </Select>
   );
 }
