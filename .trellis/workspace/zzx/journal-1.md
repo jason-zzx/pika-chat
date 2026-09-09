@@ -400,3 +400,26 @@ Shipped regenerate-as-versions (group_id/is_selected + selected-version view), d
 ### Status
 
 [OK] **Completed**
+
+
+## Session 14: Chat message navigation: chat map + scroll-to-latest
+<!-- trellis-session: v=2 fp=9d2fd0b7a15ca66d -->
+
+**Date**: 2026-09-09
+**Task**: Chat message navigation: chat map + scroll-to-latest
+**Branch**: `main`
+
+### Summary
+
+Added two navigation affordances to the chat message area: a floating scroll-to-latest button (aligned to the message content column, shown only when the view is off the bottom) and a chat map — an icon button in the Composer right group opening a centered dialog that lists every rendered message as a one-line truncated bubble, click to jump. Anchors use the version-group key (groupId ?? id), the same granularity as the React key. Jumps release the follow pin before scrolling, otherwise idle-time async growth (mermaid/images) yanks the view back to the bottom; that rule was codified in .trellis/spec/frontend/chat-scroll-behavior.md. A post-jump ring highlight was implemented then removed after visual review.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d20347d` | feat(chat): chat map overview and scroll-to-latest button |
+| `18d5fb3` | docs(spec): jump operations must release the scroll pin |
+
+### Status
+
+[OK] **Completed**
