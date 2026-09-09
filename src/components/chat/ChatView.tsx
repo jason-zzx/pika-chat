@@ -40,8 +40,9 @@ import {
   type ComposerModelPick,
 } from "@/stores/composer-store";
 
+import ChatMapDialog from "./ChatMapDialog";
 import Composer from "./Composer";
-import MessageList from "./MessageList";
+import MessageList, { type MessageListHandle } from "./MessageList";
 import {
   buildRegenPlaceholder,
   insertRegenPlaceholder,
@@ -131,6 +132,10 @@ export default function ChatView({
   // Bumped on every send so MessageList scrolls the new message to the top
   // of the viewport and pins follow-output auto-scroll for the reply.
   const [sendSignal, setSendSignal] = useState(0);
+  // Chat map: the dialog lists every message and jumps to the chosen one
+  // through this handle, so all scroll knowledge stays in MessageList.
+  const messageListRef = useRef<MessageListHandle>(null);
+  const [chatMapOpen, setChatMapOpen] = useState(false);
   const [defaultModelError, setDefaultModelError] = useState<string | null>(
     null,
   );
@@ -771,6 +776,13 @@ export default function ChatView({
     await runRegeneration(topic, target, targetIndex, pick, plan);
   }
 
+  // Close first, then scroll on the next frame: the dialog's exit animation
+  // still holds the layout (and scroll lock) during this commit.
+  function handleSelectMessage(key: string) {
+    setChatMapOpen(false);
+    requestAnimationFrame(() => messageListRef.current?.scrollToMessage(key));
+  }
+
   function handleSend() {
     if (!canSend || !pickedModel || !resolvedAssistantId) {
       return;
@@ -832,6 +844,7 @@ export default function ChatView({
         </div>
       ) : (
         <MessageList
+          ref={messageListRef}
           messages={messages}
           streaming={status === "streaming" || regen !== null}
           streamingMessageId={
@@ -884,6 +897,14 @@ export default function ChatView({
         }}
         reasoningEffort={reasoningEffort}
         onReasoningEffortChange={setReasoningEffort}
+        onOpenChatMap={() => setChatMapOpen(true)}
+        chatMapDisabled={messages.length === 0}
+      />
+      <ChatMapDialog
+        open={chatMapOpen}
+        onOpenChange={setChatMapOpen}
+        messages={messages}
+        onSelect={handleSelectMessage}
       />
     </div>
   );

@@ -3,6 +3,7 @@
 import {
   ArrowUpIcon,
   BrainIcon,
+  MapIcon,
   Maximize2Icon,
   Minimize2Icon,
   SquareIcon,
@@ -51,6 +52,10 @@ type ComposerProps = {
   onStop: () => void;
   reasoningEffort: string | null;
   onReasoningEffortChange: (value: string | null) => void;
+  /** Opens the chat map overview listing every message. */
+  onOpenChatMap: () => void;
+  /** No messages yet — there is nothing to jump to. */
+  chatMapDisabled?: boolean;
 };
 
 export default function Composer({
@@ -68,6 +73,8 @@ export default function Composer({
   onStop,
   reasoningEffort,
   onReasoningEffortChange,
+  onOpenChatMap,
+  chatMapDisabled = false,
 }: ComposerProps) {
   const models = useAvailableModels();
   const selected = findAvailableModel(models.data, model);
@@ -169,6 +176,18 @@ export default function Composer({
               ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              <Button
+                // Composer root is a <form>: without an explicit type this
+                // would submit the draft.
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Chat map"
+                disabled={chatMapDisabled}
+                onClick={onOpenChatMap}
+              >
+                <MapIcon aria-hidden="true" />
+              </Button>
               {showExpandToggle ? (
                 <Button
                   type="button"

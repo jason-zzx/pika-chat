@@ -1,16 +1,47 @@
 "use client";
 
+import { ArrowDownIcon } from "lucide-react";
 import {
+  useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
+  type Ref,
   type TouchEvent as ReactTouchEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
 
+import { Button } from "@/components/ui/button";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 
 import MessageItem from "./MessageItem";
+
+/** Distance to the bottom (px) that still counts as "at the bottom". Shares
+ * the existing re-pin threshold in `handleScroll` so the pin and the
+ * scroll-to-latest button can never disagree. */
+const BOTTOM_THRESHOLD = 32;
+
+/** Gap left above a jumped-to message; matches the send positioning. */
+const JUMP_OFFSET = 16;
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Scrolls the container to `top`, clamped to the scrollable range. */
+function scrollToPosition(container: HTMLDivElement, top: number) {
+  const max = Math.max(0, container.scrollHeight - container.clientHeight);
+  container.scrollTo({
+    top: Math.min(Math.max(0, top), max),
+    behavior: prefersReducedMotion() ? "auto" : "smooth",
+  });
+}
+
+export type MessageListHandle = {
+  scrollToBottom: () => void;
+  scrollToMessage: (key: string) => void;
+};
 
 type MessageListProps = {
   messages: ChatUIMessage[];
@@ -28,6 +59,8 @@ type MessageListProps = {
   onDelete?: (message: ChatUIMessage) => void;
   onDeleteRegenerate?: (message: ChatUIMessage) => void;
   onSelectVersion?: (message: ChatUIMessage, versionId: string) => void;
+  /** Imperative scroll handle (chat map jumps, scroll-to-latest). */
+  ref?: Ref<MessageListHandle>;
 };
 
 export default function MessageList({
@@ -41,6 +74,7 @@ export default function MessageList({
   onDelete,
   onDeleteRegenerate,
   onSelectVersion,
+  ref,
 }: MessageListProps) {
   // Single-active tap reveal (R9/B7): at most one message shows its meta /
   // actions / version switcher rows from tapping. Tapping a message reveals
@@ -49,6 +83,14 @@ export default function MessageList({
   // as the element key below) so the reveal survives a version switch,
   // delete, or regenerate of the revealed message (B1).
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  // Whether the view currently sits at the bottom; drives the scroll-to-latest
+  // button. Starts true — a freshly opened conversation lands at the bottom.
+  const [atBottom, setAtBottom] = useState(true);
+  // Set while a smooth "back to latest" scroll is in flight. Intermediate
+  // scroll events still measure far from the bottom, so without this the
+  // button would flash back on for the whole animation and only disappear
+  // once the scroll lands.
+  const bottomPendingRef = useRef(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -183,6 +225,30 @@ export default function MessageList({
     seenTailUserIdRef.current = tailUserId ?? null;
   }, [tailUserId]);
 
+  // Recompute "am I at the bottom" from the live container metrics. Called
+  // from the scroll handler and from the ResizeObserver: content can grow or
+  // shrink without firing a scroll event (e.g. deleting a message), and only
+  // syncing on scroll would leave a stale button.
+  const syncAtBottom = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const distance =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (bottomPendingRef.current) {
+      // Landed: hand tracking back to the measured distance. Until then the
+      // button stays hidden even though the in-flight position is not at the
+      // bottom yet.
+      if (distance < BOTTOM_THRESHOLD) {
+        bottomPendingRef.current = false;
+      }
+      setAtBottom(true);
+      return;
+    }
+    setAtBottom(distance < BOTTOM_THRESHOLD);
+  }, []);
+
   // Pin to the bottom while the tail reply (or the send reserve) grows:
   // streamed text and reasoning both expand the content node, so a
   // ResizeObserver catches every growth step regardless of source. Outside
@@ -203,10 +269,11 @@ export default function MessageList({
       if (pinnedRef.current && followRef.current) {
         container.scrollTop = container.scrollHeight;
       }
+      syncAtBottom();
     });
     observer.observe(content);
     return () => observer.disconnect();
-  }, [hasMessages]);
+  }, [hasMessages, syncAtBottom]);
 
   // Re-engage the pin when the user returns to the bottom, but never release
   // it here: programmatic scrolls (send positioning, follow-output) fire
@@ -260,15 +327,22 @@ export default function MessageList({
     // write back every frame (visible jitter).
     if (
       !movedUp &&
-      container.scrollHeight - top - container.clientHeight < 32
+      container.scrollHeight - top - container.clientHeight < BOTTOM_THRESHOLD
     ) {
       pinnedRef.current = true;
     }
+    syncAtBottom();
   }
 
   // The pin is released only by deliberate upward user scrolling (wheel or
   // touch), so programmatic positioning never fights the user.
   function handleWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    // A wheel gesture takes the scroll over from the in-flight "back to
+    // latest" (browsers cancel the programmatic smooth scroll on user
+    // input), so drop the pending flag and track the real position again.
+    if (event.deltaY !== 0) {
+      bottomPendingRef.current = false;
+    }
     if (event.deltaY < 0) {
       pinnedRef.current = false;
     }
@@ -282,11 +356,59 @@ export default function MessageList({
     const y = event.touches[0]?.clientY;
     const lastY = touchYRef.current;
     touchYRef.current = y ?? null;
+    // Same hand-over as the wheel: the gesture owns the scroll position now.
+    bottomPendingRef.current = false;
     // Finger moves down = content scrolls up.
     if (y !== undefined && lastY !== null && y > lastY) {
       pinnedRef.current = false;
     }
   }
+
+  const scrollToBottom = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    // "Back to latest" means re-engaging follow-output.
+    pinnedRef.current = true;
+    bottomPendingRef.current = true;
+    setAtBottom(true);
+    scrollToPosition(container, container.scrollHeight);
+  }, []);
+
+  const scrollToMessage = useCallback((key: string) => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    // Release the follow pin BEFORE scrolling. The ResizeObserver follows
+    // growth while `pinned && (tailStreaming || sendTurnActive || !streaming)`,
+    // and `!streaming` is true whenever idle — so with the pin still set, any
+    // async content (mermaid, images, math) that grows after the jump would
+    // yank the view back to the bottom and undo the jump.
+    pinnedRef.current = false;
+    // Compare dataset values instead of building an attribute selector: ids
+    // are arbitrary strings and would need escaping.
+    const target = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-message-key]"),
+    ).find((node) => node.dataset.messageKey === key);
+    // The message may have been deleted while the chat map was open.
+    if (!target) {
+      return;
+    }
+    const top =
+      target.getBoundingClientRect().top -
+      container.getBoundingClientRect().top +
+      container.scrollTop -
+      JUMP_OFFSET;
+    scrollToPosition(container, top);
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({ scrollToBottom, scrollToMessage }),
+    [scrollToBottom, scrollToMessage],
+  );
 
   if (messages.length === 0) {
     return (
@@ -299,70 +421,94 @@ export default function MessageList({
   }
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      onWheel={handleWheel}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4"
-    >
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div
-        ref={contentRef}
-        className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-4"
+        ref={containerRef}
+        onScroll={handleScroll}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4"
       >
-        <div className="sr-only" aria-live="polite">
-          {streaming ? "Assistant is responding" : ""}
-        </div>
-        {messages.map((message, index) => {
-          // Key by version group, not the per-version message id: switching
-          // versions, deleting a version, or regenerating swaps in a
-          // different-id row, and keying by id would remount the item (B1).
-          // User messages carry no groupId metadata and never change id, so
-          // they fall back to id.
-          const itemKey = message.metadata?.groupId ?? message.id;
-          return (
-            <MessageItem
-              key={itemKey}
-              message={message}
-              streaming={
-                streaming &&
-                (streamingMessageId !== undefined
-                  ? message.id === streamingMessageId
-                  : index === messages.length - 1 &&
-                    message.role === "assistant")
-              }
-              revealed={revealedKey === itemKey}
-              onReveal={() => setRevealedKey(itemKey)}
-              assistantName={assistantName}
-              assistantIcon={assistantIcon}
-              onRegenerate={onRegenerate}
-              onDelete={onDelete}
-              onDeleteRegenerate={onDeleteRegenerate}
-              onSelectVersion={onSelectVersion}
-              articleRef={
-                index === lastUserIndex
-                  ? lastUserElRef
-                  : tailReserve !== null &&
-                      index === messages.length - 1 &&
-                      message.role === "assistant"
-                    ? lastAssistantElRef
+        <div
+          ref={contentRef}
+          className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-4"
+        >
+          <div className="sr-only" aria-live="polite">
+            {streaming ? "Assistant is responding" : ""}
+          </div>
+          {messages.map((message, index) => {
+            // Key by version group, not the per-version message id: switching
+            // versions, deleting a version, or regenerating swaps in a
+            // different-id row, and keying by id would remount the item (B1).
+            // User messages carry no groupId metadata and never change id, so
+            // they fall back to id.
+            const itemKey = message.metadata?.groupId ?? message.id;
+            return (
+              <MessageItem
+                key={itemKey}
+                message={message}
+                streaming={
+                  streaming &&
+                  (streamingMessageId !== undefined
+                    ? message.id === streamingMessageId
+                    : index === messages.length - 1 &&
+                      message.role === "assistant")
+                }
+                revealed={revealedKey === itemKey}
+                onReveal={() => setRevealedKey(itemKey)}
+                assistantName={assistantName}
+                assistantIcon={assistantIcon}
+                onRegenerate={onRegenerate}
+                onDelete={onDelete}
+                onDeleteRegenerate={onDeleteRegenerate}
+                onSelectVersion={onSelectVersion}
+                articleRef={
+                  index === lastUserIndex
+                    ? lastUserElRef
+                    : tailReserve !== null &&
+                        index === messages.length - 1 &&
+                        message.role === "assistant"
+                      ? lastAssistantElRef
+                      : undefined
+                }
+                minHeight={
+                  tailReserve !== null &&
+                  index === messages.length - 1 &&
+                  message.role === "assistant"
+                    ? tailReserve
                     : undefined
-              }
-              minHeight={
-                tailReserve !== null &&
-                index === messages.length - 1 &&
-                message.role === "assistant"
-                  ? tailReserve
-                  : undefined
-              }
-            />
-          );
-        })}
-        {tailReserve !== null && lastMessage?.role === "user" ? (
-          <div aria-hidden="true" style={{ height: tailReserve }} />
-        ) : null}
+                }
+                itemKey={itemKey}
+              />
+            );
+          })}
+          {tailReserve !== null && lastMessage?.role === "user" ? (
+            <div aria-hidden="true" style={{ height: tailReserve }} />
+          ) : null}
+        </div>
       </div>
+      {!atBottom ? (
+        // Overlay spans the whole message area but must not swallow taps on
+        // the messages underneath (tap-to-reveal), so only the button itself
+        // takes pointer events. The inner wrapper mirrors the content column
+        // width so the button hugs the messages' right edge on wide screens
+        // instead of the viewport edge.
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 px-4">
+          <div className="mx-auto flex w-full max-w-[52.5rem] justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-lg"
+              className="pointer-events-auto rounded-full"
+              aria-label="Scroll to latest"
+              onClick={scrollToBottom}
+            >
+              <ArrowDownIcon aria-hidden="true" className="size-5" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

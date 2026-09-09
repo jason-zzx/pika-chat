@@ -133,6 +133,10 @@ type MessageItemProps = {
    * message stays pinned to the viewport top while the reply grows inside
    * the reserved area). */
   minHeight?: number;
+  /** Scroll anchor for this row, rendered as `data-message-key`. Handed down
+   * the version-group key (`groupId ?? id`) by the list, which already uses it
+   * as the React key — the item must not derive it itself. */
+  itemKey?: string;
 };
 
 export default function MessageItem({
@@ -148,6 +152,7 @@ export default function MessageItem({
   onSelectVersion,
   articleRef,
   minHeight,
+  itemKey,
 }: MessageItemProps) {
   // Opening the dropdown moves focus into the portaled menu, dropping
   // hover/focus-within; keep the row visible while the menu is open (B2).
@@ -242,6 +247,7 @@ export default function MessageItem({
         className="group/message flex flex-col items-end gap-1"
         aria-label="You"
         data-revealed={revealedAny ? "true" : "false"}
+        data-message-key={itemKey}
         onClick={handleArticleClick}
       >
         <MessageTimestamp createdAt={createdAt} />
@@ -264,6 +270,7 @@ export default function MessageItem({
       className="group/message flex flex-col items-start gap-1"
       aria-label="Assistant"
       data-revealed={revealedAny ? "true" : "false"}
+      data-message-key={itemKey}
       onClick={handleArticleClick}
     >
       <div className="flex items-center gap-2">

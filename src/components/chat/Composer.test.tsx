@@ -29,6 +29,7 @@ function renderComposer(options?: {
   draft?: string;
   models?: AvailableModel[];
   reasoningEffort?: string | null;
+  chatMapDisabled?: boolean;
 }) {
   vi.mocked(listAvailableModels).mockResolvedValue(options?.models ?? []);
   const client = new QueryClient({
@@ -37,6 +38,7 @@ function renderComposer(options?: {
   const onSend = vi.fn();
   const onStop = vi.fn();
   const onReasoningEffortChange = vi.fn();
+  const onOpenChatMap = vi.fn();
   render(
     <QueryClientProvider client={client}>
       <Composer
@@ -51,10 +53,12 @@ function renderComposer(options?: {
         onStop={onStop}
         reasoningEffort={options?.reasoningEffort ?? null}
         onReasoningEffortChange={onReasoningEffortChange}
+        onOpenChatMap={onOpenChatMap}
+        chatMapDisabled={options?.chatMapDisabled}
       />
     </QueryClientProvider>,
   );
-  return { onSend, onStop, onReasoningEffortChange };
+  return { onSend, onStop, onReasoningEffortChange, onOpenChatMap };
 }
 
 describe("Composer", () => {
@@ -268,6 +272,30 @@ describe("Composer", () => {
     expect(onReasoningEffortChange).toHaveBeenCalledWith("low");
     expect(onSend).not.toHaveBeenCalled();
     expect(effort).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("opens the chat map from a labelled non-submitting button", () => {
+    const { onOpenChatMap, onSend } = renderComposer();
+
+    const map = screen.getByRole("button", { name: "Chat map" });
+    // Composer root is a <form>: a default-type button would submit the draft.
+    expect(map).toHaveAttribute("type", "button");
+    fireEvent.click(map);
+    expect(onOpenChatMap).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("disables the chat map button while the conversation is empty and keeps it left of send", () => {
+    renderComposer({ chatMapDisabled: true });
+
+    const map = screen.getByRole("button", { name: "Chat map" });
+    expect(map).toBeDisabled();
+
+    const send = screen.getByRole("button", { name: "Send" });
+    expect(send.parentElement).toContainElement(map);
+    expect(
+      map.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("places expand on the send row, left of send, with no extra row above the textarea", () => {
