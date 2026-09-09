@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint/typecheck/test 三件套、a11y 基线、禁止模式（div onClick、快照测试）"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "核对改动是否违反既有滚动契约（pin 释放/重挂、ResizeObserver 跟随条件）"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对组件结构、图标按钮 aria-label、弹层、hover-reveal、响应式双断点"}
+{"file": ".trellis/tasks/09-09-chat-message-navigation/design.md", "reason": "按设计核对锚点粒度、命令式句柄、atBottom 阈值与跳后高亮实现"}
