@@ -58,7 +58,9 @@
   },
   "Common": {
     "close": "关闭",
-    "cancel": "取消"
+    "cancel": "取消",
+    "noEmojiFound": "未找到表情",
+    "selectEmoji": "选择一个表情…"
   },
   "Auth": {
     "signIn": {

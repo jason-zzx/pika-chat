@@ -7,6 +7,7 @@ import {
   EmojiPicker as EmojiPickerPrimitive,
 } from "frimousse";
 import { LoaderIcon, SearchIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -92,6 +93,8 @@ function EmojiPickerContent({
   className,
   ...props
 }: React.ComponentProps<typeof EmojiPickerPrimitive.Viewport>) {
+  const t = useTranslations("Common");
+
   return (
     <EmojiPickerPrimitive.Viewport
       className={cn("outline-hidden relative flex-1", className)}
@@ -108,7 +111,7 @@ function EmojiPickerContent({
         className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm"
         data-slot="emoji-picker-empty"
       >
-        No emoji found.
+        {t("noEmojiFound")}
       </EmojiPickerPrimitive.Empty>
       <EmojiPickerPrimitive.List
         className="select-none pb-1"
@@ -127,6 +130,8 @@ function EmojiPickerFooter({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const t = useTranslations("Common");
+
   return (
     <div
       className={cn(
@@ -149,7 +154,7 @@ function EmojiPickerFooter({
             </>
           ) : (
             <span className="text-muted-foreground ml-1.5 flex h-7 items-center truncate text-xs">
-              Select an emoji…
+              {t("selectEmoji")}
             </span>
           )
         }

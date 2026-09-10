@@ -58,7 +58,9 @@
   },
   "Common": {
     "close": "Close",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "noEmojiFound": "No emoji found.",
+    "selectEmoji": "Select an emoji…"
   },
   "Auth": {
     "signIn": {
