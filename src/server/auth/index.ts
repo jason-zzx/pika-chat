@@ -3,13 +3,19 @@ import "server-only";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { admin, bearer, username } from "better-auth/plugins";
+import { admin, bearer, twoFactor, username } from "better-auth/plugins";
 import { adminAc, userAc } from "better-auth/plugins/admin/access";
 
 import { newId } from "@/lib/id";
 import { roleHierarchy } from "@/server/auth/hierarchy";
 import { getDb } from "@/server/db/client";
-import { accounts, sessions, users, verifications } from "@/server/db/schema";
+import {
+  accounts,
+  sessions,
+  twoFactors,
+  users,
+  verifications,
+} from "@/server/db/schema";
 import { getEnv } from "@/server/env";
 
 const env = getEnv();
@@ -25,6 +31,7 @@ export const auth = betterAuth({
       session: sessions,
       account: accounts,
       verification: verifications,
+      twoFactor: twoFactors,
     },
   }),
   emailAndPassword: {
@@ -43,6 +50,10 @@ export const auth = betterAuth({
       },
     }),
     roleHierarchy(),
+    // TOTP-only: `otpOptions.sendOTP` stays unset (no email/SMS channel
+    // exists), and `skipVerificationOnEnable` / `trustDeviceMaxAge` stay at
+    // their defaults so enrollment always needs a confirmed code.
+    twoFactor({ issuer: "Pika chat" }),
     nextCookies(),
   ],
   advanced: {

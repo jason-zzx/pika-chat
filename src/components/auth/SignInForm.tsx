@@ -19,6 +19,20 @@ function looksLikeEmail(value: string): boolean {
   return value.includes("@");
 }
 
+/**
+ * The 2FA after-hook replaces the sign-in body with
+ * `{ twoFactorRedirect, twoFactorMethods }`, but the client still types it as
+ * a completed sign-in — so the flag is read by shape.
+ */
+function needsSecondStep(data: unknown): boolean {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "twoFactorRedirect" in data &&
+    data.twoFactorRedirect === true
+  );
+}
+
 export default function SignInForm({ allowRegistration }: SignInFormProps) {
   const router = useRouter();
   const t = useTranslations("Auth");
@@ -41,7 +55,10 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
         setError(apiErrorMessage(result.error, tErrors, SIGN_IN_FAILED_KEY));
         return;
       }
-      router.push("/");
+      // A 2FA-enabled account is not signed in by step one: better-auth has
+      // issued a signed challenge cookie and the second step lives on its own
+      // page so it survives a reload.
+      router.push(needsSecondStep(result.data) ? "/two-factor" : "/");
       router.refresh();
     } catch (caught) {
       setError(apiErrorMessage(caught, tErrors, SIGN_IN_FAILED_KEY));

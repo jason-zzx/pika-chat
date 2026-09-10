@@ -63,6 +63,13 @@
     "selectEmoji": "Select an emoji…"
   },
   "Auth": {
+    "twoFactor": {
+      "title": "Two-factor authentication",
+      "description": "Enter the 6-digit code from your authenticator app, or one of your backup codes.",
+      "codeLabel": "Code",
+      "submit": "Verify",
+      "submitting": "Verifying…"
+    },
     "signIn": {
       "title": "Sign in",
       "identifierLabel": "Username or email",
@@ -94,12 +101,41 @@
   },
   "Account": {
     "title": "Account",
-    "description": "Change your password.",
+    "description": "Manage your password and two-factor authentication.",
     "currentPassword": "Current password",
     "newPassword": "New password",
     "changePassword": "Change password",
     "saving": "Saving…",
-    "passwordUpdated": "Password updated"
+    "passwordUpdated": "Password updated",
+    "twoFactor": {
+      "title": "Two-factor authentication",
+      "description": "Require a code from an authenticator app when you sign in.",
+      "enabled": "Two-factor authentication is on.",
+      "disabled": "Two-factor authentication is off.",
+      "startSubmit": "Continue",
+      "passwordLabel": "Your password",
+      "qrCaption": "Scan this code with your authenticator app.",
+      "qrAlt": "QR code for your authenticator app",
+      "manualSecretLabel": "Or enter this secret by hand",
+      "copySecret": "Copy secret",
+      "secretCopied": "Secret copied",
+      "copyFailed": "Could not copy the secret",
+      "confirmLabel": "Code from your authenticator app",
+      "confirmSubmit": "Confirm and turn on",
+      "confirming": "Confirming…",
+      "working": "Working…",
+      "cancel": "Cancel",
+      "backupCodesTitle": "Backup codes",
+      "backupCodesIntro": "Save these codes somewhere safe. Each one works once.",
+      "lossWarning": "If you lose your device and every backup code, you permanently lose access to this account.",
+      "regenerate": "Generate new backup codes",
+      "regenerateSubmit": "Generate new codes",
+      "codesRegenerated": "New backup codes generated.",
+      "disable": "Turn off two-factor authentication",
+      "disableSubmit": "Turn off",
+      "disabledDone": "Two-factor authentication is now off.",
+      "otherSessionsNotRevoked": "Two-factor authentication is on, but your other sessions could not be signed out. Sign out on any other devices yourself."
+    }
   },
   "Chat": {
     "Composer": {
@@ -362,7 +398,8 @@
     "auth": {
       "required": "Authentication required",
       "adminRequired": "Admin access required",
-      "signInFailed": "Invalid username, email, or password"
+      "signInFailed": "Invalid username, email, or password",
+      "invalidTwoFactorCode": "That code was not accepted"
     },
     "account": {
       "usernameTaken": "Username is already taken",
@@ -455,7 +492,12 @@
       "createUser": "Unable to create user",
       "setRole": "Unable to change role",
       "updateBan": "Unable to update ban",
-      "resetPassword": "Unable to reset password"
+      "resetPassword": "Unable to reset password",
+      "enableTwoFactor": "Unable to start two-factor setup",
+      "disableTwoFactor": "Unable to turn off two-factor authentication",
+      "verifyTwoFactor": "Unable to verify the code",
+      "generateBackupCodes": "Unable to generate backup codes",
+      "loadQrCode": "Unable to load the QR code"
     }
   },
   "Validation": {

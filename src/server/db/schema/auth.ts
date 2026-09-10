@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   uniqueIndex,
@@ -13,6 +14,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   image: text("image"),
   username: text("username").notNull().unique(),
   displayUsername: text("display_username"),
@@ -82,4 +84,31 @@ export const verifications = pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [index("verifications_identifier_idx").on(table.identifier)],
+);
+
+/**
+ * better-auth `twoFactor` plugin state. Field set mirrors the plugin's own
+ * declared schema (plus `id`) so the adapter needs no translation; `secret`
+ * and `backup_codes` are stored encrypted by the plugin and are never read
+ * back into a response.
+ */
+export const twoFactors = pgTable(
+  "two_factors",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    verified: boolean("verified").notNull().default(true),
+    failedVerificationCount: integer("failed_verification_count")
+      .notNull()
+      .default(0),
+    lockedUntil: timestamptz("locked_until"),
+  },
+  (table) => [
+    index("two_factors_user_id_idx").on(table.userId),
+    index("two_factors_secret_idx").on(table.secret),
+  ],
 );
