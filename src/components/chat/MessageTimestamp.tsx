@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 
-import { formatMessageAge, formatMessageExact } from "@/lib/message-time";
+import { getMessageAge, parseTimestamp } from "@/lib/message-time";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
@@ -11,21 +11,43 @@ type MessageTimestampProps = {
 };
 
 export default function MessageTimestamp({ createdAt }: MessageTimestampProps) {
-  const [now, setNow] = useState(() => Date.now());
-
+  const t = useTranslations("Chat.Timestamp");
+  const format = useFormatter();
   // Keep relative labels fresh; a single cheap interval per mounted timestamp.
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setNow(Date.now());
-    }, REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, []);
+  const now = useNow({ updateInterval: REFRESH_INTERVAL_MS });
 
-  const label = formatMessageAge(createdAt, now);
-  const exact = formatMessageExact(createdAt);
-  if (!label || !exact) {
+  const date = parseTimestamp(createdAt);
+  const age = getMessageAge(createdAt, now.getTime());
+  if (!date || !age) {
     return null;
   }
+
+  // Browser-local zone: no global `timeZone` is configured (it would change
+  // user-visible times); passing it explicitly avoids next-intl's warning.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const label =
+    age.kind === "justNow"
+      ? t("justNow")
+      : age.kind === "minutes"
+        ? t("minutes", { count: age.count })
+        : age.kind === "hours"
+          ? t("hours", { count: age.count })
+          : format.dateTime(age.date, {
+              month: "short",
+              day: "numeric",
+              ...(age.withYear ? { year: "numeric" as const } : {}),
+              timeZone,
+            });
+  const exact = format.dateTime(date, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZone,
+  });
 
   return (
     <time
