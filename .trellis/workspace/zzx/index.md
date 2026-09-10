@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
+- **Total Sessions**: 16
 - **Last Active**: 2026-09-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~448 | Active |
+| `journal-1.md` | ~472 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-09-10 | i18n-core: locale infrastructure + server error localization | `4c91ba1`, `90592d1`, `dc7e9dd` | `feat/i18n-core` |
 | 15 | 2026-09-10 | Topic favorites with peer collapsible sidebar sections | `9074a0b`, `7ea35c4` | `main` |
 | 14 | 2026-09-09 | Chat message navigation: chat map + scroll-to-latest | `d20347d`, `18d5fb3` | `main` |
 | 12 | 2026-09-07 | 聊天滚动行为对齐主流 AI 聊天 | `76661a9`, `c2264ce` | `main` |
