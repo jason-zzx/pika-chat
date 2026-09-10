@@ -48,7 +48,7 @@ vi.mock("@/components/ui/emoji-picker", () => ({
   EmojiPickerContent: () => null,
 }));
 
-function renderEditor(assistant: Assistant | null) {
+function renderEditor(assistant: Assistant | null, locale?: "zh-CN") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -60,6 +60,7 @@ function renderEditor(assistant: Assistant | null) {
         assistant={assistant}
       />
     </QueryClientProvider>,
+    locale === undefined ? {} : { locale },
   );
 }
 
@@ -226,5 +227,19 @@ describe("AssistantEditorDialog", () => {
     const search = await screen.findByLabelText("Search emoji");
     expect(fireEvent.keyDown(search, { key: "Enter" })).toBe(false);
     expect(createAssistant).not.toHaveBeenCalled();
+  });
+
+  it("renders its copy from the zh-CN catalog", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([]);
+
+    renderEditor(null, "zh-CN");
+
+    expect(await screen.findByText("新建助手")).toBeInTheDocument();
+    expect(screen.getByLabelText("名称")).toBeInTheDocument();
+    expect(screen.getByLabelText("默认模型")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("表情"));
+    expect(await screen.findByLabelText("搜索表情")).toBeInTheDocument();
   });
 });

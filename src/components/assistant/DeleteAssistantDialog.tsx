@@ -32,7 +32,9 @@ export default function DeleteAssistantDialog({
   onDeleted,
 }: DeleteAssistantDialogProps) {
   const remove = useDeleteAssistant();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Assistant");
+  const tCommon = useTranslations("Common");
+  const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const topicCount = assistant?.topics.length ?? 0;
 
@@ -53,7 +55,7 @@ export default function DeleteAssistantDialog({
       handleOpenChange(false);
       onDeleted?.(assistant);
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.deleteAssistant"));
+      setError(apiErrorMessage(caught, tErrors, "actions.deleteAssistant"));
     }
   }
 
@@ -61,22 +63,23 @@ export default function DeleteAssistantDialog({
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {assistant?.name}?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {t("deleteTitle", { name: assistant?.name ?? "" })}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete {topicCount}{" "}
-            {topicCount === 1 ? "topic" : "topics"} in this assistant.
+            {t("deleteDescription", { count: topicCount })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             type="button"
             variant="destructive"
             disabled={remove.isPending || !assistant}
             onClick={() => void onConfirm()}
           >
-            {remove.isPending ? "Deleting…" : "Delete"}
+            {remove.isPending ? t("deleting") : t("delete")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

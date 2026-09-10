@@ -62,6 +62,7 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("Layout");
+  const tRoot = useTranslations("RootLayout");
   const { assistantId: pathAssistantId, topicId } = parseAssistantPath(pathname);
   const isSettings = pathname === "/settings" || pathname.startsWith("/settings/");
 
@@ -112,7 +113,7 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
             <CloseOnNavigateLink href="/">
               <PikaMark className="size-6" />
               <span className="truncate group-data-[collapsible=icon]:sr-only">
-                Pika chat
+                {tRoot("title")}
               </span>
             </CloseOnNavigateLink>
           </div>
