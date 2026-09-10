@@ -546,3 +546,27 @@ Ran the parent acceptance with agent-browser (headless Chrome, admin session): l
 ### Status
 
 [OK] **Completed**
+
+
+## Session 20: Optional TOTP two-factor authentication
+<!-- trellis-session: v=2 fp=e6960cadfe98feda -->
+
+**Date**: 2026-09-11
+**Task**: Optional TOTP two-factor authentication
+**Branch**: `feat/totp-2fa`
+
+### Summary
+
+Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + users.two_factor_enabled (migration 0013), a project-owned QR Route Handler, enrollment and challenge UI, backup codes, and revoke-other-sessions on enable. Recorded the plugin-registration pattern and the cookie-bound challenge limitation in backend/auth-guidelines.md.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ccd42da` | feat(auth): add optional TOTP two-factor authentication |
+| `e3365a0` | docs(spec): record the Better Auth plugin pattern and TOTP contract |
+| `5eb2a24` | chore(trellis): add the CodeBuddy platform integration |
+
+### Status
+
+[OK] **Completed**
