@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Verify the guard config and the finalized conventions match the shipped code and the documented adding-a-locale steps"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify lint/tests standards still hold with the new rule enabled, including the test-discovery requirement"}
+{"file": ".trellis/tasks/09-10-i18n/research/lint-guard.md", "reason": "Verify the shipped config matches the empirically tested snippet and that documented gaps/allowlists are accurate"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Quality-check walk for the integrated result"}
