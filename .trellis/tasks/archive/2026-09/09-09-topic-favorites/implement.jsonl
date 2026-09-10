@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend pre-development checklist: route-handler-first capability rule, Zod at transport boundary, service signatures free of Next request objects"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Drizzle schema/migration conventions (generated not hand-written, no server-only in schema files) and ownership-isolation query rules needed for the new is_favorite column and setTopicFavorite service"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError typing and boundary translation pattern for the new PATCH /api/topics/[id]/favorite route and 404 ownership failures"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "requireActor contract (session cookie + bearer token) required by the new favorite route handler"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "pino structured logging rules for the new setTopicFavorite service log line"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend pre-development checklist: shared Zod contracts, TanStack Query for server state, empty/loading/error states"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "shadcn/ui sidebar composition, cursor affordance, and server/client boundary rules for the new Favorite section, TopicRow, and star action in AssistantTree"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "TanStack Query mutation hook conventions for the new useSetTopicFavorite optimistic-update hook"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand vs TanStack Query boundary — favorite state is server state and must stay in React Query"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared Zod schema inference rules for extending topicSchema with isFavorite and adding setTopicFavoriteSchema"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Feature spans DB → service → API → hook → UI; guide for keeping the isFavorite contract consistent across all layers"}

@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend Quality Check section: lint/typecheck/test gates, forbidden patterns (any, !, as), Zod validation on every endpoint, ownership verified in service not UI"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify migration was generated (not hand-written), applies cleanly, and every user-scoped query filters by caller ownership"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify new favorite route returns the project error shape and uses AppError 404 for non-owned topics"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend Quality Check: breakpoints, keyboard reachability, labelled interactive elements, no server state in Zustand"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint/test/accessibility quality gates for the new sidebar UI and hook"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify topicSchema extension flows through inference with no hand-written Topic interfaces or casts"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify sidebar component composition, cursor affordance, and use-client boundary stay compliant in AssistantTree changes"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer consistency check: isFavorite present in DB projection, service returns, API responses, and tree query"}
