@@ -1,0 +1,30 @@
+{
+  "id": "i18n",
+  "name": "i18n",
+  "title": "Add i18n support (default en, add zh-CN)",
+  "description": "Internationalize the pika-chat UI: locale infrastructure (next-intl, cookie-based locale), extract hardcoded English strings into dictionaries, localized server error codes, and regression guard.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "zzx",
+  "assignee": "zzx",
+  "createdAt": "2026-09-10",
+  "completedAt": "2026-09-10",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-10-i18n-core",
+    "09-10-i18n-ui",
+    "09-10-i18n-guard"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
