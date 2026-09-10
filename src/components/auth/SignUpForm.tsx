@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import CredentialsForm from "@/components/auth/CredentialsForm";
 import { submitRegistration } from "@/lib/api/instance";
 
 export default function SignUpForm() {
   const router = useRouter();
+  const t = useTranslations("Auth");
 
   return (
     <CredentialsForm
-      submitLabel="Create account"
-      pendingLabel="Creating…"
+      submitLabel={t("signUp.submit")}
+      pendingLabel={t("signUp.submitting")}
       fallbackErrorKey="actions.register"
       onSubmit={async (input) => {
         await submitRegistration(input);
@@ -21,9 +23,9 @@ export default function SignUpForm() {
       }}
       footer={
         <p className="text-sm text-muted-foreground">
-          Already have an account?{" "}
+          {t("signUp.haveAccount")}{" "}
           <Link className="underline" href="/sign-in">
-            Sign in
+            {t("signUp.signInLink")}
           </Link>
         </p>
       }

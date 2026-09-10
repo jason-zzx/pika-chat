@@ -57,7 +57,170 @@
     }
   },
   "Common": {
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "Auth": {
+    "signIn": {
+      "title": "Sign in",
+      "identifierLabel": "Username or email",
+      "passwordLabel": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "needAccount": "Need an account?",
+      "createAccountLink": "Create one"
+    },
+    "signUp": {
+      "title": "Create account",
+      "submit": "Create account",
+      "submitting": "Creating…",
+      "haveAccount": "Already have an account?",
+      "signInLink": "Sign in"
+    },
+    "setup": {
+      "title": "Set up Pika chat",
+      "description": "Create the first admin account for this instance.",
+      "submit": "Create admin account",
+      "submitting": "Creating…"
+    },
+    "fields": {
+      "username": "Username",
+      "email": "Email",
+      "password": "Password"
+    },
+    "signOut": "Sign out"
+  },
+  "Account": {
+    "title": "Account",
+    "description": "Change your password.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "changePassword": "Change password",
+    "saving": "Saving…",
+    "passwordUpdated": "Password updated"
+  },
+  "Chat": {
+    "Composer": {
+      "messageLabel": "Message",
+      "chatMap": "Chat map",
+      "expand": "Expand composer",
+      "collapse": "Collapse composer",
+      "send": "Send",
+      "stop": "Stop",
+      "reasoningEffort": "Reasoning effort",
+      "auto": "Auto"
+    },
+    "MessageList": {
+      "empty": "Send a message to start this conversation.",
+      "responding": "Assistant is responding",
+      "scrollToLatest": "Scroll to latest",
+      "loading": "Loading conversation…",
+      "loadFailedTitle": "Unable to load conversation",
+      "loadFailedDescription": "Refresh the page to try again.",
+      "stillSaving": "The message is still being saved. Try again in a moment."
+    },
+    "MessageItem": {
+      "you": "You",
+      "assistant": "Assistant",
+      "thinkingShimmer": "Thinking…",
+      "reasoningThinking": "Thinking",
+      "reasoningThought": "Thought",
+      "reasoningThoughtDuration": "Thought ({seconds}s)",
+      "tokenLimit": "Output stopped at the token limit.",
+      "stoppedBeforeAnswer": "The model stopped before writing an answer.",
+      "stopped": "Stopped",
+      "failedFallback": "The model failed to respond.",
+      "citationSource": "Source {num}: {title}"
+    },
+    "Actions": {
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "copyMessage": "Copy message",
+      "regenerate": "Regenerate",
+      "regenerateResponse": "Regenerate response",
+      "delete": "Delete",
+      "deleteAndRegenerate": "Delete and regenerate",
+      "more": "More actions",
+      "previousVersion": "Previous version",
+      "nextVersion": "Next version",
+      "versionOf": "Version {index} of {count}"
+    },
+    "Pickers": {
+      "assistant": "Assistant",
+      "selectModel": "Select a model",
+      "searchModels": "Search models",
+      "noDefaultModel": "No default model",
+      "noModelsAvailable": "No models available",
+      "noMatchingModels": "No matching models",
+      "vision": "Vision",
+      "reasoning": "Reasoning",
+      "sharedBy": "{configName} (shared by {name})",
+      "anotherUser": "another user",
+      "searchMode": {
+        "off": "Off",
+        "offDescription": "No web search.",
+        "builtin": "Model built-in",
+        "builtinDescription": "Ask the model to use its own web search. Vendors without built-in search answer normally.",
+        "tool": "Search tool",
+        "toolDescription": "The app searches the web via your configured providers.",
+        "toggleLabel": "Web search mode: {mode}",
+        "toggleTitle": "Web search: {mode}",
+        "noProviders": "No search providers configured.",
+        "addProvider": "Add one in settings"
+      }
+    },
+    "Tools": {
+      "searchRunning": "Searching the web",
+      "searchInterrupted": "Search interrupted",
+      "searchDone": "Searched the web",
+      "searchBodyRunning": "Searching…",
+      "searchInterruptedBody": "The search did not complete.",
+      "searchDeclined": "The search was declined.",
+      "searchNoOutput": "No search output recorded.",
+      "searchFailed": "Search failed.",
+      "searchFailedWithProviders": "Search failed. Tried: {providers}.",
+      "searchNoResults": "No results found.",
+      "searchVia": "via",
+      "fetchRunning": "Reading page",
+      "fetchInterrupted": "Read interrupted",
+      "fetchDone": "Read page",
+      "fetchToggle": "Toggle page fetch details",
+      "fetchBodyRunning": "Reading page…",
+      "fetchInterruptedBody": "The fetch did not complete.",
+      "fetchDeclined": "The fetch was declined.",
+      "fetchNoOutput": "No fetch output recorded.",
+      "fetchFailed": "Fetch failed.",
+      "fetchFailedWithProviders": "Fetch failed. Tried: {providers}.",
+      "fetchNoText": "The page returned no text.",
+      "fetchTruncated": "Page content truncated for the model."
+    },
+    "Dialogs": {
+      "chatMap": "Chat map",
+      "noText": "No text",
+      "externalLinkTitle": "Open external link?",
+      "externalLinkDescription": "You're about to visit an external website.",
+      "copyLink": "Copy link",
+      "copied": "Copied",
+      "openLink": "Open link"
+    },
+    "Timestamp": {
+      "justNow": "just now",
+      "minutes": "{count, plural, one {# minute ago} other {# minutes ago}}",
+      "hours": "{count, plural, one {# hour ago} other {# hours ago}}"
+    },
+    "newTopic": "New topic"
+  },
+  "Topic": {
+    "renameTitle": "Rename topic",
+    "renameDescription": "Choose a new title for this topic.",
+    "titleLabel": "Title",
+    "save": "Save",
+    "saving": "Saving…",
+    "deleteTitle": "Delete {title}?",
+    "deleteDescription": "This topic will be permanently deleted.",
+    "deleting": "Deleting…",
+    "delete": "Delete"
   },
   "Settings": {
     "General": {
@@ -65,7 +228,128 @@
       "description": "Appearance for this browser.",
       "theme": "Theme",
       "language": "Language"
+    },
+    "Providers": {
+      "title": "Providers",
+      "description": "Connect OpenAI-compatible endpoints and choose which models chat can call."
+    },
+    "Search": {
+      "title": "Search",
+      "description": "Connect web search providers the model can call, and order the fallback chain."
+    },
+    "Users": {
+      "title": "Users"
     }
+  },
+  "Assistant": {
+    "editTitle": "Edit assistant",
+    "newTitle": "New assistant",
+    "description": "Name, emoji, prompt, and an optional default model.",
+    "nameLabel": "Name",
+    "emojiLabel": "Emoji",
+    "systemPromptLabel": "System prompt",
+    "defaultModelLabel": "Default model",
+    "staleModel": "The previously selected model is no longer available.",
+    "save": "Save",
+    "saving": "Saving…",
+    "deleteTitle": "Delete {name}?",
+    "deleteDescription": "{count, plural, one {This will permanently delete # topic in this assistant.} other {This will permanently delete # topics in this assistant.}}",
+    "delete": "Delete",
+    "deleting": "Deleting…",
+    "searchEmoji": "Search emoji",
+    "defaultName": "Assistant"
+  },
+  "Admin": {
+    "createUserTitle": "Create user",
+    "usernameLabel": "Username",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "roleLabel": "Role",
+    "roleUser": "user",
+    "roleAdmin": "admin",
+    "roleSuperAdmin": "super_admin",
+    "creating": "Creating…",
+    "create": "Create",
+    "usersTitle": "Users",
+    "makeUser": "Make user",
+    "makeAdmin": "Make admin",
+    "unban": "Unban",
+    "ban": "Ban",
+    "resetPassword": "Reset password",
+    "newPasswordPrompt": "New password (min 8 characters)",
+    "bannedSuffix": " · banned",
+    "registrationTitle": "Registration",
+    "registrationOpen": "Anyone with the link can create a user-role account.",
+    "registrationClosed": "Only admins can create accounts.",
+    "disableRegistration": "Disable registration",
+    "enableRegistration": "Enable registration"
+  },
+  "Provider": {
+    "loading": "Loading…",
+    "addProviderTitle": "Add a provider",
+    "create": "Create",
+    "yourProvidersTitle": "Your providers",
+    "emptyTitle": "No providers yet",
+    "emptyDescription": "Add an OpenAI-compatible endpoint to start choosing models.",
+    "sharedTitle": "Shared with the instance",
+    "noShared": "No shared providers yet.",
+    "keyHint": "key …{lastFour}",
+    "noKeyHint": "no API key",
+    "visibilityPrivate": "private",
+    "visibilityShared": "shared",
+    "edit": "Edit",
+    "discover": "Discover",
+    "delete": "Delete",
+    "save": "Save",
+    "saving": "Saving…",
+    "models": "Models",
+    "noModelsHint": "None yet. Discover from the endpoint or type an id.",
+    "editModel": "Edit {modelId}",
+    "removeModel": "Remove {modelId}",
+    "addModelId": "Add model id",
+    "modelIdPlaceholder": "gpt-4o",
+    "add": "Add",
+    "sharedBy": "Shared by {name}",
+    "noModels": "No models",
+    "nameLabel": "Name",
+    "baseUrlLabel": "Base URL",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "apiKeyLabel": "API key",
+    "apiKeyEditPlaceholder": "Leave blank to keep the current key",
+    "apiKeyNewPlaceholder": "Optional for local endpoints",
+    "shareWithInstance": "Share with the instance",
+    "addModelsTitle": "Add models",
+    "addModelsDescription": "Discover ids from {configName}, or type one on the provider card.",
+    "discovering": "Discovering…",
+    "discoverFromEndpoint": "Discover from endpoint",
+    "servedModels": "Served models",
+    "addSelected": "Add selected",
+    "contextDescription": "Context, capabilities, and the developer icon for this model.",
+    "contextTokensLabel": "Context tokens",
+    "inputModalitiesLabel": "Input modalities",
+    "supportsReasoning": "Supports reasoning",
+    "reasoningEffortLabel": "Reasoning effort options",
+    "vendorIconLabel": "Vendor icon",
+    "auto": "Auto",
+    "resetFromCatalog": "Reset from catalog",
+    "invalidContext": "Context size must be a positive number of tokens.",
+    "invalidModalities": "Choose at least one input modality."
+  },
+  "Search": {
+    "fallbackOrderTitle": "Fallback order",
+    "fallbackOrderDescription": "When the model asks to search the web, providers are tried top to bottom; the first one that responds wins.",
+    "loading": "Loading…",
+    "emptyTitle": "No search providers yet",
+    "emptyDescription": "Add an API key below to enable app-side web search.",
+    "addProviderTitle": "Add a provider",
+    "apiKeyLabel": "API key",
+    "baseUrlLabel": "Base URL (optional)",
+    "save": "Save",
+    "add": "Add",
+    "moveUp": "Move {name} up",
+    "moveDown": "Move {name} down",
+    "keepKeyHint": "Leave the API key field empty to keep the saved key.",
+    "delete": "Delete"
   },
   "Errors": {
     "generic": "Something went wrong. Please try again.",
@@ -75,7 +359,8 @@
     },
     "auth": {
       "required": "Authentication required",
-      "adminRequired": "Admin access required"
+      "adminRequired": "Admin access required",
+      "signInFailed": "Invalid username, email, or password"
     },
     "account": {
       "usernameTaken": "Username is already taken",
@@ -162,7 +447,13 @@
       "renameTopic": "Unable to rename topic",
       "deleteTopic": "Unable to delete topic",
       "register": "Unable to register",
-      "completeSetup": "Unable to complete setup"
+      "completeSetup": "Unable to complete setup",
+      "changePassword": "Unable to change password",
+      "listUsers": "Unable to list users",
+      "createUser": "Unable to create user",
+      "setRole": "Unable to change role",
+      "updateBan": "Unable to update ban",
+      "resetPassword": "Unable to reset password"
     }
   },
   "Validation": {
