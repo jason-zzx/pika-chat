@@ -51,6 +51,14 @@ These guides help you **ask the right questions before coding**.
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
 
+### When Adding User-Facing Copy
+
+- [ ] New or changed screen text → extend the catalogs (`messages/en.json` + `zh-CN.json` together), never a JSX literal — the lint guard fails on literals
+- [ ] Rendering a third-party widget (Base UI select, frimousse emoji picker) → check its own label/locale/placeholder API before assuming it is localized
+- [ ] Dates, times, plurals → format through `Intl`/ICU with the active locale
+
+→ Read [Frontend i18n Guidelines](../frontend/i18n.md)
+
 ### When Verifying AI Cross-Review Results
 
 - [ ] Reviewer claims "user input can be malicious" → Check the actual data source (internal manifest? user config? external API?)
