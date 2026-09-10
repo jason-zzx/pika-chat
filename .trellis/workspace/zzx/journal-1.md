@@ -446,3 +446,27 @@ Implemented topic favorites: topics.is_favorite column + migration 0012, PATCH /
 ### Status
 
 [OK] **Completed**
+
+
+## Session 16: i18n-core: locale infrastructure + server error localization
+<!-- trellis-session: v=2 fp=c5bc545ea9750827 -->
+
+**Date**: 2026-09-10
+**Task**: i18n-core: locale infrastructure + server error localization
+**Branch**: `feat/i18n-core`
+
+### Summary
+
+Cookie-based next-intl 4.14.2 (no URL routing): NEXT_LOCALE -> Accept-Language -> en, root-layout provider + dynamic html lang + localized metadata, Settings->General language switcher via server action, layout/common reference slice. AppError now carries messageKey+params; envelope {code,messageKey,params?,details?}; Zod field errors mapped to Validation keys; ~22 client call sites updated; streaming wrappers localized, upstream text verbatim. Check phase fixed vitest discovery gap + Accept-Language q-value parsing; review trimmed 3 speculative additions. 557 tests green; standalone Docker smoke verified without #2339 workaround.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c91ba1` | feat(i18n): locale infrastructure and language switcher |
+| `90592d1` | feat(api): localize server errors via stable message keys |
+| `dc7e9dd` | docs(spec): i18n conventions and error-key contract |
+
+### Status
+
+[OK] **Completed**
