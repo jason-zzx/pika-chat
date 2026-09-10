@@ -1,4 +1,4 @@
-import { index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { users } from "./auth";
 import { timestamptz } from "./columns";
@@ -35,8 +35,19 @@ export const topics = pgTable(
       .notNull()
       .references(() => assistants.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    isFavorite: boolean("is_favorite").notNull().default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [index("topics_assistant_id_idx").on(table.assistantId)],
 );
+
+/** The `Topic` shape every service returns. Lives here, not in a service, so
+ * assistant.service and topic.service can share it without an import cycle. */
+export const topicColumns = {
+  id: topics.id,
+  title: topics.title,
+  isFavorite: topics.isFavorite,
+  createdAt: topics.createdAt,
+  updatedAt: topics.updatedAt,
+};

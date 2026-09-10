@@ -38,7 +38,7 @@ import {
   updateAssistant,
 } from "@/server/services/assistant.service";
 import { appendUserMessage } from "@/server/services/message.service";
-import { createTopicForChat, touchTopicUpdatedAt } from "@/server/services/topic.service";
+import { createTopicForChat, setTopicFavorite, touchTopicUpdatedAt } from "@/server/services/topic.service";
 import {
   addProviderModel,
   createProviderConfig,
@@ -417,6 +417,42 @@ describe("assistant.service", () => {
     expect(relisted?.topics.map((topic) => topic.id)).toEqual([
       older.id,
       newer.id,
+    ]);
+  });
+
+  it("exposes the favorite flag through the tree without reordering", async () => {
+    const { userActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    const older = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+    );
+    const newer = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+    );
+    await db
+      .update(topics)
+      .set({ updatedAt: new Date("2026-01-01T00:00:00.000Z") })
+      .where(eq(topics.id, older.id));
+    await db
+      .update(topics)
+      .set({ updatedAt: new Date("2026-01-02T00:00:00.000Z") })
+      .where(eq(topics.id, newer.id));
+
+    await setTopicFavorite(older.id, { favorite: true }, userActor);
+
+    const tree = await listAssistantTree(userActor);
+    const listed = tree.assistants.find((row) => row.id === assistant.id);
+    // Favoriting the older topic must not reorder: updatedAt is untouched.
+    expect(
+      listed?.topics.map((row) => ({ id: row.id, isFavorite: row.isFavorite })),
+    ).toEqual([
+      { id: newer.id, isFavorite: false },
+      { id: older.id, isFavorite: true },
     ]);
   });
 });

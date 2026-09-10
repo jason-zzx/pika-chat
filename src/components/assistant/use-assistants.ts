@@ -8,7 +8,12 @@ import {
   listAssistantTree,
   updateAssistant,
 } from "@/lib/api/assistant";
-import { deleteTopic, generateTopicTitle, renameTopic } from "@/lib/api/topic";
+import {
+  deleteTopic,
+  generateTopicTitle,
+  renameTopic,
+  setTopicFavorite,
+} from "@/lib/api/topic";
 import type {
   AssistantTree,
   CreateAssistantInput,
@@ -17,6 +22,7 @@ import type {
 import type {
   GenerateTopicTitleInput,
   RenameTopicInput,
+  SetTopicFavoriteInput,
   Topic,
 } from "@/lib/schemas/topic";
 
@@ -148,6 +154,54 @@ export function useRenameTopic() {
     }) => renameTopic(id, input),
     onSuccess: () => {
       void invalidate();
+    },
+  });
+}
+
+export function useSetTopicFavorite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: SetTopicFavoriteInput }) =>
+      setTopicFavorite(id, input),
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: assistantKeys.tree() });
+      const previous = queryClient.getQueryData<AssistantTree>(
+        assistantKeys.tree(),
+      );
+      if (previous) {
+        queryClient.setQueryData<AssistantTree>(assistantKeys.tree(), {
+          ...previous,
+          assistants: previous.assistants.map((assistant) => ({
+            ...assistant,
+            topics: assistant.topics.map((topic) =>
+              topic.id === variables.id
+                ? { ...topic, isFavorite: variables.input.favorite }
+                : topic,
+            ),
+          })),
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, variables, context) => {
+      if (!context?.previous) {
+        return;
+      }
+      const current = queryClient.getQueryData<AssistantTree>(
+        assistantKeys.tree(),
+      );
+      const currentTopic = current?.assistants
+        .flatMap((assistant) => assistant.topics)
+        .find((topic) => topic.id === variables.id);
+      // Only roll back while the optimistic value is still the one we wrote;
+      // a newer mutation has since won and rolling back would undo it.
+      if (currentTopic?.isFavorite !== variables.input.favorite) {
+        return;
+      }
+      queryClient.setQueryData(assistantKeys.tree(), context.previous);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: assistantKeys.all });
     },
   });
 }

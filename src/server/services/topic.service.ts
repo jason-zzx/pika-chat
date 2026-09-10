@@ -2,11 +2,16 @@ import "server-only";
 
 import { and, eq, inArray } from "drizzle-orm";
 
-import { DEFAULT_TOPIC_TITLE, type RenameTopicInput, type Topic } from "@/lib/schemas/topic";
+import {
+  DEFAULT_TOPIC_TITLE,
+  type RenameTopicInput,
+  type SetTopicFavoriteInput,
+  type Topic,
+} from "@/lib/schemas/topic";
 import { newId } from "@/lib/id";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { assistants, topics } from "@/server/db/schema";
+import { assistants, topicColumns, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import { requireOwnedAssistant } from "@/server/services/assistant.service";
@@ -32,12 +37,7 @@ export async function createTopicForChat(
       assistantId: assistant.id,
       title: DEFAULT_TOPIC_TITLE,
     })
-    .returning({
-      id: topics.id,
-      title: topics.title,
-      createdAt: topics.createdAt,
-      updatedAt: topics.updatedAt,
-    });
+    .returning(topicColumns);
   const row = inserted[0];
   if (!row) {
     throw new AppError("INTERNAL", 500, "Failed to create topic");
@@ -59,17 +59,37 @@ export async function renameTopic(
     .update(topics)
     .set({ title: input.title, updatedAt: new Date() })
     .where(and(eq(topics.id, id), inArray(topics.assistantId, ownedAssistantIds(actor))))
-    .returning({
-      id: topics.id,
-      title: topics.title,
-      createdAt: topics.createdAt,
-      updatedAt: topics.updatedAt,
-    });
+    .returning(topicColumns);
   const row = updated[0];
   if (!row) {
     throw new AppError("NOT_FOUND", 404, "Topic not found");
   }
   logger.info({ userId: actor.userId, topicId: id }, "topic renamed");
+  return row;
+}
+
+/** Flips the favorite flag only. `updatedAt` is the last-active-time sort
+ * key, so a favorite toggle must not touch it — otherwise favoriting an old
+ * topic would silently jump it to the top of the list. */
+export async function setTopicFavorite(
+  id: string,
+  input: SetTopicFavoriteInput,
+  actor: Actor,
+): Promise<Topic> {
+  const db = getDb();
+  const updated = await db
+    .update(topics)
+    .set({ isFavorite: input.favorite })
+    .where(and(eq(topics.id, id), inArray(topics.assistantId, ownedAssistantIds(actor))))
+    .returning(topicColumns);
+  const row = updated[0];
+  if (!row) {
+    throw new AppError("NOT_FOUND", 404, "Topic not found");
+  }
+  logger.info(
+    { userId: actor.userId, topicId: id, favorite: input.favorite },
+    "topic favorite toggled",
+  );
   return row;
 }
 
@@ -91,12 +111,7 @@ export async function findTopicForActor(
 ): Promise<Topic | null> {
   const db = getDb();
   const rows = await db
-    .select({
-      id: topics.id,
-      title: topics.title,
-      createdAt: topics.createdAt,
-      updatedAt: topics.updatedAt,
-    })
+    .select(topicColumns)
     .from(topics)
     .innerJoin(assistants, eq(assistants.id, topics.assistantId))
     .where(and(eq(topics.id, id), eq(assistants.ownerId, actor.userId)))

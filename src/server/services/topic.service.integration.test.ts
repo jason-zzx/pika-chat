@@ -39,6 +39,7 @@ import {
   findTopicContextForActor,
   findTopicForActor,
   renameTopic,
+  setTopicFavorite,
 } from "@/server/services/topic.service";
 
 const db = getDb();
@@ -159,6 +160,47 @@ describe("topic.service", () => {
     await expect(
       renameTopic(created.id, { title: "Gone" }, userActor),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("toggles the favorite flag without bumping updatedAt", async () => {
+    const { userActor, otherAdminActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    const created = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+    );
+    expect(created.isFavorite).toBe(false);
+
+    const favorited = await setTopicFavorite(
+      created.id,
+      { favorite: true },
+      userActor,
+    );
+    expect(favorited.isFavorite).toBe(true);
+    // updatedAt is the last-active-time sort key; favoriting is not activity.
+    expect(favorited.updatedAt).toEqual(created.updatedAt);
+
+    const unfavorited = await setTopicFavorite(
+      created.id,
+      { favorite: false },
+      userActor,
+    );
+    expect(unfavorited.isFavorite).toBe(false);
+    expect(unfavorited.updatedAt).toEqual(created.updatedAt);
+
+    await expect(
+      setTopicFavorite(created.id, { favorite: true }, otherAdminActor),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const stored = await db
+      .select({ isFavorite: topics.isFavorite, updatedAt: topics.updatedAt })
+      .from(topics)
+      .where(eq(topics.id, created.id));
+    expect(stored[0]?.isFavorite).toBe(false);
+    expect(stored[0]?.updatedAt).toEqual(created.updatedAt);
   });
 
   it("returns 404 when creating under an assistant the actor does not own", async () => {

@@ -7,7 +7,7 @@ import { DEFAULT_TOPIC_TITLE, type Topic } from "@/lib/schemas/topic";
 import { createChatModelHandle } from "@/server/ai/chat-model";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { assistants, topics } from "@/server/db/schema";
+import { assistants, topicColumns, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import {
@@ -112,12 +112,7 @@ export async function titleTopicFromFirstMessage(
           ),
         ),
       )
-      .returning({
-        id: topics.id,
-        title: topics.title,
-        createdAt: topics.createdAt,
-        updatedAt: topics.updatedAt,
-      });
+      .returning(topicColumns);
     const row = updated[0];
     if (row) {
       return row;

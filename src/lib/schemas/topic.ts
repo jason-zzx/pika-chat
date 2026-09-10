@@ -5,10 +5,16 @@ export const DEFAULT_TOPIC_TITLE = "New topic";
 export const topicSchema = z.object({
   id: z.string(),
   title: z.string(),
+  isFavorite: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
 export type Topic = z.infer<typeof topicSchema>;
+
+export const setTopicFavoriteSchema = z.object({
+  favorite: z.boolean(),
+});
+export type SetTopicFavoriteInput = z.infer<typeof setTopicFavoriteSchema>;
 
 export const renameTopicSchema = z.object({
   title: z.string().trim().min(1),

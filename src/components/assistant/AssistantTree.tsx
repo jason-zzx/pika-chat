@@ -2,18 +2,21 @@
 
 import {
   ArrowLeftIcon,
+  ChevronDownIcon,
   MoreHorizontalIcon,
   PlusIcon,
+  StarIcon,
   Trash2Icon,
   UserRoundIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState, useSyncExternalStore } from "react";
+import { z } from "zod";
 
 import AssistantEditorDialog from "@/components/assistant/AssistantEditorDialog";
 import DeleteAssistantDialog from "@/components/assistant/DeleteAssistantDialog";
-import { useAssistantTree } from "@/components/assistant/use-assistants";
+import { useAssistantTree, useSetTopicFavorite } from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
 import PikaMark from "@/components/common/PikaMark";
 import CloseOnNavigateLink from "@/components/layout/CloseOnNavigateLink";
@@ -47,6 +50,7 @@ import {
 } from "@/lib/assistant-path";
 import type { Assistant } from "@/lib/schemas/assistant";
 import type { Topic } from "@/lib/schemas/topic";
+import { cn } from "@/lib/utils";
 
 type AssistantTreeProps = {
   showUsers: boolean;
@@ -274,6 +278,85 @@ function AssistantList({
   );
 }
 
+/** Collapse state of the Favorite and Topics sections — two peers, each
+ * with its own toggle. Global: one state shared by every assistant's pane,
+ * persisted in localStorage. Not Zustand — it is view-local chrome, not
+ * server state. */
+const TOPIC_SECTIONS_KEY = "pika.sidebar.topic-sections";
+
+type TopicSections = { topics: boolean; favorites: boolean };
+
+const topicSectionsSchema = z.object({
+  topics: z.boolean().default(true),
+  favorites: z.boolean().default(true),
+});
+
+const DEFAULT_TOPIC_SECTIONS: TopicSections = {
+  topics: true,
+  favorites: true,
+};
+
+function parseTopicSections(raw: string): TopicSections {
+  try {
+    return topicSectionsSchema.parse(JSON.parse(raw));
+  } catch {
+    return DEFAULT_TOPIC_SECTIONS;
+  }
+}
+
+const sectionListeners = new Set<() => void>();
+let cachedRaw: string | null = null;
+let cachedSections: TopicSections = DEFAULT_TOPIC_SECTIONS;
+
+function subscribeTopicSections(listener: () => void): () => void {
+  sectionListeners.add(listener);
+  return () => {
+    sectionListeners.delete(listener);
+  };
+}
+
+/** Cached by the raw stored string so the snapshot identity is stable. */
+function topicSectionsSnapshot(): TopicSections {
+  if (typeof window === "undefined") {
+    return DEFAULT_TOPIC_SECTIONS;
+  }
+  const raw = window.localStorage.getItem(TOPIC_SECTIONS_KEY);
+  if (raw === cachedRaw) {
+    return cachedSections;
+  }
+  cachedRaw = raw;
+  cachedSections =
+    raw === null ? DEFAULT_TOPIC_SECTIONS : parseTopicSections(raw);
+  return cachedSections;
+}
+
+// SSR and the hydration render both come from the default; the persisted
+// value is adopted right after hydration, so there is no mismatch.
+function topicSectionsServerSnapshot(): TopicSections {
+  return DEFAULT_TOPIC_SECTIONS;
+}
+
+function setTopicSections(next: TopicSections): void {
+  cachedSections = next;
+  cachedRaw = JSON.stringify(next);
+  try {
+    window.localStorage.setItem(TOPIC_SECTIONS_KEY, cachedRaw);
+  } catch {
+    // Storage can be unavailable (private mode, quota). The toggle still
+    // works for this session, so swallowing is the right call here.
+  }
+  for (const listener of sectionListeners) {
+    listener();
+  }
+}
+
+function collapseContainer(open: boolean): string {
+  return cn(
+    "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+    open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+  );
+}
+
 function AssistantPane({
   assistant,
   activeTopicId,
@@ -291,6 +374,23 @@ function AssistantPane({
   onRenameTopic: (topic: Topic) => void;
   onDeleteTopic: (topic: Topic) => void;
 }) {
+  const topicsContentId = useId();
+  const favoritesContentId = useId();
+  const sections = useSyncExternalStore(
+    subscribeTopicSections,
+    topicSectionsSnapshot,
+    topicSectionsServerSnapshot,
+  );
+
+  function toggleSection(key: keyof TopicSections) {
+    setTopicSections({ ...sections, [key]: !sections[key] });
+  }
+
+  // Both lists keep the server's `updatedAt` desc order; favorites are only
+  // lifted into their own subsection, never duplicated.
+  const favoriteTopics = assistant.topics.filter((topic) => topic.isFavorite);
+  const otherTopics = assistant.topics.filter((topic) => !topic.isFavorite);
+
   return (
     <>
       <SidebarGroup className="shrink-0 group-data-[collapsible=icon]:p-1.5">
@@ -323,52 +423,196 @@ function AssistantPane({
         </SidebarGroupContent>
       </SidebarGroup>
       <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
-        <SidebarGroupLabel>Topics</SidebarGroupLabel>
         <SidebarGroupContent className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto">
-          {assistant.topics.length === 0 ? (
-            <EmptyState
-              title="No topics yet"
-              description="Start a conversation in this assistant."
+          {favoriteTopics.length > 0 ? (
+            <div>
+              <SectionToggle
+                label="Favorite"
+                open={sections.favorites}
+                controls={favoritesContentId}
+                onToggle={() => toggleSection("favorites")}
+              />
+              <div
+                id={favoritesContentId}
+                className={collapseContainer(sections.favorites)}
+                aria-hidden={!sections.favorites}
+                inert={!sections.favorites}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  <SidebarMenu>
+                    {favoriteTopics.map((topic) => (
+                      <TopicRow
+                        key={topic.id}
+                        topic={topic}
+                        assistantId={assistant.id}
+                        isActive={topic.id === activeTopicId}
+                        onRename={onRenameTopic}
+                        onDelete={onDeleteTopic}
+                      />
+                    ))}
+                  </SidebarMenu>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div>
+            <SectionToggle
+              label="Topics"
+              open={sections.topics}
+              controls={topicsContentId}
+              onToggle={() => toggleSection("topics")}
             />
-          ) : (
-            <SidebarMenu>
-              {assistant.topics.map((topic) => (
-                <SidebarMenuItem key={topic.id} className="min-w-0 overflow-hidden">
-                  <SidebarNavLink
-                    href={assistantTopicHref(assistant.id, topic.id)}
-                    isActive={topic.id === activeTopicId}
-                  >
-                    <span className="truncate">{topic.title}</span>
-                  </SidebarNavLink>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <SidebarMenuAction
-                          showOnHover
-                          aria-label={`Actions for ${topic.title}`}
-                        />
-                      }
-                    >
-                      <MoreHorizontalIcon aria-hidden="true" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" side="right">
-                      <DropdownMenuItem onClick={() => onRenameTopic(topic)}>
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => onDeleteTopic(topic)}
-                      >
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          )}
+            <div
+              id={topicsContentId}
+              className={collapseContainer(sections.topics)}
+              aria-hidden={!sections.topics}
+              inert={!sections.topics}
+            >
+              <div className="min-h-0 overflow-hidden">
+                {assistant.topics.length === 0 ? (
+                  <EmptyState
+                    title="No topics yet"
+                    description="Start a conversation in this assistant."
+                  />
+                ) : otherTopics.length > 0 ? (
+                  <SidebarMenu>
+                    {otherTopics.map((topic) => (
+                      <TopicRow
+                        key={topic.id}
+                        topic={topic}
+                        assistantId={assistant.id}
+                        isActive={topic.id === activeTopicId}
+                        onRename={onRenameTopic}
+                        onDelete={onDeleteTopic}
+                      />
+                    ))}
+                  </SidebarMenu>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </SidebarGroupContent>
       </SidebarGroup>
     </>
+  );
+}
+
+/** Section label + collapse chevron, shared by the Favorite and Topics
+ * sections so the two peers cannot drift apart in styling. */
+function SectionToggle({
+  label,
+  open,
+  controls,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  controls: string;
+  onToggle: () => void;
+}) {
+  return (
+    <SidebarGroupLabel
+      className="w-full justify-between group-data-[collapsible=icon]:hidden"
+      render={
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={controls}
+          onClick={onToggle}
+        />
+      }
+    >
+      <span>{label}</span>
+      <CollapseChevron open={open} />
+    </SidebarGroupLabel>
+  );
+}
+
+function CollapseChevron({ open }: { open: boolean }) {
+  return (
+    <ChevronDownIcon
+      aria-hidden="true"
+      className={cn(
+        "size-4 shrink-0 transition-transform duration-200 motion-reduce:transition-none",
+        open ? "rotate-180" : "rotate-0",
+      )}
+    />
+  );
+}
+
+function TopicRow({
+  topic,
+  assistantId,
+  isActive,
+  onRename,
+  onDelete,
+}: {
+  topic: Topic;
+  assistantId: string;
+  isActive: boolean;
+  onRename: (topic: Topic) => void;
+  onDelete: (topic: Topic) => void;
+}) {
+  const setFavorite = useSetTopicFavorite();
+
+  function toggleFavorite() {
+    setFavorite.mutate({
+      id: topic.id,
+      input: { favorite: !topic.isFavorite },
+    });
+  }
+
+  return (
+    <SidebarMenuItem className="min-w-0 overflow-hidden">
+      <SidebarNavLink
+        href={assistantTopicHref(assistantId, topic.id)}
+        isActive={isActive}
+      >
+        <span className="truncate">{topic.title}</span>
+        {/* Reserves room for the star action next to the "..." trigger. */}
+        <span aria-hidden="true" className="w-6 shrink-0" />
+      </SidebarNavLink>
+      <SidebarMenuAction
+        className="right-7"
+        showOnHover={!topic.isFavorite}
+        aria-label={`${topic.isFavorite ? "Unfavorite" : "Favorite"} ${topic.title}`}
+        onClick={toggleFavorite}
+      >
+        <StarIcon
+          aria-hidden="true"
+          className={cn(topic.isFavorite && "fill-current")}
+        />
+      </SidebarMenuAction>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <SidebarMenuAction
+              showOnHover
+              aria-label={`Actions for ${topic.title}`}
+            />
+          }
+        >
+          <MoreHorizontalIcon aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="right">
+          <DropdownMenuItem onClick={toggleFavorite}>
+            <StarIcon
+              aria-hidden="true"
+              className={cn(topic.isFavorite && "fill-current")}
+            />
+            {topic.isFavorite ? "Unfavorite" : "Favorite"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onRename(topic)}>
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => onDelete(topic)}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarMenuItem>
   );
 }

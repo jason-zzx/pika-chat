@@ -14,7 +14,7 @@ import { newId } from "@/lib/id";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { assistants, topics } from "@/server/db/schema";
+import { assistants, topicColumns, topics } from "@/server/db/schema";
 import { isUniqueViolation } from "@/server/db/unique-violation";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
@@ -34,6 +34,7 @@ type TreeRow = {
   topic: {
     id: string;
     title: string;
+    isFavorite: boolean;
     createdAt: Date;
     updatedAt: Date;
   } | null;
@@ -98,12 +99,7 @@ async function selectTree(actor: Actor, assistantId?: string): Promise<TreeRow[]
         defaultModelId: assistants.defaultModelId,
         createdAt: assistants.createdAt,
       },
-      topic: {
-        id: topics.id,
-        title: topics.title,
-        createdAt: topics.createdAt,
-        updatedAt: topics.updatedAt,
-      },
+      topic: topicColumns,
     })
     .from(assistants)
     .leftJoin(topics, eq(topics.assistantId, assistants.id))
