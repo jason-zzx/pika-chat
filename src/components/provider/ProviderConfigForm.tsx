@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export default function ProviderConfigForm({
   initial,
   onSubmit,
 }: ProviderConfigFormProps) {
+  const t = useTranslations("Errors");
   const isEdit = initial !== undefined;
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +58,7 @@ export default function ProviderConfigForm({
         form.reset();
       }
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to save provider"));
+      setError(apiErrorMessage(caught, t, "actions.saveProvider"));
     }
   }
 

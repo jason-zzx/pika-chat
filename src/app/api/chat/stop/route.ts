@@ -9,7 +9,7 @@ export const POST = withErrorHandling(async (request) => {
   const input = stopChatRequestSchema.parse(await request.json());
   const aborted = abortStream(input.streamId, actor.userId);
   if (!aborted) {
-    throw new AppError("NOT_FOUND", 404, "Stream not found");
+    throw new AppError("NOT_FOUND", 404, "stream.notFound");
   }
   return new Response(null, { status: 204 });
 });

@@ -113,7 +113,7 @@ async function requireOwnedTopic(
 ): Promise<void> {
   const context = await findTopicContextForActor(topicId, actor);
   if (!context) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
 }
 
@@ -139,7 +139,7 @@ function selectedRowOf(group: ChatMessageRow[]): ChatMessageRow {
   const selected =
     group.find((row) => row.isSelected) ?? group[group.length - 1];
   if (!selected) {
-    throw new AppError("INTERNAL", 500, "Empty version group");
+    throw new AppError("INTERNAL", 500, "message.emptyVersionGroup");
   }
   return selected;
 }
@@ -206,7 +206,7 @@ export async function appendUserMessage(
     .returning();
   const row = inserted[0];
   if (!row) {
-    throw new AppError("INTERNAL", 500, "Failed to store message");
+    throw new AppError("INTERNAL", 500, "message.storeFailed");
   }
   return rowToChatUIMessage(row);
 }
@@ -264,7 +264,7 @@ export async function appendAssistantMessage(
       })
     : (await db.insert(chatMessages).values(values).returning())[0];
   if (!row) {
-    throw new AppError("INTERNAL", 500, "Failed to store message");
+    throw new AppError("INTERNAL", 500, "message.storeFailed");
   }
   return rowToChatUIMessage(row);
 }
@@ -289,7 +289,7 @@ export async function deleteMessage(
     const target = targets[0];
     if (!target) {
       // Missing and foreign messages are indistinguishable to the caller.
-      throw new AppError("NOT_FOUND", 404, "Message not found");
+      throw new AppError("NOT_FOUND", 404, "message.notFound");
     }
     await tx.delete(chatMessages).where(eq(chatMessages.id, target.id));
     const remaining = await tx
@@ -334,7 +334,7 @@ export async function selectMessageVersion(
       .limit(1);
     const target = targets[0];
     if (!target) {
-      throw new AppError("NOT_FOUND", 404, "Message not found");
+      throw new AppError("NOT_FOUND", 404, "message.notFound");
     }
     // Deselect first so the partial unique index never sees two selected
     // versions of the same group.
@@ -378,7 +378,7 @@ export async function resolveRegenerateTarget(
   const rows = await listTopicRows(input.topicId);
   const target = rows.find((row) => row.id === input.messageId);
   if (!target) {
-    throw new AppError("NOT_FOUND", 404, "Message not found");
+    throw new AppError("NOT_FOUND", 404, "message.notFound");
   }
   const groups = groupRows(rows);
   const targetGroupIndex = groups.findIndex((group) =>

@@ -61,7 +61,7 @@ describe("fetchServedModelIds", () => {
       expect(error).toMatchObject({
         code: "PROVIDER_ERROR",
         status: 502,
-        message: "Provider rejected the credentials",
+        messageKey: "provider.credentialsRejected",
       });
       if (error instanceof Error) {
         expect(error.message).not.toContain("sk-leaked");
@@ -83,8 +83,28 @@ describe("fetchServedModelIds", () => {
       expect(error).toMatchObject({
         code: "PROVIDER_ERROR",
         status: 502,
-        message: "Provider request timed out",
+        messageKey: "provider.timedOut",
       });
+    }
+  });
+
+  it("reports other provider statuses as a key with the status param", async () => {
+    globalThis.fetch = async () =>
+      new Response("upstream exploded sk-leaked", { status: 503 });
+
+    try {
+      await fetchServedModelIds("https://api.example.com/v1", "sk-leaked");
+      throw new Error("expected discovery to fail");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "PROVIDER_ERROR",
+        status: 502,
+        messageKey: "provider.httpStatus",
+        params: { status: 503 },
+      });
+      if (error instanceof Error) {
+        expect(error.message).not.toContain("sk-leaked");
+      }
     }
   });
 
@@ -102,7 +122,7 @@ describe("fetchServedModelIds", () => {
       expect(error).toMatchObject({
         code: "PROVIDER_ERROR",
         status: 502,
-        message: "Provider returned an unexpected response",
+        messageKey: "provider.unexpectedResponse",
       });
       if (error instanceof Error) {
         expect(error.message).not.toContain("sk-leaked");

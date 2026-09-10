@@ -1,3 +1,4 @@
+import type { AppErrorMessageKey } from "@/lib/api/error-contract";
 import { AppError } from "@/server/errors";
 
 type RouteContext = { params: Promise<Record<string, string>> } | undefined;
@@ -9,11 +10,11 @@ type RouteContext = { params: Promise<Record<string, string>> } | undefined;
 export async function requireParam(
   context: RouteContext,
   name: string,
-  notFoundMessage: string,
+  notFoundMessageKey: AppErrorMessageKey,
 ): Promise<string> {
   const value = (await context?.params)?.[name];
   if (!value) {
-    throw new AppError("NOT_FOUND", 404, notFoundMessage);
+    throw new AppError("NOT_FOUND", 404, notFoundMessageKey);
   }
   return value;
 }

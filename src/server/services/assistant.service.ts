@@ -44,7 +44,7 @@ function conflictOnName(): never {
   throw new AppError(
     "CONFLICT",
     409,
-    "An assistant with this name already exists",
+    "assistant.nameTaken",
   );
 }
 
@@ -119,7 +119,7 @@ async function loadAssistant(id: string, actor: Actor): Promise<Assistant> {
   const grouped = groupTree(await selectTree(actor, id));
   const assistant = grouped[0];
   if (!assistant) {
-    throw new AppError("NOT_FOUND", 404, "Assistant not found");
+    throw new AppError("NOT_FOUND", 404, "assistant.notFound");
   }
   return assistant;
 }
@@ -159,7 +159,7 @@ async function assertModelAvailable(
     throw new AppError(
       "VALIDATION_FAILED",
       400,
-      "Selected model is not available",
+      "model.notAvailable",
     );
   }
 }
@@ -176,7 +176,7 @@ export async function requireOwnedAssistant(
     .limit(1);
   const row = rows[0];
   if (!row) {
-    throw new AppError("NOT_FOUND", 404, "Assistant not found");
+    throw new AppError("NOT_FOUND", 404, "assistant.notFound");
   }
   return row;
 }
@@ -229,7 +229,7 @@ export async function createAssistant(
       })
       .returning({ id: assistants.id });
     if (!inserted[0]) {
-      throw new AppError("INTERNAL", 500, "Failed to create assistant");
+      throw new AppError("INTERNAL", 500, "assistant.createFailed");
     }
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -283,7 +283,7 @@ export async function updateAssistant(
       .where(and(eq(assistants.id, id), eq(assistants.ownerId, actor.userId)))
       .returning({ id: assistants.id });
     if (!updated[0]) {
-      throw new AppError("NOT_FOUND", 404, "Assistant not found");
+      throw new AppError("NOT_FOUND", 404, "assistant.notFound");
     }
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -307,13 +307,13 @@ export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
       .for("update");
 
     if (!owned.some((row) => row.id === id)) {
-      throw new AppError("NOT_FOUND", 404, "Assistant not found");
+      throw new AppError("NOT_FOUND", 404, "assistant.notFound");
     }
     if (owned.length <= 1) {
       throw new AppError(
         "CONFLICT",
         409,
-        "Cannot delete your only assistant",
+        "assistant.lastOne",
       );
     }
 

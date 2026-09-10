@@ -5,7 +5,7 @@ import { listTopicMessages } from "@/server/services/message.service";
 
 export const GET = withErrorHandling(async (request, context) => {
   const actor = await requireActor(request.headers);
-  const topicId = await requireParam(context, "id", "Topic not found");
+  const topicId = await requireParam(context, "id", "topic.notFound");
   const messages = await listTopicMessages({ topicId }, actor);
   return Response.json({ messages });
 });

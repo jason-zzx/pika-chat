@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
@@ -35,6 +36,7 @@ export default function ProviderConfigsScreen({
 }: ProviderConfigsScreenProps) {
   const configs = useProviderConfigs();
   const createConfig = useCreateProviderConfig();
+  const t = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const loading = (
     <p className="text-sm text-muted-foreground">Loading…</p>
@@ -59,7 +61,7 @@ export default function ProviderConfigsScreen({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {configs.error ? (
         <p className="text-sm text-destructive">
-          {apiErrorMessage(configs.error, "Unable to load providers")}
+          {apiErrorMessage(configs.error, t, "actions.loadProviders")}
         </p>
       ) : null}
 
@@ -122,6 +124,7 @@ function OwnProviderCard({
   const deleteConfig = useDeleteProviderConfig();
   const addModel = useAddProviderModel();
   const removeModel = useRemoveProviderModel();
+  const t = useTranslations("Errors");
   const [editing, setEditing] = useState(false);
   const [discoverOpen, setDiscoverOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ProviderModel | null>(
@@ -167,7 +170,7 @@ function OwnProviderCard({
             onClick={() => {
               onError(null);
               void deleteConfig.mutateAsync(config.id).catch((caught) => {
-                onError(apiErrorMessage(caught, "Unable to delete provider"));
+                onError(apiErrorMessage(caught, t, "actions.deleteProvider"));
               });
             }}
           >
@@ -238,7 +241,7 @@ function OwnProviderCard({
                       })
                       .catch((caught) => {
                         onError(
-                          apiErrorMessage(caught, "Unable to remove model"),
+                          apiErrorMessage(caught, t, "actions.removeModel"),
                         );
                       });
                   }}
@@ -262,7 +265,7 @@ function OwnProviderCard({
               .mutateAsync({ configId: config.id, input: { modelId } })
               .then(() => setManualId(""))
               .catch((caught) => {
-                onError(apiErrorMessage(caught, "Unable to add model"));
+                onError(apiErrorMessage(caught, t, "actions.addModel"));
               });
           }}
         >

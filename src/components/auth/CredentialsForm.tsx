@@ -1,17 +1,19 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api/error-message";
+import type { AppErrorMessageKey } from "@/lib/api/error-contract";
 import type { CredentialsInput } from "@/lib/schemas/credentials";
 
 type CredentialsFormProps = {
   submitLabel: string;
   pendingLabel: string;
-  fallbackError: string;
+  fallbackErrorKey: AppErrorMessageKey;
   footer?: ReactNode;
   onSubmit: (input: CredentialsInput) => Promise<void>;
 };
@@ -19,10 +21,11 @@ type CredentialsFormProps = {
 export default function CredentialsForm({
   submitLabel,
   pendingLabel,
-  fallbackError,
+  fallbackErrorKey,
   footer,
   onSubmit,
 }: CredentialsFormProps) {
+  const t = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -38,7 +41,7 @@ export default function CredentialsForm({
         password: String(form.get("password") ?? ""),
       });
     } catch (caught) {
-      setError(apiErrorMessage(caught, fallbackError));
+      setError(apiErrorMessage(caught, t, fallbackErrorKey));
     } finally {
       setPending(false);
     }

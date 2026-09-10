@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import {
   deleteSearchProvider,
@@ -32,14 +34,15 @@ function setting(
   };
 }
 
-function renderScreen() {
+function renderScreen(locale?: "en" | "zh-CN") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
+  renderWithIntl(
     <QueryClientProvider client={client}>
       <SearchProvidersScreen />
     </QueryClientProvider>,
+    locale === undefined ? {} : { locale },
   );
 }
 
@@ -165,12 +168,45 @@ describe("SearchProvidersScreen", () => {
     });
   });
 
-  it("surfaces a load failure", async () => {
+  it("surfaces a load failure by resolving its message key", async () => {
     vi.mocked(listSearchProviders).mockRejectedValue({
-      error: { code: "INTERNAL", message: "boom" },
+      error: { code: "INTERNAL", messageKey: "unexpected" },
     });
     renderScreen();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "An unexpected error occurred",
+    );
+  });
+
+  it("resolves the server message in the active locale", async () => {
+    vi.mocked(listSearchProviders).mockRejectedValue({
+      error: { code: "NOT_FOUND", messageKey: "searchProvider.notConfigured" },
+    });
+    renderScreen("zh-CN");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "未配置搜索服务商",
+    );
+  });
+
+  it("falls back to the localized generic message for an unknown key", async () => {
+    vi.mocked(listSearchProviders).mockRejectedValue({
+      error: { code: "INTERNAL", messageKey: "not.a.real.key" },
+    });
+    renderScreen();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Something went wrong. Please try again.",
+    );
+  });
+
+  it("falls back to the action message when the envelope is absent", async () => {
+    vi.mocked(listSearchProviders).mockRejectedValue(new Error("network down"));
+    renderScreen();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to load search providers",
+    );
   });
 });

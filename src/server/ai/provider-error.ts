@@ -2,10 +2,41 @@ import "server-only";
 
 import { APICallError } from "ai";
 
-import type { AppErrorCode } from "@/server/errors";
+import type {
+  AppErrorCode,
+  AppErrorMessageKey,
+  ErrorMessageParams,
+  ErrorsTranslator,
+} from "@/lib/api/error-contract";
 import { logger } from "@/server/logger";
 
 const MAX_MESSAGE_LENGTH = 400;
+
+/**
+ * A provider failure description.
+ *
+ * Our own wrapper copy is a catalog key (`kind: "key"`) resolved to the
+ * request locale at the transport boundary; text extracted from an upstream
+ * provider response stays verbatim (`kind: "verbatim"`) — it is third-party
+ * output we must neither translate nor paraphrase.
+ */
+export type ProviderErrorDescription =
+  | {
+      code: AppErrorCode;
+      kind: "key";
+      messageKey: AppErrorMessageKey;
+      params?: ErrorMessageParams;
+    }
+  | { code: AppErrorCode; kind: "verbatim"; message: string };
+
+export function providerErrorText(
+  description: ProviderErrorDescription,
+  t: ErrorsTranslator,
+): string {
+  return description.kind === "key"
+    ? t(description.messageKey, description.params)
+    : description.message;
+}
 
 export function scrubSecret(text: string, secret: string): string {
   return secret.length === 0 ? text : text.replaceAll(secret, "[redacted]");
@@ -68,17 +99,17 @@ function parseJsonBody(body: string | undefined): unknown {
 
 function fallbackForStatus(
   status: number | undefined,
-): { code: AppErrorCode; message: string } {
+): { code: AppErrorCode; messageKey: AppErrorMessageKey } {
   if (status === 401 || status === 403) {
-    return { code: "PROVIDER_ERROR", message: "Provider rejected the credentials" };
+    return { code: "PROVIDER_ERROR", messageKey: "provider.credentialsRejected" };
   }
   if (status === 404) {
-    return { code: "PROVIDER_ERROR", message: "Model not found" };
+    return { code: "PROVIDER_ERROR", messageKey: "model.notFound" };
   }
   if (status === 429) {
-    return { code: "RATE_LIMITED", message: "Provider rate limit reached" };
+    return { code: "RATE_LIMITED", messageKey: "provider.rateLimited" };
   }
-  return { code: "PROVIDER_ERROR", message: "Provider request failed" };
+  return { code: "PROVIDER_ERROR", messageKey: "provider.requestFailed" };
 }
 
 function isTimeoutError(error: unknown): boolean {
@@ -93,7 +124,7 @@ function isTimeoutError(error: unknown): boolean {
 export function describeProviderError(
   error: unknown,
   apiKey: string,
-): { code: AppErrorCode; message: string } {
+): ProviderErrorDescription {
   let status: number | undefined;
   let responseBody: string | undefined;
   let data: unknown;
@@ -116,17 +147,29 @@ export function describeProviderError(
 
   if (!APICallError.isInstance(error)) {
     if (isTimeoutError(error)) {
-      return { code: "PROVIDER_ERROR", message: "Provider request timed out" };
+      return {
+        code: "PROVIDER_ERROR",
+        kind: "key",
+        messageKey: "provider.timedOut",
+      };
     }
-    return { code: "PROVIDER_ERROR", message: "Unable to reach the provider" };
+    return {
+      code: "PROVIDER_ERROR",
+      kind: "key",
+      messageKey: "provider.unreachable",
+    };
   }
 
   const payload = data ?? parseJsonBody(responseBody);
   const extracted = extractStructuredProviderMessage(payload);
   const fallback = fallbackForStatus(status);
-  const message = clampErrorMessage(scrubSecret(extracted ?? fallback.message, apiKey));
-  if (message.length === 0) {
-    return fallback;
+  if (extracted === undefined) {
+    return { code: fallback.code, kind: "key", messageKey: fallback.messageKey };
   }
-  return { code: fallback.code, message };
+
+  const message = clampErrorMessage(scrubSecret(extracted, apiKey));
+  if (message.length === 0) {
+    return { code: fallback.code, kind: "key", messageKey: fallback.messageKey };
+  }
+  return { code: fallback.code, kind: "verbatim", message };
 }

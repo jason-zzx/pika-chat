@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   DefaultChatTransport,
   parseJsonEventStream,
@@ -107,6 +108,7 @@ export default function ChatView({
   assistantDefaultModelId,
 }: ChatViewProps) {
   const queryClient = useQueryClient();
+  const t = useTranslations("Errors");
   const tree = useAssistantTree();
   const models = useAvailableModels();
   const setAssistantDefault = useSetAssistantDefaultModel();
@@ -448,7 +450,7 @@ export default function ChatView({
           }
           setPickedModel(previous);
           setDefaultModelError(
-            apiErrorMessage(caught, "Unable to save default model"),
+            apiErrorMessage(caught, t, "actions.saveDefaultModel"),
           );
         },
       },
@@ -547,8 +549,8 @@ export default function ChatView({
       setRegen(null);
       setActionError(
         caught === undefined
-          ? "Unable to regenerate the response"
-          : apiErrorMessage(caught, "Unable to regenerate the response"),
+          ? t("actions.regenerate")
+          : apiErrorMessage(caught, t, "actions.regenerate"),
       );
       reseedHistory(topic);
     };
@@ -678,7 +680,7 @@ export default function ChatView({
     try {
       await deleteTopicMessage(activeTopicId, serverId);
     } catch (caught) {
-      setActionError(apiErrorMessage(caught, "Unable to delete the message"));
+      setActionError(apiErrorMessage(caught, t, "actions.deleteMessage"));
       return;
     }
     setMessages((current) =>
@@ -702,7 +704,7 @@ export default function ChatView({
     try {
       await selectMessageVersion(activeTopicId, versionId);
     } catch (caught) {
-      setActionError(apiErrorMessage(caught, "Unable to switch versions"));
+      setActionError(apiErrorMessage(caught, t, "actions.switchVersions"));
       return;
     }
     // No optimistic switch: the reseeded history shows the new selection.
@@ -754,7 +756,7 @@ export default function ChatView({
     try {
       await deleteTopicMessage(topic, serverId);
     } catch (caught) {
-      setActionError(apiErrorMessage(caught, "Unable to delete the message"));
+      setActionError(apiErrorMessage(caught, t, "actions.deleteMessage"));
       return;
     }
     const afterDelete = messages.filter((entry) => entry.id !== message.id);

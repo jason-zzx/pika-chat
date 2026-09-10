@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import ModelVendorIcon from "@/components/provider/ModelVendorIcon";
@@ -52,6 +53,7 @@ export default function ModelEditorDialog({
   configId,
   model,
 }: ModelEditorDialogProps) {
+  const t = useTranslations("Errors");
   const updateModel = useUpdateProviderModel();
   const [contextTokens, setContextTokens] = useState(
     String(model.contextTokens),
@@ -126,7 +128,7 @@ export default function ModelEditorDialog({
       });
       onOpenChange(false);
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to save model"));
+      setError(apiErrorMessage(caught, t, "actions.saveModel"));
     }
   }
 
@@ -146,7 +148,7 @@ export default function ModelEditorDialog({
       );
       setVendorKey(next.vendorKey ?? "");
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to reset from catalog"));
+      setError(apiErrorMessage(caught, t, "actions.resetFromCatalog"));
     }
   }
 

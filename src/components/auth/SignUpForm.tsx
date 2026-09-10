@@ -13,7 +13,7 @@ export default function SignUpForm() {
     <CredentialsForm
       submitLabel="Create account"
       pendingLabel="Creating…"
-      fallbackError="Unable to register"
+      fallbackErrorKey="actions.register"
       onSubmit={async (input) => {
         await submitRegistration(input);
         router.push("/");

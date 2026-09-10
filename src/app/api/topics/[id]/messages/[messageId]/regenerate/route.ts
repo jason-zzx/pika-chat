@@ -18,6 +18,7 @@ import { createChatModelHandle } from "@/server/ai/chat-model";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
+import { providerErrorText } from "@/server/ai/provider-error";
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
 import {
   createReasoningTimer,
@@ -36,6 +37,7 @@ import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
+import { getTranslations } from "next-intl/server";
 import {
   appendAssistantMessage,
   resolveRegenerateTarget,
@@ -62,8 +64,10 @@ function partsHaveText(message: ChatUIMessage): boolean {
  */
 export const POST = withErrorHandling(async (request, context) => {
   const actor = await requireActor(request.headers);
-  const topicId = await requireParam(context, "id", "Topic not found");
-  const messageId = await requireParam(context, "messageId", "Message not found");
+  // Request-scoped translator for the streaming path (see /api/chat).
+  const t = await getTranslations("Errors");
+  const topicId = await requireParam(context, "id", "topic.notFound");
+  const messageId = await requireParam(context, "messageId", "message.notFound");
   const input = regenerateMessageRequestSchema.parse(await request.json());
 
   const available = await resolveAvailableModels(actor);
@@ -76,7 +80,7 @@ export const POST = withErrorHandling(async (request, context) => {
     throw new AppError(
       "VALIDATION_FAILED",
       400,
-      "Selected model is not available",
+      "model.notAvailable",
     );
   }
   const reasoningEffort = resolvedReasoningEffort(
@@ -111,7 +115,7 @@ export const POST = withErrorHandling(async (request, context) => {
 
   const topicContext = await findTopicContextForActor(topicId, actor);
   if (!topicContext) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
 
   const { targetGroupId, history } = await resolveRegenerateTarget(
@@ -235,7 +239,7 @@ export const POST = withErrorHandling(async (request, context) => {
       );
     },
     onError: (error: unknown) => {
-      streamErrorMessage = handle.describeError(error).message;
+      streamErrorMessage = providerErrorText(handle.describeError(error), t);
       return streamErrorMessage;
     },
     onEnd: async ({ responseMessage, outcome, isAborted }) => {
@@ -272,7 +276,8 @@ export const POST = withErrorHandling(async (request, context) => {
         } else if (outcome.status === "failed") {
           turnOutcome = "failed";
           errorMessage =
-            streamErrorMessage ?? handle.describeError(outcome.error).message;
+            streamErrorMessage ??
+            providerErrorText(handle.describeError(outcome.error), t);
         }
 
         await appendAssistantMessage(

@@ -40,7 +40,7 @@ export async function createTopicForChat(
     .returning(topicColumns);
   const row = inserted[0];
   if (!row) {
-    throw new AppError("INTERNAL", 500, "Failed to create topic");
+    throw new AppError("INTERNAL", 500, "topic.createFailed");
   }
   logger.info(
     { userId: actor.userId, topicId: row.id, assistantId: assistant.id },
@@ -62,7 +62,7 @@ export async function renameTopic(
     .returning(topicColumns);
   const row = updated[0];
   if (!row) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
   logger.info({ userId: actor.userId, topicId: id }, "topic renamed");
   return row;
@@ -84,7 +84,7 @@ export async function setTopicFavorite(
     .returning(topicColumns);
   const row = updated[0];
   if (!row) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
   logger.info(
     { userId: actor.userId, topicId: id, favorite: input.favorite },
@@ -100,7 +100,7 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
     .where(and(eq(topics.id, id), inArray(topics.assistantId, ownedAssistantIds(actor))))
     .returning({ id: topics.id });
   if (!deleted[0]) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
   logger.info({ userId: actor.userId, topicId: id }, "topic deleted");
 }

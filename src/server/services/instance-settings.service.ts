@@ -22,7 +22,7 @@ async function readSettingsRow() {
     .limit(1);
   const row = rows[0];
   if (!row) {
-    throw new AppError("INTERNAL", 500, "Instance settings are missing");
+    throw new AppError("INTERNAL", 500, "instanceSettings.missing");
   }
   return row;
 }
@@ -44,7 +44,7 @@ export async function updateInstanceSettings(
   actor: Actor,
 ): Promise<InstanceSettings> {
   if (!isStaffRole(actor.role)) {
-    throw new AppError("FORBIDDEN", 403, "Admin access required");
+    throw new AppError("FORBIDDEN", 403, "auth.adminRequired");
   }
   const db = getDb();
   const updated = await db
@@ -57,7 +57,7 @@ export async function updateInstanceSettings(
     .returning({ allowRegistration: appSettings.allowRegistration });
   const row = updated[0];
   if (!row) {
-    throw new AppError("INTERNAL", 500, "Instance settings are missing");
+    throw new AppError("INTERNAL", 500, "instanceSettings.missing");
   }
   logger.info(
     { userId: actor.userId, allowRegistration: row.allowRegistration },

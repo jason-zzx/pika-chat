@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import { useRenameTopic } from "@/components/assistant/use-assistants";
@@ -31,6 +32,7 @@ export default function RenameTopicDialog({
 }: RenameTopicDialogProps) {
   const rename = useRenameTopic();
   const router = useRouter();
+  const t = useTranslations("Errors");
   const [title, setTitle] = useState(topic?.title ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +47,7 @@ export default function RenameTopicDialog({
       router.refresh();
       onOpenChange(false);
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to rename topic"));
+      setError(apiErrorMessage(caught, t, "actions.renameTopic"));
     }
   }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import {
@@ -31,6 +32,7 @@ export default function DeleteAssistantDialog({
   onDeleted,
 }: DeleteAssistantDialogProps) {
   const remove = useDeleteAssistant();
+  const t = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const topicCount = assistant?.topics.length ?? 0;
 
@@ -51,7 +53,7 @@ export default function DeleteAssistantDialog({
       handleOpenChange(false);
       onDeleted?.(assistant);
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to delete assistant"));
+      setError(apiErrorMessage(caught, t, "actions.deleteAssistant"));
     }
   }
 

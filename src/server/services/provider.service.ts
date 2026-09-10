@@ -75,7 +75,7 @@ function conflictOnName(): never {
   throw new AppError(
     "CONFLICT",
     409,
-    "A provider with this name already exists",
+    "provider.nameTaken",
   );
 }
 
@@ -96,7 +96,7 @@ async function requireOwnedConfig(
     .limit(1);
   const row = rows[0];
   if (!row) {
-    throw new AppError("NOT_FOUND", 404, "Provider not found");
+    throw new AppError("NOT_FOUND", 404, "provider.notFound");
   }
   return row;
 }
@@ -130,7 +130,7 @@ async function loadOwnConfig(
     );
   const first = rows[0];
   if (!first) {
-    throw new AppError("NOT_FOUND", 404, "Provider not found");
+    throw new AppError("NOT_FOUND", 404, "provider.notFound");
   }
   const models: ProviderModel[] = await hydrateUnsourcedModels(
     rows.flatMap((row) => (row.model?.id ? [row.model] : [])),
@@ -245,7 +245,7 @@ export async function createProviderConfig(
       });
     const row = inserted[0];
     if (!row) {
-      throw new AppError("INTERNAL", 500, "Failed to create provider");
+      throw new AppError("INTERNAL", 500, "provider.createFailed");
     }
     logger.info(
       { userId: actor.userId, configId: row.id, visibility: row.visibility },
@@ -311,7 +311,7 @@ export async function updateProviderConfig(
       )
       .returning({ id: providerConfigs.id });
     if (!updated[0]) {
-      throw new AppError("NOT_FOUND", 404, "Provider not found");
+      throw new AppError("NOT_FOUND", 404, "provider.notFound");
     }
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -342,7 +342,7 @@ export async function deleteProviderConfig(
     )
     .returning({ id: providerConfigs.id });
   if (!deleted[0]) {
-    throw new AppError("NOT_FOUND", 404, "Provider not found");
+    throw new AppError("NOT_FOUND", 404, "provider.notFound");
   }
   logger.info({ userId: actor.userId, configId: id }, "provider config deleted");
 }
@@ -367,7 +367,7 @@ export async function addProviderModel(
       .returning(providerModelColumns);
     const row = inserted[0];
     if (!row) {
-      throw new AppError("INTERNAL", 500, "Failed to add model");
+      throw new AppError("INTERNAL", 500, "provider.modelAddFailed");
     }
     return toProviderModel(row);
   } catch (error) {
@@ -375,7 +375,7 @@ export async function addProviderModel(
       throw new AppError(
         "CONFLICT",
         409,
-        "This model is already on the provider",
+        "provider.modelExists",
       );
     }
     throw error;
@@ -402,7 +402,7 @@ export async function updateProviderModel(
     .limit(1);
   const existing = existingRows[0];
   if (!existing) {
-    throw new AppError("NOT_FOUND", 404, "Model not found");
+    throw new AppError("NOT_FOUND", 404, "model.notFound");
   }
 
   let next: ModelMetadataFields;
@@ -441,7 +441,7 @@ export async function updateProviderModel(
     .returning(providerModelColumns);
   const row = updated[0];
   if (!row) {
-    throw new AppError("NOT_FOUND", 404, "Model not found");
+    throw new AppError("NOT_FOUND", 404, "model.notFound");
   }
   return toProviderModel(row);
 }
@@ -463,7 +463,7 @@ export async function removeProviderModel(
     )
     .returning({ id: providerModels.id });
   if (!deleted[0]) {
-    throw new AppError("NOT_FOUND", 404, "Model not found");
+    throw new AppError("NOT_FOUND", 404, "model.notFound");
   }
 }
 

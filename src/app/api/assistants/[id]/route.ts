@@ -12,7 +12,7 @@ async function assistantId(
 ): Promise<string> {
   const id = (await context?.params)?.id;
   if (!id) {
-    throw new AppError("NOT_FOUND", 404, "Assistant not found");
+    throw new AppError("NOT_FOUND", 404, "assistant.notFound");
   }
   return id;
 }
