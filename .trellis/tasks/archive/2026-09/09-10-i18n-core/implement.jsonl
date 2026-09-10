@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Pre-development checklist and quality gate for frontend work (server/client boundary, states, breakpoints) — applies to the layout/provider/switcher changes"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Server/client boundary and composition rules for the LocaleControl client component and root-layout provider placement"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Forbidden escapes (no any/!/unchecked as) — constrains the AppConfig type augmentation, locale handling, and the error-key union"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Where new i18n module and layout components belong (src/i18n/, src/components/layout/, test util placement)"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "The error contract being modified (AppError shape, withErrorHandling envelope, code-is-the-contract rule, streaming errors) — must stay authoritative after the change"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend pre-development checklist and quality gate for the AppError / envelope / service throw-site changes"}
+{"file": ".trellis/tasks/09-10-i18n/research/next-intl-setup.md", "reason": "Authoritative, version-verified setup for next-intl 4.14.2 cookie mode: request.ts, plugin wiring, provider inheritance, switcher server action, Turbopack/Docker caveats"}
+{"file": ".trellis/tasks/09-10-i18n/research/next-intl-usage.md", "reason": "Usage specifics needed this task: AppConfig augmentation, getTranslations vs useTranslations, generateMetadata, Vitest provider wrapper, t.has dynamic-key lookup for error codes"}
