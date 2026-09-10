@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Binding conventions for this task: catalog namespaces, key rules, server vs client usage, testing wrapper, error-key contract, dynamic-key cast policy"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Pre-development checklist and quality gate (server/client boundary, states, breakpoints, no client-boundary widening)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Server/client boundary and composition rules while migrating copy without widening use client"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Forbidden escapes (no any/!/unchecked as) while wiring translation hooks and keys"}
+{"file": ".trellis/tasks/09-10-i18n/research/next-intl-usage.md", "reason": "Usage specifics: ICU plurals/interpolation, useNow/useFormatter for timestamps, testing wrapper and determinism; t.has policy"}
