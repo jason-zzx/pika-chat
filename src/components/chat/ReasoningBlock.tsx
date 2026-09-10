@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDownIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ export default function ReasoningBlock({
   ended,
   reasoningMs,
 }: ReasoningBlockProps) {
+  const t = useTranslations("Chat.MessageItem");
   const contentId = useId();
   // Open only while this block is the actively streaming phase; a finished
   // phase collapses as soon as the next step's content starts.
@@ -66,10 +68,12 @@ export default function ReasoningBlock({
   }
 
   const label = !ended
-    ? "Thinking"
+    ? t("reasoningThinking")
     : reasoningMs === undefined
-      ? "Thought"
-      : `Thought (${(reasoningMs / 1000).toFixed(1)}s)`;
+      ? t("reasoningThought")
+      : t("reasoningThoughtDuration", {
+          seconds: (reasoningMs / 1000).toFixed(1),
+        });
 
   return (
     <div className="w-full text-sm text-muted-foreground">

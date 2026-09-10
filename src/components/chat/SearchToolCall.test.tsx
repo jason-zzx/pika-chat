@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { SearchWebToolOutput } from "@/lib/schemas/search-provider";
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import SearchToolCall, { type SearchWebToolPart } from "./SearchToolCall";
 
@@ -43,7 +44,7 @@ const successOutput: SearchWebToolOutput = {
 
 describe("SearchToolCall", () => {
   it("is expanded with a spinner while the search is running", () => {
-    render(<SearchToolCall part={runningPart("pika chat repo")} streaming />);
+    renderWithIntl(<SearchToolCall part={runningPart("pika chat repo")} streaming />);
 
     const trigger = screen.getByRole("button", {
       name: /Searching the web/,
@@ -53,14 +54,16 @@ describe("SearchToolCall", () => {
   });
 
   it("auto-collapses when the output arrives and keeps the query in the header", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <SearchToolCall part={runningPart("pika chat repo")} streaming />,
     );
     expect(
       screen.getByRole("button", { name: /Searching the web/ }),
     ).toHaveAttribute("aria-expanded", "true");
 
-    rerender(<SearchToolCall part={donePart(successOutput)} />);
+    rerender(
+      wrapWithIntl(<SearchToolCall part={donePart(successOutput)} />),
+    );
 
     const trigger = screen.getByRole("button", {
       name: /Searched the web/,
@@ -69,7 +72,7 @@ describe("SearchToolCall", () => {
   });
 
   it("lists the provider and result links when expanded after finishing", () => {
-    render(<SearchToolCall part={donePart(successOutput)} />);
+    renderWithIntl(<SearchToolCall part={donePart(successOutput)} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Searched the web/ }));
 
@@ -87,7 +90,7 @@ describe("SearchToolCall", () => {
   });
 
   it("shows the failure summary when every provider failed", () => {
-    render(
+    renderWithIntl(
       <SearchToolCall
         part={donePart({
           error: "search_failed",
@@ -111,7 +114,7 @@ describe("SearchToolCall", () => {
       input: { query: "pika chat repo" },
       errorText: "search timed out",
     };
-    render(<SearchToolCall part={part} />);
+    renderWithIntl(<SearchToolCall part={part} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Searched the web/ }));
 
@@ -119,7 +122,7 @@ describe("SearchToolCall", () => {
   });
 
   it("renders without a query while the input is still streaming", () => {
-    render(
+    renderWithIntl(
       <SearchToolCall
         streaming
         part={{
@@ -139,7 +142,7 @@ describe("SearchToolCall", () => {
     // A stream stopped after the tool call but before its output persists
     // an input-available part; on history reload the message is not
     // streaming, so the block must not spin forever.
-    render(<SearchToolCall part={runningPart("pika chat repo")} />);
+    renderWithIntl(<SearchToolCall part={runningPart("pika chat repo")} />);
 
     const trigger = screen.getByRole("button", {
       name: /Search interrupted/,
@@ -154,7 +157,7 @@ describe("SearchToolCall", () => {
   });
 
   it("renders an input-streaming leftover part as interrupted once settled", () => {
-    render(
+    renderWithIntl(
       <SearchToolCall
         part={{
           type: "tool-searchWeb",
@@ -170,14 +173,18 @@ describe("SearchToolCall", () => {
   });
 
   it("resumes spinning when an interrupted part belongs to a live stream again", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <SearchToolCall part={runningPart("pika chat repo")} />,
     );
     expect(
       screen.getByRole("button", { name: /Search interrupted/ }),
     ).toBeInTheDocument();
 
-    rerender(<SearchToolCall part={runningPart("pika chat repo")} streaming />);
+    rerender(
+      wrapWithIntl(
+        <SearchToolCall part={runningPart("pika chat repo")} streaming />,
+      ),
+    );
 
     expect(
       screen.getByRole("button", { name: /Searching the web/ }),

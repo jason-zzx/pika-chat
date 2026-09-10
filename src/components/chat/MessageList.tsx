@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDownIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   useCallback,
   useEffect,
@@ -76,6 +77,7 @@ export default function MessageList({
   onSelectVersion,
   ref,
 }: MessageListProps) {
+  const t = useTranslations("Chat.MessageList");
   // Single-active tap reveal (R9/B7): at most one message shows its meta /
   // actions / version switcher rows from tapping. Tapping a message reveals
   // it and it stays revealed until a different message is tapped; tapping the
@@ -413,9 +415,7 @@ export default function MessageList({
   if (messages.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-muted-foreground">
-          Send a message to start this conversation.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("empty")}</p>
       </div>
     );
   }
@@ -435,7 +435,7 @@ export default function MessageList({
           className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-4"
         >
           <div className="sr-only" aria-live="polite">
-            {streaming ? "Assistant is responding" : ""}
+            {streaming ? t("responding") : ""}
           </div>
           {messages.map((message, index) => {
             // Key by version group, not the per-version message id: switching
@@ -501,7 +501,7 @@ export default function MessageList({
               variant="secondary"
               size="icon-lg"
               className="pointer-events-auto rounded-full"
-              aria-label="Scroll to latest"
+              aria-label={t("scrollToLatest")}
               onClick={scrollToBottom}
             >
               <ArrowDownIcon aria-hidden="true" className="size-5" />

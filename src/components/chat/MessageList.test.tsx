@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageList, { type MessageListHandle } from "./MessageList";
 
@@ -89,7 +90,7 @@ function assistantMessage(
 
 describe("MessageList reveal state across version switches (B1)", () => {
   it("keeps the tapped-open actions row when the message id changes but the group is stable", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageList
         messages={[assistantMessage("v1", "first version", "group-1")]}
         streaming={false}
@@ -105,10 +106,12 @@ describe("MessageList reveal state across version switches (B1)", () => {
     // A version switch reseeds the list with a different-id row of the same
     // group; the item must not remount and lose the revealed state.
     rerender(
-      <MessageList
-        messages={[assistantMessage("v2", "second version", "group-1")]}
-        streaming={false}
-      />,
+      wrapWithIntl(
+        <MessageList
+          messages={[assistantMessage("v2", "second version", "group-1")]}
+          streaming={false}
+        />,
+      ),
     );
 
     const article = screen.getByRole("article", { name: "Assistant" });
@@ -117,7 +120,7 @@ describe("MessageList reveal state across version switches (B1)", () => {
   });
 
   it("does not carry reveal state over to a different group", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageList
         messages={[assistantMessage("v1", "first", "group-1")]}
         streaming={false}
@@ -126,10 +129,12 @@ describe("MessageList reveal state across version switches (B1)", () => {
     fireEvent.click(screen.getByRole("article", { name: "Assistant" }));
 
     rerender(
-      <MessageList
-        messages={[assistantMessage("other", "other answer", "group-2")]}
-        streaming={false}
-      />,
+      wrapWithIntl(
+        <MessageList
+          messages={[assistantMessage("other", "other answer", "group-2")]}
+          streaming={false}
+        />,
+      ),
     );
 
     expect(screen.getByRole("article", { name: "Assistant" })).toHaveAttribute(
@@ -141,7 +146,7 @@ describe("MessageList reveal state across version switches (B1)", () => {
 
 describe("MessageList single-active tap reveal (R9/B7)", () => {
   function renderThree() {
-    render(
+    renderWithIntl(
       <MessageList
         messages={[
           userMessage("u1", "question one"),
@@ -177,7 +182,7 @@ describe("MessageList single-active tap reveal (R9/B7)", () => {
   });
 
   it("reveals user messages through the same single slot", () => {
-    render(
+    renderWithIntl(
       <MessageList
         messages={[
           userMessage("u1", "question one"),
@@ -199,7 +204,7 @@ describe("MessageList single-active tap reveal (R9/B7)", () => {
   });
 
   it("keeps the reveal when the revealed message switches versions", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageList
         messages={[
           userMessage("u1", "question"),
@@ -216,13 +221,15 @@ describe("MessageList single-active tap reveal (R9/B7)", () => {
     );
 
     rerender(
-      <MessageList
-        messages={[
-          userMessage("u1", "question"),
-          assistantMessage("v2", "second version", "group-1"),
-        ]}
-        streaming={false}
-      />,
+      wrapWithIntl(
+        <MessageList
+          messages={[
+            userMessage("u1", "question"),
+            assistantMessage("v2", "second version", "group-1"),
+          ]}
+          streaming={false}
+        />,
+      ),
     );
 
     const article = screen.getByRole("article", { name: "Assistant" });
@@ -238,7 +245,7 @@ describe("MessageList single-active tap reveal (R9/B7)", () => {
       versionCount: 2,
       versionIds: ["v1", "v2"],
     };
-    render(
+    renderWithIntl(
       <MessageList
         messages={[message]}
         streaming={false}
@@ -285,7 +292,7 @@ describe("MessageList tool-part messages", () => {
   }
 
   it("renders a finished search tool block inside the list", () => {
-    render(
+    renderWithIntl(
       <MessageList
         messages={[
           userMessage("u1", "question"),
@@ -326,7 +333,7 @@ describe("MessageList tool-part messages", () => {
     } as ChatUIMessage["parts"][number]);
     tail.parts = tail.parts.slice(0, 2);
 
-    render(
+    renderWithIntl(
       <MessageList
         messages={[userMessage("u1", "question"), tail]}
         streaming
@@ -350,7 +357,7 @@ describe("MessageList tool-part messages", () => {
       outcome: "stopped",
     };
 
-    render(
+    renderWithIntl(
       <MessageList
         messages={[userMessage("u1", "question"), interrupted]}
         streaming={false}
@@ -365,7 +372,7 @@ describe("MessageList tool-part messages", () => {
 
 describe("MessageList scroll anchors (R4)", () => {
   it("keys every row by version group, so a jump target survives a version switch", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageList
         messages={[
           userMessage("u1", "question"),
@@ -387,13 +394,15 @@ describe("MessageList scroll anchors (R4)", () => {
 
     // A version switch swaps in a different-id row; the anchor must not move.
     rerender(
-      <MessageList
-        messages={[
-          userMessage("u1", "question"),
-          assistantMessage("v2", "second version", "group-1"),
-        ]}
-        streaming={false}
-      />,
+      wrapWithIntl(
+        <MessageList
+          messages={[
+            userMessage("u1", "question"),
+            assistantMessage("v2", "second version", "group-1"),
+          ]}
+          streaming={false}
+        />,
+      ),
     );
 
     const article = screen.getByRole("article", { name: "Assistant" });
@@ -404,7 +413,7 @@ describe("MessageList scroll anchors (R4)", () => {
 
 describe("MessageList scroll-to-latest button (R1)", () => {
   function renderTwo() {
-    render(
+    renderWithIntl(
       <MessageList
         messages={[
           userMessage("u1", "question"),
@@ -474,7 +483,7 @@ describe("MessageList scroll-to-latest button (R1)", () => {
 describe("MessageList chat-map jump (R5)", () => {
   function renderWithRef() {
     const ref = createRef<MessageListHandle>();
-    render(
+    renderWithIntl(
       <MessageList
         ref={ref}
         messages={[
@@ -591,7 +600,7 @@ describe("MessageList regenerate placeholder shimmer (B5/R7)", () => {
       parts: [],
       metadata: { groupId: "group-1" },
     };
-    render(
+    renderWithIntl(
       <MessageList
         messages={[
           {

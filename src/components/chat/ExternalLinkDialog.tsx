@@ -2,6 +2,7 @@
 
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 import { CheckIcon, CopyIcon, ExternalLinkIcon, XIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -35,6 +36,8 @@ export default function ExternalLinkDialog({
   open,
   onOpenChange,
 }: ExternalLinkDialogProps) {
+  const t = useTranslations("Chat.Dialogs");
+  const tCommon = useTranslations("Common");
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<number | undefined>(undefined);
 
@@ -80,17 +83,17 @@ export default function ExternalLinkDialog({
       >
         <AlertDialogPrimitive.Close
           className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground transition-all hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          aria-label="Close"
-          title="Close"
+          aria-label={tCommon("close")}
+          title={tCommon("close")}
         >
           <XIcon aria-hidden="true" className="size-4" />
         </AlertDialogPrimitive.Close>
         <AlertDialogTitle className="flex items-center gap-2 font-semibold text-lg">
           <ExternalLinkIcon aria-hidden="true" className="size-5" />
-          Open external link?
+          {t("externalLinkTitle")}
         </AlertDialogTitle>
         <AlertDialogDescription className="text-muted-foreground text-sm">
-          You&apos;re about to visit an external website.
+          {t("externalLinkDescription")}
         </AlertDialogDescription>
         <div
           className={cn(
@@ -111,7 +114,7 @@ export default function ExternalLinkDialog({
             ) : (
               <CopyIcon aria-hidden="true" className="size-3.5" />
             )}
-            {copied ? "Copied" : "Copy link"}
+            {copied ? t("copied") : t("copyLink")}
           </button>
           <button
             type="button"
@@ -119,7 +122,7 @@ export default function ExternalLinkDialog({
             className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
-            Open link
+            {t("openLink")}
           </button>
         </div>
       </AlertDialogContent>

@@ -2,6 +2,7 @@
 
 import { GlobeIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useState, useSyncExternalStore } from "react";
 
 import { useSearchProviders } from "@/components/search/use-search-providers";
@@ -16,22 +17,30 @@ import { useComposerStore } from "@/stores/composer-store";
 
 import ComposerPickerContent from "./ComposerPickerContent";
 
+type SearchModeOptionKey =
+  | "searchMode.off"
+  | "searchMode.builtin"
+  | "searchMode.tool";
+
 const SEARCH_MODE_OPTIONS: {
   value: SearchMode;
-  label: string;
-  description: string;
+  labelKey: SearchModeOptionKey;
+  descriptionKey: `${SearchModeOptionKey}Description`;
 }[] = [
-  { value: "off", label: "Off", description: "No web search." },
+  {
+    value: "off",
+    labelKey: "searchMode.off",
+    descriptionKey: "searchMode.offDescription",
+  },
   {
     value: "builtin",
-    label: "Model built-in",
-    description:
-      "Ask the model to use its own web search. Vendors without built-in search answer normally.",
+    labelKey: "searchMode.builtin",
+    descriptionKey: "searchMode.builtinDescription",
   },
   {
     value: "tool",
-    label: "Search tool",
-    description: "The app searches the web via your configured providers.",
+    labelKey: "searchMode.tool",
+    descriptionKey: "searchMode.toolDescription",
   },
 ];
 
@@ -58,14 +67,16 @@ type SearchModePickerProps = {
 export default function SearchModePicker({
   disabled = false,
 }: SearchModePickerProps) {
+  const t = useTranslations("Chat.Pickers");
   const mode = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const setSearchMode = useComposerStore((state) => state.setSearchMode);
   const providers = useSearchProviders();
   const toolAvailable = (providers.data?.providers.length ?? 0) > 0;
   const [open, setOpen] = useState(false);
-  const modeLabel =
-    SEARCH_MODE_OPTIONS.find((option) => option.value === mode)?.label ??
-    "Off";
+  const modeLabel = t(
+    SEARCH_MODE_OPTIONS.find((option) => option.value === mode)?.labelKey ??
+      "searchMode.off",
+  );
 
   function select(next: SearchMode) {
     setSearchMode(next);
@@ -75,8 +86,8 @@ export default function SearchModePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        aria-label={`Web search mode: ${modeLabel}`}
-        title={`Web search: ${modeLabel}`}
+        aria-label={t("searchMode.toggleLabel", { mode: modeLabel })}
+        title={t("searchMode.toggleTitle", { mode: modeLabel })}
         disabled={disabled}
         render={
           <Button
@@ -117,22 +128,24 @@ export default function SearchModePicker({
               )}
               onClick={() => select(option.value)}
             >
-              <span className="text-sm font-medium">{option.label}</span>
+              <span className="text-sm font-medium">
+                {t(option.labelKey)}
+              </span>
               <span className="text-xs text-muted-foreground">
-                {option.description}
+                {t(option.descriptionKey)}
               </span>
             </button>
           );
         })}
         {!toolAvailable ? (
           <p className="px-2 pb-1 pt-1 text-xs text-muted-foreground">
-            No search providers configured.{" "}
+            {t("searchMode.noProviders")}{" "}
             <Link
               href="/settings/search"
               className="font-medium text-foreground underline underline-offset-2"
               onClick={() => setOpen(false)}
             >
-              Add one in settings
+              {t("searchMode.addProvider")}
             </Link>
           </p>
         ) : null}

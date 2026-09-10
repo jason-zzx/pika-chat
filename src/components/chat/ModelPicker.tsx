@@ -1,6 +1,7 @@
 "use client";
 
 import { BrainIcon, ChevronDownIcon, EyeIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { useAvailableModels } from "@/components/provider/use-available-models";
@@ -45,6 +46,7 @@ export default function ModelPicker({
   id,
   iconOnly = false,
 }: ModelPickerProps) {
+  const t = useTranslations("Chat.Pickers");
   const models = useAvailableModels();
   const available = models.data ?? [];
   const selected = findAvailableModel(available, value);
@@ -53,7 +55,7 @@ export default function ModelPicker({
   const filtered = available.filter((model) => modelMatchesQuery(model, query));
   const groups = groupAvailableModels(filtered);
   const pickerDisabled = disabled || models.isPending;
-  const triggerLabel = selected ? selected.modelId : "Select a model";
+  const triggerLabel = selected ? selected.modelId : t("selectModel");
 
   function closeAndSelect(next: ComposerModelPick | null) {
     onChange(next);
@@ -110,7 +112,7 @@ export default function ModelPicker({
                 <span className="truncate">{selected.modelId}</span>
               </>
             ) : (
-              "Select a model"
+              t("selectModel")
             )}
           </span>
         )}
@@ -137,8 +139,8 @@ export default function ModelPicker({
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search models"
-          aria-label="Search models"
+          placeholder={t("searchModels")}
+          aria-label={t("searchModels")}
           autoComplete="off"
         />
         {/* relative: popup enter/exit animations apply a transform, making
@@ -154,80 +156,94 @@ export default function ModelPicker({
               )}
               onClick={() => closeAndSelect(null)}
             >
-              No default model
+              {t("noDefaultModel")}
             </button>
           ) : null}
           {available.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">
-              No models available
+              {t("noModelsAvailable")}
             </p>
           ) : groups.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">
-              No matching models
+              {t("noMatchingModels")}
             </p>
           ) : (
-            groups.map((group) => (
-              <div key={group.configId} className="mb-1">
-                <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                  {modelGroupHeading(group)}
-                </p>
-                {group.models.map((model) => {
-                  const pick = {
-                    configId: model.configId,
-                    modelId: model.modelId,
-                  };
-                  const isSelected = sameModelPick(value, pick);
-                  const contextLabel = formatContextTokens(model.contextTokens);
-                  const hasVision = modelHasVision(model.inputModalities);
-                  const hasCues =
-                    contextLabel !== null || hasVision || model.reasoning;
-                  return (
-                    <button
-                      key={`${model.configId}::${model.modelId}`}
-                      type="button"
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                        isSelected && "bg-accent text-accent-foreground",
-                      )}
-                      onClick={() => closeAndSelect(pick)}
-                    >
-                      <ModelVendorIcon
-                        modelId={model.modelId}
-                        vendorKey={model.vendorKey}
-                      />
-                      <span className="min-w-0 flex-1 truncate">
-                        {model.modelId}
-                      </span>
-                      {hasCues ? (
-                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                          {contextLabel !== null ? (
-                            <span>{contextLabel}</span>
-                          ) : null}
-                          {hasVision ? (
-                            <span title="Vision" className="flex items-center">
-                              <EyeIcon
-                                aria-hidden="true"
-                                className="size-3.5"
-                              />
-                              <span className="sr-only">Vision</span>
-                            </span>
-                          ) : null}
-                          {model.reasoning ? (
-                            <span title="Reasoning" className="flex items-center">
-                              <BrainIcon
-                                aria-hidden="true"
-                                className="size-3.5"
-                              />
-                              <span className="sr-only">Reasoning</span>
-                            </span>
-                          ) : null}
+            groups.map((group) => {
+              const heading = modelGroupHeading(group);
+              return (
+                <div key={group.configId} className="mb-1">
+                  <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                    {heading.kind === "shared"
+                      ? t("sharedBy", {
+                          configName: heading.configName,
+                          name: heading.ownerName ?? t("anotherUser"),
+                        })
+                      : heading.configName}
+                  </p>
+                  {group.models.map((model) => {
+                    const pick = {
+                      configId: model.configId,
+                      modelId: model.modelId,
+                    };
+                    const isSelected = sameModelPick(value, pick);
+                    const contextLabel = formatContextTokens(model.contextTokens);
+                    const hasVision = modelHasVision(model.inputModalities);
+                    const hasCues =
+                      contextLabel !== null || hasVision || model.reasoning;
+                    return (
+                      <button
+                        key={`${model.configId}::${model.modelId}`}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                          isSelected && "bg-accent text-accent-foreground",
+                        )}
+                        onClick={() => closeAndSelect(pick)}
+                      >
+                        <ModelVendorIcon
+                          modelId={model.modelId}
+                          vendorKey={model.vendorKey}
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {model.modelId}
                         </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            ))
+                        {hasCues ? (
+                          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                            {contextLabel !== null ? (
+                              <span>{contextLabel}</span>
+                            ) : null}
+                            {hasVision ? (
+                              <span
+                                title={t("vision")}
+                                className="flex items-center"
+                              >
+                                <EyeIcon
+                                  aria-hidden="true"
+                                  className="size-3.5"
+                                />
+                                <span className="sr-only">{t("vision")}</span>
+                              </span>
+                            ) : null}
+                            {model.reasoning ? (
+                              <span
+                                title={t("reasoning")}
+                                className="flex items-center"
+                              >
+                                <BrainIcon
+                                  aria-hidden="true"
+                                  className="size-3.5"
+                                />
+                                <span className="sr-only">{t("reasoning")}</span>
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })
           )}
         </div>
       </ComposerPickerContent>

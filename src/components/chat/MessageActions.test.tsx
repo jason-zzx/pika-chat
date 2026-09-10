@@ -1,5 +1,7 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageActions from "./MessageActions";
 
@@ -28,7 +30,7 @@ const TWO_VERSIONS = {
 
 describe("MessageActions", () => {
   it("reveals on hover, focus-within, and the tap-to-reveal data attribute", () => {
-    const { container } = render(
+    const { container } = renderWithIntl(
       <MessageActions text="hello" messageRole="assistant" />,
     );
 
@@ -51,7 +53,7 @@ describe("MessageActions", () => {
   it("copies the message text and announces success", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     mockClipboard(writeText);
-    render(<MessageActions text="hello world" messageRole="assistant" />);
+    renderWithIntl(<MessageActions text="hello world" messageRole="assistant" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
@@ -65,7 +67,7 @@ describe("MessageActions", () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     mockClipboard(writeText);
     mockExecCommand(false);
-    render(<MessageActions text="hello" messageRole="assistant" />);
+    renderWithIntl(<MessageActions text="hello" messageRole="assistant" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
@@ -79,7 +81,7 @@ describe("MessageActions", () => {
   it("falls back to execCommand when the clipboard API is missing (B9)", async () => {
     mockClipboard(undefined);
     const execCommand = mockExecCommand(true);
-    render(<MessageActions text="hello world" messageRole="assistant" />);
+    renderWithIntl(<MessageActions text="hello world" messageRole="assistant" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
@@ -91,7 +93,7 @@ describe("MessageActions", () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     mockClipboard(writeText);
     const execCommand = mockExecCommand(true);
-    render(<MessageActions text="hello world" messageRole="assistant" />);
+    renderWithIntl(<MessageActions text="hello world" messageRole="assistant" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
@@ -102,7 +104,7 @@ describe("MessageActions", () => {
 
   it("shows the version switcher for multi-version messages and selects the next version", () => {
     const onSelectVersion = vi.fn();
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="assistant"
@@ -128,7 +130,7 @@ describe("MessageActions", () => {
 
   it("disables next at the last version and selects the previous version", () => {
     const onSelectVersion = vi.fn();
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="assistant"
@@ -147,7 +149,7 @@ describe("MessageActions", () => {
   });
 
   it("hides the version switcher for single-version messages", () => {
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="assistant"
@@ -166,7 +168,7 @@ describe("MessageActions", () => {
 
   it("invokes regenerate from the toolbar button", () => {
     const onRegenerate = vi.fn();
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="assistant"
@@ -182,7 +184,7 @@ describe("MessageActions", () => {
 
   it("lists copy, regenerate, delete-and-regenerate, and delete for assistant messages", async () => {
     const onDeleteRegenerate = vi.fn();
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="assistant"
@@ -205,7 +207,7 @@ describe("MessageActions", () => {
   });
 
   it("omits delete-and-regenerate from the user message menu", async () => {
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="user"
@@ -226,7 +228,7 @@ describe("MessageActions", () => {
   });
 
   it("never wraps menu item labels (B3)", async () => {
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="assistant"
@@ -251,7 +253,7 @@ describe("MessageActions", () => {
 
   it("reports menu open state so the parent can keep the row visible (B2)", async () => {
     const onMenuOpenChange = vi.fn();
-    render(
+    renderWithIntl(
       <MessageActions
         text="hello"
         messageRole="assistant"
@@ -275,7 +277,7 @@ describe("MessageActions", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     mockClipboard(writeText);
     try {
-      render(<MessageActions text="hello" messageRole="assistant" />);
+      renderWithIntl(<MessageActions text="hello" messageRole="assistant" />);
 
       fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
@@ -301,7 +303,7 @@ describe("MessageActions", () => {
     mockClipboard(writeText);
     const onCopyFeedbackChange = vi.fn();
     try {
-      render(
+      renderWithIntl(
         <MessageActions
           text="hello"
           messageRole="assistant"

@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { listAvailableModels } from "@/lib/api/provider";
 import { defaultModelMetadata } from "@/lib/schemas/provider";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import ModelPicker from "./ModelPicker";
 
@@ -19,7 +20,7 @@ function renderPicker(options?: {
     defaultOptions: { queries: { retry: false } },
   });
   const onChange = vi.fn();
-  render(
+  renderWithIntl(
     <QueryClientProvider client={client}>
       <ModelPicker
         value={options?.value ?? null}
@@ -121,6 +122,30 @@ describe("ModelPicker", () => {
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByText("No default model"));
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it("falls back to the anonymous owner label for a shared config without an owner name", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([
+      {
+        configId: "cfg-shared",
+        configName: "instance-openai",
+        modelId: "gpt-4o",
+        provenance: "shared",
+        ownerName: null,
+        ...defaultModelMetadata(),
+      },
+    ]);
+
+    renderPicker();
+    const trigger = await screen.findByRole("button", {
+      name: "Select a model",
+    });
+    await vi.waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+
+    expect(
+      await screen.findByText("instance-openai (shared by another user)"),
+    ).toBeInTheDocument();
   });
 
   it("shows a 1M context label, hides labels under 1M, and renders vision and reasoning as icons", async () => {

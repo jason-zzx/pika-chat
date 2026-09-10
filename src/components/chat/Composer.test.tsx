@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listAvailableModels } from "@/lib/api/provider";
@@ -8,6 +8,7 @@ import {
   defaultModelMetadata,
   type AvailableModel,
 } from "@/lib/schemas/provider";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 import { useComposerStore } from "@/stores/composer-store";
 
 import Composer from "./Composer";
@@ -39,7 +40,7 @@ function renderComposer(options?: {
   const onStop = vi.fn();
   const onReasoningEffortChange = vi.fn();
   const onOpenChatMap = vi.fn();
-  render(
+  renderWithIntl(
     <QueryClientProvider client={client}>
       <Composer
         draft={options?.draft ?? "hello"}

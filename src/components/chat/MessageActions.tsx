@@ -8,6 +8,7 @@ import {
   MoreHorizontalIcon,
   RefreshCwIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -22,12 +23,6 @@ import type { ChatMetadata } from "@/lib/schemas/chat";
 const COPY_RESET_MS = 2_000;
 
 type CopyState = "idle" | "success" | "failed";
-
-const COPY_STATE_TITLE: Record<CopyState, string> = {
-  idle: "Copy message",
-  success: "Copied",
-  failed: "Copy failed",
-};
 
 /**
  * Derived from ChatMetadata so the component contract can never drift from
@@ -70,6 +65,7 @@ export default function MessageActions({
   onMenuOpenChange,
   onCopyFeedbackChange,
 }: MessageActionsProps) {
+  const t = useTranslations("Chat.Actions");
   const [copyState, setCopyState] = useState<CopyState>("idle");
   const resetTimeoutRef = useRef<number | null>(null);
 
@@ -99,6 +95,12 @@ export default function MessageActions({
   const hasPrevious = version !== undefined && version.versionIndex > 1;
   const hasNext =
     version !== undefined && version.versionIndex < version.versionCount;
+  const copyTitle =
+    copyState === "idle"
+      ? t("copyMessage")
+      : copyState === "success"
+        ? t("copied")
+        : t("copyFailed");
 
   return (
     <div className="flex h-5 shrink-0 items-center gap-1">
@@ -109,12 +111,15 @@ export default function MessageActions({
           <div
             className="flex items-center gap-0.5"
             role="group"
-            aria-label={`Version ${version.versionIndex} of ${version.versionCount}`}
+            aria-label={t("versionOf", {
+              index: version.versionIndex,
+              count: version.versionCount,
+            })}
           >
             <button
               type="button"
-              aria-label="Previous version"
-              title="Previous version"
+              aria-label={t("previousVersion")}
+              title={t("previousVersion")}
               disabled={!hasPrevious}
               onClick={() => {
                 const target = version.versionIds[version.versionIndex - 2];
@@ -134,8 +139,8 @@ export default function MessageActions({
             </span>
             <button
               type="button"
-              aria-label="Next version"
-              title="Next version"
+              aria-label={t("nextVersion")}
+              title={t("nextVersion")}
               disabled={!hasNext}
               onClick={() => {
                 const target = version.versionIds[version.versionIndex];
@@ -152,8 +157,8 @@ export default function MessageActions({
         {onRegenerate ? (
           <button
             type="button"
-            aria-label="Regenerate response"
-            title="Regenerate response"
+            aria-label={t("regenerateResponse")}
+            title={t("regenerateResponse")}
             onClick={onRegenerate}
             className={ACTION_BUTTON_CLASS}
           >
@@ -162,8 +167,8 @@ export default function MessageActions({
         ) : null}
         <button
           type="button"
-          aria-label="Copy message"
-          title={COPY_STATE_TITLE[copyState]}
+          aria-label={t("copyMessage")}
+          title={copyTitle}
           onClick={() => {
             void handleCopy();
           }}
@@ -180,8 +185,8 @@ export default function MessageActions({
             render={
               <button
                 type="button"
-                aria-label="More actions"
-                title="More actions"
+                aria-label={t("more")}
+                title={t("more")}
                 className={ACTION_BUTTON_CLASS}
               />
             }
@@ -195,14 +200,14 @@ export default function MessageActions({
                 void handleCopy();
               }}
             >
-              Copy
+              {t("copy")}
             </DropdownMenuItem>
             {onRegenerate ? (
               <DropdownMenuItem
                 className="whitespace-nowrap"
                 onClick={onRegenerate}
               >
-                Regenerate
+                {t("regenerate")}
               </DropdownMenuItem>
             ) : null}
             {messageRole === "assistant" && onDeleteRegenerate ? (
@@ -210,7 +215,7 @@ export default function MessageActions({
                 className="whitespace-nowrap"
                 onClick={onDeleteRegenerate}
               >
-                Delete and regenerate
+                {t("deleteAndRegenerate")}
               </DropdownMenuItem>
             ) : null}
             {onDelete ? (
@@ -219,16 +224,16 @@ export default function MessageActions({
                 className="whitespace-nowrap"
                 onClick={onDelete}
               >
-                Delete
+                {t("delete")}
               </DropdownMenuItem>
             ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="sr-only" aria-live="polite">
           {copyState === "success"
-            ? "Copied"
+            ? t("copied")
             : copyState === "failed"
-              ? "Copy failed"
+              ? t("copyFailed")
               : ""}
         </span>
       </div>

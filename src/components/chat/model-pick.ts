@@ -69,10 +69,22 @@ export function modelMatchesQuery(model: AvailableModel, query: string): boolean
   );
 }
 
-export function modelGroupHeading(group: ModelGroup): string {
+/**
+ * Locale-agnostic heading for a provider-config group: the config name
+ * alone, or the config name plus the sharing owner for instance-shared
+ * configs. The caller resolves the copy through the `Chat.Pickers` catalog.
+ */
+type ModelGroupHeading =
+  | { kind: "config"; configName: string }
+  | { kind: "shared"; configName: string; ownerName: string | null };
+
+export function modelGroupHeading(group: ModelGroup): ModelGroupHeading {
   if (group.provenance === "shared") {
-    const who = group.ownerName ?? "another user";
-    return `${group.configName} (shared by ${who})`;
+    return {
+      kind: "shared",
+      configName: group.configName,
+      ownerName: group.ownerName,
+    };
   }
-  return group.configName;
+  return { kind: "config", configName: group.configName };
 }

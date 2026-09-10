@@ -34,7 +34,6 @@ import {
   parseAssistantPath,
 } from "@/lib/assistant-path";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
-import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
 import {
   composerDraftKey,
   useComposerStore,
@@ -108,7 +107,9 @@ export default function ChatView({
   assistantDefaultModelId,
 }: ChatViewProps) {
   const queryClient = useQueryClient();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Chat.MessageList");
+  const tChat = useTranslations("Chat");
+  const tErrors = useTranslations("Errors");
   const tree = useAssistantTree();
   const models = useAvailableModels();
   const setAssistantDefault = useSetAssistantDefaultModel();
@@ -192,7 +193,7 @@ export default function ChatView({
           .find((topic) => topic.id === activeTopicId)?.title
       : undefined) ??
     topicTitle ??
-    DEFAULT_TOPIC_TITLE;
+    tChat("newTopic");
   const headerModel = findAvailableModel(models.data, pickedModel);
   const headerSubtitle = headerModel
     ? `${headerModel.modelId} · ${headerModel.configName}`
@@ -450,7 +451,7 @@ export default function ChatView({
           }
           setPickedModel(previous);
           setDefaultModelError(
-            apiErrorMessage(caught, t, "actions.saveDefaultModel"),
+            apiErrorMessage(caught, tErrors, "actions.saveDefaultModel"),
           );
         },
       },
@@ -526,7 +527,7 @@ export default function ChatView({
       fetchHistory: () => fetchFreshHistoryMessages(topic),
     });
     if (!serverId) {
-      setActionError("The message is still being saved. Try again in a moment.");
+      setActionError(t("stillSaving"));
       reseedHistory(topic);
       return null;
     }
@@ -549,8 +550,8 @@ export default function ChatView({
       setRegen(null);
       setActionError(
         caught === undefined
-          ? t("actions.regenerate")
-          : apiErrorMessage(caught, t, "actions.regenerate"),
+          ? tErrors("actions.regenerate")
+          : apiErrorMessage(caught, tErrors, "actions.regenerate"),
       );
       reseedHistory(topic);
     };
@@ -680,7 +681,7 @@ export default function ChatView({
     try {
       await deleteTopicMessage(activeTopicId, serverId);
     } catch (caught) {
-      setActionError(apiErrorMessage(caught, t, "actions.deleteMessage"));
+      setActionError(apiErrorMessage(caught, tErrors, "actions.deleteMessage"));
       return;
     }
     setMessages((current) =>
@@ -704,7 +705,7 @@ export default function ChatView({
     try {
       await selectMessageVersion(activeTopicId, versionId);
     } catch (caught) {
-      setActionError(apiErrorMessage(caught, t, "actions.switchVersions"));
+      setActionError(apiErrorMessage(caught, tErrors, "actions.switchVersions"));
       return;
     }
     // No optimistic switch: the reseeded history shows the new selection.
@@ -756,7 +757,7 @@ export default function ChatView({
     try {
       await deleteTopicMessage(topic, serverId);
     } catch (caught) {
-      setActionError(apiErrorMessage(caught, t, "actions.deleteMessage"));
+      setActionError(apiErrorMessage(caught, tErrors, "actions.deleteMessage"));
       return;
     }
     const afterDelete = messages.filter((entry) => entry.id !== message.id);
@@ -826,8 +827,8 @@ export default function ChatView({
       <div className="flex min-h-0 flex-1 flex-col">
         <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
         <EmptyState
-          title="Unable to load conversation"
-          description="Refresh the page to try again."
+          title={t("loadFailedTitle")}
+          description={t("loadFailedDescription")}
         />
       </div>
     );
@@ -840,9 +841,7 @@ export default function ChatView({
       <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
       {historyPending ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-          <p className="text-sm text-muted-foreground">
-            Loading conversation…
-          </p>
+          <p className="text-sm text-muted-foreground">{t("loading")}</p>
         </div>
       ) : (
         <MessageList

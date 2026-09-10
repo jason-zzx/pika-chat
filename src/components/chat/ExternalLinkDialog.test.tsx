@@ -1,6 +1,5 @@
 import {
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
@@ -8,6 +7,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import ExternalLinkDialog from "./ExternalLinkDialog";
 
@@ -27,7 +27,7 @@ afterEach(() => {
 
 function renderDialog(url = URL) {
   const onOpenChange = vi.fn();
-  render(<ExternalLinkDialog url={url} open onOpenChange={onOpenChange} />);
+  renderWithIntl(<ExternalLinkDialog url={url} open onOpenChange={onOpenChange} />);
   return onOpenChange;
 }
 
@@ -100,7 +100,7 @@ describe("ExternalLinkDialog", () => {
   it("resets copy feedback across a close and reopen cycle", async () => {
     copyMock.mockResolvedValue(true);
     const onOpenChange = vi.fn();
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <ExternalLinkDialog url={URL} open onOpenChange={onOpenChange} />,
     );
 
@@ -109,14 +109,18 @@ describe("ExternalLinkDialog", () => {
     await within(dialog).findByRole("button", { name: "Copied" });
 
     rerender(
-      <ExternalLinkDialog url={URL} open={false} onOpenChange={onOpenChange} />,
+      wrapWithIntl(
+        <ExternalLinkDialog url={URL} open={false} onOpenChange={onOpenChange} />,
+      ),
     );
     await waitFor(() =>
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
     );
 
     rerender(
-      <ExternalLinkDialog url={URL} open onOpenChange={onOpenChange} />,
+      wrapWithIntl(
+        <ExternalLinkDialog url={URL} open onOpenChange={onOpenChange} />,
+      ),
     );
     const reopened = await findDialog();
     expect(

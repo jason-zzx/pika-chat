@@ -81,8 +81,15 @@ describe("groupAvailableModels", () => {
       "other-model",
     ]);
     expect(
+      ownGroup ? modelGroupHeading(ownGroup) : null,
+    ).toEqual({ kind: "config", configName: "my-keys" });
+    expect(
       sharedGroup ? modelGroupHeading(sharedGroup) : null,
-    ).toBe("instance-openai (shared by operator)");
+    ).toEqual({
+      kind: "shared",
+      configName: "instance-openai",
+      ownerName: "operator",
+    });
   });
 });
 

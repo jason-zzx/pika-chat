@@ -1,5 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import Markdown from "./Markdown";
 import type { CitationSource } from "./citations";
@@ -29,7 +31,7 @@ const sources: CitationSource[] = [
 
 describe("Markdown citations (real Streamdown pipeline)", () => {
   it("renders resolvable [n] markers as chips; code and unknown nums stay literal", async () => {
-    const { container } = render(
+    const { container } = renderWithIntl(
       <Markdown
         text={
           "First [1] then [2], missing [9], inline `a[1]`, fence:\n\n```txt\nx[2]\n```"
@@ -62,7 +64,7 @@ describe("Markdown citations (real Streamdown pipeline)", () => {
   });
 
   it("keeps the no-citations path plain: no chips, no sup markers", async () => {
-    const { container } = render(<Markdown text="plain [1] text" />);
+    const { container } = renderWithIntl(<Markdown text="plain [1] text" />);
 
     await screen.findByText(/plain/);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
@@ -71,12 +73,16 @@ describe("Markdown citations (real Streamdown pipeline)", () => {
   });
 
   it("renders chips for markers that stream in after the sources exist", async () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <Markdown text="Still researching…" citations={sources} />,
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
 
-    rerender(<Markdown text="The answer [1] is here." citations={sources} />);
+    rerender(
+      wrapWithIntl(
+        <Markdown text="The answer [1] is here." citations={sources} />,
+      ),
+    );
 
     expect(
       await screen.findByRole("button", {
@@ -88,7 +94,7 @@ describe("Markdown citations (real Streamdown pipeline)", () => {
   it("reparses exactly once when sources appear after the text was already rendered", async () => {
     // Streamdown's memo ignores remarkPlugins/components, so without the
     // citation key segment this block would keep [1] literal forever.
-    const { container, rerender } = render(
+    const { container, rerender } = renderWithIntl(
       <Markdown text="The answer [1] is here." />,
     );
 
@@ -100,7 +106,11 @@ describe("Markdown citations (real Streamdown pipeline)", () => {
 
     // Sources arrive with the text unchanged — the remount key flips and
     // the one reparse turns the marker into a chip.
-    rerender(<Markdown text="The answer [1] is here." citations={sources} />);
+    rerender(
+      wrapWithIntl(
+        <Markdown text="The answer [1] is here." citations={sources} />,
+      ),
+    );
 
     expect(
       await screen.findByRole("button", {

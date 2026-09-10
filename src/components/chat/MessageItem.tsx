@@ -1,15 +1,13 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   useState,
   type MouseEvent as ReactMouseEvent,
   type Ref,
 } from "react";
 
-import {
-  DEFAULT_ASSISTANT_ICON,
-  DEFAULT_ASSISTANT_NAME,
-} from "@/lib/schemas/assistant";
+import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 
 import Markdown from "./Markdown";
@@ -154,6 +152,8 @@ export default function MessageItem({
   minHeight,
   itemKey,
 }: MessageItemProps) {
+  const t = useTranslations("Chat.MessageItem");
+  const tAssistant = useTranslations("Assistant");
   // Opening the dropdown moves focus into the portaled menu, dropping
   // hover/focus-within; keep the row visible while the menu is open (B2).
   const [menuOpen, setMenuOpen] = useState(false);
@@ -245,7 +245,7 @@ export default function MessageItem({
       <article
         ref={articleRef}
         className="group/message flex flex-col items-end gap-1"
-        aria-label="You"
+        aria-label={t("you")}
         data-revealed={revealedAny ? "true" : "false"}
         data-message-key={itemKey}
         onClick={handleArticleClick}
@@ -268,7 +268,7 @@ export default function MessageItem({
       ref={articleRef}
       style={minHeight !== undefined ? { minHeight } : undefined}
       className="group/message flex flex-col items-start gap-1"
-      aria-label="Assistant"
+      aria-label={t("assistant")}
       data-revealed={revealedAny ? "true" : "false"}
       data-message-key={itemKey}
       onClick={handleArticleClick}
@@ -276,7 +276,7 @@ export default function MessageItem({
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium">
           {assistantIcon ?? DEFAULT_ASSISTANT_ICON}{" "}
-          {assistantName ?? DEFAULT_ASSISTANT_NAME}
+          {assistantName ?? tAssistant("defaultName")}
         </span>
         <MessageTimestamp createdAt={createdAt} />
       </div>
@@ -330,29 +330,27 @@ export default function MessageItem({
       {showThinkingShimmer ? (
         <div className="w-full text-sm">
           <span className="inline-block animate-thinking-shimmer bg-linear-to-r from-muted-foreground/40 via-foreground to-muted-foreground/40 bg-[length:200%_100%] bg-clip-text font-medium text-transparent motion-reduce:animate-none">
-            Thinking…
+            {t("thinkingShimmer")}
           </span>
         </div>
       ) : null}
       {!streaming && !hasAnswer && finishReason === "length" ? (
-        <p className="text-xs text-muted-foreground">
-          Output stopped at the token limit.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("tokenLimit")}</p>
       ) : null}
       {!streaming &&
       !hasAnswer &&
       finishReason !== "length" &&
       reasoningParts.length > 0 ? (
         <p className="text-xs text-muted-foreground">
-          The model stopped before writing an answer.
+          {t("stoppedBeforeAnswer")}
         </p>
       ) : null}
       {outcome === "stopped" ? (
-        <p className="text-xs text-muted-foreground">Stopped</p>
+        <p className="text-xs text-muted-foreground">{t("stopped")}</p>
       ) : null}
       {outcome === "failed" ? (
         <p className="text-xs text-destructive" role="alert">
-          {metadata?.errorMessage ?? "The model failed to respond."}
+          {metadata?.errorMessage ?? t("failedFallback")}
         </p>
       ) : null}
       {modelId ? (
