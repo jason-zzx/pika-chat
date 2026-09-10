@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Sidebar, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import SettingsNav from "./SettingsNav";
 
@@ -15,7 +16,7 @@ vi.mock("@/hooks/use-mobile", () => ({
 }));
 
 function renderNav(showUsers: boolean) {
-  return render(
+  return renderWithIntl(
     <TooltipProvider>
       <SidebarProvider>
         <Sidebar>

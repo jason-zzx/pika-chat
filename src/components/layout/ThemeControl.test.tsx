@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { THEME_COOKIE_NAME } from "@/lib/theme";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import ThemeControl from "./ThemeControl";
 
@@ -23,7 +24,7 @@ function renderControl(
   initialMode: "light" | "dark" | "system",
   appearance?: "page" | "sidebar",
 ) {
-  return render(
+  return renderWithIntl(
     <TooltipProvider>
       <SidebarProvider>
         <ThemeControl initialMode={initialMode} appearance={appearance} />

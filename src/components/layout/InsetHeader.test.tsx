@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import InsetHeader from "./InsetHeader";
 
@@ -10,7 +11,7 @@ vi.mock("@/hooks/use-mobile", () => ({
 }));
 
 function renderHeader(title?: string | null, subtitle?: string | null) {
-  return render(
+  return renderWithIntl(
     <SidebarProvider>
       <InsetHeader title={title} subtitle={subtitle} />
     </SidebarProvider>,

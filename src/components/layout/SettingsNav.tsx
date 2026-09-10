@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 import SidebarNavLink from "@/components/layout/SidebarNavLink";
 import {
@@ -10,18 +11,20 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
+type SettingsTabLabelKey = `settingsNav.${"general" | "account" | "providers" | "search" | "users"}`;
+
 type SettingsTab = {
   href: string;
-  label: string;
+  labelKey: SettingsTabLabelKey;
   staffOnly?: boolean;
 };
 
 const SETTINGS_TABS: SettingsTab[] = [
-  { href: "/settings/general", label: "General" },
-  { href: "/settings/account", label: "Account" },
-  { href: "/settings/providers", label: "Providers" },
-  { href: "/settings/search", label: "Search" },
-  { href: "/settings/users", label: "Users", staffOnly: true },
+  { href: "/settings/general", labelKey: "settingsNav.general" },
+  { href: "/settings/account", labelKey: "settingsNav.account" },
+  { href: "/settings/providers", labelKey: "settingsNav.providers" },
+  { href: "/settings/search", labelKey: "settingsNav.search" },
+  { href: "/settings/users", labelKey: "settingsNav.users", staffOnly: true },
 ];
 
 type SettingsNavProps = {
@@ -30,21 +33,22 @@ type SettingsNavProps = {
 
 export default function SettingsNav({ showUsers }: SettingsNavProps) {
   const pathname = usePathname();
+  const t = useTranslations("Layout");
 
   return (
     <SidebarGroup>
       <SidebarGroupContent>
-        <nav aria-label="Settings">
+        <nav aria-label={t("settingsNav.label")}>
           <SidebarMenu>
             {SETTINGS_TABS.filter((tab) => !tab.staffOnly || showUsers).map(
               (tab) => (
                 <SidebarMenuItem key={tab.href}>
                   <SidebarNavLink
                     href={tab.href}
-                    tooltip={tab.label}
+                    tooltip={t(tab.labelKey)}
                     isActive={pathname === tab.href}
                   >
-                    <span>{tab.label}</span>
+                    <span>{t(tab.labelKey)}</span>
                   </SidebarNavLink>
                 </SidebarMenuItem>
               ),

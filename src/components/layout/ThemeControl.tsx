@@ -2,6 +2,7 @@
 
 import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { persistTheme } from "@/components/layout/use-theme-sync";
@@ -10,13 +11,10 @@ import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { nextThemeMode, type ThemeMode } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-const THEME_COPY: Record<
-  ThemeMode,
-  { label: string; icon: typeof SunIcon }
-> = {
-  light: { label: "Light", icon: SunIcon },
-  dark: { label: "Dark", icon: MoonIcon },
-  system: { label: "System", icon: MonitorIcon },
+const THEME_ICONS: Record<ThemeMode, typeof SunIcon> = {
+  light: SunIcon,
+  dark: MoonIcon,
+  system: MonitorIcon,
 };
 
 type ThemeControlProps = {
@@ -31,15 +29,16 @@ export default function ThemeControl({
   appearance = "page",
 }: ThemeControlProps) {
   const router = useRouter();
+  const t = useTranslations("Layout");
   const [mode, setMode] = useState<ThemeMode>(initialMode);
   const [prevInitialMode, setPrevInitialMode] = useState(initialMode);
   if (prevInitialMode !== initialMode) {
     setPrevInitialMode(initialMode);
     setMode(initialMode);
   }
-  const current = THEME_COPY[mode];
-  const next = THEME_COPY[nextThemeMode(mode)];
-  const Icon = current.icon;
+  const currentLabel = t(`theme.${mode}`);
+  const nextLabel = t(`theme.${nextThemeMode(mode)}`);
+  const Icon = THEME_ICONS[mode];
 
   function onCycle() {
     const following = nextThemeMode(mode);
@@ -53,12 +52,12 @@ export default function ThemeControl({
       <SidebarMenuButton
         type="button"
         className={className}
-        tooltip={`Switch to ${next.label}`}
-        aria-label={`Theme: ${current.label}`}
+        tooltip={t("theme.switchTo", { theme: nextLabel })}
+        aria-label={t("theme.current", { theme: currentLabel })}
         onClick={onCycle}
       >
         <Icon aria-hidden="true" />
-        <span>{current.label}</span>
+        <span>{currentLabel}</span>
       </SidebarMenuButton>
     );
   }
@@ -69,11 +68,11 @@ export default function ThemeControl({
       variant="ghost"
       size="sm"
       className={cn("justify-start gap-2", className)}
-      aria-label={`Theme: ${current.label}`}
+      aria-label={t("theme.current", { theme: currentLabel })}
       onClick={onCycle}
     >
       <Icon aria-hidden="true" />
-      <span>{current.label}</span>
+      <span>{currentLabel}</span>
     </Button>
   );
 }

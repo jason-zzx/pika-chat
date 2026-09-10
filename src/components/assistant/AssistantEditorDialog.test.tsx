@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { type InputHTMLAttributes, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,7 @@ import { createAssistant } from "@/lib/api/assistant";
 import { listAvailableModels } from "@/lib/api/provider";
 import type { Assistant } from "@/lib/schemas/assistant";
 import { defaultModelMetadata } from "@/lib/schemas/provider";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import AssistantEditorDialog from "./AssistantEditorDialog";
 
@@ -51,7 +52,7 @@ function renderEditor(assistant: Assistant | null) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  return renderWithIntl(
     <QueryClientProvider client={client}>
       <AssistantEditorDialog
         open

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,6 +11,7 @@ import { listAssistantTree } from "@/lib/api/assistant";
 import { setTopicFavorite } from "@/lib/api/topic";
 import type { Assistant } from "@/lib/schemas/assistant";
 import type { Topic } from "@/lib/schemas/topic";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import AssistantTree from "./AssistantTree";
 
@@ -66,7 +67,7 @@ function renderTree(options?: { showUsers?: boolean }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  return renderWithIntl(
     <QueryClientProvider client={client}>
       <TooltipProvider>
         <SidebarProvider>

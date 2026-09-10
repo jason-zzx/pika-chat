@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import ChatMapDialog from "./ChatMapDialog";
 
@@ -20,7 +21,7 @@ function textMessage(
 }
 
 function renderDialog(messages: ChatUIMessage[], onSelect = vi.fn()) {
-  render(
+  renderWithIntl(
     <ChatMapDialog
       open
       onOpenChange={vi.fn()}
