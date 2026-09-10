@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "No any/! /as; strictness rules for review"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Route handler and layering rules to check against"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality bar and test discovery"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Verify no hardcoded strings and catalog parity"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Type-safety expectations for new client components"}
+{"file": ".trellis/tasks/09-10-totp-2fa/research/better-auth-two-factor.md", "reason": "Ground truth for 2FA endpoint semantics during review"}

@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend entry spec: route handler shape, server-only rules, bearer requirement"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "How better-auth endpoints error shapes and plugin registration must be handled"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Drizzle schema + migration discipline (schema and migration in same commit)"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Where services, routes, and helpers belong; handler shape"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Error envelope rules; secret non-leak rule"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend entry spec: client component placement and form conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "'use client' at the narrowest leaf; dialog positionMethod rule"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "No hardcoded copy; both catalogs must change together"}
+{"file": ".trellis/tasks/09-10-totp-2fa/research/better-auth-two-factor.md", "reason": "Verified better-auth 2FA endpoint contracts, enrollment state machine, cookie binding"}
