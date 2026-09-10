@@ -280,6 +280,37 @@ the tap state.
 
 ---
 
+## Collapsible sidebar group labels
+
+Sidebar sections whose content hides behind a click on the group label
+("Favorite" / "Topics", landed in `09-09-topic-favorites`) follow the
+`ToolCallShell` collapse mechanics (`chat/ToolCallShell.tsx`): chevron
+`ChevronDownIcon` with `rotate-180` when open, `transition-transform
+duration-200 motion-reduce:transition-none`, `aria-expanded` +
+`aria-controls={useId()}`, and the `grid grid-rows-[1fr]`/`grid-rows-[0fr]` +
+inner `min-h-0 overflow-hidden` height animation. There is no
+`ui/collapsible.tsx` primitive — do not generate one.
+
+Three rules that are easy to get wrong:
+
+- **Render the label as a real button** via `SidebarGroupLabel`'s `render`
+  prop (`render={<button type="button" aria-expanded … />}`), not a
+  `button`-styled `div`. The label then stays keyboard reachable for free.
+- **Re-hide it in icon-collapsed mode**: `SidebarGroupLabel`'s built-in styles
+  hide the label in `group-data-[collapsible=icon]` with `-mt-8 opacity-0` —
+  visually gone but still keyboard-focusable once it is a button. Any
+  label-turned-button must add `group-data-[collapsible=icon]:hidden`
+  (found by check in `09-09-topic-favorites`).
+- **Peer sections stay peers.** Several sections in one group ("Favorite"
+  above "Topics") are siblings with independent collapse scopes — never nest
+  one inside another's collapse container, and never indent/subordinate one
+  label. Share one local `SectionToggle` component between them
+  (`AssistantTree.tsx` is the reference) so the two cannot drift in styling,
+  and let each own its `useId` + collapse container. A nested variant with an
+  indented sub-label was rejected on visual review.
+
+---
+
 ## Common Mistakes
 
 - `"use client"` on a layout or page "to make it work". It works, and it ships

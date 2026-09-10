@@ -71,6 +71,37 @@ user's storage for them.
 
 ---
 
+## Persisted UI chrome (localStorage without Zustand)
+
+Small view-chrome booleans that must survive reloads but are not server state
+and not shared across components (sidebar section collapse, landed in
+`09-09-topic-favorites` for the Topics/Favorite labels) do not need a Zustand
+store. Read them with `useSyncExternalStore`:
+
+```ts
+// Wrong — react-hooks/set-state-in-effect is an ERROR in this repo,
+// so "useState(default) + read localStorage in useEffect" does not lint.
+const [open, setOpen] = useState(true);
+useEffect(() => { setOpen(readStorage()); }, []); // ❌ lint error
+```
+
+Correct (reference: `assistant/AssistantTree.tsx`, module-level store):
+
+- `getSnapshot` caches by the raw localStorage string so it returns a stable
+  object identity (fresh objects every call = infinite re-render).
+- `getServerSnapshot` returns the default constant — SSR and the hydration
+  render both show the default, the persisted value adopts right after
+  hydration. No mismatch.
+- The write helper updates the cache, writes storage inside try/catch (private
+  mode / quota must not break the toggle), then notifies listeners.
+
+Zustand-persist is still the right tool when the state is genuinely shared
+across components (composer store). For one-component chrome, the standalone
+`useSyncExternalStore` store above is lighter and keeps Zustand out of the
+render path.
+
+---
+
 ## Server state that feels like client state
 
 Two cases come up constantly in this product and both belong to Query:
