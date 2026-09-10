@@ -1,6 +1,10 @@
 "use client";
 
-import { adminClient, usernameClient } from "better-auth/client/plugins";
+import {
+  adminClient,
+  twoFactorClient,
+  usernameClient,
+} from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 import type { AppErrorMessageKey } from "@/lib/api/error-contract";
@@ -12,5 +16,8 @@ import type { AppErrorMessageKey } from "@/lib/api/error-contract";
 export const SIGN_IN_FAILED_KEY: AppErrorMessageKey = "auth.signInFailed";
 
 export const authClient = createAuthClient({
-  plugins: [usernameClient(), adminClient()],
+  // No `twoFactorPage` and no `onTwoFactorRedirect`: `SignInForm` branches to
+  // the challenge page itself, which avoids the client plugin's
+  // `window.location.href` full reload.
+  plugins: [usernameClient(), adminClient(), twoFactorClient()],
 });

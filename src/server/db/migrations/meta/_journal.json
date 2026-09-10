@@ -92,6 +92,13 @@
       "when": 1788966704521,
       "tag": "0012_bouncy_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789053557360,
+      "tag": "0013_bright_veda",
+      "breakpoints": true
     }
   ]
 }

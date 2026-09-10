@@ -63,6 +63,13 @@
     "selectEmoji": "选择一个表情…"
   },
   "Auth": {
+    "twoFactor": {
+      "title": "两步验证",
+      "description": "输入验证器应用中的 6 位验证码，或使用一个备用验证码。",
+      "codeLabel": "验证码",
+      "submit": "验证",
+      "submitting": "正在验证…"
+    },
     "signIn": {
       "title": "登录",
       "identifierLabel": "用户名或邮箱",
@@ -94,12 +101,41 @@
   },
   "Account": {
     "title": "账户",
-    "description": "更改你的密码。",
+    "description": "管理你的密码与两步验证。",
     "currentPassword": "当前密码",
     "newPassword": "新密码",
     "changePassword": "修改密码",
     "saving": "正在保存…",
-    "passwordUpdated": "密码已更新"
+    "passwordUpdated": "密码已更新",
+    "twoFactor": {
+      "title": "两步验证",
+      "description": "登录时需要输入验证器应用生成的验证码。",
+      "enabled": "两步验证已开启。",
+      "disabled": "两步验证未开启。",
+      "startSubmit": "继续",
+      "passwordLabel": "你的密码",
+      "qrCaption": "用验证器应用扫描此二维码。",
+      "qrAlt": "验证器应用的二维码",
+      "manualSecretLabel": "或手动输入此密钥",
+      "copySecret": "复制密钥",
+      "secretCopied": "密钥已复制",
+      "copyFailed": "无法复制密钥",
+      "confirmLabel": "验证器应用中的验证码",
+      "confirmSubmit": "确认并开启",
+      "confirming": "正在确认…",
+      "working": "处理中…",
+      "cancel": "取消",
+      "backupCodesTitle": "备用验证码",
+      "backupCodesIntro": "请将这些验证码妥善保存，每个只能使用一次。",
+      "lossWarning": "如果同时丢失设备和所有备用验证码，你将永久无法访问此账户。",
+      "regenerate": "生成新的备用验证码",
+      "regenerateSubmit": "生成新的验证码",
+      "codesRegenerated": "已生成新的备用验证码。",
+      "disable": "关闭两步验证",
+      "disableSubmit": "关闭",
+      "disabledDone": "两步验证已关闭。",
+      "otherSessionsNotRevoked": "两步验证已开启，但未能退出其他设备上的登录。请在其他设备上手动退出。"
+    }
   },
   "Chat": {
     "Composer": {
@@ -362,7 +398,8 @@
     "auth": {
       "required": "需要登录",
       "adminRequired": "需要管理员权限",
-      "signInFailed": "用户名、邮箱或密码无效"
+      "signInFailed": "用户名、邮箱或密码无效",
+      "invalidTwoFactorCode": "该验证码不正确"
     },
     "account": {
       "usernameTaken": "用户名已被占用",
@@ -455,7 +492,12 @@
       "createUser": "无法创建用户",
       "setRole": "无法更改角色",
       "updateBan": "无法更新封禁状态",
-      "resetPassword": "无法重置密码"
+      "resetPassword": "无法重置密码",
+      "enableTwoFactor": "无法开始两步验证设置",
+      "disableTwoFactor": "无法关闭两步验证",
+      "verifyTwoFactor": "无法验证该验证码",
+      "generateBackupCodes": "无法生成备用验证码",
+      "loadQrCode": "无法加载二维码"
     }
   },
   "Validation": {

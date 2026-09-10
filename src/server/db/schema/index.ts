@@ -1,6 +1,6 @@
 export { assistants, topicColumns, topics } from "./assistant";
 export { APP_SETTINGS_ROW_ID, appSettings } from "./app-settings";
-export { accounts, sessions, users, verifications } from "./auth";
+export { accounts, sessions, twoFactors, users, verifications } from "./auth";
 export {
   chatMessageOutcome,
   chatMessageRole,
