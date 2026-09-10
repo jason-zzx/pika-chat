@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Verify migrated screens follow the conventions: namespace/key rules, no hardcoded fallbacks, testing wrapper, timestamp contract"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification standard: lint/tests/accessibility; test discovery globs for new dirs; no behavior changes in copy migration"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend quality check list walk (keyboard reachability, states, breakpoints, no client-boundary widening)"}
+{"file": ".trellis/tasks/09-10-i18n/research/next-intl-usage.md", "reason": "Verify correct ICU/plural usage, useNow/useFormatter timezone handling, and deterministic test setup"}
