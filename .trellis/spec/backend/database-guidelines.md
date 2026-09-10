@@ -31,6 +31,13 @@ points at the single schema file.
 | Every table | `created_at`, and `updated_at` where mutable |
 | Enums | PostgreSQL enum via `pgEnum`, not free-text |
 
+> **Exception — adapter-owned tables.** When a third-party adapter writes the
+> rows (Better Auth's `two_factors`), the table mirrors that library's declared
+> fields exactly and adds only the `id` the adapter fills from
+> `advanced.database.generateId`. Do not add `created_at` / `updated_at`
+> bookkeeping the adapter never writes — those columns would silently lie. See
+> [Auth Guidelines](./auth-guidelines.md).
+
 UUIDv7 over serial: ids appear in URLs and will later cross an API boundary to
 a mobile client, where sequential integers leak volume and invite enumeration.
 UUIDv7 over UUIDv4: it keeps index locality, which matters for the message
