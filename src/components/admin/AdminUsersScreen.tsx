@@ -162,7 +162,11 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="create-role">{t("roleLabel")}</Label>
-            <Select name="role" defaultValue="user">
+            <Select
+              name="role"
+              defaultValue="user"
+              items={{ user: t("roleUser"), admin: t("roleAdmin") }}
+            >
               <SelectTrigger id="create-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,9 @@ export default function AssistantEmojiPicker({
   id,
 }: AssistantEmojiPickerProps) {
   const t = useTranslations("Assistant");
+  const locale = useLocale();
+  // frimousse fetches emoji data (category headers + emoji names) per locale.
+  const emojiLocale = locale.toLowerCase().startsWith("zh") ? "zh" : "en";
   const [open, setOpen] = useState(false);
 
   return (
@@ -58,12 +61,16 @@ export default function AssistantEmojiPicker({
         <EmojiPicker
           className="h-80 w-full [&_[data-slot=emoji-picker-emoji]]:size-11 [&_[data-slot=emoji-picker-emoji]]:text-2xl [&_[data-slot=emoji-picker-row]]:flex [&_[data-slot=emoji-picker-row]]:justify-between"
           columns={8}
+          locale={emojiLocale}
           onEmojiSelect={({ emoji }) => {
             onChange(emoji);
             setOpen(false);
           }}
         >
-          <EmojiPickerSearch aria-label={t("searchEmoji")} />
+          <EmojiPickerSearch
+            aria-label={t("searchEmoji")}
+            placeholder={t("searchEmoji")}
+          />
           <EmojiPickerContent />
         </EmojiPicker>
       </PopoverContent>
