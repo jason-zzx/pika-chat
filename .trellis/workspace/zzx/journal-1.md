@@ -522,3 +522,27 @@ Final child of the i18n effort. Added eslint-plugin-i18next 6.1.5 flat config (n
 ### Status
 
 [OK] **Completed**
+
+
+## Session 19: i18n wrap-up: browser acceptance, widget localization fixes, doc audit
+<!-- trellis-session: v=2 fp=bc3ea0585de46ae6 -->
+
+**Date**: 2026-09-10
+**Task**: i18n wrap-up: browser acceptance, widget localization fixes, doc audit
+**Branch**: `feat/i18n-guard`
+
+### Summary
+
+Ran the parent acceptance with agent-browser (headless Chrome, admin session): locale switch re-renders without reload and cookie persists across reloads; zh visual pass over auth/chat/settings/admin/assistant/emoji-picker with no English leftovers; wrong-password error localized; sign-out redirect correct. Found and fixed three widget gaps (Admin role select showed the raw value -> Base UI items label mapping; frimousse search placeholder stayed 'Search…' -> localized placeholder; emoji categories/names stayed English -> locale prop zh). Doc audit updated the frontend spec (generated-file exception list now three entries; i18n spec pitfalls cover both widget gotchas), added an i18n thinking trigger to guides/index, noted the bilingual UI in the README, and ticked the parent AC1-AC8 with evidence pointers. Gates after fixes: lint/typecheck/566 tests/build green. All four Trellis tasks now archived.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `819884f` | fix(i18n): localize role label and emoji picker data |
+| `ceedd6d` | docs(spec): record widget i18n gotchas and generated-file exceptions |
+| `003755e` | docs: mention the bilingual UI in the README |
+
+### Status
+
+[OK] **Completed**
