@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "The conventions this task finalizes (guard section, adding-a-locale steps); also the allowlist policy source"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint standards and the test-discovery rule the new ESLint setup must respect"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Pre-development checklist and quality gate for the config change and the sweep"}
+{"file": ".trellis/tasks/09-10-i18n/research/lint-guard.md", "reason": "Empirically verified flat-config snippet for eslint-plugin-i18next 6.1.5, what it flags, and the accepted gaps"}
