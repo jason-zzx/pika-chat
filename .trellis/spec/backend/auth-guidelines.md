@@ -68,7 +68,8 @@ Sign-in, sign-out, get-session, password change, and `/api/auth/admin/*` are
 Better Auth's catch-all. They keep the library's error shape.
 
 Project-owned endpoints (`/api/setup`, `/api/registration`, `/api/instance`,
-`/api/admin/settings`) use `withErrorHandling` and `{ error: { code, message } }`.
+`/api/admin/settings`) use `withErrorHandling` and
+`{ error: { code, messageKey, params?, details? } }`.
 
 ## Headerless `createUser`
 
