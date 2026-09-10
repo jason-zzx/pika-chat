@@ -27,7 +27,8 @@ import {
 export default function SearchProvidersScreen() {
   const providers = useSearchProviders();
   const reorder = useReorderSearchProviders();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Search");
+  const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
 
   const configured = providers.data?.providers ?? [];
@@ -52,7 +53,7 @@ export default function SearchProvidersScreen() {
       { providers: next },
       {
         onError: (caught) => {
-          setError(apiErrorMessage(caught, t, "actions.reorderProviders"));
+          setError(apiErrorMessage(caught, tErrors, "actions.reorderProviders"));
         },
       },
     );
@@ -69,24 +70,23 @@ export default function SearchProvidersScreen() {
         <p className="text-sm text-destructive" role="alert">
           {apiErrorMessage(
             providers.error,
-            t,
+            tErrors,
             "actions.loadSearchProviders",
           )}
         </p>
       ) : null}
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Fallback order</h2>
+        <h2 className="text-lg font-medium">{t("fallbackOrderTitle")}</h2>
         <p className="text-sm text-muted-foreground">
-          When the model asks to search the web, providers are tried top to
-          bottom; the first one that responds wins.
+          {t("fallbackOrderDescription")}
         </p>
         {providers.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">{t("loading")}</p>
         ) : configured.length === 0 ? (
           <EmptyState
-            title="No search providers yet"
-            description="Add an API key below to enable app-side web search."
+            title={t("emptyTitle")}
+            description={t("emptyDescription")}
           />
         ) : (
           <ul className="flex flex-col gap-3">
@@ -109,7 +109,7 @@ export default function SearchProvidersScreen() {
 
       {!providers.isPending && unconfigured.length > 0 ? (
         <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-medium">Add a provider</h2>
+          <h2 className="text-lg font-medium">{t("addProviderTitle")}</h2>
           <ul className="flex flex-col gap-3">
             {unconfigured.map((provider) => (
               <li key={provider}>
@@ -151,7 +151,8 @@ function ProviderForm({
   onError,
 }: ProviderFormProps) {
   const meta = SEARCH_PROVIDER_META[provider];
-  const t = useTranslations("Errors");
+  const t = useTranslations("Search");
+  const tErrors = useTranslations("Errors");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -159,14 +160,14 @@ function ProviderForm({
     try {
       await onSubmit();
     } catch (caught) {
-      onError(apiErrorMessage(caught, t, "actions.saveSearchProvider"));
+      onError(apiErrorMessage(caught, tErrors, "actions.saveSearchProvider"));
     }
   }
 
   return (
     <form className="flex flex-col gap-3" onSubmit={(event) => void handleSubmit(event)}>
       <div className="flex flex-col gap-1">
-        <Label htmlFor={`${provider}-api-key`}>API key</Label>
+        <Label htmlFor={`${provider}-api-key`}>{t("apiKeyLabel")}</Label>
         <Input
           id={`${provider}-api-key`}
           type="password"
@@ -177,7 +178,7 @@ function ProviderForm({
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor={`${provider}-base-url`}>Base URL (optional)</Label>
+        <Label htmlFor={`${provider}-base-url`}>{t("baseUrlLabel")}</Label>
         <Input
           id={`${provider}-base-url`}
           type="url"
@@ -225,7 +226,8 @@ function ConfiguredProviderCard({
   const meta = SEARCH_PROVIDER_META[setting.provider];
   const upsert = useUpsertSearchProvider();
   const remove = useDeleteSearchProvider();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Search");
+  const tErrors = useTranslations("Errors");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(setting.baseUrl ?? "");
 
@@ -238,7 +240,7 @@ function ConfiguredProviderCard({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Move ${meta.label} up`}
+            aria-label={t("moveUp", { name: meta.label })}
             disabled={!canMoveUp}
             onClick={() => onMove(-1)}
           >
@@ -248,7 +250,7 @@ function ConfiguredProviderCard({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Move ${meta.label} down`}
+            aria-label={t("moveDown", { name: meta.label })}
             disabled={!canMoveDown}
             onClick={() => onMove(1)}
           >
@@ -265,7 +267,7 @@ function ConfiguredProviderCard({
         onBaseUrlChange={setBaseUrl}
         pending={upsert.isPending}
         submitDisabled={false}
-        submitLabel="Save"
+        submitLabel={t("save")}
         onSubmit={async () => {
           await upsert.mutateAsync({
             provider: setting.provider,
@@ -275,9 +277,7 @@ function ConfiguredProviderCard({
         }}
         onError={onError}
       />
-      <p className="text-xs text-muted-foreground">
-        Leave the API key field empty to keep the saved key.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("keepKeyHint")}</p>
       <div>
         <Button
           type="button"
@@ -288,12 +288,14 @@ function ConfiguredProviderCard({
             onError(null);
             remove.mutate(setting.provider, {
               onError: (caught) => {
-                onError(apiErrorMessage(caught, t, "actions.deleteSearchProvider"));
+                onError(
+                  apiErrorMessage(caught, tErrors, "actions.deleteSearchProvider"),
+                );
               },
             });
           }}
         >
-          Delete
+          {t("delete")}
         </Button>
       </div>
     </article>
@@ -309,6 +311,7 @@ function NewProviderCard({
 }) {
   const meta = SEARCH_PROVIDER_META[provider];
   const upsert = useUpsertSearchProvider();
+  const t = useTranslations("Search");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
 
@@ -323,7 +326,7 @@ function NewProviderCard({
         onBaseUrlChange={setBaseUrl}
         pending={upsert.isPending}
         submitDisabled={apiKey.trim().length === 0}
-        submitLabel="Add"
+        submitLabel={t("add")}
         onSubmit={async () => {
           await upsert.mutateAsync({
             provider,

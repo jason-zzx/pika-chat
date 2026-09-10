@@ -36,21 +36,22 @@ export default function ProviderConfigsScreen({
 }: ProviderConfigsScreenProps) {
   const configs = useProviderConfigs();
   const createConfig = useCreateProviderConfig();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Provider");
+  const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const loading = (
-    <p className="text-sm text-muted-foreground">Loading…</p>
+    <p className="text-sm text-muted-foreground">{t("loading")}</p>
   );
 
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">Add a provider</h2>
+        <h2 className="text-lg font-medium">{t("addProviderTitle")}</h2>
         <ProviderConfigForm
           idPrefix="create-provider"
           canShare={canShare}
           pending={createConfig.isPending}
-          submitLabel="Create"
+          submitLabel={t("create")}
           onSubmit={async (input) => {
             setError(null);
             await createConfig.mutateAsync(input);
@@ -61,18 +62,18 @@ export default function ProviderConfigsScreen({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {configs.error ? (
         <p className="text-sm text-destructive">
-          {apiErrorMessage(configs.error, t, "actions.loadProviders")}
+          {apiErrorMessage(configs.error, tErrors, "actions.loadProviders")}
         </p>
       ) : null}
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Your providers</h2>
+        <h2 className="text-lg font-medium">{t("yourProvidersTitle")}</h2>
         {configs.isPending ? (
           loading
         ) : (configs.data?.own.length ?? 0) === 0 ? (
           <EmptyState
-            title="No providers yet"
-            description="Add an OpenAI-compatible endpoint to start choosing models."
+            title={t("emptyTitle")}
+            description={t("emptyDescription")}
           />
         ) : (
           <ul className="flex flex-col gap-3">
@@ -90,13 +91,11 @@ export default function ProviderConfigsScreen({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Shared with the instance</h2>
+        <h2 className="text-lg font-medium">{t("sharedTitle")}</h2>
         {configs.isPending ? (
           loading
         ) : (configs.data?.shared.length ?? 0) === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No shared providers yet.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("noShared")}</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {(configs.data?.shared ?? []).map((config) => (
@@ -124,13 +123,19 @@ function OwnProviderCard({
   const deleteConfig = useDeleteProviderConfig();
   const addModel = useAddProviderModel();
   const removeModel = useRemoveProviderModel();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Provider");
+  const tCommon = useTranslations("Common");
+  const tErrors = useTranslations("Errors");
   const [editing, setEditing] = useState(false);
   const [discoverOpen, setDiscoverOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ProviderModel | null>(
     null,
   );
   const [manualId, setManualId] = useState("");
+  const visibilityLabel =
+    config.visibility === "shared"
+      ? t("visibilityShared")
+      : t("visibilityPrivate");
 
   return (
     <article className="flex flex-col gap-3 rounded-md border border-border p-3">
@@ -139,10 +144,10 @@ function OwnProviderCard({
           <p className="font-medium">{config.name}</p>
           <p className="break-all text-muted-foreground">{config.baseUrl}</p>
           <p className="text-muted-foreground">
-            {config.visibility}
+            {visibilityLabel}
             {config.apiKeyLastFour
-              ? ` · key …${config.apiKeyLastFour}`
-              : " · no API key"}
+              ? ` · ${t("keyHint", { lastFour: config.apiKeyLastFour })}`
+              : ` · ${t("noKeyHint")}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -152,7 +157,7 @@ function OwnProviderCard({
             size="sm"
             onClick={() => setEditing((value) => !value)}
           >
-            {editing ? "Close" : "Edit"}
+            {editing ? tCommon("close") : t("edit")}
           </Button>
           <Button
             type="button"
@@ -160,7 +165,7 @@ function OwnProviderCard({
             size="sm"
             onClick={() => setDiscoverOpen(true)}
           >
-            Discover
+            {t("discover")}
           </Button>
           <Button
             type="button"
@@ -170,11 +175,13 @@ function OwnProviderCard({
             onClick={() => {
               onError(null);
               void deleteConfig.mutateAsync(config.id).catch((caught) => {
-                onError(apiErrorMessage(caught, t, "actions.deleteProvider"));
+                onError(
+                  apiErrorMessage(caught, tErrors, "actions.deleteProvider"),
+                );
               });
             }}
           >
-            Delete
+            {t("delete")}
           </Button>
         </div>
       </div>
@@ -184,7 +191,7 @@ function OwnProviderCard({
           idPrefix={`edit-${config.id}`}
           canShare={canShare}
           pending={updateConfig.isPending}
-          submitLabel="Save"
+          submitLabel={t("save")}
           initial={{
             name: config.name,
             baseUrl: config.baseUrl,
@@ -202,11 +209,9 @@ function OwnProviderCard({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Models</p>
+        <p className="text-sm font-medium">{t("models")}</p>
         {config.models.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            None yet. Discover from the endpoint or type an id.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("noModelsHint")}</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {config.models.map((model) => (
@@ -217,7 +222,7 @@ function OwnProviderCard({
                 <button
                   type="button"
                   className="flex min-w-0 items-center gap-1.5"
-                  aria-label={`Edit ${model.modelId}`}
+                  aria-label={t("editModel", { modelId: model.modelId })}
                   onClick={() => setEditingModel(model)}
                 >
                   <ModelVendorIcon
@@ -230,7 +235,7 @@ function OwnProviderCard({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={`Remove ${model.modelId}`}
+                  aria-label={t("removeModel", { modelId: model.modelId })}
                   disabled={removeModel.isPending}
                   onClick={() => {
                     onError(null);
@@ -241,7 +246,11 @@ function OwnProviderCard({
                       })
                       .catch((caught) => {
                         onError(
-                          apiErrorMessage(caught, t, "actions.removeModel"),
+                          apiErrorMessage(
+                            caught,
+                            tErrors,
+                            "actions.removeModel",
+                          ),
                         );
                       });
                   }}
@@ -265,21 +274,21 @@ function OwnProviderCard({
               .mutateAsync({ configId: config.id, input: { modelId } })
               .then(() => setManualId(""))
               .catch((caught) => {
-                onError(apiErrorMessage(caught, t, "actions.addModel"));
+                onError(apiErrorMessage(caught, tErrors, "actions.addModel"));
               });
           }}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <Label htmlFor={`quick-model-${config.id}`}>Add model id</Label>
+            <Label htmlFor={`quick-model-${config.id}`}>{t("addModelId")}</Label>
             <Input
               id={`quick-model-${config.id}`}
               value={manualId}
               onChange={(event) => setManualId(event.currentTarget.value)}
-              placeholder="gpt-4o"
+              placeholder={t("modelIdPlaceholder")}
             />
           </div>
           <Button type="submit" size="sm" disabled={addModel.isPending}>
-            Add
+            {t("add")}
           </Button>
         </form>
       </div>
@@ -308,14 +317,17 @@ function OwnProviderCard({
 }
 
 function SharedProviderCard({ config }: { config: SharedProviderConfig }) {
+  const t = useTranslations("Provider");
   return (
     <article className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="text-sm">
         <p className="font-medium">{config.name}</p>
-        <p className="text-muted-foreground">Shared by {config.ownerName}</p>
+        <p className="text-muted-foreground">
+          {t("sharedBy", { name: config.ownerName })}
+        </p>
       </div>
       {config.models.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No models</p>
+        <p className="text-sm text-muted-foreground">{t("noModels")}</p>
       ) : (
         <ul className="flex flex-wrap gap-2">
           {config.models.map((model) => (

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import AdminUsersScreen from "@/components/admin/AdminUsersScreen";
 import RegistrationToggle from "@/components/admin/RegistrationToggle";
@@ -11,10 +12,11 @@ export default async function SettingsUsersPage() {
   if (!actor) {
     redirect("/sign-in");
   }
+  const t = await getTranslations("Settings.Users");
 
   return (
     <>
-      <PageHeader title="Users" />
+      <PageHeader title={t("title")} />
       <RegistrationToggle />
       <AdminUsersScreen actor={actor} />
     </>

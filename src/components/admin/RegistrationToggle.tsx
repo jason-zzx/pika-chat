@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +11,7 @@ import {
 
 export default function RegistrationToggle() {
   const queryClient = useQueryClient();
+  const t = useTranslations("Admin");
   const settings = useQuery({
     queryKey: ["instance"],
     queryFn: fetchInstanceState,
@@ -25,11 +27,11 @@ export default function RegistrationToggle() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-lg font-medium">Registration</h2>
+      <h2 className="text-lg font-medium">{t("registrationTitle")}</h2>
       <p className="text-sm text-muted-foreground">
         {allowRegistration
-          ? "Anyone with the link can create a user-role account."
-          : "Only admins can create accounts."}
+          ? t("registrationOpen")
+          : t("registrationClosed")}
       </p>
       <Button
         type="button"
@@ -39,7 +41,9 @@ export default function RegistrationToggle() {
           mutation.mutate({ allowRegistration: !allowRegistration });
         }}
       >
-        {allowRegistration ? "Disable registration" : "Enable registration"}
+        {allowRegistration
+          ? t("disableRegistration")
+          : t("enableRegistration")}
       </Button>
     </section>
   );

@@ -29,7 +29,8 @@ export default function ProviderConfigForm({
   initial,
   onSubmit,
 }: ProviderConfigFormProps) {
-  const t = useTranslations("Errors");
+  const t = useTranslations("Provider");
+  const tErrors = useTranslations("Errors");
   const isEdit = initial !== undefined;
   const [error, setError] = useState<string | null>(null);
 
@@ -58,14 +59,14 @@ export default function ProviderConfigForm({
         form.reset();
       }
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.saveProvider"));
+      setError(apiErrorMessage(caught, tErrors, "actions.saveProvider"));
     }
   }
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="flex max-w-lg flex-col gap-2">
       <div className="flex flex-col gap-1">
-        <Label htmlFor={`${idPrefix}-name`}>Name</Label>
+        <Label htmlFor={`${idPrefix}-name`}>{t("nameLabel")}</Label>
         <Input
           id={`${idPrefix}-name`}
           name="name"
@@ -74,18 +75,18 @@ export default function ProviderConfigForm({
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor={`${idPrefix}-base-url`}>Base URL</Label>
+        <Label htmlFor={`${idPrefix}-base-url`}>{t("baseUrlLabel")}</Label>
         <Input
           id={`${idPrefix}-base-url`}
           name="baseUrl"
           type="url"
           required
-          placeholder="https://api.openai.com/v1"
+          placeholder={t("baseUrlPlaceholder")}
           defaultValue={initial?.baseUrl}
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor={`${idPrefix}-api-key`}>API key</Label>
+        <Label htmlFor={`${idPrefix}-api-key`}>{t("apiKeyLabel")}</Label>
         <Input
           id={`${idPrefix}-api-key`}
           name="apiKey"
@@ -93,8 +94,8 @@ export default function ProviderConfigForm({
           autoComplete="off"
           placeholder={
             isEdit
-              ? "Leave blank to keep the current key"
-              : "Optional for local endpoints"
+              ? t("apiKeyEditPlaceholder")
+              : t("apiKeyNewPlaceholder")
           }
         />
       </div>
@@ -106,12 +107,12 @@ export default function ProviderConfigForm({
             defaultChecked={initial?.visibility === "shared"}
             className="size-4 accent-primary"
           />
-          Share with the instance
+          {t("shareWithInstance")}
         </Label>
       ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
-        {pending ? "Saving…" : submitLabel}
+        {pending ? t("saving") : submitLabel}
       </Button>
     </form>
   );
