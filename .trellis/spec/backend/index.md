@@ -65,7 +65,7 @@ review blocker, not a style nit.
 | Guide | Description |
 |-------|-------------|
 | [Directory Structure](./directory-structure.md) | Layering, where code goes, the transport/domain split |
-| [Auth Guidelines](./auth-guidelines.md) | Actor contract, headerless `createUser`, cookie-cache prohibition |
+| [Auth Guidelines](./auth-guidelines.md) | Actor contract, headerless `createUser`, cookie-cache prohibition, adding a Better Auth plugin (schema → migration → adapter map → client), TOTP 2FA contract and its cookie-bound challenge |
 | [Database Guidelines](./database-guidelines.md) | Drizzle schema, migrations, ownership isolation, credential encryption |
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
 | [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit |
