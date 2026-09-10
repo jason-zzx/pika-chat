@@ -423,3 +423,26 @@ Added two navigation affordances to the chat message area: a floating scroll-to-
 ### Status
 
 [OK] **Completed**
+
+
+## Session 15: Topic favorites with peer collapsible sidebar sections
+<!-- trellis-session: v=2 fp=453512e3c82ce790 -->
+
+**Date**: 2026-09-10
+**Task**: Topic favorites with peer collapsible sidebar sections
+**Branch**: `main`
+
+### Summary
+
+Implemented topic favorites: topics.is_favorite column + migration 0012, PATCH /api/topics/[id]/favorite, setTopicFavorite service (updatedAt untouched), useSetTopicFavorite optimistic hook, and sidebar restructure into two peer collapsible sections (Favorite above Topics, arrows, localStorage-persisted collapse via useSyncExternalStore). Structure iterated from nested subcategory back to peer sections after user visual review. Spec updates: backend/topic-favorites.md (updatedAt last-active semantics), frontend persisted-UI-chrome and collapsible-label conventions. Ponytail pass applied topicColumns extraction (-22 lines); Zod kept for localStorage parsing after verification showed no shorter cast-free equivalent.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9074a0b` | feat(assistant): topic favorites with collapsible sidebar sections |
+| `7ea35c4` | docs(spec): topic favorites contract and sidebar collapse conventions |
+
+### Status
+
+[OK] **Completed**
