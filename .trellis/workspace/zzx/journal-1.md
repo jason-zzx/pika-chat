@@ -498,3 +498,27 @@ Migrated every remaining screen to next-intl catalogs in six batches: auth/accou
 ### Status
 
 [OK] **Completed**
+
+
+## Session 18: i18n-guard: ESLint regression guard + integrated verification
+<!-- trellis-session: v=2 fp=4b2bd0cf5bf4d13a -->
+
+**Date**: 2026-09-10
+**Task**: i18n-guard: ESLint regression guard + integrated verification
+**Branch**: `feat/i18n-guard`
+
+### Summary
+
+Final child of the i18n effort. Added eslint-plugin-i18next 6.1.5 flat config (no-literal-string, jsx-only, calibrated excludes for non-copy value classes, test exemption, vendor-marks allowlist, inline disables for select/role wire tokens) and swept the last literal gaps (dialog Close, emoji-picker strings -> Common catalog). Check phase found and fixed a real gap: the value attribute exclude masked renderable submit-button copy; replaced with precise inline disables. Spec finalized with Regression guard + Adding a locale sections (4 registration points, zero component edits, verified by a reverted ja dry-run). Evidence in verification.md: guard demo (lint fails on hardcoded JSX), 81 files / 566 tests, build, standalone smoke (zh header / en cookie precedence both ways / default en), error envelopes (401 auth.required; 400 validation.failed + fieldErrors). Browser-only checks (switcher no-reload, visual pass, live toasts) remain manual for the parent acceptance.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2c5e187` | feat(i18n): localize the last literal gaps |
+| `5f307c6` | chore(lint): fail on hardcoded user-facing strings |
+| `513a6f8` | docs(spec): regression guard and adding-a-locale steps |
+
+### Status
+
+[OK] **Completed**
