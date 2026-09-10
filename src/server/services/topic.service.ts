@@ -3,7 +3,6 @@ import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 
 import {
-  DEFAULT_TOPIC_TITLE,
   type RenameTopicInput,
   type SetTopicFavoriteInput,
   type Topic,
@@ -24,9 +23,12 @@ function ownedAssistantIds(actor: Actor) {
     .where(eq(assistants.ownerId, actor.userId));
 }
 
+/** `defaultTitle` is the request-locale `Chat.newTopic` sentinel; the route
+ * boundary resolves it so this service stays transport-agnostic. */
 export async function createTopicForChat(
   input: { assistantId: string },
   actor: Actor,
+  defaultTitle: string,
 ): Promise<Topic> {
   const assistant = await requireOwnedAssistant(input.assistantId, actor);
   const db = getDb();
@@ -35,7 +37,7 @@ export async function createTopicForChat(
     .values({
       id: newId(),
       assistantId: assistant.id,
-      title: DEFAULT_TOPIC_TITLE,
+      title: defaultTitle,
     })
     .returning(topicColumns);
   const row = inserted[0];

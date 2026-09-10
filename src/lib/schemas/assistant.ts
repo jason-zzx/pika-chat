@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { topicSchema } from "./topic";
 
-export const DEFAULT_ASSISTANT_NAME = "Assistant";
 export const DEFAULT_ASSISTANT_ICON = "✨";
 
 export const assistantSchema = z.object({

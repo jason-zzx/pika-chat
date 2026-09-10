@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
 import type { Actor } from "@/server/auth/actor";
 
 import {
@@ -53,13 +52,13 @@ describe("sanitizeGeneratedTitle", () => {
 describe("fallbackTitleFromMessage", () => {
   it("truncates the first user message", () => {
     const text = "a".repeat(TITLE_MAX_LENGTH + 10);
-    const title = fallbackTitleFromMessage(text);
+    const title = fallbackTitleFromMessage(text, "New topic");
     expect(title.endsWith("…")).toBe(true);
     expect(title.length).toBe(TITLE_MAX_LENGTH + 1);
   });
 
-  it("returns the default title for empty text", () => {
-    expect(fallbackTitleFromMessage("   ")).toBe(DEFAULT_TOPIC_TITLE);
+  it("returns the provided default title for empty text", () => {
+    expect(fallbackTitleFromMessage("   ", "New topic")).toBe("New topic");
   });
 });
 

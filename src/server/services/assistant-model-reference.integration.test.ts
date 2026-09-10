@@ -141,7 +141,7 @@ describe("assistant default model reference", () => {
 
     await deleteProviderConfig(config.id, userActor);
 
-    const tree = await listAssistantTree(userActor);
+    const tree = await listAssistantTree(userActor, "Assistant");
     const loaded = tree.assistants.find((row) => row.id === assistant.id);
     expect(loaded).toBeDefined();
     expect(loaded?.defaultProviderConfigId).toBeNull();

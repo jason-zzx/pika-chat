@@ -3,7 +3,6 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
 import { requireActor } from "@/server/auth/actor";
 import {
   adminCredentials,
@@ -41,6 +40,10 @@ import {
   renameTopic,
   setTopicFavorite,
 } from "@/server/services/topic.service";
+
+/** The route boundary resolves the real `Chat.newTopic`; the service stores
+ * whatever localized default it is handed. */
+const DEFAULT_TITLE = "New topic";
 
 const db = getDb();
 
@@ -146,8 +149,9 @@ describe("topic.service", () => {
     const created = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
-    expect(created.title).toBe(DEFAULT_TOPIC_TITLE);
+    expect(created.title).toBe(DEFAULT_TITLE);
 
     const renamed = await renameTopic(
       created.id,
@@ -171,6 +175,7 @@ describe("topic.service", () => {
     const created = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
     expect(created.isFavorite).toBe(false);
 
@@ -210,7 +215,7 @@ describe("topic.service", () => {
       otherAdminActor,
     );
     await expect(
-      createTopicForChat({ assistantId: theirs.id }, userActor),
+      createTopicForChat({ assistantId: theirs.id }, userActor, DEFAULT_TITLE),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     const leftover = await db
@@ -226,7 +231,11 @@ describe("topic.service", () => {
       { name: "Owner", icon: "✨" },
       userActor,
     );
-    const topic = await createTopicForChat({ assistantId: assistant.id }, userActor);
+    const topic = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+      DEFAULT_TITLE,
+    );
 
     await expect(
       renameTopic(topic.id, { title: "Stolen" }, otherAdminActor),
@@ -237,11 +246,11 @@ describe("topic.service", () => {
     expect(await findTopicForActor(topic.id, otherAdminActor)).toBeNull();
     expect(await findTopicForActor(topic.id, userActor)).toMatchObject({
       id: topic.id,
-      title: DEFAULT_TOPIC_TITLE,
+      title: DEFAULT_TITLE,
     });
     expect(await findTopicContextForActor(topic.id, otherAdminActor)).toBeNull();
     expect(await findTopicContextForActor(topic.id, userActor)).toMatchObject({
-      topic: { id: topic.id, title: DEFAULT_TOPIC_TITLE },
+      topic: { id: topic.id, title: DEFAULT_TITLE },
       assistant: { id: assistant.id },
     });
   });
@@ -255,6 +264,7 @@ describe("topic.service", () => {
     const topic = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
     await appendUserMessage(
       {
@@ -299,6 +309,7 @@ describe("topic.service", () => {
     const topic = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
     await appendUserMessage(
       {

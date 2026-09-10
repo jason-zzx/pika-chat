@@ -4,7 +4,6 @@ import { and, asc, desc, eq } from "drizzle-orm";
 
 import {
   DEFAULT_ASSISTANT_ICON,
-  DEFAULT_ASSISTANT_NAME,
   type Assistant,
   type AssistantTree,
   type CreateAssistantInput,
@@ -181,7 +180,12 @@ export async function requireOwnedAssistant(
   return row;
 }
 
-export async function listAssistantTree(actor: Actor): Promise<AssistantTree> {
+/** `defaultName` is the request-locale `Assistant.defaultName`; the route
+ * boundary resolves it so this service stays transport-agnostic. */
+export async function listAssistantTree(
+  actor: Actor,
+  defaultName: string,
+): Promise<AssistantTree> {
   const existing = await selectTree(actor);
   if (existing.length > 0) {
     return { assistants: groupTree(existing) };
@@ -193,7 +197,7 @@ export async function listAssistantTree(actor: Actor): Promise<AssistantTree> {
     .values({
       id: newId(),
       ownerId: actor.userId,
-      name: DEFAULT_ASSISTANT_NAME,
+      name: defaultName,
       icon: DEFAULT_ASSISTANT_ICON,
     })
     .onConflictDoNothing({

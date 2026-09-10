@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-export const DEFAULT_TOPIC_TITLE = "New topic";
-
 export const topicSchema = z.object({
   id: z.string(),
   title: z.string(),

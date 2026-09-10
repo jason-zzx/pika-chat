@@ -72,6 +72,9 @@ export const POST = withErrorHandling(async (request) => {
   // carry text, so our wrapper copy is localized here while upstream
   // provider detail stays verbatim (see provider-error.ts).
   const t = await getTranslations("Errors");
+  // The new-topic sentinel title is stored data; resolve it here at the
+  // transport boundary and pass it into the service (see src/i18n/defaults.ts).
+  const tChat = await getTranslations("Chat");
   const input = chatRequestSchema.parse(await request.json());
 
   // Before any topic row exists: an unusable model must not leave a draft behind.
@@ -131,6 +134,7 @@ export const POST = withErrorHandling(async (request) => {
     const created = await createTopicForChat(
       { assistantId: input.assistantId },
       actor,
+      tChat("newTopic"),
     );
     topicId = created.id;
     const context = await findTopicContextForActor(topicId, actor);
