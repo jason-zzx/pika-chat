@@ -2,6 +2,8 @@
 
 Self-hosted AI chat. Phase 1 is text chat with a responsive layout, provider
 and model configuration, assistants and topics, and basic user management.
+The UI ships in English and Simplified Chinese, switchable per browser under
+Settings → General.
 
 ## Quick start
 
