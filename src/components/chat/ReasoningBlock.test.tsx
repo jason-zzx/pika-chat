@@ -1,5 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import ReasoningBlock from "./ReasoningBlock";
 
@@ -29,28 +31,32 @@ function mockScrollMetrics(el: HTMLElement) {
 
 describe("ReasoningBlock auto-follow", () => {
   it("pins the scroll view to the bottom while streaming", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <ReasoningBlock text="step one" streaming ended={false} />,
     );
     const container = screen.getByText("step one");
     mockScrollMetrics(container);
 
     rerender(
-      <ReasoningBlock text="step one step two" streaming ended={false} />,
+      wrapWithIntl(
+        <ReasoningBlock text="step one step two" streaming ended={false} />,
+      ),
     );
 
     expect(container.scrollTop).toBe(SCROLL_HEIGHT);
   });
 
   it("stops following when the user scrolls up and resumes at the bottom", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <ReasoningBlock text="step one" streaming ended={false} />,
     );
     const container = screen.getByText("step one");
     mockScrollMetrics(container);
 
     rerender(
-      <ReasoningBlock text="step one step two" streaming ended={false} />,
+      wrapWithIntl(
+        <ReasoningBlock text="step one step two" streaming ended={false} />,
+      ),
     );
     expect(container.scrollTop).toBe(SCROLL_HEIGHT);
 
@@ -58,11 +64,13 @@ describe("ReasoningBlock auto-follow", () => {
     container.scrollTop = 400;
     fireEvent.scroll(container);
     rerender(
-      <ReasoningBlock
-        text="step one step two step three"
-        streaming
-        ended={false}
-      />,
+      wrapWithIntl(
+        <ReasoningBlock
+          text="step one step two step three"
+          streaming
+          ended={false}
+        />,
+      ),
     );
     expect(container.scrollTop).toBe(400);
 
@@ -70,17 +78,19 @@ describe("ReasoningBlock auto-follow", () => {
     container.scrollTop = SCROLL_HEIGHT - CLIENT_HEIGHT;
     fireEvent.scroll(container);
     rerender(
-      <ReasoningBlock
-        text="step one step two step three step four"
-        streaming
-        ended={false}
-      />,
+      wrapWithIntl(
+        <ReasoningBlock
+          text="step one step two step three step four"
+          streaming
+          ended={false}
+        />,
+      ),
     );
     expect(container.scrollTop).toBe(SCROLL_HEIGHT);
   });
 
   it("re-pins to the latest output when the block is reopened mid-stream", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <ReasoningBlock text="step one" streaming ended={false} />,
     );
     const container = screen.getByText("step one");
@@ -91,7 +101,9 @@ describe("ReasoningBlock auto-follow", () => {
     fireEvent.scroll(container);
     fireEvent.click(toggle);
     rerender(
-      <ReasoningBlock text="step one step two" streaming ended={false} />,
+      wrapWithIntl(
+        <ReasoningBlock text="step one step two" streaming ended={false} />,
+      ),
     );
     expect(container.scrollTop).toBe(400);
 
@@ -100,7 +112,7 @@ describe("ReasoningBlock auto-follow", () => {
   });
 
   it("does not pin when the block is not streaming", () => {
-    render(
+    renderWithIntl(
       <ReasoningBlock
         text="finished thought"
         streaming={false}

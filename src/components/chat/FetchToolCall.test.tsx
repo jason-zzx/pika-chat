@@ -1,6 +1,5 @@
 import {
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
@@ -8,6 +7,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FetchPageToolOutput } from "@/lib/schemas/search-provider";
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
 
@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe("FetchToolCall", () => {
   it("is expanded with a spinner while the fetch is running", () => {
-    render(
+    renderWithIntl(
       <FetchToolCall
         part={runningPart("https://pika.example.com/docs")}
         streaming
@@ -63,7 +63,7 @@ describe("FetchToolCall", () => {
   });
 
   it("auto-collapses when the output arrives and shows title and provider badge", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <FetchToolCall
         part={runningPart("https://pika.example.com/docs")}
         streaming
@@ -73,7 +73,7 @@ describe("FetchToolCall", () => {
       screen.getByRole("button", { name: TOGGLE_NAME }),
     ).toHaveAttribute("aria-expanded", "true");
 
-    rerender(<FetchToolCall part={donePart(successOutput)} />);
+    rerender(wrapWithIntl(<FetchToolCall part={donePart(successOutput)} />));
 
     const trigger = screen.getByRole("button", { name: TOGGLE_NAME });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -84,7 +84,7 @@ describe("FetchToolCall", () => {
   });
 
   it("falls back to the domain in the header when no title is available", () => {
-    render(
+    renderWithIntl(
       <FetchToolCall
         part={donePart({
           provider: "tavily",
@@ -102,7 +102,7 @@ describe("FetchToolCall", () => {
 
   it("shows a truncated content preview when expanded", () => {
     const longContent = `${"lorem ipsum ".repeat(60)}END_MARKER`;
-    render(
+    renderWithIntl(
       <FetchToolCall
         part={donePart({
           provider: "firecrawl",
@@ -124,7 +124,7 @@ describe("FetchToolCall", () => {
   });
 
   it("shows the failure summary when every provider failed", () => {
-    render(
+    renderWithIntl(
       <FetchToolCall
         part={donePart({
           error: "fetch_failed",
@@ -148,7 +148,7 @@ describe("FetchToolCall", () => {
       input: { url: "https://pika.example.com/docs" },
       errorText: "fetch timed out",
     };
-    render(<FetchToolCall part={part} />);
+    renderWithIntl(<FetchToolCall part={part} />);
 
     fireEvent.click(screen.getByRole("button", { name: TOGGLE_NAME }));
 
@@ -158,7 +158,7 @@ describe("FetchToolCall", () => {
   it("renders a persisted incomplete part as interrupted, not running", () => {
     // A stream stopped after the tool call but before its output persists
     // an input-available part; on history reload the block must not spin.
-    render(<FetchToolCall part={runningPart("https://pika.example.com/docs")} />);
+    renderWithIntl(<FetchToolCall part={runningPart("https://pika.example.com/docs")} />);
 
     const trigger = screen.getByRole("button", { name: TOGGLE_NAME });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -172,7 +172,7 @@ describe("FetchToolCall", () => {
   });
 
   it("renders an input-streaming leftover part without a URL", () => {
-    render(
+    renderWithIntl(
       <FetchToolCall
         part={{
           type: "tool-fetchPage",
@@ -191,7 +191,7 @@ describe("FetchToolCall", () => {
   });
 
   it("toggles expansion from the full-row toggle, with the chevron last", () => {
-    render(<FetchToolCall part={donePart(successOutput)} />);
+    renderWithIntl(<FetchToolCall part={donePart(successOutput)} />);
 
     const toggle = screen.getByRole("button", { name: TOGGLE_NAME });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -214,7 +214,7 @@ describe("FetchToolCall", () => {
 
   it("opens the external-link dialog from the title without toggling or navigating", async () => {
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
-    render(<FetchToolCall part={donePart(successOutput)} />);
+    renderWithIntl(<FetchToolCall part={donePart(successOutput)} />);
 
     const toggle = screen.getByRole("button", { name: TOGGLE_NAME });
     fireEvent.click(screen.getByRole("button", { name: "pika docs" }));
@@ -233,7 +233,7 @@ describe("FetchToolCall", () => {
 
   it("opens the URL in a new tab when the dialog is confirmed", async () => {
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
-    render(<FetchToolCall part={donePart(successOutput)} />);
+    renderWithIntl(<FetchToolCall part={donePart(successOutput)} />);
 
     fireEvent.click(screen.getByRole("button", { name: "pika docs" }));
     const dialog = await screen.findByRole("alertdialog");
@@ -253,7 +253,7 @@ describe("FetchToolCall", () => {
 
   it("closes the dialog without navigating on Close", async () => {
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
-    render(<FetchToolCall part={donePart(successOutput)} />);
+    renderWithIntl(<FetchToolCall part={donePart(successOutput)} />);
 
     fireEvent.click(screen.getByRole("button", { name: "pika docs" }));
     const dialog = await screen.findByRole("alertdialog");

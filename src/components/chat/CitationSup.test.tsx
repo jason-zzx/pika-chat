@@ -1,5 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import CitationSup from "./CitationSup";
 import { CitationSourcesContext, type CitationSource } from "./citations";
@@ -21,7 +23,7 @@ const sources: CitationSource[] = [
 
 function renderSup(text: string, withSources = true) {
   const sup = <CitationSup>{text}</CitationSup>;
-  return render(
+  return renderWithIntl(
     withSources ? (
       <CitationSourcesContext.Provider value={sources}>
         {sup}

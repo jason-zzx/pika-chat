@@ -1,6 +1,7 @@
 "use client";
 
 import type { ToolUIPart } from "ai";
+import { useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { searchProviderLabel } from "@/components/search/provider-meta";
@@ -37,13 +38,14 @@ export default function SearchToolCall({
   part,
   streaming = false,
 }: SearchToolCallProps) {
+  const t = useTranslations("Chat.Tools");
   const incomplete = incompleteState(part);
   const running = incomplete && streaming;
   const interrupted = incomplete && !streaming;
 
   const query = queryOf(part.input);
   const output = outputOf(part, searchWebToolOutputSchema);
-  const errorText = toolErrorText(part, "The search was declined.");
+  const errorText = toolErrorText(part, t("searchDeclined"));
 
   return (
     <ToolCallShell
@@ -52,9 +54,9 @@ export default function SearchToolCall({
       output={output}
       errorText={errorText}
       labels={{
-        running: "Searching the web",
-        interrupted: "Search interrupted",
-        done: "Searched the web",
+        running: t("searchRunning"),
+        interrupted: t("searchInterrupted"),
+        done: t("searchDone"),
       }}
       headerMode="button"
       middle={
@@ -88,12 +90,13 @@ function SearchToolBody({
   output: SearchWebToolOutput | undefined;
   errorText: string | undefined;
 }) {
+  const t = useTranslations("Chat.Tools");
   if (running) {
-    return <p className="text-muted-foreground">Searching…</p>;
+    return <p className="text-muted-foreground">{t("searchBodyRunning")}</p>;
   }
   if (interrupted) {
     return (
-      <p className="text-muted-foreground">The search did not complete.</p>
+      <p className="text-muted-foreground">{t("searchInterruptedBody")}</p>
     );
   }
   if (errorText !== undefined) {
@@ -104,9 +107,7 @@ function SearchToolBody({
     );
   }
   if (output === undefined) {
-    return (
-      <p className="text-muted-foreground">No search output recorded.</p>
-    );
+    return <p className="text-muted-foreground">{t("searchNoOutput")}</p>;
   }
   if ("error" in output) {
     const attempted = output.attemptedProviders
@@ -114,21 +115,22 @@ function SearchToolBody({
       .join(", ");
     return (
       <p className="text-muted-foreground">
-        Search failed.
-        {attempted.length > 0 ? ` Tried: ${attempted}.` : ""}
+        {attempted.length > 0
+          ? t("searchFailedWithProviders", { providers: attempted })
+          : t("searchFailed")}
       </p>
     );
   }
   return (
     <div className="flex flex-col gap-2">
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        via
+        {t("searchVia")}
         <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-foreground">
           {searchProviderLabel(output.provider)}
         </span>
       </p>
       {output.results.length === 0 ? (
-        <p className="text-muted-foreground">No results found.</p>
+        <p className="text-muted-foreground">{t("searchNoResults")}</p>
       ) : (
         <ul className="flex flex-col">
           {output.results.map((result) => {

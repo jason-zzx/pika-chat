@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageItem from "./MessageItem";
 
@@ -47,7 +48,7 @@ function assistantMessage(
 
 describe("MessageItem", () => {
   it("renders a user message as a muted right-aligned bubble", () => {
-    render(<MessageItem message={userMessage("Hello there")} />);
+    renderWithIntl(<MessageItem message={userMessage("Hello there")} />);
 
     const article = screen.getByRole("article", { name: "You" });
     expect(article).toHaveClass("items-end");
@@ -58,7 +59,7 @@ describe("MessageItem", () => {
   });
 
   it("renders an assistant message as unbubbled document markdown", () => {
-    render(<MessageItem message={assistantMessage("Here is an answer")} />);
+    renderWithIntl(<MessageItem message={assistantMessage("Here is an answer")} />);
 
     const article = screen.getByRole("article", { name: "Assistant" });
     expect(article).toHaveClass("items-start");
@@ -70,7 +71,7 @@ describe("MessageItem", () => {
   });
 
   it("shows the assistant name header and hides the timestamp without createdAt", () => {
-    render(<MessageItem message={assistantMessage("Here is an answer")} />);
+    renderWithIntl(<MessageItem message={assistantMessage("Here is an answer")} />);
 
     const article = screen.getByRole("article", { name: "Assistant" });
     expect(screen.getByText("✨ Assistant")).toBeInTheDocument();
@@ -78,7 +79,7 @@ describe("MessageItem", () => {
   });
 
   it("orders the assistant rows: header, body, model id, copy action", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={assistantMessage("Here is an answer", {
           modelId: "gpt-5.2",
@@ -106,7 +107,7 @@ describe("MessageItem", () => {
 
   it("shows the user timestamp above the bubble and copy below it", () => {
     const createdAt = recentIso();
-    render(<MessageItem message={userMessage("Hello", { createdAt })} />);
+    renderWithIntl(<MessageItem message={userMessage("Hello", { createdAt })} />);
 
     const article = screen.getByRole("article", { name: "You" });
     const children = Array.from(article.children);
@@ -118,27 +119,29 @@ describe("MessageItem", () => {
 
     const time = screen.getByText("just now");
     expect(time).toHaveAttribute("datetime", createdAt);
-    expect(time.getAttribute("title")).toMatch(
-      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+    // The exact format is asserted in MessageTimestamp.test.tsx.
+    expect(time).toHaveAttribute(
+      "title",
+      expect.stringMatching(/\d{2}:\d{2}:\d{2}/),
     );
   });
 
   it("offers a labelled copy action for both roles", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem message={userMessage("Hello")} />,
     );
     expect(
       screen.getByRole("button", { name: "Copy message" }),
     ).toBeInTheDocument();
 
-    rerender(<MessageItem message={assistantMessage("Answer")} />);
+    rerender(wrapWithIntl(<MessageItem message={assistantMessage("Answer")} />));
     expect(
       screen.getByRole("button", { name: "Copy message" }),
     ).toBeInTheDocument();
   });
 
   it("keeps stopped and failed captions under the assistant message", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem
         message={assistantMessage("Partial", { outcome: "stopped" })}
       />,
@@ -146,12 +149,14 @@ describe("MessageItem", () => {
     expect(screen.getByText("Stopped")).toBeInTheDocument();
 
     rerender(
-      <MessageItem
-        message={assistantMessage("Partial", {
-          outcome: "failed",
-          errorMessage: "model does not exist",
-        })}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          message={assistantMessage("Partial", {
+            outcome: "failed",
+            errorMessage: "model does not exist",
+          })}
+        />,
+      ),
     );
     expect(screen.getByRole("alert")).toHaveTextContent("model does not exist");
   });
@@ -162,7 +167,7 @@ describe("MessageItem", () => {
       role: "assistant",
       parts: [{ type: "reasoning", text: "planning the steps" }],
     };
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem message={thinking} streaming />,
     );
 
@@ -173,16 +178,18 @@ describe("MessageItem", () => {
     expect(screen.getByText("planning the steps")).toBeInTheDocument();
 
     rerender(
-      <MessageItem
-        streaming
-        message={{
-          ...thinking,
-          parts: [
-            { type: "reasoning", text: "planning the steps" },
-            { type: "text", text: "Here is the answer" },
-          ],
-        }}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          streaming
+          message={{
+            ...thinking,
+            parts: [
+              { type: "reasoning", text: "planning the steps" },
+              { type: "text", text: "Here is the answer" },
+            ],
+          }}
+        />,
+      ),
     );
 
     // The phase ended when the answer text started: it collapses and its
@@ -196,7 +203,7 @@ describe("MessageItem", () => {
   });
 
   it("lets the user reopen a collapsed thought after the turn finishes", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={{
           id: "assistant-1",
@@ -217,7 +224,7 @@ describe("MessageItem", () => {
   });
 
   it("explains when the turn finished at the token limit with no answer", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={{
           id: "assistant-1",
@@ -242,7 +249,7 @@ describe("MessageItem version and action wiring", () => {
       versionCount: 2,
       versionIds: ["v1", "v2"],
     });
-    render(
+    renderWithIntl(
       <MessageItem message={message} onSelectVersion={onSelectVersion} />,
     );
 
@@ -255,7 +262,7 @@ describe("MessageItem version and action wiring", () => {
   });
 
   it("hides the version switcher without version metadata", () => {
-    render(<MessageItem message={assistantMessage("Answer")} />);
+    renderWithIntl(<MessageItem message={assistantMessage("Answer")} />);
 
     expect(
       screen.queryByRole("button", { name: "Next version" }),
@@ -266,7 +273,7 @@ describe("MessageItem version and action wiring", () => {
     const onRegenerate = vi.fn();
     const onDelete = vi.fn();
     const message = assistantMessage("Answer");
-    render(
+    renderWithIntl(
       <MessageItem
         message={message}
         onRegenerate={onRegenerate}
@@ -287,7 +294,7 @@ describe("MessageItem version and action wiring", () => {
   it("offers delete-and-regenerate only on assistant messages", async () => {
     const onDeleteRegenerate = vi.fn();
     const message = assistantMessage("Answer");
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem message={message} onDeleteRegenerate={onDeleteRegenerate} />,
     );
 
@@ -298,11 +305,13 @@ describe("MessageItem version and action wiring", () => {
     expect(onDeleteRegenerate).toHaveBeenCalledWith(message);
 
     rerender(
-      <MessageItem
-        message={userMessage("Hello")}
-        onDeleteRegenerate={onDeleteRegenerate}
-        onDelete={vi.fn()}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          message={userMessage("Hello")}
+          onDeleteRegenerate={onDeleteRegenerate}
+          onDelete={vi.fn()}
+        />,
+      ),
     );
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     expect(
@@ -320,7 +329,7 @@ describe("MessageItem thinking shimmer", () => {
   }
 
   it("shows the shimmering Thinking placeholder while a stream has no content", () => {
-    render(<MessageItem streaming message={contentlessAssistant()} />);
+    renderWithIntl(<MessageItem streaming message={contentlessAssistant()} />);
 
     const shimmer = screen.getByText("Thinking…");
     expect(shimmer).toHaveClass("animate-thinking-shimmer");
@@ -332,20 +341,22 @@ describe("MessageItem thinking shimmer", () => {
   });
 
   it("replaces the shimmer as soon as a text part arrives", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem streaming message={contentlessAssistant()} />,
     );
     expect(screen.getByText("Thinking…")).toBeInTheDocument();
 
     rerender(
-      <MessageItem
-        streaming
-        message={{
-          id: "assistant-1",
-          role: "assistant",
-          parts: [{ type: "text", text: "Here is the answer" }],
-        }}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          streaming
+          message={{
+            id: "assistant-1",
+            role: "assistant",
+            parts: [{ type: "text", text: "Here is the answer" }],
+          }}
+        />,
+      ),
     );
 
     expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
@@ -353,19 +364,21 @@ describe("MessageItem thinking shimmer", () => {
   });
 
   it("replaces the shimmer as soon as a reasoning part arrives", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem streaming message={contentlessAssistant()} />,
     );
 
     rerender(
-      <MessageItem
-        streaming
-        message={{
-          id: "assistant-1",
-          role: "assistant",
-          parts: [{ type: "reasoning", text: "planning the steps" }],
-        }}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          streaming
+          message={{
+            id: "assistant-1",
+            role: "assistant",
+            parts: [{ type: "reasoning", text: "planning the steps" }],
+          }}
+        />,
+      ),
     );
 
     expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
@@ -375,7 +388,7 @@ describe("MessageItem thinking shimmer", () => {
   });
 
   it("shows no placeholder for a contentless message that is not streaming", () => {
-    render(<MessageItem message={contentlessAssistant()} />);
+    renderWithIntl(<MessageItem message={contentlessAssistant()} />);
 
     expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
   });
@@ -384,7 +397,7 @@ describe("MessageItem thinking shimmer", () => {
 describe("MessageItem tap-to-reveal", () => {
   it("reports taps through onReveal and renders the controlled revealed state (R9)", () => {
     const onReveal = vi.fn();
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem
         message={assistantMessage("Answer", { createdAt: recentIso() })}
         revealed={false}
@@ -404,11 +417,13 @@ describe("MessageItem tap-to-reveal", () => {
     expect(article).toHaveAttribute("data-revealed", "false");
 
     rerender(
-      <MessageItem
-        message={assistantMessage("Answer", { createdAt: recentIso() })}
-        revealed
-        onReveal={onReveal}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          message={assistantMessage("Answer", { createdAt: recentIso() })}
+          revealed
+          onReveal={onReveal}
+        />,
+      ),
     );
     expect(article).toHaveAttribute("data-revealed", "true");
 
@@ -419,7 +434,7 @@ describe("MessageItem tap-to-reveal", () => {
   });
 
   it("marks the reveal rows with the data-revealed variant", () => {
-    render(
+    renderWithIntl(
       <MessageItem message={assistantMessage("Answer", { createdAt: recentIso() })} />,
     );
 
@@ -434,7 +449,7 @@ describe("MessageItem tap-to-reveal", () => {
 
   it("renders user messages revealed when the prop is set", () => {
     const onReveal = vi.fn();
-    render(<MessageItem message={userMessage("Hello")} revealed onReveal={onReveal} />);
+    renderWithIntl(<MessageItem message={userMessage("Hello")} revealed onReveal={onReveal} />);
 
     const article = screen.getByRole("article", { name: "You" });
     expect(article).toHaveAttribute("data-revealed", "true");
@@ -446,7 +461,7 @@ describe("MessageItem tap-to-reveal", () => {
 
   it("does not report a reveal when an action button is clicked", () => {
     const onReveal = vi.fn();
-    render(
+    renderWithIntl(
       <MessageItem
         message={assistantMessage("Answer")}
         revealed={false}
@@ -472,7 +487,7 @@ describe("MessageItem tap-to-reveal", () => {
       .spyOn(window, "getSelection")
       .mockReturnValue({ isCollapsed: false } as Selection);
     const onReveal = vi.fn();
-    render(
+    renderWithIntl(
       <MessageItem
         message={assistantMessage("Answer")}
         revealed={false}
@@ -489,7 +504,7 @@ describe("MessageItem tap-to-reveal", () => {
   });
 
   it("keeps the actions row visible while the dropdown menu is open (B2)", async () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={assistantMessage("Answer")}
         onDelete={vi.fn()}
@@ -522,7 +537,7 @@ describe("MessageItem tap-to-reveal", () => {
       configurable: true,
     });
     try {
-      render(<MessageItem message={assistantMessage("Answer")} />);
+      renderWithIntl(<MessageItem message={assistantMessage("Answer")} />);
 
       const article = screen.getByRole("article", { name: "Assistant" });
       expect(article).toHaveAttribute("data-revealed", "false");
@@ -581,7 +596,7 @@ describe("MessageItem tool parts", () => {
   }
 
   it("renders parts interleaved in part order", () => {
-    render(<MessageItem message={searchMessage()} />);
+    renderWithIntl(<MessageItem message={searchMessage()} />);
 
     const article = screen.getByRole("article", { name: "Assistant" });
     const before = screen.getByText("Let me look that up.");
@@ -610,7 +625,7 @@ describe("MessageItem tool parts", () => {
   });
 
   it("suppresses the thinking shimmer while a search tool call is running", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         streaming
         message={{
@@ -635,7 +650,7 @@ describe("MessageItem tool parts", () => {
   });
 
   it("shows the thinking shimmer while waiting for the step after a tool result (R8)", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         streaming
         message={{
@@ -665,7 +680,7 @@ describe("MessageItem tool parts", () => {
       input: { query: "pika chat" },
       output: { provider: "tavily" as const, query: "pika chat", results: [] },
     };
-    const { rerender } = render(
+    const { rerender } = renderWithIntl(
       <MessageItem
         streaming
         message={{ id: "assistant-1", role: "assistant", parts: [toolPart] }}
@@ -674,32 +689,36 @@ describe("MessageItem tool parts", () => {
     expect(screen.getByText("Thinking…")).toBeInTheDocument();
 
     rerender(
-      <MessageItem
-        streaming
-        message={{
-          id: "assistant-1",
-          role: "assistant",
-          parts: [toolPart, { type: "reasoning", text: "next step" }],
-        }}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          streaming
+          message={{
+            id: "assistant-1",
+            role: "assistant",
+            parts: [toolPart, { type: "reasoning", text: "next step" }],
+          }}
+        />,
+      ),
     );
     expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
 
     rerender(
-      <MessageItem
-        streaming
-        message={{
-          id: "assistant-1",
-          role: "assistant",
-          parts: [toolPart, { type: "text", text: "answering" }],
-        }}
-      />,
+      wrapWithIntl(
+        <MessageItem
+          streaming
+          message={{
+            id: "assistant-1",
+            role: "assistant",
+            parts: [toolPart, { type: "text", text: "answering" }],
+          }}
+        />,
+      ),
     );
     expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
   });
 
   it("shows no post-tool shimmer once the stream has ended (R8)", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={{
           id: "assistant-1",
@@ -721,7 +740,7 @@ describe("MessageItem tool parts", () => {
   });
 
   it("renders a fetchPage tool block interleaved in part order (R12)", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={{
           id: "assistant-1",
@@ -768,7 +787,7 @@ describe("MessageItem tool parts", () => {
   });
 
   it("shows the thinking shimmer after a finished fetchPage call while streaming (R8)", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         streaming
         message={{
@@ -796,7 +815,7 @@ describe("MessageItem tool parts", () => {
   });
 
   it("suppresses the thinking shimmer while a fetchPage call is running", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         streaming
         message={{
@@ -823,7 +842,7 @@ describe("MessageItem tool parts", () => {
 
 describe("MessageItem thinking duration", () => {
   it("shows the recorded duration once thinking has finished", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={{
           id: "assistant-1",
@@ -843,7 +862,7 @@ describe("MessageItem thinking duration", () => {
   });
 
   it("shows Thinking without a duration while still streaming", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         streaming
         message={{
@@ -864,7 +883,7 @@ describe("MessageItem thinking duration", () => {
   });
 
   it("shows each reasoning phase its own duration from live metadata (R6)", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         message={{
           id: "assistant-1",
@@ -895,7 +914,7 @@ describe("MessageItem thinking duration", () => {
   });
 
   it("collapses a finished phase to its own duration while the next step still streams (R6)", () => {
-    render(
+    renderWithIntl(
       <MessageItem
         streaming
         message={{
@@ -943,7 +962,7 @@ describe("MessageItem thinking duration", () => {
       { type: "reasoning" as const, text: "second thought", durationMs: 900 },
       { type: "text" as const, text: "Here is the answer" },
     ];
-    render(
+    renderWithIntl(
       <MessageItem
         message={{ id: "assistant-1", role: "assistant", parts }}
       />,
@@ -954,6 +973,23 @@ describe("MessageItem thinking duration", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Thought (0.9s)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders its chrome from the zh-CN catalog", () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Partial", { outcome: "stopped" })}
+      />,
+      { locale: "zh-CN" },
+    );
+
+    expect(
+      screen.getByRole("article", { name: "助手" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("已停止")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "复制消息" }),
     ).toBeInTheDocument();
   });
 });

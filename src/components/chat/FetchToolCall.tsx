@@ -1,6 +1,7 @@
 "use client";
 
 import type { ToolUIPart } from "ai";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -42,6 +43,7 @@ export default function FetchToolCall({
   part,
   streaming = false,
 }: FetchToolCallProps) {
+  const t = useTranslations("Chat.Tools");
   const incomplete = incompleteState(part);
   const running = incomplete && streaming;
   const interrupted = incomplete && !streaming;
@@ -49,7 +51,7 @@ export default function FetchToolCall({
 
   const inputUrl = urlOf(part.input);
   const output = outputOf(part, fetchPageToolOutputSchema);
-  const errorText = toolErrorText(part, "The fetch was declined.");
+  const errorText = toolErrorText(part, t("fetchDeclined"));
   const pageUrl = output && !("error" in output) ? output.url : inputUrl;
   const pageTitle =
     output && !("error" in output) && output.title ? output.title : undefined;
@@ -61,12 +63,12 @@ export default function FetchToolCall({
       output={output}
       errorText={errorText}
       labels={{
-        running: "Reading page",
-        interrupted: "Read interrupted",
-        done: "Read page",
+        running: t("fetchRunning"),
+        interrupted: t("fetchInterrupted"),
+        done: t("fetchDone"),
       }}
       headerMode="overlay"
-      toggleAriaLabel="Toggle page fetch details"
+      toggleAriaLabel={t("fetchToggle")}
       middle={
         <>
           {pageUrl ? (
@@ -118,12 +120,13 @@ function FetchToolBody({
   output: FetchPageToolOutput | undefined;
   errorText: string | undefined;
 }) {
+  const t = useTranslations("Chat.Tools");
   if (running) {
-    return <p className="text-muted-foreground">Reading page…</p>;
+    return <p className="text-muted-foreground">{t("fetchBodyRunning")}</p>;
   }
   if (interrupted) {
     return (
-      <p className="text-muted-foreground">The fetch did not complete.</p>
+      <p className="text-muted-foreground">{t("fetchInterruptedBody")}</p>
     );
   }
   if (errorText !== undefined) {
@@ -134,9 +137,7 @@ function FetchToolBody({
     );
   }
   if (output === undefined) {
-    return (
-      <p className="text-muted-foreground">No fetch output recorded.</p>
-    );
+    return <p className="text-muted-foreground">{t("fetchNoOutput")}</p>;
   }
   if ("error" in output) {
     const attempted = output.attemptedProviders
@@ -144,8 +145,9 @@ function FetchToolBody({
       .join(", ");
     return (
       <p className="text-muted-foreground">
-        Fetch failed.
-        {attempted.length > 0 ? ` Tried: ${attempted}.` : ""}
+        {attempted.length > 0
+          ? t("fetchFailedWithProviders", { providers: attempted })
+          : t("fetchFailed")}
       </p>
     );
   }
@@ -156,16 +158,14 @@ function FetchToolBody({
   return (
     <div className="flex flex-col gap-2">
       {preview.length === 0 ? (
-        <p className="text-muted-foreground">The page returned no text.</p>
+        <p className="text-muted-foreground">{t("fetchNoText")}</p>
       ) : (
         <p className="whitespace-pre-wrap break-words text-muted-foreground">
           {preview}
         </p>
       )}
       {output.truncated ? (
-        <p className="text-xs text-muted-foreground">
-          Page content truncated for the model.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("fetchTruncated")}</p>
       ) : null}
     </div>
   );

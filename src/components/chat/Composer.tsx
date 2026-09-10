@@ -8,6 +8,7 @@ import {
   Minimize2Icon,
   SquareIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -76,6 +77,7 @@ export default function Composer({
   onOpenChatMap,
   chatMapDisabled = false,
 }: ComposerProps) {
+  const t = useTranslations("Chat.Composer");
   const models = useAvailableModels();
   const selected = findAvailableModel(models.data, model);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -135,8 +137,8 @@ export default function Composer({
         <div className="relative flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-muted/40">
           <Textarea
             ref={textareaRef}
-            aria-label="Message"
-            placeholder="Message"
+            aria-label={t("messageLabel")}
+            placeholder={t("messageLabel")}
             value={draft}
             onChange={(event) => handleDraftChange(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -182,7 +184,7 @@ export default function Composer({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Chat map"
+                aria-label={t("chatMap")}
                 disabled={chatMapDisabled}
                 onClick={onOpenChatMap}
               >
@@ -193,7 +195,7 @@ export default function Composer({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={expanded ? "Collapse composer" : "Expand composer"}
+                  aria-label={expanded ? t("collapse") : t("expand")}
                   onClick={() => setExpanded((current) => !current)}
                 >
                   {expanded ? (
@@ -209,7 +211,7 @@ export default function Composer({
                   variant="secondary"
                   size="icon-sm"
                   className="rounded-full"
-                  aria-label="Stop"
+                  aria-label={t("stop")}
                   onClick={onStop}
                 >
                   <SquareIcon aria-hidden="true" />
@@ -219,7 +221,7 @@ export default function Composer({
                   type="submit"
                   size="icon-sm"
                   className="rounded-full"
-                  aria-label="Send"
+                  aria-label={t("send")}
                   disabled={!canSend}
                 >
                   <ArrowUpIcon aria-hidden="true" />
@@ -244,6 +246,7 @@ function ReasoningEffortSelect({
   onChange: (value: string | null) => void;
   disabled: boolean;
 }) {
+  const t = useTranslations("Chat.Composer");
   return (
     <Select
       // Non-modal: an outside tap closes this popup and activates the tapped
@@ -259,13 +262,13 @@ function ReasoningEffortSelect({
       disabled={disabled}
     >
       <ComposerSelectTrigger
-        label="Reasoning effort"
-        title={value ?? "Auto"}
+        label={t("reasoningEffort")}
+        title={value ?? t("auto")}
       >
         <BrainIcon aria-hidden="true" />
       </ComposerSelectTrigger>
       <ComposerPickerContent variant="select">
-        <SelectItem value={AUTO_EFFORT}>Auto</SelectItem>
+        <SelectItem value={AUTO_EFFORT}>{t("auto")}</SelectItem>
         {options.map((option) => (
           <SelectItem key={option} value={option}>
             {option}

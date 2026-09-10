@@ -1,6 +1,7 @@
 "use client";
 
 import { BotIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { useAssistantTree } from "@/components/assistant/use-assistants";
 import {
@@ -23,6 +24,7 @@ export default function AssistantPicker({
   onChange,
   disabled = false,
 }: AssistantPickerProps) {
+  const t = useTranslations("Chat.Pickers");
   const tree = useAssistantTree();
   const assistants = tree.data?.assistants ?? [];
   const selected = assistants.find((row) => row.id === value);
@@ -41,7 +43,7 @@ export default function AssistantPicker({
       }}
       disabled={disabled || tree.isPending}
     >
-      <ComposerSelectTrigger label="Assistant" title={selected?.name}>
+      <ComposerSelectTrigger label={t("assistant")} title={selected?.name}>
         <SelectValue
           className="justify-center text-center"
           placeholder={<BotIcon aria-hidden="true" className="size-4" />}

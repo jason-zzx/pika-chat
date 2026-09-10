@@ -32,7 +32,8 @@ export default function RenameTopicDialog({
 }: RenameTopicDialogProps) {
   const rename = useRenameTopic();
   const router = useRouter();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Topic");
+  const tErrors = useTranslations("Errors");
   const [title, setTitle] = useState(topic?.title ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +48,7 @@ export default function RenameTopicDialog({
       router.refresh();
       onOpenChange(false);
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.renameTopic"));
+      setError(apiErrorMessage(caught, tErrors, "actions.renameTopic"));
     }
   }
 
@@ -59,13 +60,11 @@ export default function RenameTopicDialog({
           onSubmit={(event) => void handleSubmit(event)}
         >
           <DialogHeader>
-            <DialogTitle>Rename topic</DialogTitle>
-            <DialogDescription>
-              Choose a new title for this topic.
-            </DialogDescription>
+            <DialogTitle>{t("renameTitle")}</DialogTitle>
+            <DialogDescription>{t("renameDescription")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="topic-title">Title</Label>
+            <Label htmlFor="topic-title">{t("titleLabel")}</Label>
             <Input
               id="topic-title"
               name="title"
@@ -77,7 +76,7 @@ export default function RenameTopicDialog({
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <DialogFooter>
             <Button type="submit" disabled={rename.isPending || !topic}>
-              {rename.isPending ? "Saving…" : "Save"}
+              {rename.isPending ? t("saving") : t("save")}
             </Button>
           </DialogFooter>
         </form>

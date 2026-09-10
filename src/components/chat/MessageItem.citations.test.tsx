@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageItem from "./MessageItem";
 import type { CitationSource } from "./citations";
@@ -67,7 +68,7 @@ describe("MessageItem citation wiring (R14)", () => {
       ],
     };
 
-    render(<MessageItem message={message} />);
+    renderWithIntl(<MessageItem message={message} />);
 
     const answerCall = markdownCalls.find(
       (call) => call.text === "The answer [1] builds on [2].",
@@ -91,7 +92,7 @@ describe("MessageItem citation wiring (R14)", () => {
   it("passes no citations for a message without numbered tool sources", () => {
     markdownCalls.length = 0;
 
-    render(<MessageItem message={assistantTextOnly()} />);
+    renderWithIntl(<MessageItem message={assistantTextOnly()} />);
 
     expect(markdownCalls[0]?.citations).toBeUndefined();
     expect(screen.getByText("just text")).toBeInTheDocument();

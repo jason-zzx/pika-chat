@@ -31,7 +31,9 @@ export default function DeleteTopicDialog({
   onDeleted,
 }: DeleteTopicDialogProps) {
   const remove = useDeleteTopic();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Topic");
+  const tCommon = useTranslations("Common");
+  const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
 
   function handleOpenChange(next: boolean) {
@@ -52,7 +54,7 @@ export default function DeleteTopicDialog({
       handleOpenChange(false);
       onDeleted?.(id);
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.deleteTopic"));
+      setError(apiErrorMessage(caught, tErrors, "actions.deleteTopic"));
     }
   }
 
@@ -60,21 +62,23 @@ export default function DeleteTopicDialog({
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {topic?.title}?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {t("deleteTitle", { title: topic?.title ?? "" })}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            This topic will be permanently deleted.
+            {t("deleteDescription")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             type="button"
             variant="destructive"
             disabled={remove.isPending || !topic}
             onClick={() => void onConfirm()}
           >
-            {remove.isPending ? "Deleting…" : "Delete"}
+            {remove.isPending ? t("deleting") : t("delete")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

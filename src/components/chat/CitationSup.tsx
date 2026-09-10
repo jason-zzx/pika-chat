@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useContext, useState, type ComponentProps, type ReactNode } from "react";
 import type { Components, ExtraProps } from "streamdown";
 
@@ -57,12 +58,16 @@ export default function CitationSup(props: SupProps) {
 /** Superscript numbered pill (ChatGPT-style); taps open the external-link
  * confirmation dialog for the source URL. */
 function CitationChip({ source }: { source: CitationSource }) {
+  const t = useTranslations("Chat.MessageItem");
   const [dialogOpen, setDialogOpen] = useState(false);
   return (
     <>
       <button
         type="button"
-        aria-label={`Source ${source.num}: ${source.title}`}
+        aria-label={t("citationSource", {
+          num: source.num,
+          title: source.title,
+        })}
         onClick={() => setDialogOpen(true)}
         className="mx-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 align-super text-[10px] leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
