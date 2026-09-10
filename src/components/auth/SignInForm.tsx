@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SIGN_IN_FAILED_MESSAGE, authClient } from "@/lib/auth-client";
+import { apiErrorMessage } from "@/lib/api/error-message";
+import { SIGN_IN_FAILED_KEY, authClient } from "@/lib/auth-client";
 
 type SignInFormProps = {
   allowRegistration: boolean;
@@ -19,6 +21,8 @@ function looksLikeEmail(value: string): boolean {
 
 export default function SignInForm({ allowRegistration }: SignInFormProps) {
   const router = useRouter();
+  const t = useTranslations("Auth");
+  const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -34,13 +38,13 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
         ? await authClient.signIn.email({ email: identifier, password })
         : await authClient.signIn.username({ username: identifier, password });
       if (result.error) {
-        setError(SIGN_IN_FAILED_MESSAGE);
+        setError(apiErrorMessage(result.error, tErrors, SIGN_IN_FAILED_KEY));
         return;
       }
       router.push("/");
       router.refresh();
-    } catch {
-      setError(SIGN_IN_FAILED_MESSAGE);
+    } catch (caught) {
+      setError(apiErrorMessage(caught, tErrors, SIGN_IN_FAILED_KEY));
     } finally {
       setPending(false);
     }
@@ -49,7 +53,7 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
   return (
     <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <Label htmlFor="identifier">Username or email</Label>
+        <Label htmlFor="identifier">{t("signIn.identifierLabel")}</Label>
         <Input
           id="identifier"
           name="identifier"
@@ -58,7 +62,7 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password">{t("signIn.passwordLabel")}</Label>
         <Input
           id="password"
           name="password"
@@ -69,13 +73,13 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? t("signIn.submitting") : t("signIn.submit")}
       </Button>
       {allowRegistration ? (
         <p className="text-sm text-muted-foreground">
-          Need an account?{" "}
+          {t("signIn.needAccount")}{" "}
           <Link className="underline" href="/sign-up">
-            Create one
+            {t("signIn.createAccountLink")}
           </Link>
         </p>
       ) : null}

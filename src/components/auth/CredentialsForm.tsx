@@ -25,7 +25,8 @@ export default function CredentialsForm({
   footer,
   onSubmit,
 }: CredentialsFormProps) {
-  const t = useTranslations("Errors");
+  const t = useTranslations("Auth");
+  const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -41,7 +42,7 @@ export default function CredentialsForm({
         password: String(form.get("password") ?? ""),
       });
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, fallbackErrorKey));
+      setError(apiErrorMessage(caught, tErrors, fallbackErrorKey));
     } finally {
       setPending(false);
     }
@@ -50,7 +51,7 @@ export default function CredentialsForm({
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <Label htmlFor="username">Username</Label>
+        <Label htmlFor="username">{t("fields.username")}</Label>
         <Input
           id="username"
           name="username"
@@ -59,7 +60,7 @@ export default function CredentialsForm({
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{t("fields.email")}</Label>
         <Input
           id="email"
           name="email"
@@ -69,7 +70,7 @@ export default function CredentialsForm({
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password">{t("fields.password")}</Label>
         <Input
           id="password"
           name="password"

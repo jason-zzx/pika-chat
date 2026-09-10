@@ -39,7 +39,7 @@
       "assistants": "助手",
       "openAssistant": "打开 {name}",
       "newAssistant": "新建助手",
-      "newTopic": "新建主题",
+      "newTopic": "新建话题",
       "profile": "资料",
       "delete": "删除",
       "rename": "重命名",
@@ -48,16 +48,179 @@
       "favoriteNamed": "收藏 {title}",
       "unfavoriteNamed": "取消收藏 {title}",
       "actionsFor": "{title} 的操作",
-      "topicsSection": "主题",
+      "topicsSection": "话题",
       "favoritesSection": "收藏",
-      "noTopicsTitle": "暂无主题",
+      "noTopicsTitle": "暂无话题",
       "noTopicsDescription": "在此助手中开始对话。",
       "loadFailedTitle": "无法加载助手",
       "loadFailedDescription": "刷新页面重试。"
     }
   },
   "Common": {
-    "close": "关闭"
+    "close": "关闭",
+    "cancel": "取消"
+  },
+  "Auth": {
+    "signIn": {
+      "title": "登录",
+      "identifierLabel": "用户名或邮箱",
+      "passwordLabel": "密码",
+      "submit": "登录",
+      "submitting": "正在登录…",
+      "needAccount": "还没有账户？",
+      "createAccountLink": "立即注册"
+    },
+    "signUp": {
+      "title": "创建账户",
+      "submit": "创建账户",
+      "submitting": "正在创建…",
+      "haveAccount": "已有账户？",
+      "signInLink": "登录"
+    },
+    "setup": {
+      "title": "初始化 Pika chat",
+      "description": "为此实例创建第一个管理员账户。",
+      "submit": "创建管理员账户",
+      "submitting": "正在创建…"
+    },
+    "fields": {
+      "username": "用户名",
+      "email": "邮箱",
+      "password": "密码"
+    },
+    "signOut": "退出登录"
+  },
+  "Account": {
+    "title": "账户",
+    "description": "更改你的密码。",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "changePassword": "修改密码",
+    "saving": "正在保存…",
+    "passwordUpdated": "密码已更新"
+  },
+  "Chat": {
+    "Composer": {
+      "messageLabel": "消息",
+      "chatMap": "聊天地图",
+      "expand": "展开输入框",
+      "collapse": "收起输入框",
+      "send": "发送",
+      "stop": "停止",
+      "reasoningEffort": "推理强度",
+      "auto": "自动"
+    },
+    "MessageList": {
+      "empty": "发送消息以开始对话。",
+      "responding": "助手正在回复",
+      "scrollToLatest": "滚动到最新",
+      "loading": "正在加载对话…",
+      "loadFailedTitle": "无法加载对话",
+      "loadFailedDescription": "刷新页面重试。",
+      "stillSaving": "消息仍在保存中，请稍后重试。"
+    },
+    "MessageItem": {
+      "you": "你",
+      "assistant": "助手",
+      "thinkingShimmer": "思考中…",
+      "reasoningThinking": "思考中",
+      "reasoningThought": "已思考",
+      "reasoningThoughtDuration": "已思考（{seconds} 秒）",
+      "tokenLimit": "输出在 token 上限处停止。",
+      "stoppedBeforeAnswer": "模型在给出回答前停止了。",
+      "stopped": "已停止",
+      "failedFallback": "模型未能回复。",
+      "citationSource": "来源 {num}：{title}"
+    },
+    "Actions": {
+      "copy": "复制",
+      "copied": "已复制",
+      "copyFailed": "复制失败",
+      "copyMessage": "复制消息",
+      "regenerate": "重新生成",
+      "regenerateResponse": "重新生成回复",
+      "delete": "删除",
+      "deleteAndRegenerate": "删除并重新生成",
+      "more": "更多操作",
+      "previousVersion": "上一个版本",
+      "nextVersion": "下一个版本",
+      "versionOf": "第 {index} 版，共 {count} 版"
+    },
+    "Pickers": {
+      "assistant": "助手",
+      "selectModel": "选择模型",
+      "searchModels": "搜索模型",
+      "noDefaultModel": "无默认模型",
+      "noModelsAvailable": "暂无可用模型",
+      "noMatchingModels": "没有匹配的模型",
+      "vision": "视觉",
+      "reasoning": "推理",
+      "sharedBy": "{configName}（由 {name} 共享）",
+      "anotherUser": "其他用户",
+      "searchMode": {
+        "off": "关闭",
+        "offDescription": "不使用网络搜索。",
+        "builtin": "模型内置",
+        "builtinDescription": "让模型使用其自带的网络搜索。不支持内置搜索的服务商将正常回答。",
+        "tool": "搜索工具",
+        "toolDescription": "应用通过你配置的服务商搜索网络。",
+        "toggleLabel": "网络搜索模式：{mode}",
+        "toggleTitle": "网络搜索：{mode}",
+        "noProviders": "未配置搜索服务商。",
+        "addProvider": "在设置中添加"
+      }
+    },
+    "Tools": {
+      "searchRunning": "正在搜索网络",
+      "searchInterrupted": "搜索已中断",
+      "searchDone": "已搜索网络",
+      "searchBodyRunning": "正在搜索…",
+      "searchInterruptedBody": "搜索未完成。",
+      "searchDeclined": "搜索被拒绝。",
+      "searchNoOutput": "没有搜索输出记录。",
+      "searchFailed": "搜索失败。",
+      "searchFailedWithProviders": "搜索失败。已尝试：{providers}。",
+      "searchNoResults": "未找到结果。",
+      "searchVia": "来自",
+      "fetchRunning": "正在读取页面",
+      "fetchInterrupted": "读取已中断",
+      "fetchDone": "已读取页面",
+      "fetchToggle": "切换页面抓取详情",
+      "fetchBodyRunning": "正在读取页面…",
+      "fetchInterruptedBody": "抓取未完成。",
+      "fetchDeclined": "抓取被拒绝。",
+      "fetchNoOutput": "没有抓取输出记录。",
+      "fetchFailed": "抓取失败。",
+      "fetchFailedWithProviders": "抓取失败。已尝试：{providers}。",
+      "fetchNoText": "页面未返回文本。",
+      "fetchTruncated": "页面内容已为模型截断。"
+    },
+    "Dialogs": {
+      "chatMap": "聊天地图",
+      "noText": "无文本",
+      "externalLinkTitle": "打开外部链接？",
+      "externalLinkDescription": "你即将访问外部网站。",
+      "copyLink": "复制链接",
+      "copied": "已复制",
+      "openLink": "打开链接"
+    },
+    "Timestamp": {
+      "justNow": "刚刚",
+      "minutes": "{count, plural, other {# 分钟前}}",
+      "hours": "{count, plural, other {# 小时前}}"
+    },
+    "newTopic": "新话题"
+  },
+  "Topic": {
+    "renameTitle": "重命名话题",
+    "renameDescription": "为该话题选择一个新标题。",
+    "titleLabel": "标题",
+    "save": "保存",
+    "saving": "正在保存…",
+    "deleteTitle": "删除 {title}？",
+    "deleteDescription": "该话题将被永久删除。",
+    "deleting": "正在删除…",
+    "delete": "删除"
   },
   "Settings": {
     "General": {
@@ -65,7 +228,128 @@
       "description": "此浏览器的外观设置。",
       "theme": "主题",
       "language": "语言"
+    },
+    "Providers": {
+      "title": "服务商",
+      "description": "连接兼容 OpenAI 的端点，并选择聊天可调用的模型。"
+    },
+    "Search": {
+      "title": "搜索",
+      "description": "连接模型可调用的网络搜索服务商，并调整回退顺序。"
+    },
+    "Users": {
+      "title": "用户"
     }
+  },
+  "Assistant": {
+    "editTitle": "编辑助手",
+    "newTitle": "新建助手",
+    "description": "名称、表情、提示词，以及可选的默认模型。",
+    "nameLabel": "名称",
+    "emojiLabel": "表情",
+    "systemPromptLabel": "系统提示词",
+    "defaultModelLabel": "默认模型",
+    "staleModel": "之前选择的模型已不可用。",
+    "save": "保存",
+    "saving": "正在保存…",
+    "deleteTitle": "删除 {name}？",
+    "deleteDescription": "{count, plural, other {将永久删除此助手中的 # 个话题。}}",
+    "delete": "删除",
+    "deleting": "正在删除…",
+    "searchEmoji": "搜索表情",
+    "defaultName": "助手"
+  },
+  "Admin": {
+    "createUserTitle": "创建用户",
+    "usernameLabel": "用户名",
+    "emailLabel": "邮箱",
+    "passwordLabel": "密码",
+    "roleLabel": "角色",
+    "roleUser": "普通用户",
+    "roleAdmin": "管理员",
+    "roleSuperAdmin": "超级管理员",
+    "creating": "正在创建…",
+    "create": "创建",
+    "usersTitle": "用户",
+    "makeUser": "设为普通用户",
+    "makeAdmin": "设为管理员",
+    "unban": "解除封禁",
+    "ban": "封禁",
+    "resetPassword": "重置密码",
+    "newPasswordPrompt": "新密码（至少 8 个字符）",
+    "bannedSuffix": " · 已封禁",
+    "registrationTitle": "注册",
+    "registrationOpen": "任何获得链接的人都可以创建普通用户账户。",
+    "registrationClosed": "只有管理员可以创建账户。",
+    "disableRegistration": "关闭注册",
+    "enableRegistration": "开放注册"
+  },
+  "Provider": {
+    "loading": "加载中…",
+    "addProviderTitle": "添加服务商",
+    "create": "创建",
+    "yourProvidersTitle": "你的服务商",
+    "emptyTitle": "暂无服务商",
+    "emptyDescription": "添加一个兼容 OpenAI 的端点以开始选择模型。",
+    "sharedTitle": "共享给实例的服务商",
+    "noShared": "暂无共享服务商。",
+    "keyHint": "密钥 …{lastFour}",
+    "noKeyHint": "无 API 密钥",
+    "visibilityPrivate": "私有",
+    "visibilityShared": "共享",
+    "edit": "编辑",
+    "discover": "发现模型",
+    "delete": "删除",
+    "save": "保存",
+    "saving": "正在保存…",
+    "models": "模型",
+    "noModelsHint": "暂无模型。可从端点发现或手动输入 ID。",
+    "editModel": "编辑 {modelId}",
+    "removeModel": "移除 {modelId}",
+    "addModelId": "添加模型 ID",
+    "modelIdPlaceholder": "gpt-4o",
+    "add": "添加",
+    "sharedBy": "由 {name} 共享",
+    "noModels": "无模型",
+    "nameLabel": "名称",
+    "baseUrlLabel": "基础 URL",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "apiKeyLabel": "API 密钥",
+    "apiKeyEditPlaceholder": "留空以保留当前密钥",
+    "apiKeyNewPlaceholder": "本地端点可留空",
+    "shareWithInstance": "共享给实例",
+    "addModelsTitle": "添加模型",
+    "addModelsDescription": "从 {configName} 发现 ID，或直接在服务商卡片中输入。",
+    "discovering": "正在发现…",
+    "discoverFromEndpoint": "从端点发现",
+    "servedModels": "提供的模型",
+    "addSelected": "添加所选",
+    "contextDescription": "该模型的上下文、能力与开发者图标。",
+    "contextTokensLabel": "上下文 token 数",
+    "inputModalitiesLabel": "输入模态",
+    "supportsReasoning": "支持推理",
+    "reasoningEffortLabel": "推理强度选项",
+    "vendorIconLabel": "厂商图标",
+    "auto": "自动",
+    "resetFromCatalog": "从目录重置",
+    "invalidContext": "上下文大小必须是正数 token 数。",
+    "invalidModalities": "请至少选择一种输入模态。"
+  },
+  "Search": {
+    "fallbackOrderTitle": "回退顺序",
+    "fallbackOrderDescription": "当模型请求网络搜索时，将自上而下尝试服务商；第一个响应的生效。",
+    "loading": "加载中…",
+    "emptyTitle": "暂无搜索服务商",
+    "emptyDescription": "在下方添加 API 密钥以启用应用内网络搜索。",
+    "addProviderTitle": "添加服务商",
+    "apiKeyLabel": "API 密钥",
+    "baseUrlLabel": "基础 URL（可选）",
+    "save": "保存",
+    "add": "添加",
+    "moveUp": "上移 {name}",
+    "moveDown": "下移 {name}",
+    "keepKeyHint": "留空 API 密钥字段以保留已保存的密钥。",
+    "delete": "删除"
   },
   "Errors": {
     "generic": "出错了，请重试。",
@@ -75,7 +359,8 @@
     },
     "auth": {
       "required": "需要登录",
-      "adminRequired": "需要管理员权限"
+      "adminRequired": "需要管理员权限",
+      "signInFailed": "用户名、邮箱或密码无效"
     },
     "account": {
       "usernameTaken": "用户名已被占用",
@@ -95,8 +380,8 @@
       "decryptFailed": "无法解密凭据"
     },
     "topic": {
-      "notFound": "主题不存在",
-      "createFailed": "创建主题失败"
+      "notFound": "话题不存在",
+      "createFailed": "创建话题失败"
     },
     "message": {
       "notFound": "消息不存在",
@@ -159,10 +444,16 @@
       "resetFromCatalog": "无法从目录重置",
       "saveAssistant": "无法保存助手",
       "deleteAssistant": "无法删除助手",
-      "renameTopic": "无法重命名主题",
-      "deleteTopic": "无法删除主题",
+      "renameTopic": "无法重命名话题",
+      "deleteTopic": "无法删除话题",
       "register": "无法注册",
-      "completeSetup": "无法完成初始化"
+      "completeSetup": "无法完成初始化",
+      "changePassword": "无法修改密码",
+      "listUsers": "无法列出用户",
+      "createUser": "无法创建用户",
+      "setRole": "无法更改角色",
+      "updateBan": "无法更新封禁状态",
+      "resetPassword": "无法重置密码"
     }
   },
   "Validation": {
