@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification standard for lint, tests, accessibility, and performance on the migrated General page and layout components"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend quality check list the check agent must walk (keyboard reachability, states, breakpoints, no client-boundary widening)"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify the new error contract still follows the spec's rules (typed errors, one envelope, code is the contract, streaming behavior) and that the spec file itself is updated consistently"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality gate for the AppError / service / route-handler changes"}
+{"file": ".trellis/tasks/09-10-i18n/research/next-intl-setup.md", "reason": "Verify the shipped setup matches the version-verified configuration (no absolute plugin path, provider inheritance, #2339 workarounds documented, standalone smoke test)"}
+{"file": ".trellis/tasks/09-10-i18n/research/next-intl-usage.md", "reason": "Verify correct usage: AppConfig (not IntlMessages), getTranslations in async server components, provider wrapper in tests, t.has for dynamic error keys, no setRequestLocale"}
