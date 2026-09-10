@@ -167,7 +167,9 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                {/* eslint-disable-next-line i18next/no-literal-string -- select wire values, not copy */}
                 <SelectItem value="user">{t("roleUser")}</SelectItem>
+                {/* eslint-disable-next-line i18next/no-literal-string -- select wire values, not copy */}
                 <SelectItem value="admin">{t("roleAdmin")}</SelectItem>
               </SelectContent>
             </Select>
@@ -194,6 +196,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
               role: parseActorRole(user.role),
             };
             const nextRole: AssignableRole =
+              // eslint-disable-next-line i18next/no-literal-string -- role tokens (data values), not copy
               target.role === "admin" ? "user" : "admin";
             const showSetRole = canAdminister(
               actor,

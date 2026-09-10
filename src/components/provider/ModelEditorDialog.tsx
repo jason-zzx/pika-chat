@@ -241,6 +241,7 @@ export default function ModelEditorDialog({
             <div className="flex flex-col gap-1">
               <Label htmlFor="model-vendor">{t("vendorIconLabel")}</Label>
               <Select
+                // eslint-disable-next-line i18next/no-literal-string -- "auto" vendor wire sentinel, not copy
                 value={vendorKey.length > 0 ? vendorKey : "auto"}
                 onValueChange={(next) => {
                   if (typeof next !== "string") {
@@ -257,6 +258,7 @@ export default function ModelEditorDialog({
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
+                  {/* eslint-disable-next-line i18next/no-literal-string -- select wire value, not copy */}
                   <SelectItem value="auto">{t("auto")}</SelectItem>
                   {MODEL_VENDOR_KEYS.map((key) => (
                     <SelectItem key={key} value={key}>

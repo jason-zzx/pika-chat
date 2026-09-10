@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import jsxA11y from "eslint-plugin-jsx-a11y";
+import i18next from "eslint-plugin-i18next";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -35,6 +36,113 @@ const eslintConfig = defineConfig([
       // click handler is intentionally pointer-only.
       "jsx-a11y/click-events-have-key-events": "off",
       "jsx-a11y/no-noninteractive-element-interactions": "off",
+    },
+  },
+  i18next.configs["flat/recommended"],
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      // Regression guard for user-facing copy: flags string literals in JSX
+      // text, JSX attributes, and JSX expression containers. Calibration rule:
+      // an exclude is only added for a class of values that can never be
+      // rendered copy; copy migrations go to the catalogs instead.
+      // Known accepted gap: ALL-CAPS strings (`OK`) pass the default `words`
+      // excludes — review covers those.
+      "i18next/no-literal-string": [
+        "error",
+        {
+          mode: "jsx-only",
+          callees: {
+            exclude: [
+              // Plugin defaults, re-listed because the option replaces (not
+              // merges) the default object.
+              "i18n(ext)?",
+              "t",
+              "require",
+              "addEventListener",
+              "removeEventListener",
+              "postMessage",
+              "getElementById",
+              "dispatch",
+              "commit",
+              "includes",
+              "indexOf",
+              "endsWith",
+              "startsWith",
+              // Namespaced translator aliases (tRoot, tCommon, tErrors, …) —
+              // repo convention is `t` + PascalCase for useTranslations().
+              "t[A-Z][A-Za-z]*",
+              // String arguments are catalog keys / mode tokens, never copy.
+              "apiErrorMessage",
+              "canAdminister",
+              "setEditor",
+              "toggleSection",
+            ],
+          },
+          "jsx-attributes": {
+            exclude: [
+              // Styling and markup config (plugin defaults, re-listed so this
+              // list stays the single documented source).
+              "className",
+              "styleName",
+              "style",
+              "type",
+              "key",
+              "id",
+              "width",
+              "height",
+              // Markup/config attributes whose values are never rendered:
+              // form wiring, generated ids, CSS classes, ARIA state tokens.
+              "htmlFor",
+              "name",
+              "autoComplete",
+              "inputMode",
+              "idPrefix",
+              "data-.*",
+              "aria-hidden",
+              "aria-current",
+              "role",
+              "src",
+              "href",
+              "overlayClassName",
+              // Design-system / positioning enum tokens, never copy.
+              "variant",
+              "size",
+              "side",
+              "align",
+              "positionMethod",
+              "headerMode",
+              "collapsible",
+              "appearance",
+              "messageRole",
+              // Form initial values (select wire tokens / user data). The
+              // displayed text is the child or `placeholder`, which stay
+              // guarded. `value` is deliberately NOT excluded: on
+              // `<input type="submit|button|reset">` it renders as the
+              // button label — literal select wire values use an inline
+              // disable instead.
+              "defaultValue",
+              // Error-catalog key resolved by apiErrorMessage, not displayed.
+              "fallbackErrorKey",
+            ],
+          },
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    rules: {
+      // Tests intentionally contain literals and fixtures; not user-facing.
+      "i18next/no-literal-string": "off",
+    },
+  },
+  {
+    files: ["src/components/provider/vendor-icons/marks.tsx"],
+    rules: {
+      // SVG <title> content is vendor brand names (proper nouns, not
+      // translatable copy) — the accessible name of each vendor icon.
+      "i18next/no-literal-string": "off",
     },
   },
   globalIgnores([
