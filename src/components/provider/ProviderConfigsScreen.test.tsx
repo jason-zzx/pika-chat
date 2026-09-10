@@ -42,4 +42,21 @@ describe("ProviderConfigsScreen", () => {
       screen.getByRole("checkbox", { name: "Share with the instance" }),
     ).toBeInTheDocument();
   });
+
+  it("renders its copy from the zh-CN catalog", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderWithIntl(
+      <QueryClientProvider client={client}>
+        <ProviderConfigsScreen canShare />
+      </QueryClientProvider>,
+      { locale: "zh-CN" },
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "共享给实例" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "创建" })).toBeInTheDocument();
+  });
 });

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import PageHeader from "@/components/layout/PageHeader";
 import ProviderConfigsScreen from "@/components/provider/ProviderConfigsScreen";
@@ -11,13 +12,11 @@ export default async function SettingsProvidersPage() {
   if (!actor) {
     redirect("/sign-in");
   }
+  const t = await getTranslations("Settings.Providers");
 
   return (
     <>
-      <PageHeader
-        title="Providers"
-        description="Connect OpenAI-compatible endpoints and choose which models chat can call."
-      />
+      <PageHeader title={t("title")} description={t("description")} />
       <ProviderConfigsScreen canShare={isStaffRole(actor.role)} />
     </>
   );

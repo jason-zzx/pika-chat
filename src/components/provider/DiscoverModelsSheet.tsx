@@ -34,7 +34,8 @@ export default function DiscoverModelsSheet({
 }: DiscoverModelsSheetProps) {
   const discover = useDiscoverProviderModels();
   const addModel = useAddProviderModel();
-  const t = useTranslations("Errors");
+  const t = useTranslations("Provider");
+  const tErrors = useTranslations("Errors");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +46,7 @@ export default function DiscoverModelsSheet({
     try {
       await discover.mutateAsync(configId);
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.discoverModels"));
+      setError(apiErrorMessage(caught, tErrors, "actions.discoverModels"));
     }
   }
 
@@ -69,7 +70,7 @@ export default function DiscoverModelsSheet({
       }
       setSelected(new Set());
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.addModel"));
+      setError(apiErrorMessage(caught, tErrors, "actions.addModel"));
     }
   }
 
@@ -77,9 +78,9 @@ export default function DiscoverModelsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Add models</SheetTitle>
+          <SheetTitle>{t("addModelsTitle")}</SheetTitle>
           <SheetDescription>
-            Discover ids from {configName}, or type one on the provider card.
+            {t("addModelsDescription", { configName })}
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4 pb-4">
@@ -89,11 +90,15 @@ export default function DiscoverModelsSheet({
             disabled={discover.isPending}
             onClick={() => void onDiscover()}
           >
-            {discover.isPending ? "Discovering…" : "Discover from endpoint"}
+            {discover.isPending
+              ? t("discovering")
+              : t("discoverFromEndpoint")}
           </Button>
           {modelIds.length > 0 ? (
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium">Served models</legend>
+              <legend className="text-sm font-medium">
+                {t("servedModels")}
+              </legend>
               {modelIds.map((modelId) => (
                 <Label key={modelId} className="font-normal">
                   <input
@@ -112,7 +117,7 @@ export default function DiscoverModelsSheet({
                 disabled={selected.size === 0 || addModel.isPending}
                 onClick={() => void onAddSelected()}
               >
-                Add selected
+                {t("addSelected")}
               </Button>
             </fieldset>
           ) : null}

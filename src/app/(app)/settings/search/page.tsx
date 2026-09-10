@@ -1,13 +1,14 @@
+import { useTranslations } from "next-intl";
+
 import PageHeader from "@/components/layout/PageHeader";
 import SearchProvidersScreen from "@/components/search/SearchProvidersScreen";
 
 export default function SettingsSearchPage() {
+  const t = useTranslations("Settings.Search");
+
   return (
     <>
-      <PageHeader
-        title="Search"
-        description="Connect web search providers the model can call, and order the fallback chain."
-      />
+      <PageHeader title={t("title")} description={t("description")} />
       <SearchProvidersScreen />
     </>
   );

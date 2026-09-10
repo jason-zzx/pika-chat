@@ -53,7 +53,8 @@ export default function ModelEditorDialog({
   configId,
   model,
 }: ModelEditorDialogProps) {
-  const t = useTranslations("Errors");
+  const t = useTranslations("Provider");
+  const tErrors = useTranslations("Errors");
   const updateModel = useUpdateProviderModel();
   const [contextTokens, setContextTokens] = useState(
     String(model.contextTokens),
@@ -96,14 +97,14 @@ export default function ModelEditorDialog({
     event.preventDefault();
     const parsedContext = Number.parseInt(contextTokens, 10);
     if (!Number.isFinite(parsedContext) || parsedContext <= 0) {
-      setError("Context size must be a positive number of tokens.");
+      setError(t("invalidContext"));
       return;
     }
     const modalities = INPUT_MODALITIES.filter((modality) =>
       inputModalities.has(modality),
     );
     if (modalities.length === 0) {
-      setError("Choose at least one input modality.");
+      setError(t("invalidModalities"));
       return;
     }
     const options = reasoning
@@ -128,7 +129,7 @@ export default function ModelEditorDialog({
       });
       onOpenChange(false);
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.saveModel"));
+      setError(apiErrorMessage(caught, tErrors, "actions.saveModel"));
     }
   }
 
@@ -148,7 +149,7 @@ export default function ModelEditorDialog({
       );
       setVendorKey(next.vendorKey ?? "");
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.resetFromCatalog"));
+      setError(apiErrorMessage(caught, tErrors, "actions.resetFromCatalog"));
     }
   }
 
@@ -167,14 +168,12 @@ export default function ModelEditorDialog({
               />
               {model.modelId}
             </DialogTitle>
-            <DialogDescription>
-              Context, capabilities, and the developer icon for this model.
-            </DialogDescription>
+            <DialogDescription>{t("contextDescription")}</DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor="model-context">Context tokens</Label>
+              <Label htmlFor="model-context">{t("contextTokensLabel")}</Label>
               <Input
                 id="model-context"
                 inputMode="numeric"
@@ -186,7 +185,9 @@ export default function ModelEditorDialog({
             </div>
 
             <fieldset className="flex flex-col gap-1">
-              <legend className="text-sm font-medium">Input modalities</legend>
+              <legend className="text-sm font-medium">
+                {t("inputModalitiesLabel")}
+              </legend>
               <div className="flex flex-wrap gap-2">
                 {INPUT_MODALITIES.map((modality) => (
                   <Label key={modality} className="gap-2 font-normal">
@@ -211,13 +212,13 @@ export default function ModelEditorDialog({
                 onChange={(event) => setReasoning(event.currentTarget.checked)}
                 className="size-4 accent-primary"
               />
-              Supports reasoning
+              {t("supportsReasoning")}
             </Label>
 
             {reasoning ? (
               <fieldset className="flex flex-col gap-1">
                 <legend className="text-sm font-medium">
-                  Reasoning effort options
+                  {t("reasoningEffortLabel")}
                 </legend>
                 <div className="flex flex-wrap gap-2">
                   {REASONING_EFFORT_CHOICES.map((option) => (
@@ -238,7 +239,7 @@ export default function ModelEditorDialog({
             ) : null}
 
             <div className="flex flex-col gap-1">
-              <Label htmlFor="model-vendor">Vendor icon</Label>
+              <Label htmlFor="model-vendor">{t("vendorIconLabel")}</Label>
               <Select
                 value={vendorKey.length > 0 ? vendorKey : "auto"}
                 onValueChange={(next) => {
@@ -249,14 +250,14 @@ export default function ModelEditorDialog({
                 }}
               >
                 <SelectTrigger id="model-vendor" className="w-full">
-                  <SelectValue placeholder="Auto">
+                  <SelectValue placeholder={t("auto")}>
                     {isModelVendorKey(vendorKey)
                       ? MODEL_VENDOR_LABELS[vendorKey]
-                      : "Auto"}
+                      : t("auto")}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="auto">{t("auto")}</SelectItem>
                   {MODEL_VENDOR_KEYS.map((key) => (
                     <SelectItem key={key} value={key}>
                       <span className="flex items-center gap-2">
@@ -281,10 +282,10 @@ export default function ModelEditorDialog({
                 void handleReset();
               }}
             >
-              Reset from catalog
+              {t("resetFromCatalog")}
             </Button>
             <Button type="submit" disabled={updateModel.isPending}>
-              {updateModel.isPending ? "Saving…" : "Save"}
+              {updateModel.isPending ? t("saving") : t("save")}
             </Button>
           </DialogFooter>
         </form>

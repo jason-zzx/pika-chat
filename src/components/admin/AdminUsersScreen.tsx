@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import {
   type Actor,
   canAdminister,
@@ -40,13 +42,16 @@ async function listAdminUsers(): Promise<AdminUser[]> {
     query: { limit: 100 },
   });
   if (result.error) {
-    throw new Error("Unable to list users");
+    // Key-based like the server error contract: never displayed verbatim.
+    throw new Error("actions.listUsers");
   }
   return result.data.users;
 }
 
 export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
   const queryClient = useQueryClient();
+  const t = useTranslations("Admin");
+  const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
   const users = useQuery({
     queryKey: ["admin-users"],
@@ -71,14 +76,15 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
         data: { username: input.username },
       });
       if (result.error) {
-        throw new Error("Unable to create user");
+        throw new Error("actions.createUser");
       }
     },
     onSuccess: () => {
       setError(null);
       void invalidate();
     },
-    onError: () => setError("Unable to create user"),
+    onError: (caught) =>
+      setError(apiErrorMessage(caught, tErrors, "actions.createUser")),
   });
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
@@ -98,7 +104,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
     setError(null);
     const result = await authClient.admin.setRole({ userId, role });
     if (result.error) {
-      setError("Unable to change role");
+      setError(apiErrorMessage(result.error, tErrors, "actions.setRole"));
       return;
     }
     await invalidate();
@@ -110,14 +116,14 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
       ? await authClient.admin.unbanUser({ userId: user.id })
       : await authClient.admin.banUser({ userId: user.id });
     if (result.error) {
-      setError("Unable to update ban");
+      setError(apiErrorMessage(result.error, tErrors, "actions.updateBan"));
       return;
     }
     await invalidate();
   }
 
   async function onResetPassword(userId: string) {
-    const next = window.prompt("New password (min 8 characters)");
+    const next = window.prompt(t("newPasswordPrompt"));
     if (!next) {
       return;
     }
@@ -127,25 +133,25 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
       newPassword: next,
     });
     if (result.error) {
-      setError("Unable to reset password");
+      setError(apiErrorMessage(result.error, tErrors, "actions.resetPassword"));
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">Create user</h2>
+        <h2 className="text-lg font-medium">{t("createUserTitle")}</h2>
         <form onSubmit={onCreate} className="flex max-w-lg flex-col gap-2">
           <div className="flex flex-col gap-1">
-            <Label htmlFor="create-username">Username</Label>
+            <Label htmlFor="create-username">{t("usernameLabel")}</Label>
             <Input id="create-username" name="username" required />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="create-email">Email</Label>
+            <Label htmlFor="create-email">{t("emailLabel")}</Label>
             <Input id="create-email" name="email" type="email" required />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="create-password">Password</Label>
+            <Label htmlFor="create-password">{t("passwordLabel")}</Label>
             <Input
               id="create-password"
               name="password"
@@ -155,30 +161,32 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="create-role">Role</Label>
+            <Label htmlFor="create-role">{t("roleLabel")}</Label>
             <Select name="role" defaultValue="user">
               <SelectTrigger id="create-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">user</SelectItem>
-                <SelectItem value="admin">admin</SelectItem>
+                <SelectItem value="user">{t("roleUser")}</SelectItem>
+                <SelectItem value="admin">{t("roleAdmin")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <Button type="submit" disabled={createUser.isPending}>
-            {createUser.isPending ? "Creating…" : "Create"}
+            {createUser.isPending ? t("creating") : t("create")}
           </Button>
         </form>
       </section>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {users.error ? (
-        <p className="text-sm text-destructive">Unable to list users</p>
+        <p className="text-sm text-destructive">
+          {apiErrorMessage(users.error, tErrors, "actions.listUsers")}
+        </p>
       ) : null}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">Users</h2>
+        <h2 className="text-lg font-medium">{t("usersTitle")}</h2>
         <ul className="flex flex-col gap-3">
           {(users.data ?? []).map((user) => {
             const target = {
@@ -203,6 +211,12 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
               target,
               "set-user-password",
             );
+            const roleLabel =
+              target.role === "super_admin"
+                ? t("roleSuperAdmin")
+                : target.role === "admin"
+                  ? t("roleAdmin")
+                  : t("roleUser");
 
             return (
               <li
@@ -213,8 +227,8 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                   <p className="font-medium">{user.username ?? user.name}</p>
                   <p className="text-muted-foreground">{user.email}</p>
                   <p>
-                    {user.role ?? "user"}
-                    {user.banned ? " · banned" : ""}
+                    {roleLabel}
+                    {user.banned ? t("bannedSuffix") : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -225,7 +239,9 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                       size="sm"
                       onClick={() => void onSetRole(user.id, nextRole)}
                     >
-                      {target.role === "admin" ? "Make user" : "Make admin"}
+                      {target.role === "admin"
+                        ? t("makeUser")
+                        : t("makeAdmin")}
                     </Button>
                   ) : null}
                   {showBan ? (
@@ -235,7 +251,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                       size="sm"
                       onClick={() => void onToggleBan(user)}
                     >
-                      {user.banned ? "Unban" : "Ban"}
+                      {user.banned ? t("unban") : t("ban")}
                     </Button>
                   ) : null}
                   {showReset ? (
@@ -245,7 +261,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                       size="sm"
                       onClick={() => void onResetPassword(user.id)}
                     >
-                      Reset password
+                      {t("resetPassword")}
                     </Button>
                   ) : null}
                 </div>
