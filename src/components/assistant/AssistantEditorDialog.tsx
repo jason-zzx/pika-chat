@@ -43,7 +43,8 @@ export default function AssistantEditorDialog({
   onOpenChange,
   assistant,
 }: AssistantEditorDialogProps) {
-  const t = useTranslations("Errors");
+  const t = useTranslations("Assistant");
+  const tErrors = useTranslations("Errors");
   const isEdit = assistant !== null;
   const models = useAvailableModels();
   const create = useCreateAssistant();
@@ -91,7 +92,7 @@ export default function AssistantEditorDialog({
       }
       onOpenChange(false);
     } catch (caught) {
-      setError(apiErrorMessage(caught, t, "actions.saveAssistant"));
+      setError(apiErrorMessage(caught, tErrors, "actions.saveAssistant"));
     }
   }
 
@@ -104,14 +105,12 @@ export default function AssistantEditorDialog({
         >
           <DialogHeader>
             <DialogTitle>
-              {isEdit ? "Edit assistant" : "New assistant"}
+              {isEdit ? t("editTitle") : t("newTitle")}
             </DialogTitle>
-            <DialogDescription>
-              Name, emoji, prompt, and an optional default model.
-            </DialogDescription>
+            <DialogDescription>{t("description")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="assistant-name">Name</Label>
+            <Label htmlFor="assistant-name">{t("nameLabel")}</Label>
             <Input
               id="assistant-name"
               name="name"
@@ -121,7 +120,7 @@ export default function AssistantEditorDialog({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="assistant-icon">Emoji</Label>
+            <Label htmlFor="assistant-icon">{t("emojiLabel")}</Label>
             <AssistantEmojiPicker
               id="assistant-icon"
               value={icon}
@@ -129,7 +128,7 @@ export default function AssistantEditorDialog({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="assistant-prompt">System prompt</Label>
+            <Label htmlFor="assistant-prompt">{t("systemPromptLabel")}</Label>
             <Textarea
               id="assistant-prompt"
               name="systemPrompt"
@@ -138,7 +137,7 @@ export default function AssistantEditorDialog({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="assistant-model">Default model</Label>
+            <Label htmlFor="assistant-model">{t("defaultModelLabel")}</Label>
             <ModelPicker
               id="assistant-model"
               value={modelValue}
@@ -147,14 +146,14 @@ export default function AssistantEditorDialog({
             />
             {models.data && pair && !storedIsAvailable ? (
               <p className="text-sm text-muted-foreground">
-                The previously selected model is no longer available.
+                {t("staleModel")}
               </p>
             ) : null}
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <DialogFooter>
             <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save"}
+              {pending ? t("saving") : t("save")}
             </Button>
           </DialogFooter>
         </form>

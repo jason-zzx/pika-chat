@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export default function AssistantEmojiPicker({
   onChange,
   id,
 }: AssistantEmojiPickerProps) {
+  const t = useTranslations("Assistant");
   const [open, setOpen] = useState(false);
 
   return (
@@ -61,7 +63,7 @@ export default function AssistantEmojiPicker({
             setOpen(false);
           }}
         >
-          <EmojiPickerSearch aria-label="Search emoji" />
+          <EmojiPickerSearch aria-label={t("searchEmoji")} />
           <EmojiPickerContent />
         </EmojiPicker>
       </PopoverContent>
