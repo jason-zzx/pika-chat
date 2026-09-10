@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
+- **Total Sessions**: 19
 - **Last Active**: 2026-09-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~524 | Active |
+| `journal-1.md` | ~548 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 19 | 2026-09-10 | i18n wrap-up: browser acceptance, widget localization fixes, doc audit | `819884f`, `ceedd6d`, `003755e` | `feat/i18n-guard` |
 | 18 | 2026-09-10 | i18n-guard: ESLint regression guard + integrated verification | `2c5e187`, `5f307c6`, `513a6f8` | `feat/i18n-guard` |
 | 17 | 2026-09-10 | i18n-ui: all screens localized (batches 1-6) | `f2a1b48`, `d2eb0c1`, `c077d5f`, `dc53040`, `3ef20fe`, `da1b2a6`, `f285111` | `feat/i18n-ui` |
 | 16 | 2026-09-10 | i18n-core: locale infrastructure + server error localization | `4c91ba1`, `90592d1`, `dc7e9dd` | `feat/i18n-core` |
