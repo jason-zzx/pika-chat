@@ -3,7 +3,8 @@ import "server-only";
 import { generateText } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { DEFAULT_TOPIC_TITLE, type Topic } from "@/lib/schemas/topic";
+import { DEFAULT_TOPIC_TITLES, isDefaultTopicTitle } from "@/i18n/defaults";
+import type { Topic } from "@/lib/schemas/topic";
 import { createChatModelHandle } from "@/server/ai/chat-model";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
@@ -32,10 +33,15 @@ export function sanitizeGeneratedTitle(raw: string): string | null {
   return text;
 }
 
-export function fallbackTitleFromMessage(text: string): string {
+/** `defaultTitle` is the sentinel already stored on the topic (its creator's
+ * locale) — empty first-message text must leave that placeholder in place. */
+export function fallbackTitleFromMessage(
+  text: string,
+  defaultTitle: string,
+): string {
   const collapsed = text.trim().replace(/\s+/g, " ");
   if (collapsed.length === 0) {
-    return DEFAULT_TOPIC_TITLE;
+    return defaultTitle;
   }
   if (collapsed.length <= TITLE_MAX_LENGTH) {
     return collapsed;
@@ -55,7 +61,7 @@ export async function titleTopicFromFirstMessage(
   if (!topic) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
-  if (topic.title !== DEFAULT_TOPIC_TITLE) {
+  if (!isDefaultTopicTitle(topic.title)) {
     return topic;
   }
 
@@ -93,7 +99,7 @@ export async function titleTopicFromFirstMessage(
     }
   }
 
-  const title = generated ?? fallbackTitleFromMessage(text);
+  const title = generated ?? fallbackTitleFromMessage(text, topic.title);
   try {
     const db = getDb();
     const updated = await db
@@ -102,7 +108,7 @@ export async function titleTopicFromFirstMessage(
       .where(
         and(
           eq(topics.id, input.topicId),
-          eq(topics.title, DEFAULT_TOPIC_TITLE),
+          inArray(topics.title, DEFAULT_TOPIC_TITLES),
           inArray(
             topics.assistantId,
             db

@@ -1,4 +1,4 @@
-import { DEFAULT_TOPIC_TITLE } from "@/lib/schemas/topic";
+import { isDefaultTopicTitle } from "@/i18n/defaults";
 
 export function shouldRequestTopicTitle(input: {
   activeTopicId: string | undefined;
@@ -13,6 +13,6 @@ export function shouldRequestTopicTitle(input: {
   }
   return (
     input.activeTopicId === undefined ||
-    input.displayedTitle === DEFAULT_TOPIC_TITLE
+    isDefaultTopicTitle(input.displayedTitle)
   );
 }

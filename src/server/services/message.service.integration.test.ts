@@ -143,7 +143,11 @@ async function setupTopic(): Promise<{
 }> {
   const { actor, otherActor } = await seedActors();
   const assistant = await createAssistant({ name: "Owner", icon: "✨" }, actor);
-  const topic = await createTopicForChat({ assistantId: assistant.id }, actor);
+  const topic = await createTopicForChat(
+    { assistantId: assistant.id },
+    actor,
+    "New topic",
+  );
   // chat_messages.provider_config_id is a real FK: seed a config row.
   await db.insert(providerConfigs).values({
     id: "cfg-1",

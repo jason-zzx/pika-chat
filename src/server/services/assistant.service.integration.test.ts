@@ -3,10 +3,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  DEFAULT_ASSISTANT_ICON,
-  DEFAULT_ASSISTANT_NAME,
-} from "@/lib/schemas/assistant";
+import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
 import { requireActor } from "@/server/auth/actor";
 import {
   adminCredentials,
@@ -44,6 +41,11 @@ import {
   createProviderConfig,
 } from "@/server/services/provider.service";
 import { AppError } from "@/server/errors";
+
+/** The route boundary resolves the real `Assistant.defaultName`; the service
+ * stores whatever localized default it is handed. */
+const DEFAULT_NAME = "Assistant";
+const DEFAULT_TITLE = "New topic";
 
 const db = getDb();
 
@@ -152,7 +154,7 @@ describe("assistant.service", () => {
     expect(created.systemPrompt).toBe("Be brief");
     expect(created.topics).toEqual([]);
 
-    const listed = await listAssistantTree(userActor);
+    const listed = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(listed.assistants.map((row) => row.id)).toContain(created.id);
 
     const updated = await updateAssistant(
@@ -175,22 +177,22 @@ describe("assistant.service", () => {
       userActor,
     );
     await deleteAssistant(created.id, userActor);
-    const after = await listAssistantTree(userActor);
+    const after = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(after.assistants.map((row) => row.id)).toEqual([second.id]);
   });
 
   it("seeds exactly one assistant on the first empty list and does not duplicate", async () => {
     const { userActor } = await seedActors();
-    const first = await listAssistantTree(userActor);
+    const first = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(first.assistants).toHaveLength(1);
     const seeded = first.assistants[0];
-    expect(seeded?.name).toBe(DEFAULT_ASSISTANT_NAME);
+    expect(seeded?.name).toBe(DEFAULT_NAME);
     expect(seeded?.icon).toBe(DEFAULT_ASSISTANT_ICON);
     expect(seeded?.systemPrompt).toBeNull();
     expect(seeded?.defaultProviderConfigId).toBeNull();
     expect(seeded?.defaultModelId).toBeNull();
 
-    const second = await listAssistantTree(userActor);
+    const second = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(second.assistants).toHaveLength(1);
     expect(second.assistants[0]?.id).toBe(seeded?.id);
 
@@ -204,8 +206,8 @@ describe("assistant.service", () => {
   it("converges concurrent first-list calls onto one seeded row", async () => {
     const { userActor } = await seedActors();
     const [left, right] = await Promise.all([
-      listAssistantTree(userActor),
-      listAssistantTree(userActor),
+      listAssistantTree(userActor, DEFAULT_NAME),
+      listAssistantTree(userActor, DEFAULT_NAME),
     ]);
     expect(left.assistants).toHaveLength(1);
     expect(right.assistants).toHaveLength(1);
@@ -292,7 +294,11 @@ describe("assistant.service", () => {
       { name: "Extra", icon: "2️⃣" },
       userActor,
     );
-    const topic = await createTopicForChat({ assistantId: extra.id }, userActor);
+    const topic = await createTopicForChat(
+      { assistantId: extra.id },
+      userActor,
+      DEFAULT_TITLE,
+    );
     await appendUserMessage(
       {
         topicId: topic.id,
@@ -316,7 +322,7 @@ describe("assistant.service", () => {
       .from(chatMessages)
       .where(eq(chatMessages.topicId, topic.id));
     expect(leftoverMessages).toEqual([]);
-    const tree = await listAssistantTree(userActor);
+    const tree = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(tree.assistants.map((row) => row.id)).toEqual([primary.id]);
   });
 
@@ -326,14 +332,18 @@ describe("assistant.service", () => {
       { name: "Only", icon: "🔒" },
       userActor,
     );
-    const topic = await createTopicForChat({ assistantId: only.id }, userActor);
+    const topic = await createTopicForChat(
+      { assistantId: only.id },
+      userActor,
+      DEFAULT_TITLE,
+    );
 
     await expect(deleteAssistant(only.id, userActor)).rejects.toMatchObject({
       code: "CONFLICT",
       status: 409,
     });
 
-    const still = await listAssistantTree(userActor);
+    const still = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(still.assistants).toHaveLength(1);
     expect(still.assistants[0]?.topics.map((row) => row.id)).toEqual([
       topic.id,
@@ -376,7 +386,7 @@ describe("assistant.service", () => {
       expect(failure.reason).toMatchObject({ code: "CONFLICT", status: 409 });
     }
 
-    const remaining = await listAssistantTree(userActor);
+    const remaining = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(remaining.assistants).toHaveLength(1);
   });
 
@@ -389,10 +399,12 @@ describe("assistant.service", () => {
     const older = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
     const newer = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
 
     await db
@@ -404,7 +416,7 @@ describe("assistant.service", () => {
       .set({ updatedAt: new Date("2026-01-02T00:00:00.000Z") })
       .where(eq(topics.id, newer.id));
 
-    const before = await listAssistantTree(userActor);
+    const before = await listAssistantTree(userActor, DEFAULT_NAME);
     const listed = before.assistants.find((row) => row.id === assistant.id);
     expect(listed?.topics.map((topic) => topic.id)).toEqual([
       newer.id,
@@ -412,7 +424,7 @@ describe("assistant.service", () => {
     ]);
 
     await touchTopicUpdatedAt(older.id, userActor);
-    const after = await listAssistantTree(userActor);
+    const after = await listAssistantTree(userActor, DEFAULT_NAME);
     const relisted = after.assistants.find((row) => row.id === assistant.id);
     expect(relisted?.topics.map((topic) => topic.id)).toEqual([
       older.id,
@@ -429,10 +441,12 @@ describe("assistant.service", () => {
     const older = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
     const newer = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
+      DEFAULT_TITLE,
     );
     await db
       .update(topics)
@@ -445,7 +459,7 @@ describe("assistant.service", () => {
 
     await setTopicFavorite(older.id, { favorite: true }, userActor);
 
-    const tree = await listAssistantTree(userActor);
+    const tree = await listAssistantTree(userActor, DEFAULT_NAME);
     const listed = tree.assistants.find((row) => row.id === assistant.id);
     // Favoriting the older topic must not reorder: updatedAt is untouched.
     expect(
