@@ -16,7 +16,7 @@ async function providerParam(context: RouteContext) {
   const raw = await requireParam(
     context,
     "provider",
-    "Search provider not configured",
+    "searchProvider.notConfigured",
   );
   // An unknown provider name is a client input error, not a 404.
   return searchProviderSchema.parse(raw);

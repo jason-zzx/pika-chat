@@ -51,7 +51,7 @@ export async function createChatModelHandle(
     throw new AppError(
       "VALIDATION_FAILED",
       400,
-      "Selected model is not available",
+      "model.notAvailable",
     );
   }
 
@@ -60,7 +60,7 @@ export async function createChatModelHandle(
     throw new AppError(
       "VALIDATION_FAILED",
       400,
-      "Selected model is not available",
+      "model.notAvailable",
     );
   }
 

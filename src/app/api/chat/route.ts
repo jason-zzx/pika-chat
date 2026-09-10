@@ -13,6 +13,7 @@ import {
   type ChatMessageOutcome,
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
+import { getTranslations } from "next-intl/server";
 import { createChatModelHandle } from "@/server/ai/chat-model";
 import {
   stripMarkupFromTextParts,
@@ -26,6 +27,7 @@ import {
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
+import { providerErrorText } from "@/server/ai/provider-error";
 import {
   createReasoningTimer,
   withReasoningDurations,
@@ -66,6 +68,10 @@ function partsHaveText(message: ChatUIMessage): boolean {
 
 export const POST = withErrorHandling(async (request) => {
   const actor = await requireActor(request.headers);
+  // Request-scoped translator for the streaming path: the stream can only
+  // carry text, so our wrapper copy is localized here while upstream
+  // provider detail stays verbatim (see provider-error.ts).
+  const t = await getTranslations("Errors");
   const input = chatRequestSchema.parse(await request.json());
 
   // Before any topic row exists: an unusable model must not leave a draft behind.
@@ -79,7 +85,7 @@ export const POST = withErrorHandling(async (request) => {
     throw new AppError(
       "VALIDATION_FAILED",
       400,
-      "Selected model is not available",
+      "model.notAvailable",
     );
   }
   const reasoningEffort = resolvedReasoningEffort(
@@ -118,7 +124,7 @@ export const POST = withErrorHandling(async (request) => {
   if (topicId) {
     const context = await findTopicContextForActor(topicId, actor);
     if (!context || context.assistant.id !== input.assistantId) {
-      throw new AppError("NOT_FOUND", 404, "Topic not found");
+      throw new AppError("NOT_FOUND", 404, "topic.notFound");
     }
     systemPrompt = context.assistant.systemPrompt;
   } else {
@@ -269,7 +275,7 @@ export const POST = withErrorHandling(async (request) => {
       );
     },
     onError: (error: unknown) => {
-      streamErrorMessage = handle.describeError(error).message;
+      streamErrorMessage = providerErrorText(handle.describeError(error), t);
       return streamErrorMessage;
     },
     onEnd: async ({ responseMessage, outcome, isAborted }) => {
@@ -307,7 +313,7 @@ export const POST = withErrorHandling(async (request) => {
           turnOutcome = "failed";
           errorMessage =
             streamErrorMessage ??
-            handle.describeError(outcome.error).message;
+            providerErrorText(handle.describeError(outcome.error), t);
         }
 
         await appendAssistantMessage(

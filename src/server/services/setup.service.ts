@@ -28,7 +28,7 @@ export async function createFirstAdmin(input: CredentialsInput): Promise<{
 
     const counted = await tx.select({ value: count() }).from(users);
     if ((counted[0]?.value ?? 0) > 0) {
-      throw new AppError("FORBIDDEN", 403, "Setup has already been completed");
+      throw new AppError("FORBIDDEN", 403, "setup.alreadyCompleted");
     }
 
     await assertUsernameAvailable(input.username);

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ export default function DiscoverModelsSheet({
 }: DiscoverModelsSheetProps) {
   const discover = useDiscoverProviderModels();
   const addModel = useAddProviderModel();
+  const t = useTranslations("Errors");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +45,7 @@ export default function DiscoverModelsSheet({
     try {
       await discover.mutateAsync(configId);
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to discover models"));
+      setError(apiErrorMessage(caught, t, "actions.discoverModels"));
     }
   }
 
@@ -67,7 +69,7 @@ export default function DiscoverModelsSheet({
       }
       setSelected(new Set());
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to add model"));
+      setError(apiErrorMessage(caught, t, "actions.addModel"));
     }
   }
 

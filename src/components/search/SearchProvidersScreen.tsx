@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
@@ -26,6 +27,7 @@ import {
 export default function SearchProvidersScreen() {
   const providers = useSearchProviders();
   const reorder = useReorderSearchProviders();
+  const t = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
 
   const configured = providers.data?.providers ?? [];
@@ -50,7 +52,7 @@ export default function SearchProvidersScreen() {
       { providers: next },
       {
         onError: (caught) => {
-          setError(apiErrorMessage(caught, "Unable to reorder providers"));
+          setError(apiErrorMessage(caught, t, "actions.reorderProviders"));
         },
       },
     );
@@ -67,7 +69,8 @@ export default function SearchProvidersScreen() {
         <p className="text-sm text-destructive" role="alert">
           {apiErrorMessage(
             providers.error,
-            "Unable to load search providers",
+            t,
+            "actions.loadSearchProviders",
           )}
         </p>
       ) : null}
@@ -148,6 +151,7 @@ function ProviderForm({
   onError,
 }: ProviderFormProps) {
   const meta = SEARCH_PROVIDER_META[provider];
+  const t = useTranslations("Errors");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -155,7 +159,7 @@ function ProviderForm({
     try {
       await onSubmit();
     } catch (caught) {
-      onError(apiErrorMessage(caught, "Unable to save provider"));
+      onError(apiErrorMessage(caught, t, "actions.saveSearchProvider"));
     }
   }
 
@@ -221,6 +225,7 @@ function ConfiguredProviderCard({
   const meta = SEARCH_PROVIDER_META[setting.provider];
   const upsert = useUpsertSearchProvider();
   const remove = useDeleteSearchProvider();
+  const t = useTranslations("Errors");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(setting.baseUrl ?? "");
 
@@ -283,7 +288,7 @@ function ConfiguredProviderCard({
             onError(null);
             remove.mutate(setting.provider, {
               onError: (caught) => {
-                onError(apiErrorMessage(caught, "Unable to delete provider"));
+                onError(apiErrorMessage(caught, t, "actions.deleteSearchProvider"));
               },
             });
           }}

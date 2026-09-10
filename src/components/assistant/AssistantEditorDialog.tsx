@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import ModelPicker from "@/components/chat/ModelPicker";
@@ -42,6 +43,7 @@ export default function AssistantEditorDialog({
   onOpenChange,
   assistant,
 }: AssistantEditorDialogProps) {
+  const t = useTranslations("Errors");
   const isEdit = assistant !== null;
   const models = useAvailableModels();
   const create = useCreateAssistant();
@@ -89,7 +91,7 @@ export default function AssistantEditorDialog({
       }
       onOpenChange(false);
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to save assistant"));
+      setError(apiErrorMessage(caught, t, "actions.saveAssistant"));
     }
   }
 

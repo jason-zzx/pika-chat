@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import type { AppErrorMessageKey } from "@/lib/api/error-contract";
 import { AppError } from "@/server/errors";
 
 const servedModelsSchema = z.object({
@@ -15,14 +16,14 @@ function isTimeoutError(error: unknown): boolean {
   return error.name === "AbortError" || error.name === "TimeoutError";
 }
 
-function providerStatusMessage(status: number): string {
+function providerStatusKey(status: number): AppErrorMessageKey {
   if (status === 401 || status === 403) {
-    return "Provider rejected the credentials";
+    return "provider.credentialsRejected";
   }
   if (status === 404) {
-    return "Provider does not support model discovery";
+    return "provider.discoveryUnsupported";
   }
-  return `Provider returned HTTP ${status}`;
+  return "provider.httpStatus";
 }
 
 export async function fetchServedModelIds(
@@ -44,19 +45,21 @@ export async function fetchServedModelIds(
     });
   } catch (error) {
     if (isTimeoutError(error)) {
-      throw new AppError("PROVIDER_ERROR", 502, "Provider request timed out");
+      throw new AppError("PROVIDER_ERROR", 502, "provider.timedOut");
     }
-    throw new AppError("PROVIDER_ERROR", 502, "Unable to reach the provider");
+    throw new AppError("PROVIDER_ERROR", 502, "provider.unreachable");
   }
 
   if (!response.ok) {
     if (response.body) {
       await response.body.cancel();
     }
+    const messageKey = providerStatusKey(response.status);
     throw new AppError(
       "PROVIDER_ERROR",
       502,
-      providerStatusMessage(response.status),
+      messageKey,
+      messageKey === "provider.httpStatus" ? { status: response.status } : undefined,
     );
   }
 
@@ -67,7 +70,7 @@ export async function fetchServedModelIds(
     throw new AppError(
       "PROVIDER_ERROR",
       502,
-      "Provider returned an unexpected response",
+      "provider.unexpectedResponse",
     );
   }
 
@@ -76,7 +79,7 @@ export async function fetchServedModelIds(
     throw new AppError(
       "PROVIDER_ERROR",
       502,
-      "Provider returned an unexpected response",
+      "provider.unexpectedResponse",
     );
   }
 

@@ -13,7 +13,7 @@ export function resolvedReasoningEffort(
     throw new AppError(
       "VALIDATION_FAILED",
       400,
-      "Selected reasoning effort is not available",
+      "model.effortUnavailable",
     );
   }
   return requested;

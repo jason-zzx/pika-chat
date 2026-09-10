@@ -53,7 +53,7 @@ export async function titleTopicFromFirstMessage(
 ): Promise<Topic> {
   const topic = await findTopicForActor(input.topicId, actor);
   if (!topic) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
   if (topic.title !== DEFAULT_TOPIC_TITLE) {
     return topic;
@@ -123,7 +123,7 @@ export async function titleTopicFromFirstMessage(
 
   const current = await findTopicForActor(input.topicId, actor);
   if (!current) {
-    throw new AppError("NOT_FOUND", 404, "Topic not found");
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
   return current;
 }

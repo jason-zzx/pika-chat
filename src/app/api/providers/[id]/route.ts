@@ -12,7 +12,7 @@ async function providerId(
 ): Promise<string> {
   const id = (await context?.params)?.id;
   if (!id) {
-    throw new AppError("NOT_FOUND", 404, "Provider not found");
+    throw new AppError("NOT_FOUND", 404, "provider.notFound");
   }
   return id;
 }

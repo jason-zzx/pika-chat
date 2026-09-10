@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import ProviderConfigsScreen from "./ProviderConfigsScreen";
 
@@ -19,7 +21,7 @@ function renderScreen(canShare: boolean) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  return renderWithIntl(
     <QueryClientProvider client={client}>
       <ProviderConfigsScreen canShare={canShare} />
     </QueryClientProvider>,

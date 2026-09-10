@@ -5,7 +5,7 @@ import { requireActor } from "@/server/auth/actor";
 import { deleteTopic, renameTopic } from "@/server/services/topic.service";
 
 function topicId(context: Parameters<typeof requireParam>[0]): Promise<string> {
-  return requireParam(context, "id", "Topic not found");
+  return requireParam(context, "id", "topic.notFound");
 }
 
 export const PATCH = withErrorHandling(async (request, context) => {

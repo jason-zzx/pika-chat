@@ -100,7 +100,7 @@ export async function upsertSearchProviderSetting(
       .returning();
     const updatedRow = updated[0];
     if (!updatedRow) {
-      throw new AppError("NOT_FOUND", 404, "Search provider not configured");
+      throw new AppError("NOT_FOUND", 404, "searchProvider.notConfigured");
     }
     logger.info(
       { userId: actor.userId, provider },
@@ -113,8 +113,9 @@ export async function upsertSearchProviderSetting(
     throw new AppError(
       "VALIDATION_FAILED",
       400,
-      "API key is required to add a search provider",
-      { apiKey: "Required" },
+      "searchProvider.apiKeyRequired",
+      undefined,
+      { fieldErrors: { apiKey: { key: "required" } } },
     );
   }
   const positionRows = await db
@@ -138,7 +139,7 @@ export async function upsertSearchProviderSetting(
       .returning();
     const insertedRow = inserted[0];
     if (!insertedRow) {
-      throw new AppError("INTERNAL", 500, "Failed to save search provider");
+      throw new AppError("INTERNAL", 500, "searchProvider.saveFailed");
     }
     logger.info(
       { userId: actor.userId, provider },
@@ -150,7 +151,7 @@ export async function upsertSearchProviderSetting(
       throw new AppError(
         "CONFLICT",
         409,
-        "Search provider is already configured",
+        "searchProvider.alreadyConfigured",
       );
     }
     throw error;
@@ -173,7 +174,7 @@ export async function deleteSearchProviderSetting(
       )
       .returning({ id: searchProviderSettings.id });
     if (!deleted[0]) {
-      throw new AppError("NOT_FOUND", 404, "Search provider not configured");
+      throw new AppError("NOT_FOUND", 404, "searchProvider.notConfigured");
     }
     // Compact positions back to 0..n-1 in the remaining order.
     const remaining = await tx
@@ -218,7 +219,7 @@ export async function reorderSearchProviders(
       throw new AppError(
         "VALIDATION_FAILED",
         400,
-        "Order must list every configured search provider exactly once",
+        "searchProvider.invalidOrder",
       );
     }
 
@@ -230,7 +231,7 @@ export async function reorderSearchProviders(
         throw new AppError(
           "VALIDATION_FAILED",
           400,
-          "Order must list every configured search provider exactly once",
+          "searchProvider.invalidOrder",
         );
       }
       if (row.position !== index) {
@@ -241,7 +242,7 @@ export async function reorderSearchProviders(
           .returning();
         const updatedRow = updated[0];
         if (!updatedRow) {
-          throw new AppError("INTERNAL", 500, "Failed to reorder providers");
+          throw new AppError("INTERNAL", 500, "searchProvider.reorderFailed");
         }
         reordered.push(updatedRow);
       } else {

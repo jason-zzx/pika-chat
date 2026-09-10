@@ -12,7 +12,7 @@ export default function SetupForm() {
     <CredentialsForm
       submitLabel="Create admin account"
       pendingLabel="Creating…"
-      fallbackError="Unable to complete setup"
+      fallbackErrorKey="actions.completeSetup"
       onSubmit={async (input) => {
         await submitSetup(input);
         router.push("/");

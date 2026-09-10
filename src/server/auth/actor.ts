@@ -46,7 +46,7 @@ export async function resolveActor(
 export async function requireActor(headers: Headers): Promise<ResolvedActor> {
   const actor = await resolveActor(headers);
   if (!actor) {
-    throw new AppError("UNAUTHENTICATED", 401, "Authentication required");
+    throw new AppError("UNAUTHENTICATED", 401, "auth.required");
   }
   return actor;
 }
@@ -54,7 +54,7 @@ export async function requireActor(headers: Headers): Promise<ResolvedActor> {
 export async function requireAdmin(headers: Headers): Promise<ResolvedActor> {
   const actor = await requireActor(headers);
   if (!isStaffRole(actor.role)) {
-    throw new AppError("FORBIDDEN", 403, "Admin access required");
+    throw new AppError("FORBIDDEN", 403, "auth.adminRequired");
   }
   return actor;
 }

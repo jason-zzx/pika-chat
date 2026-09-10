@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { useDeleteTopic } from "@/components/assistant/use-assistants";
@@ -30,6 +31,7 @@ export default function DeleteTopicDialog({
   onDeleted,
 }: DeleteTopicDialogProps) {
   const remove = useDeleteTopic();
+  const t = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
 
   function handleOpenChange(next: boolean) {
@@ -50,7 +52,7 @@ export default function DeleteTopicDialog({
       handleOpenChange(false);
       onDeleted?.(id);
     } catch (caught) {
-      setError(apiErrorMessage(caught, "Unable to delete topic"));
+      setError(apiErrorMessage(caught, t, "actions.deleteTopic"));
     }
   }
 

@@ -7,7 +7,7 @@ export const POST = withErrorHandling(async (request, context) => {
   const actor = await requireActor(request.headers);
   const id = (await context?.params)?.id;
   if (!id) {
-    throw new AppError("NOT_FOUND", 404, "Provider not found");
+    throw new AppError("NOT_FOUND", 404, "provider.notFound");
   }
   const modelIds = await discoverProviderModels(id, actor);
   return Response.json({ modelIds });

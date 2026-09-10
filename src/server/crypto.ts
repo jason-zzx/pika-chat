@@ -20,7 +20,7 @@ function credentialKey(): Buffer {
 }
 
 function decryptFailed(): never {
-  throw new AppError("INTERNAL", 500, "Unable to decrypt credential");
+  throw new AppError("INTERNAL", 500, "crypto.decryptFailed");
 }
 
 export function encryptSecret(plaintext: string): string {

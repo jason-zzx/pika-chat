@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Dispatch, SetStateAction } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,10 @@ import type {
   ChatMessagesResponse,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
+import {
+  renderWithIntl,
+  wrapWithIntl,
+} from "@/test-utils/render-with-intl";
 
 import ChatView from "./ChatView";
 
@@ -127,7 +131,7 @@ function renderChatView(props?: { assistantId?: string }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const view = render(
+  const view = renderWithIntl(
     <QueryClientProvider client={client}>
       <ChatView {...props} />
     </QueryClientProvider>,
@@ -243,15 +247,19 @@ describe("ChatView session-created topic history (B8)", () => {
     // picker comes back.
     nav.pathname = "/assistant/a1/t1";
     view.rerender(
-      <QueryClientProvider client={view.client}>
-        <ChatView />
-      </QueryClientProvider>,
+      wrapWithIntl(
+        <QueryClientProvider client={view.client}>
+          <ChatView />
+        </QueryClientProvider>,
+      ),
     );
     nav.pathname = "/";
     view.rerender(
-      <QueryClientProvider client={view.client}>
-        <ChatView />
-      </QueryClientProvider>,
+      wrapWithIntl(
+        <QueryClientProvider client={view.client}>
+          <ChatView />
+        </QueryClientProvider>,
+      ),
     );
     await waitFor(() => {
       expect(composerProps.latest?.showAssistantPicker).toBe(true);
@@ -282,18 +290,22 @@ describe("ChatView session-created topic history (B8)", () => {
     // The replaceState'd topic URL becomes visible to the router.
     nav.pathname = "/assistant/a1/t1";
     view.rerender(
-      <QueryClientProvider client={view.client}>
-        <ChatView assistantId="a1" />
-      </QueryClientProvider>,
+      wrapWithIntl(
+        <QueryClientProvider client={view.client}>
+          <ChatView assistantId="a1" />
+        </QueryClientProvider>,
+      ),
     );
     expect(screen.getByText("first answer")).toBeInTheDocument();
 
     // Clicking New topic navigates to the draft URL without a remount.
     nav.pathname = "/assistant/a1";
     view.rerender(
-      <QueryClientProvider client={view.client}>
-        <ChatView assistantId="a1" />
-      </QueryClientProvider>,
+      wrapWithIntl(
+        <QueryClientProvider client={view.client}>
+          <ChatView assistantId="a1" />
+        </QueryClientProvider>,
+      ),
     );
 
     await waitFor(() => {

@@ -26,7 +26,7 @@ export async function registerUser(input: CredentialsInput): Promise<{
     .limit(1);
   const settings = rows[0];
   if (!settings?.allowRegistration) {
-    throw new AppError("FORBIDDEN", 403, "Registration is disabled");
+    throw new AppError("FORBIDDEN", 403, "registration.disabled");
   }
 
   await assertUsernameAvailable(input.username);

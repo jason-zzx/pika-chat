@@ -36,7 +36,7 @@ export async function assertUsernameAvailable(username: string): Promise<void> {
     .where(eq(users.username, normalized))
     .limit(1);
   if (existing[0]) {
-    throw new AppError("CONFLICT", 409, "Username is already taken");
+    throw new AppError("CONFLICT", 409, "account.usernameTaken");
   }
 }
 
@@ -47,12 +47,12 @@ export function throwIfAccountCreateFailed(error: unknown): never {
 
   const code = errorCode(error);
   if (code && CONFLICT_CODES.has(code)) {
-    throw new AppError("CONFLICT", 409, "Username or email is already taken");
+    throw new AppError("CONFLICT", 409, "account.usernameOrEmailTaken");
   }
   if (isUniqueViolation(error)) {
-    throw new AppError("CONFLICT", 409, "Username or email is already taken");
+    throw new AppError("CONFLICT", 409, "account.usernameOrEmailTaken");
   }
 
   logger.error({ err: error }, "account create failed");
-  throw new AppError("INTERNAL", 500, "Unable to create account");
+  throw new AppError("INTERNAL", 500, "account.createFailed");
 }
