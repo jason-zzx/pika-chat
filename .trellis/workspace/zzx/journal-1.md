@@ -470,3 +470,31 @@ Cookie-based next-intl 4.14.2 (no URL routing): NEXT_LOCALE -> Accept-Language -
 ### Status
 
 [OK] **Completed**
+
+
+## Session 17: i18n-ui: all screens localized (batches 1-6)
+<!-- trellis-session: v=2 fp=d2e084714748ea58 -->
+
+**Date**: 2026-09-10
+**Task**: i18n-ui: all screens localized (batches 1-6)
+**Branch**: `feat/i18n-ui`
+
+### Summary
+
+Migrated every remaining screen to next-intl catalogs in six batches: auth/account, chat+topic, settings/admin/provider/search, Intl-localized timestamps (behavior-preserving getMessageAge descriptor + useNow), assistant dialogs + tree brand, and localized defaults (Chat.newTopic / Assistant.defaultName) with locale-independent sentinels (DEFAULT_TOPIC_TITLES + isDefaultTopicTitle) covering creation, SQL CAS, and the client pre-check. Check phases fixed provider visibility enum leak, spec namespace list, ModelPicker null-owner test; review trimmed speculative additions; zh copy uniformized on 话题 for topics. Gates: 81 files / 566 tests, build green. No commits by agents; 7 work commits on feat/i18n-ui.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f2a1b48` | feat(i18n): localize auth and account screens |
+| `d2eb0c1` | feat(i18n): localize chat and topic UI |
+| `c077d5f` | feat(i18n): localize settings, admin, provider, and search screens |
+| `dc53040` | feat(i18n): localize message timestamps |
+| `3ef20fe` | feat(i18n): localize assistant dialogs and tree brand |
+| `da1b2a6` | feat(i18n): localize default assistant name and topic title |
+| `f285111` | docs(spec): document assistant, provider, and search namespaces |
+
+### Status
+
+[OK] **Completed**
