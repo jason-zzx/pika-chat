@@ -1,0 +1,178 @@
+{
+  "RootLayout": {
+    "title": "Pika chat",
+    "description": "Self-hosted AI chat"
+  },
+  "Layout": {
+    "sidebar": {
+      "title": "Sidebar",
+      "description": "Displays the mobile sidebar.",
+      "toggle": "Toggle Sidebar",
+      "main": "Main"
+    },
+    "settingsNav": {
+      "label": "Settings",
+      "general": "General",
+      "account": "Account",
+      "providers": "Providers",
+      "search": "Search",
+      "users": "Users"
+    },
+    "userMenu": {
+      "accountMenu": "Account menu for {name}",
+      "superAdmin": "super admin",
+      "signOut": "Sign out",
+      "settings": "Settings"
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System",
+      "switchTo": "Switch to {theme}",
+      "current": "Theme: {theme}"
+    },
+    "locale": {
+      "label": "Language"
+    },
+    "tree": {
+      "backToAssistants": "Back to assistants",
+      "assistants": "Assistants",
+      "openAssistant": "Open {name}",
+      "newAssistant": "New assistant",
+      "newTopic": "New topic",
+      "profile": "Profile",
+      "delete": "Delete",
+      "rename": "Rename",
+      "favorite": "Favorite",
+      "unfavorite": "Unfavorite",
+      "favoriteNamed": "Favorite {title}",
+      "unfavoriteNamed": "Unfavorite {title}",
+      "actionsFor": "Actions for {title}",
+      "topicsSection": "Topics",
+      "favoritesSection": "Favorite",
+      "noTopicsTitle": "No topics yet",
+      "noTopicsDescription": "Start a conversation in this assistant.",
+      "loadFailedTitle": "Unable to load assistants",
+      "loadFailedDescription": "Refresh the page to try again."
+    }
+  },
+  "Common": {
+    "close": "Close"
+  },
+  "Settings": {
+    "General": {
+      "title": "General",
+      "description": "Appearance for this browser.",
+      "theme": "Theme",
+      "language": "Language"
+    }
+  },
+  "Errors": {
+    "generic": "Something went wrong. Please try again.",
+    "unexpected": "An unexpected error occurred",
+    "validation": {
+      "failed": "Invalid request"
+    },
+    "auth": {
+      "required": "Authentication required",
+      "adminRequired": "Admin access required"
+    },
+    "account": {
+      "usernameTaken": "Username is already taken",
+      "usernameOrEmailTaken": "Username or email is already taken",
+      "createFailed": "Unable to create account"
+    },
+    "registration": {
+      "disabled": "Registration is disabled"
+    },
+    "setup": {
+      "alreadyCompleted": "Setup has already been completed"
+    },
+    "instanceSettings": {
+      "missing": "Instance settings are missing"
+    },
+    "crypto": {
+      "decryptFailed": "Unable to decrypt credential"
+    },
+    "topic": {
+      "notFound": "Topic not found",
+      "createFailed": "Failed to create topic"
+    },
+    "message": {
+      "notFound": "Message not found",
+      "storeFailed": "Failed to store message",
+      "emptyVersionGroup": "Empty version group"
+    },
+    "assistant": {
+      "notFound": "Assistant not found",
+      "nameTaken": "An assistant with this name already exists",
+      "createFailed": "Failed to create assistant",
+      "lastOne": "Cannot delete your only assistant"
+    },
+    "provider": {
+      "notFound": "Provider not found",
+      "nameTaken": "A provider with this name already exists",
+      "createFailed": "Failed to create provider",
+      "modelAddFailed": "Failed to add model",
+      "modelExists": "This model is already on the provider",
+      "requestFailed": "Provider request failed",
+      "credentialsRejected": "Provider rejected the credentials",
+      "rateLimited": "Provider rate limit reached",
+      "timedOut": "Provider request timed out",
+      "unreachable": "Unable to reach the provider",
+      "unexpectedResponse": "Provider returned an unexpected response",
+      "httpStatus": "Provider returned HTTP {status}",
+      "discoveryUnsupported": "Provider does not support model discovery"
+    },
+    "model": {
+      "notFound": "Model not found",
+      "notAvailable": "Selected model is not available",
+      "effortUnavailable": "Selected reasoning effort is not available"
+    },
+    "searchProvider": {
+      "notConfigured": "Search provider not configured",
+      "apiKeyRequired": "API key is required to add a search provider",
+      "saveFailed": "Failed to save search provider",
+      "alreadyConfigured": "Search provider is already configured",
+      "invalidOrder": "Order must list every configured search provider exactly once",
+      "reorderFailed": "Failed to reorder providers"
+    },
+    "stream": {
+      "notFound": "Stream not found"
+    },
+    "actions": {
+      "saveDefaultModel": "Unable to save default model",
+      "regenerate": "Unable to regenerate the response",
+      "deleteMessage": "Unable to delete the message",
+      "switchVersions": "Unable to switch versions",
+      "reorderProviders": "Unable to reorder providers",
+      "loadSearchProviders": "Unable to load search providers",
+      "saveSearchProvider": "Unable to save provider",
+      "deleteSearchProvider": "Unable to delete provider",
+      "loadProviders": "Unable to load providers",
+      "saveProvider": "Unable to save provider",
+      "deleteProvider": "Unable to delete provider",
+      "removeModel": "Unable to remove model",
+      "addModel": "Unable to add model",
+      "discoverModels": "Unable to discover models",
+      "saveModel": "Unable to save model",
+      "resetFromCatalog": "Unable to reset from catalog",
+      "saveAssistant": "Unable to save assistant",
+      "deleteAssistant": "Unable to delete assistant",
+      "renameTopic": "Unable to rename topic",
+      "deleteTopic": "Unable to delete topic",
+      "register": "Unable to register",
+      "completeSetup": "Unable to complete setup"
+    }
+  },
+  "Validation": {
+    "required": "Required",
+    "invalid": "Invalid value",
+    "invalidType": "Invalid value",
+    "invalidFormat": "Invalid format",
+    "invalidValue": "Invalid value",
+    "tooSmall": "Must be at least {minimum}",
+    "tooBig": "Must be at most {maximum}",
+    "unrecognizedKeys": "Unrecognized field"
+  }
+}

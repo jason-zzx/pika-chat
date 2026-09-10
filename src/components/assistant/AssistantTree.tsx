@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useId, useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 
@@ -60,6 +61,7 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
   const tree = useAssistantTree();
   const router = useRouter();
   const pathname = usePathname();
+  const t = useTranslations("Layout");
   const { assistantId: pathAssistantId, topicId } = parseAssistantPath(pathname);
   const isSettings = pathname === "/settings" || pathname.startsWith("/settings/");
 
@@ -95,7 +97,10 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
     <>
       <SidebarHeader className="overflow-hidden">
         {isSettings ? (
-          <PaneHeader title="Settings" onBack={() => router.push("/")} />
+          <PaneHeader
+            title={t("settingsNav.label")}
+            onBack={() => router.push("/")}
+          />
         ) : viewing ? (
           <PaneHeader
             title={viewing.name}
@@ -120,8 +125,8 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
           <LoadingRows />
         ) : tree.isError ? (
           <EmptyState
-            title="Unable to load assistants"
-            description="Refresh the page to try again."
+            title={t("tree.loadFailedTitle")}
+            description={t("tree.loadFailedDescription")}
           />
         ) : viewing ? (
           <AssistantPane
@@ -196,13 +201,14 @@ function PaneHeader({
   icon?: string;
   onBack: () => void;
 }) {
+  const t = useTranslations("Layout");
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label="Back to assistants"
+        aria-label={t("tree.backToAssistants")}
         onClick={onBack}
       >
         <ArrowLeftIcon />
@@ -242,16 +248,17 @@ function AssistantList({
   onOpen: (assistant: Assistant) => void;
   onCreate: () => void;
 }) {
+  const t = useTranslations("Layout");
   return (
     <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
-      <SidebarGroupLabel>Assistants</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("tree.assistants")}</SidebarGroupLabel>
       <SidebarGroupContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SidebarMenu className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto">
           {assistants.map((assistant) => (
             <SidebarMenuItem key={assistant.id} className="min-w-0 overflow-hidden">
               <SidebarMenuButton
                 onClick={() => onOpen(assistant)}
-                aria-label={`Open ${assistant.name}`}
+                aria-label={t("tree.openAssistant", { name: assistant.name })}
               >
                 <span aria-hidden="true">{assistant.icon}</span>
                 <span className="truncate group-data-[collapsible=icon]:hidden">
@@ -266,11 +273,13 @@ function AssistantList({
             type="button"
             variant="ghost"
             className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-            aria-label="New assistant"
+            aria-label={t("tree.newAssistant")}
             onClick={onCreate}
           >
             <PlusIcon aria-hidden="true" />
-            <span className="group-data-[collapsible=icon]:hidden">New assistant</span>
+            <span className="group-data-[collapsible=icon]:hidden">
+              {t("tree.newAssistant")}
+            </span>
           </Button>
         </div>
       </SidebarGroupContent>
@@ -376,6 +385,7 @@ function AssistantPane({
 }) {
   const topicsContentId = useId();
   const favoritesContentId = useId();
+  const t = useTranslations("Layout");
   const sections = useSyncExternalStore(
     subscribeTopicSections,
     topicSectionsSnapshot,
@@ -399,21 +409,25 @@ function AssistantPane({
             <SidebarMenuItem className="min-w-0 overflow-hidden">
               <SidebarMenuButton
                 render={<Link href={assistantDraftHref(assistant.id)} />}
-                aria-label="New topic"
+                aria-label={t("tree.newTopic")}
               >
                 <PlusIcon />
-                <span className="group-data-[collapsible=icon]:hidden">New topic</span>
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {t("tree.newTopic")}
+                </span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem className="min-w-0 overflow-hidden">
-              <SidebarMenuButton onClick={onEdit} aria-label="Profile">
+              <SidebarMenuButton onClick={onEdit} aria-label={t("tree.profile")}>
                 <UserRoundIcon />
-                <span className="group-data-[collapsible=icon]:hidden">Profile</span>
+                <span className="group-data-[collapsible=icon]:hidden">
+                  {t("tree.profile")}
+                </span>
               </SidebarMenuButton>
               <SidebarMenuAction
                 showOnHover
                 disabled={isLastAssistant}
-                aria-label="Delete"
+                aria-label={t("tree.delete")}
                 onClick={onDelete}
               >
                 <Trash2Icon />
@@ -427,7 +441,7 @@ function AssistantPane({
           {favoriteTopics.length > 0 ? (
             <div>
               <SectionToggle
-                label="Favorite"
+                label={t("tree.favoritesSection")}
                 open={sections.favorites}
                 controls={favoritesContentId}
                 onToggle={() => toggleSection("favorites")}
@@ -457,7 +471,7 @@ function AssistantPane({
           ) : null}
           <div>
             <SectionToggle
-              label="Topics"
+              label={t("tree.topicsSection")}
               open={sections.topics}
               controls={topicsContentId}
               onToggle={() => toggleSection("topics")}
@@ -471,8 +485,8 @@ function AssistantPane({
               <div className="min-h-0 overflow-hidden">
                 {assistant.topics.length === 0 ? (
                   <EmptyState
-                    title="No topics yet"
-                    description="Start a conversation in this assistant."
+                    title={t("tree.noTopicsTitle")}
+                    description={t("tree.noTopicsDescription")}
                   />
                 ) : otherTopics.length > 0 ? (
                   <SidebarMenu>
@@ -554,6 +568,7 @@ function TopicRow({
   onDelete: (topic: Topic) => void;
 }) {
   const setFavorite = useSetTopicFavorite();
+  const t = useTranslations("Layout");
 
   function toggleFavorite() {
     setFavorite.mutate({
@@ -575,7 +590,11 @@ function TopicRow({
       <SidebarMenuAction
         className="right-7"
         showOnHover={!topic.isFavorite}
-        aria-label={`${topic.isFavorite ? "Unfavorite" : "Favorite"} ${topic.title}`}
+        aria-label={
+          topic.isFavorite
+            ? t("tree.unfavoriteNamed", { title: topic.title })
+            : t("tree.favoriteNamed", { title: topic.title })
+        }
         onClick={toggleFavorite}
       >
         <StarIcon
@@ -588,7 +607,7 @@ function TopicRow({
           render={
             <SidebarMenuAction
               showOnHover
-              aria-label={`Actions for ${topic.title}`}
+              aria-label={t("tree.actionsFor", { title: topic.title })}
             />
           }
         >
@@ -600,16 +619,16 @@ function TopicRow({
               aria-hidden="true"
               className={cn(topic.isFavorite && "fill-current")}
             />
-            {topic.isFavorite ? "Unfavorite" : "Favorite"}
+            {topic.isFavorite ? t("tree.unfavorite") : t("tree.favorite")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onRename(topic)}>
-            Rename
+            {t("tree.rename")}
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onClick={() => onDelete(topic)}
           >
-            Delete
+            {t("tree.delete")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

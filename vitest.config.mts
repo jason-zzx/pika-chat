@@ -23,6 +23,8 @@ export default defineConfig({
             "src/server/**/*.test.ts",
             "src/lib/**/*.test.ts",
             "src/components/**/*.test.ts",
+            "src/app/**/*.test.ts",
+            "src/i18n/**/*.test.ts",
             "src/stores/**/*.test.ts",
           ],
           exclude: ["**/*.integration.test.ts"],

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
   // Standalone output is for the Docker runner, which has no pnpm/next CLI.
@@ -7,4 +8,8 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['192.168.99.203'],
 };
 
-export default nextConfig;
+// No-arg form auto-discovers ./src/i18n/request.ts.
+// Never pass an absolute path here — Turbopack rejects it.
+const withNextIntl = createNextIntlPlugin();
+
+export default withNextIntl(nextConfig);

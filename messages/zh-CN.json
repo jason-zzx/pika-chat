@@ -1,0 +1,178 @@
+{
+  "RootLayout": {
+    "title": "Pika chat",
+    "description": "自托管的 AI 聊天"
+  },
+  "Layout": {
+    "sidebar": {
+      "title": "侧边栏",
+      "description": "显示移动端侧边栏。",
+      "toggle": "切换侧边栏",
+      "main": "主导航"
+    },
+    "settingsNav": {
+      "label": "设置",
+      "general": "通用",
+      "account": "账户",
+      "providers": "服务商",
+      "search": "搜索",
+      "users": "用户"
+    },
+    "userMenu": {
+      "accountMenu": "{name} 的账户菜单",
+      "superAdmin": "超级管理员",
+      "signOut": "退出登录",
+      "settings": "设置"
+    },
+    "theme": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统",
+      "switchTo": "切换到{theme}",
+      "current": "主题：{theme}"
+    },
+    "locale": {
+      "label": "语言"
+    },
+    "tree": {
+      "backToAssistants": "返回助手列表",
+      "assistants": "助手",
+      "openAssistant": "打开 {name}",
+      "newAssistant": "新建助手",
+      "newTopic": "新建主题",
+      "profile": "资料",
+      "delete": "删除",
+      "rename": "重命名",
+      "favorite": "收藏",
+      "unfavorite": "取消收藏",
+      "favoriteNamed": "收藏 {title}",
+      "unfavoriteNamed": "取消收藏 {title}",
+      "actionsFor": "{title} 的操作",
+      "topicsSection": "主题",
+      "favoritesSection": "收藏",
+      "noTopicsTitle": "暂无主题",
+      "noTopicsDescription": "在此助手中开始对话。",
+      "loadFailedTitle": "无法加载助手",
+      "loadFailedDescription": "刷新页面重试。"
+    }
+  },
+  "Common": {
+    "close": "关闭"
+  },
+  "Settings": {
+    "General": {
+      "title": "通用",
+      "description": "此浏览器的外观设置。",
+      "theme": "主题",
+      "language": "语言"
+    }
+  },
+  "Errors": {
+    "generic": "出错了，请重试。",
+    "unexpected": "发生意外错误",
+    "validation": {
+      "failed": "请求无效"
+    },
+    "auth": {
+      "required": "需要登录",
+      "adminRequired": "需要管理员权限"
+    },
+    "account": {
+      "usernameTaken": "用户名已被占用",
+      "usernameOrEmailTaken": "用户名或邮箱已被占用",
+      "createFailed": "无法创建账户"
+    },
+    "registration": {
+      "disabled": "注册已关闭"
+    },
+    "setup": {
+      "alreadyCompleted": "初始化已完成"
+    },
+    "instanceSettings": {
+      "missing": "实例设置缺失"
+    },
+    "crypto": {
+      "decryptFailed": "无法解密凭据"
+    },
+    "topic": {
+      "notFound": "主题不存在",
+      "createFailed": "创建主题失败"
+    },
+    "message": {
+      "notFound": "消息不存在",
+      "storeFailed": "保存消息失败",
+      "emptyVersionGroup": "版本组为空"
+    },
+    "assistant": {
+      "notFound": "助手不存在",
+      "nameTaken": "已存在同名助手",
+      "createFailed": "创建助手失败",
+      "lastOne": "无法删除唯一的助手"
+    },
+    "provider": {
+      "notFound": "服务商不存在",
+      "nameTaken": "已存在同名服务商",
+      "createFailed": "创建服务商失败",
+      "modelAddFailed": "添加模型失败",
+      "modelExists": "该模型已添加到此服务商",
+      "requestFailed": "服务商请求失败",
+      "credentialsRejected": "服务商拒绝了凭据",
+      "rateLimited": "已达到服务商速率限制",
+      "timedOut": "服务商请求超时",
+      "unreachable": "无法连接到服务商",
+      "unexpectedResponse": "服务商返回了意外的响应",
+      "httpStatus": "服务商返回 HTTP {status}",
+      "discoveryUnsupported": "服务商不支持模型发现"
+    },
+    "model": {
+      "notFound": "模型不存在",
+      "notAvailable": "所选模型不可用",
+      "effortUnavailable": "所选推理强度不可用"
+    },
+    "searchProvider": {
+      "notConfigured": "未配置搜索服务商",
+      "apiKeyRequired": "添加搜索服务商需要 API 密钥",
+      "saveFailed": "保存搜索服务商失败",
+      "alreadyConfigured": "搜索服务商已配置",
+      "invalidOrder": "顺序必须恰好列出每个已配置的搜索服务商一次",
+      "reorderFailed": "调整服务商顺序失败"
+    },
+    "stream": {
+      "notFound": "流不存在"
+    },
+    "actions": {
+      "saveDefaultModel": "无法保存默认模型",
+      "regenerate": "无法重新生成回复",
+      "deleteMessage": "无法删除该消息",
+      "switchVersions": "无法切换版本",
+      "reorderProviders": "无法调整服务商顺序",
+      "loadSearchProviders": "无法加载搜索服务商",
+      "saveSearchProvider": "无法保存服务商",
+      "deleteSearchProvider": "无法删除服务商",
+      "loadProviders": "无法加载服务商",
+      "saveProvider": "无法保存服务商",
+      "deleteProvider": "无法删除服务商",
+      "removeModel": "无法移除模型",
+      "addModel": "无法添加模型",
+      "discoverModels": "无法发现模型",
+      "saveModel": "无法保存模型",
+      "resetFromCatalog": "无法从目录重置",
+      "saveAssistant": "无法保存助手",
+      "deleteAssistant": "无法删除助手",
+      "renameTopic": "无法重命名主题",
+      "deleteTopic": "无法删除主题",
+      "register": "无法注册",
+      "completeSetup": "无法完成初始化"
+    }
+  },
+  "Validation": {
+    "required": "必填",
+    "invalid": "无效的值",
+    "invalidType": "无效的值",
+    "invalidFormat": "格式无效",
+    "invalidValue": "无效的值",
+    "tooSmall": "至少为 {minimum}",
+    "tooBig": "至多为 {maximum}",
+    "unrecognizedKeys": "存在无法识别的字段"
+  }
+}

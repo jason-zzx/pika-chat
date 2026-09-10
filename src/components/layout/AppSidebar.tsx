@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import AssistantTree from "@/components/assistant/AssistantTree";
 import SidebarUserMenu from "@/components/layout/SidebarUserMenu";
 import ThemeControl from "@/components/layout/ThemeControl";
@@ -18,8 +20,10 @@ type AppSidebarProps = {
 };
 
 export default function AppSidebar({ name, role, themeMode }: AppSidebarProps) {
+  const t = useTranslations("Layout");
+
   return (
-    <Sidebar collapsible="icon" aria-label="Main">
+    <Sidebar collapsible="icon" aria-label={t("sidebar.main")}>
       <AssistantTree showUsers={isStaffRole(role)} />
       <SidebarFooter>
         <SidebarMenu>
