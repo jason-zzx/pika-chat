@@ -49,6 +49,13 @@ Mock at the network boundary with MSW or a stubbed API client, not by mocking
 the query hooks. Mocking the hook under test means the test passes when the
 hook is wrong.
 
+**Test discovery is opt-in per directory.** `vitest.config.mts` lists explicit
+include globs for each project (`unit-node`, `unit-dom`, `integration`). A new
+top-level source directory (e.g. `src/i18n/`) is collected by **no project**
+until its glob is added — the tests silently never run and still "pass" as
+absent. When adding a directory with tests, add its glob and verify the file
+count moved (`pnpm test` prints the totals).
+
 ---
 
 ## Accessibility
