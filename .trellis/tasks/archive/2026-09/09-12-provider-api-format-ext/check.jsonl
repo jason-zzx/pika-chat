@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端验收清单：lint/typecheck/test、禁 any、迁移与密钥"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端验收清单：断点、可访问性、密钥不进客户端"}
+{"file": ".trellis/spec/backend/index.md", "reason": "后端 Quality Check 总清单"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端 Quality Check 总清单"}

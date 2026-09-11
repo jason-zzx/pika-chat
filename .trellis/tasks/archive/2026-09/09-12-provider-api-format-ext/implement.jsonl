@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "后端分层、迁移与质量硬约束（Route Handler 可达、Zod 边界、owner 过滤）"}
+{"file": ".trellis/spec/backend/provider-configs.md", "reason": "provider service 与 provider schema 的既有契约，本任务要扩展 apiFormat"}
+{"file": ".trellis/spec/backend/chat-search-tools.md", "reason": "builtin 搜索 fetch 注入机制与 searchMode 契约，本任务要按格式扩展"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Drizzle schema/migration 约定与凭据加密"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "provider 错误码与 message key 语义，Discover 改造需沿用"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端分层、共享 Zod 契约与质量清单"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Provider 命名空间新增 key 的登记与双语维护约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "shadcn/Base UI 组件用法与 server/client 边界"}
