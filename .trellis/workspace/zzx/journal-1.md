@@ -570,3 +570,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 21: 供应商端点格式扩充：支持 Claude 与 Google
+<!-- trellis-session: v=2 fp=6094e9c6b09e4aa2 -->
+
+**Date**: 2026-09-12
+**Task**: 供应商端点格式扩充：支持 Claude 与 Google
+**Branch**: `feat/provider-api-format`
+
+### Summary
+
+把供应商从只支持 OpenAI compatible 扩充为三种可选端点格式（openai-compatible / claude / google），新增 api_format 列与对应迁移，按格式构造 AI SDK provider、适配 Discover 鉴权与解析、按格式注入 builtin 搜索载荷，并在创建/编辑表单加格式下拉。实现期修掉一个 apiKey:null 被误判为沿用存量 key 的缺陷；人工验收时又发现 google 解析把网关返回的显式 null 当成非法响应，改用 .nullish() 修复。经 ponytail 精简 19 行、trellis-check 核验 0 blocker 后提交。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4aa1690` | feat(provider): support claude and google endpoint formats |
+
+### Status
+
+[OK] **Completed**
