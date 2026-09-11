@@ -26,6 +26,7 @@ vi.mock("@/server/db/client", () => ({
               id: "cfg-1",
               name: "openai",
               baseUrl: "https://api.example.com/v1",
+              apiFormat: "openai-compatible",
               encryptedApiKey: "encrypted",
             },
           ],

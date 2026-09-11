@@ -1,0 +1,2 @@
+CREATE TYPE "public"."provider_api_format" AS ENUM('openai-compatible', 'claude', 'google');--> statement-breakpoint
+ALTER TABLE "provider_configs" ADD COLUMN "api_format" "provider_api_format" DEFAULT 'openai-compatible' NOT NULL;

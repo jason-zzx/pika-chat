@@ -102,6 +102,7 @@ describe("resolveAvailableModels", () => {
     const own = await createProviderConfig(
       {
         name: "mine",
+        apiFormat: "openai-compatible",
         baseUrl: "https://mine.example.com/v1",
         visibility: "private",
       },
@@ -112,6 +113,7 @@ describe("resolveAvailableModels", () => {
     const secondOwn = await createProviderConfig(
       {
         name: "mine-two",
+        apiFormat: "openai-compatible",
         baseUrl: "https://mine.example.com/v1",
         visibility: "private",
       },
@@ -122,6 +124,7 @@ describe("resolveAvailableModels", () => {
     const shared = await createProviderConfig(
       {
         name: "instance",
+        apiFormat: "openai-compatible",
         baseUrl: "https://api.openai.com/v1",
         apiKey: "sk-admin",
         visibility: "shared",
@@ -133,6 +136,7 @@ describe("resolveAvailableModels", () => {
     const hidden = await createProviderConfig(
       {
         name: "admin-private",
+        apiFormat: "openai-compatible",
         baseUrl: "https://hidden.example.com/v1",
         apiKey: "sk-hidden",
         visibility: "private",

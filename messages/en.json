@@ -273,7 +273,7 @@
     },
     "Providers": {
       "title": "Providers",
-      "description": "Connect OpenAI-compatible endpoints and choose which models chat can call."
+      "description": "Connect provider endpoints and choose which models chat can call."
     },
     "Search": {
       "title": "Search",
@@ -340,7 +340,7 @@
     "create": "Create",
     "yourProvidersTitle": "Your providers",
     "emptyTitle": "No providers yet",
-    "emptyDescription": "Add an OpenAI-compatible endpoint to start choosing models.",
+    "emptyDescription": "Add an endpoint to start choosing models.",
     "sharedTitle": "Shared with the instance",
     "noShared": "No shared providers yet.",
     "keyHint": "key …{lastFour}",
@@ -362,11 +362,15 @@
     "sharedBy": "Shared by {name}",
     "noModels": "No models",
     "nameLabel": "Name",
+    "apiFormatLabel": "API format",
+    "formatOpenai": "OpenAI compatible",
+    "formatClaude": "Claude (Anthropic)",
+    "formatGoogle": "Google (Gemini)",
     "baseUrlLabel": "Base URL",
-    "baseUrlPlaceholder": "https://api.openai.com/v1",
     "apiKeyLabel": "API key",
     "apiKeyEditPlaceholder": "Leave blank to keep the current key",
     "apiKeyNewPlaceholder": "Optional for local endpoints",
+    "apiKeyRequiredPlaceholder": "Required for this API format",
     "shareWithInstance": "Share with the instance",
     "addModelsTitle": "Add models",
     "addModelsDescription": "Discover ids from {configName}, or add one manually via Add model.",
@@ -384,7 +388,7 @@
     "resetFromCatalog": "Reset from catalog",
     "invalidContext": "Context size must be a positive number of tokens.",
     "invalidModalities": "Choose at least one input modality.",
-    "addProviderDescription": "Fill in the basics of an OpenAI-compatible endpoint.",
+    "addProviderDescription": "Fill in the basics of the endpoint.",
     "editProviderTitle": "Edit provider",
     "modelCount": "{count} models",
     "addModel": "Add model",
@@ -466,6 +470,7 @@
     "provider": {
       "notFound": "Provider not found",
       "nameTaken": "A provider with this name already exists",
+      "apiKeyRequired": "This API format requires an API key",
       "createFailed": "Failed to create provider",
       "modelAddFailed": "Failed to add model",
       "modelExists": "This model is already on the provider",

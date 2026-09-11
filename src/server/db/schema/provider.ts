@@ -18,6 +18,12 @@ export const providerVisibility = pgEnum("provider_visibility", [
   "shared",
 ]);
 
+export const providerApiFormat = pgEnum("provider_api_format", [
+  "openai-compatible",
+  "claude",
+  "google",
+]);
+
 export const modelMetadataSource = pgEnum("model_metadata_source", [
   "catalog",
   "default",
@@ -33,6 +39,9 @@ export const providerConfigs = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     baseUrl: text("base_url").notNull(),
+    apiFormat: providerApiFormat("api_format")
+      .notNull()
+      .default("openai-compatible"),
     encryptedApiKey: text("encrypted_api_key"),
     apiKeyLastFour: text("api_key_last_four"),
     visibility: providerVisibility("visibility").notNull().default("private"),

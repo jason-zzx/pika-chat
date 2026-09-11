@@ -1,12 +1,11 @@
 import "server-only";
 
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import { eq } from "drizzle-orm";
 
-import { withBuiltinWebSearch } from "@/server/ai/builtin-search";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { describeProviderError } from "@/server/ai/provider-error";
+import { createLanguageModel } from "@/server/ai/provider-factory";
 import type { Actor } from "@/server/auth/actor";
 import { decryptSecret } from "@/server/crypto";
 import { getDb } from "@/server/db/client";
@@ -25,6 +24,7 @@ async function loadConfigRow(providerConfigId: string) {
       id: providerConfigs.id,
       name: providerConfigs.name,
       baseUrl: providerConfigs.baseUrl,
+      apiFormat: providerConfigs.apiFormat,
       encryptedApiKey: providerConfigs.encryptedApiKey,
     })
     .from(providerConfigs)
@@ -67,14 +67,16 @@ export async function createChatModelHandle(
   const apiKey = config.encryptedApiKey
     ? decryptSecret(config.encryptedApiKey)
     : "";
-  const provider = createOpenAICompatible({
-    name: config.name,
-    baseURL: config.baseUrl,
-    apiKey: apiKey.length > 0 ? apiKey : undefined,
-    includeUsage: true,
-    ...(options?.builtinSearch ? { fetch: withBuiltinWebSearch() } : {}),
-  });
-  const model: LanguageModel = provider.chatModel(pair.modelId);
+  const model = createLanguageModel(
+    {
+      apiFormat: config.apiFormat,
+      name: config.name,
+      baseUrl: config.baseUrl,
+      apiKey,
+    },
+    pair.modelId,
+    options,
+  );
   return {
     model,
     describeError: (error: unknown) => describeProviderError(error, apiKey),

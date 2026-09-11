@@ -120,6 +120,7 @@ describe("assistant default model reference", () => {
     const config = await createProviderConfig(
       {
         name: "ephemeral",
+        apiFormat: "openai-compatible",
         baseUrl: "https://api.example.com/v1",
         apiKey: "sk-temp",
         visibility: "private",

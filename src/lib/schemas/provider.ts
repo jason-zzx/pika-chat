@@ -1,7 +1,13 @@
 import { MODEL_VENDOR_KEYS } from "@/lib/model-vendor";
+import {
+  DEFAULT_PROVIDER_API_FORMAT,
+  PROVIDER_API_FORMATS,
+} from "@/lib/provider-format";
 import { z } from "zod";
 
 export const providerVisibilitySchema = z.enum(["private", "shared"]);
+
+export const providerApiFormatSchema = z.enum(PROVIDER_API_FORMATS);
 
 export const modelMetadataSourceSchema = z.enum([
   "catalog",
@@ -67,6 +73,7 @@ export const ownProviderConfigSchema = z.object({
   id: z.string(),
   name: z.string(),
   baseUrl: z.string(),
+  apiFormat: providerApiFormatSchema,
   visibility: providerVisibilitySchema,
   apiKeyLastFour: z.string().nullable(),
   models: z.array(providerModelSchema),
@@ -91,6 +98,7 @@ export const createProviderConfigSchema = z.object({
   name: z.string().trim().min(1),
   baseUrl: z.url(),
   apiKey: z.string().min(1).nullable().optional(),
+  apiFormat: providerApiFormatSchema.default(DEFAULT_PROVIDER_API_FORMAT),
   visibility: providerVisibilitySchema.optional().default("private"),
 });
 export type CreateProviderConfigInput = z.infer<typeof createProviderConfigSchema>;
@@ -99,6 +107,7 @@ export const updateProviderConfigSchema = z.object({
   name: z.string().trim().min(1).optional(),
   baseUrl: z.url().optional(),
   apiKey: z.string().min(1).nullable().optional(),
+  apiFormat: providerApiFormatSchema.optional(),
   visibility: providerVisibilitySchema.optional(),
 });
 export type UpdateProviderConfigInput = z.infer<typeof updateProviderConfigSchema>;

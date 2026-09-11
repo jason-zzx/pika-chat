@@ -43,10 +43,12 @@ parts → UI — change them together.
 - History replay: `replayModelMessages(messages)`
   (`src/server/ai/model-messages.ts`) — both streaming routes MUST use it
   instead of bare `convertToModelMessages` (see Contracts).
-- Builtin: `withBuiltinWebSearch(base?)` (`src/server/ai/builtin-search.ts`)
-  returns a `fetch` that injects `web_search_options: {}` into
-  chat-completions POST bodies; wired via
-  `createChatModelHandle(pair, actor, { builtinSearch: true })`.
+- Builtin: `withBuiltinWebSearch(format, base?)`
+  (`src/server/ai/builtin-search.ts`) returns a `fetch` that injects the
+  provider format's builtin-search marker into POST bodies (see Contracts);
+  wired via `createChatModelHandle(pair, actor, { builtinSearch: true })`,
+  which delegates provider construction to `createLanguageModel`
+  (`src/server/ai/provider-factory.ts`).
 - Schemas (`src/lib/schemas/search-provider.ts`): `searchModeSchema` =
   `z.enum(["off", "builtin", "tool"])`, `searchWebToolInputSchema`,
   `searchWebToolOutputSchema` (union: success `{ provider, query, results }`
@@ -127,12 +129,37 @@ parts → UI — change them together.
   replaces), so the directive survives onto the answer step. The
   assistant's `[n]` markers are model-generated best-effort — weak models
   may skip citing; that is valid output.
-- **Builtin injection mechanism**: `web_search_options` cannot travel through
-  `providerOptions` — `@ai-sdk/openai-compatible` parses options through a
-  zod schema that strips unknown keys. The fetch wrapper rewrites the request
-  body instead, passing through untouched on any mismatch/parse failure.
-  Vendors ignoring the field degrade to a normal completion (best-effort by
-  design).
+- **Builtin injection is per provider format**: the wrapper picks one
+  `FORMAT_INJECTION` entry by the config's `api_format` (see
+  [Provider Configs](./provider-configs.md)), matches on the lowercased request
+  URL, and rewrites the JSON body:
+
+  | format | URL match | injected |
+  |---|---|---|
+  | `openai-compatible` | `/chat/completions` | `web_search_options: {}` |
+  | `claude` | ends with `/messages` (so `/messages/count_tokens` is excluded) | `tools` **appended** with `{ type: "web_search_20250305", name: "web_search", max_uses: 5 }` |
+  | `google` | contains `generatecontent` | `tools` **appended** with `{ googleSearch: {} }` |
+
+  `web_search_options` cannot travel through `providerOptions` —
+  `@ai-sdk/openai-compatible` parses options through a zod schema that strips
+  unknown keys. The fetch wrapper rewrites the request body instead, passing
+  through untouched on any mismatch/parse failure. `claude` and `google` append
+  to `tools` rather than replacing it, so caller-registered function tools
+  survive; a caller with neither field gets a `tools` array created.
+
+  **Google's match must be case-insensitive**: the SDK streams, so the URL is
+  `:streamGenerateContent`, and a case-sensitive `:generateContent` check
+  silently never fires.
+
+  Vendors ignoring the injected field degrade to a normal completion
+  (best-effort by design).
+
+  Considered and rejected: `anthropic.tools.webSearch_20250305()` and
+  `google.tools.googleSearch()` are provider-executed tool factories and would
+  be the AI-SDK-native route, but they must be registered on `streamText`'s
+  `tools`, dragging both streaming routes and the tool-part persistence /
+  rendering contract in — and leaving openai-compatible on a different
+  mechanism than the other two.
 - **Part rendering**: `tool-searchWeb` / `tool-fetchPage` parts persist in
   `parts` jsonb via the state-discriminated union in
   `chatStoredPartSchema`. `MessageItem` renders parts interleaved in part
@@ -207,6 +234,11 @@ parts → UI — change them together.
   `output-available` parts replay with results.
 - `chat-model.test.ts`: fetch wrapper attached only when
   `builtinSearch: true`.
+- `provider-factory.test.ts`: fetch wrapper attached per format only when
+  `builtinSearch: true`; each format builds the corresponding SDK provider.
+- `builtin-search.test.ts`: per-format payload shape; `tools` append preserves
+  caller-registered tools; google covers both `:generateContent` and
+  `:streamGenerateContent`; cross-format and non-object bodies pass through.
 - `SearchToolCall` tests: live running spins/expands; persisted incomplete
   part in stopped/failed message renders collapsed non-spinning.
 

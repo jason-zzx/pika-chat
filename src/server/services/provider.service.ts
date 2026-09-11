@@ -4,6 +4,10 @@ import { and, eq, or } from "drizzle-orm";
 
 import { isStaffRole } from "@/lib/auth-hierarchy";
 import { newId } from "@/lib/id";
+import {
+  requiresApiKey,
+  type ProviderApiFormat,
+} from "@/lib/provider-format";
 import type {
   AddProviderModelInput,
   CreateProviderConfigInput,
@@ -54,10 +58,25 @@ function lastFour(value: string): string {
   return value.slice(-4);
 }
 
+/**
+ * Formats that reject keyless calls must end up with a key, from either the
+ * incoming payload or the stored row. Enforced here rather than in Zod because
+ * update has to consult the existing row to answer it — Zod only sees the
+ * payload. A rejected write must not touch the database.
+ */
+function assertApiKeyAvailable(
+  format: ProviderApiFormat,
+  hasKey: boolean,
+): void {
+  if (requiresApiKey(format) && !hasKey) {
+    throw new AppError("VALIDATION_FAILED", 400, "provider.apiKeyRequired");
+  }
+}
+
 function toOwnConfig(
   row: Pick<
     ConfigRow,
-    "id" | "name" | "baseUrl" | "visibility" | "apiKeyLastFour"
+    "id" | "name" | "baseUrl" | "apiFormat" | "visibility" | "apiKeyLastFour"
   >,
   models: ProviderModel[],
 ): OwnProviderConfig {
@@ -65,6 +84,7 @@ function toOwnConfig(
     id: row.id,
     name: row.name,
     baseUrl: row.baseUrl,
+    apiFormat: row.apiFormat,
     visibility: row.visibility,
     apiKeyLastFour: row.apiKeyLastFour,
     models,
@@ -112,6 +132,7 @@ async function loadOwnConfig(
         id: providerConfigs.id,
         name: providerConfigs.name,
         baseUrl: providerConfigs.baseUrl,
+        apiFormat: providerConfigs.apiFormat,
         visibility: providerConfigs.visibility,
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       },
@@ -149,6 +170,7 @@ export async function listProviderConfigs(
         ownerId: providerConfigs.ownerId,
         name: providerConfigs.name,
         baseUrl: providerConfigs.baseUrl,
+        apiFormat: providerConfigs.apiFormat,
         visibility: providerConfigs.visibility,
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       },
@@ -222,6 +244,7 @@ export async function createProviderConfig(
 ): Promise<OwnProviderConfig> {
   const visibility = coerceVisibility(input.visibility, actor, "private");
   const apiKey = input.apiKey ?? null;
+  assertApiKeyAvailable(input.apiFormat, apiKey !== null);
   const id = newId();
   const db = getDb();
   try {
@@ -232,6 +255,7 @@ export async function createProviderConfig(
         ownerId: actor.userId,
         name: input.name,
         baseUrl: input.baseUrl,
+        apiFormat: input.apiFormat,
         encryptedApiKey: apiKey ? encryptSecret(apiKey) : null,
         apiKeyLastFour: apiKey ? lastFour(apiKey) : null,
         visibility,
@@ -240,6 +264,7 @@ export async function createProviderConfig(
         id: providerConfigs.id,
         name: providerConfigs.name,
         baseUrl: providerConfigs.baseUrl,
+        apiFormat: providerConfigs.apiFormat,
         visibility: providerConfigs.visibility,
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       });
@@ -271,10 +296,20 @@ export async function updateProviderConfig(
     actor,
     existing.visibility,
   );
+  const apiFormat = input.apiFormat ?? existing.apiFormat;
+  // The rule is about the state *after* the patch: an explicit `null` clears
+  // the key, an omitted field keeps the stored one.
+  const hasKey =
+    input.apiKey === null
+      ? false
+      : (typeof input.apiKey === "string" && input.apiKey.length > 0) ||
+        existing.encryptedApiKey !== null;
+  assertApiKeyAvailable(apiFormat, hasKey);
   const db = getDb();
   const patch: {
     name?: string;
     baseUrl?: string;
+    apiFormat?: ProviderApiFormat;
     encryptedApiKey?: string | null;
     apiKeyLastFour?: string | null;
     visibility: "private" | "shared";
@@ -288,6 +323,9 @@ export async function updateProviderConfig(
   }
   if (input.baseUrl !== undefined) {
     patch.baseUrl = input.baseUrl;
+  }
+  if (input.apiFormat !== undefined) {
+    patch.apiFormat = input.apiFormat;
   }
   if (input.apiKey !== undefined) {
     if (input.apiKey === null) {
@@ -499,5 +537,9 @@ export async function discoverProviderModels(
     { userId: actor.userId, configId },
     "provider discovery started",
   );
-  return fetchServedModelIds(config.baseUrl, apiKey);
+  return fetchServedModelIds({
+    apiFormat: config.apiFormat,
+    baseUrl: config.baseUrl,
+    apiKey,
+  });
 }

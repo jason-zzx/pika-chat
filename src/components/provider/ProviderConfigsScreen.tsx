@@ -30,7 +30,9 @@ import DiscoverModelsDialog from "./DiscoverModelsDialog";
 import ModelEditorDialog from "./ModelEditorDialog";
 import ModelVendorIcon from "./ModelVendorIcon";
 import { ModelCapabilityIcons } from "./model-capabilities";
-import ProviderConfigForm from "./ProviderConfigForm";
+import ProviderConfigForm, {
+  PROVIDER_FORMAT_LABEL_KEYS,
+} from "./ProviderConfigForm";
 import {
   useCreateProviderConfig,
   useDeleteProviderConfig,
@@ -320,6 +322,9 @@ function OwnProviderDetail({
               {config.name}
             </p>
             <SettingsBadge dot={false}>{visibilityLabel}</SettingsBadge>
+            <SettingsBadge dot={false}>
+              {t(PROVIDER_FORMAT_LABEL_KEYS[config.apiFormat])}
+            </SettingsBadge>
           </div>
           <p className="break-all text-sm text-muted-foreground">
             {config.baseUrl}
@@ -447,6 +452,7 @@ function OwnProviderDetail({
             initial={{
               name: config.name,
               baseUrl: config.baseUrl,
+              apiFormat: config.apiFormat,
               visibility: config.visibility,
             }}
             onSubmit={async (input) => {
