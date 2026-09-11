@@ -273,7 +273,7 @@
     },
     "Providers": {
       "title": "服务商",
-      "description": "连接兼容 OpenAI 的端点，并选择聊天可调用的模型。"
+      "description": "连接供应商端点，并选择聊天可调用的模型。"
     },
     "Search": {
       "title": "搜索",
@@ -340,7 +340,7 @@
     "create": "创建",
     "yourProvidersTitle": "你的服务商",
     "emptyTitle": "暂无服务商",
-    "emptyDescription": "添加一个兼容 OpenAI 的端点以开始选择模型。",
+    "emptyDescription": "添加一个端点以开始选择模型。",
     "sharedTitle": "共享给实例的服务商",
     "noShared": "暂无共享服务商。",
     "keyHint": "密钥 …{lastFour}",
@@ -362,11 +362,15 @@
     "sharedBy": "由 {name} 共享",
     "noModels": "无模型",
     "nameLabel": "名称",
+    "apiFormatLabel": "API 格式",
+    "formatOpenai": "OpenAI 兼容",
+    "formatClaude": "Claude（Anthropic）",
+    "formatGoogle": "Google（Gemini）",
     "baseUrlLabel": "基础 URL",
-    "baseUrlPlaceholder": "https://api.openai.com/v1",
     "apiKeyLabel": "API 密钥",
     "apiKeyEditPlaceholder": "留空以保留当前密钥",
     "apiKeyNewPlaceholder": "本地端点可留空",
+    "apiKeyRequiredPlaceholder": "该 API 格式必填",
     "shareWithInstance": "共享给实例",
     "addModelsTitle": "添加模型",
     "addModelsDescription": "从 {configName} 发现 ID，或通过「添加模型」手动填写。",
@@ -384,7 +388,7 @@
     "resetFromCatalog": "从目录重置",
     "invalidContext": "上下文大小必须是正数 token 数。",
     "invalidModalities": "请至少选择一种输入模态。",
-    "addProviderDescription": "填写兼容 OpenAI 端点的基础信息。",
+    "addProviderDescription": "填写端点的基础信息。",
     "editProviderTitle": "编辑服务商",
     "modelCount": "{count} 个模型",
     "addModel": "添加模型",
@@ -466,6 +470,7 @@
     "provider": {
       "notFound": "服务商不存在",
       "nameTaken": "已存在同名服务商",
+      "apiKeyRequired": "该 API 格式需要填写 API Key",
       "createFailed": "创建服务商失败",
       "modelAddFailed": "添加模型失败",
       "modelExists": "该模型已添加到此服务商",

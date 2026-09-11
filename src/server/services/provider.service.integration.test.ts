@@ -4,7 +4,11 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { newId } from "@/lib/id";
-import { DEFAULT_MODEL_CONTEXT_TOKENS } from "@/lib/schemas/provider";
+import { DEFAULT_PROVIDER_API_FORMAT } from "@/lib/provider-format";
+import {
+  DEFAULT_MODEL_CONTEXT_TOKENS,
+  type CreateProviderConfigInput,
+} from "@/lib/schemas/provider";
 import { POST as postDiscover } from "@/app/api/providers/[id]/discover/route";
 import { PATCH as patchProvider, DELETE as deleteProvider } from "@/app/api/providers/[id]/route";
 import {
@@ -15,7 +19,7 @@ import {
 import { POST as postProvider } from "@/app/api/providers/route";
 import { resetModelCatalogCache } from "@/server/ai/model-catalog";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
-import { requireActor } from "@/server/auth/actor";
+import { requireActor, type Actor } from "@/server/auth/actor";
 import {
   adminCredentials,
   authPost,
@@ -40,7 +44,7 @@ import {
 } from "@/server/db/schema";
 import {
   addProviderModel,
-  createProviderConfig,
+  createProviderConfig as createProviderConfigRaw,
   deleteProviderConfig,
   listProviderConfigs,
   updateProviderConfig,
@@ -48,6 +52,21 @@ import {
 } from "@/server/services/provider.service";
 
 const db = getDb();
+
+/**
+ * Every pre-existing fixture targets the original OpenAI-compatible shape, so
+ * this defaults the format and keeps those call sites about what they actually
+ * test. Format-specific cases call the service directly.
+ */
+function createProviderConfig(
+  input: Omit<CreateProviderConfigInput, "apiFormat">,
+  actor: Actor,
+) {
+  return createProviderConfigRaw(
+    { apiFormat: DEFAULT_PROVIDER_API_FORMAT, ...input },
+    actor,
+  );
+}
 
 function asObject(value: unknown): Record<string, unknown> {
   if (typeof value === "object" && value !== null) {
@@ -747,5 +766,179 @@ describe("provider.service", () => {
     } finally {
       restore();
     }
+  });
+
+  describe("api format", () => {
+    it("persists an explicit format and returns it from list", async () => {
+      const { userActor } = await seedActors();
+      const created = await createProviderConfigRaw(
+        {
+          name: "claude-cfg",
+          baseUrl: "https://api.anthropic.com/v1",
+          apiFormat: "claude",
+          apiKey: "sk-ant-secret",
+          visibility: "private",
+        },
+        userActor,
+      );
+
+      expect(created.apiFormat).toBe("claude");
+      const listed = await listProviderConfigs(userActor);
+      expect(
+        listed.own.find((entry) => entry.id === created.id)?.apiFormat,
+      ).toBe("claude");
+    });
+
+    it("rejects a keyless claude config without persisting it", async () => {
+      const { userActor } = await seedActors();
+
+      await expect(
+        createProviderConfigRaw(
+          {
+            name: "keyless",
+            baseUrl: "https://api.anthropic.com/v1",
+            apiFormat: "claude",
+            visibility: "private",
+          },
+          userActor,
+        ),
+      ).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        status: 400,
+        messageKey: "provider.apiKeyRequired",
+      });
+
+      const listed = await listProviderConfigs(userActor);
+      expect(listed.own).toHaveLength(0);
+    });
+
+    it("accepts a keyless openai-compatible config", async () => {
+      const { userActor } = await seedActors();
+
+      const created = await createProviderConfigRaw(
+        {
+          name: "local",
+          baseUrl: "http://127.0.0.1:11434/v1",
+          apiFormat: "openai-compatible",
+          visibility: "private",
+        },
+        userActor,
+      );
+
+      expect(created.apiFormat).toBe("openai-compatible");
+      expect(created.apiKeyLastFour).toBeNull();
+    });
+
+    it("switches format while reusing the stored key", async () => {
+      const { userActor } = await seedActors();
+      const config = await createProviderConfig(
+        {
+          name: "switch",
+          baseUrl: "https://relay.example.com/v1",
+          apiKey: "sk-existing",
+          visibility: "private",
+        },
+        userActor,
+      );
+
+      const updated = await updateProviderConfig(
+        config.id,
+        { apiFormat: "claude", baseUrl: "https://api.anthropic.com/v1" },
+        userActor,
+      );
+
+      expect(updated.apiFormat).toBe("claude");
+      expect(updated.apiKeyLastFour).toBe("ting");
+    });
+
+    it("rejects switching to claude with no stored key, leaving the row unchanged", async () => {
+      const { userActor } = await seedActors();
+      const config = await createProviderConfig(
+        {
+          name: "keyless-switch",
+          baseUrl: "http://127.0.0.1:11434/v1",
+          visibility: "private",
+        },
+        userActor,
+      );
+
+      await expect(
+        updateProviderConfig(config.id, { apiFormat: "claude" }, userActor),
+      ).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        status: 400,
+        messageKey: "provider.apiKeyRequired",
+      });
+
+      const rows = await db
+        .select({ apiFormat: providerConfigs.apiFormat })
+        .from(providerConfigs)
+        .where(eq(providerConfigs.id, config.id));
+      expect(rows[0]?.apiFormat).toBe("openai-compatible");
+    });
+
+    it("rejects clearing the key of a claude config", async () => {
+      const { userActor } = await seedActors();
+      const config = await createProviderConfigRaw(
+        {
+          name: "claude-clear",
+          baseUrl: "https://api.anthropic.com/v1",
+          apiFormat: "claude",
+          apiKey: "sk-ant-secret",
+          visibility: "private",
+        },
+        userActor,
+      );
+
+      await expect(
+        updateProviderConfig(config.id, { apiKey: null }, userActor),
+      ).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        status: 400,
+        messageKey: "provider.apiKeyRequired",
+      });
+    });
+
+    it("still allows clearing the key of an openai-compatible config", async () => {
+      const { userActor } = await seedActors();
+      const config = await createProviderConfig(
+        {
+          name: "openai-clear",
+          baseUrl: "https://relay.example.com/v1",
+          apiKey: "sk-clear-me",
+          visibility: "private",
+        },
+        userActor,
+      );
+
+      const updated = await updateProviderConfig(
+        config.id,
+        { apiKey: null },
+        userActor,
+      );
+
+      expect(updated.apiKeyLastFour).toBeNull();
+    });
+
+    it("accepts a replacement key when switching to google", async () => {
+      const { userActor } = await seedActors();
+      const config = await createProviderConfig(
+        {
+          name: "to-google",
+          baseUrl: "http://127.0.0.1:11434/v1",
+          visibility: "private",
+        },
+        userActor,
+      );
+
+      const updated = await updateProviderConfig(
+        config.id,
+        { apiFormat: "google", apiKey: "goog-secret" },
+        userActor,
+      );
+
+      expect(updated.apiFormat).toBe("google");
+      expect(updated.apiKeyLastFour).toBe("cret");
+    });
   });
 });

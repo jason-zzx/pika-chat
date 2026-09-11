@@ -369,6 +369,30 @@ Three rules that are easy to get wrong:
 
 ---
 
+## Testing Base UI popups in jsdom
+
+Base UI's Select / Popover popups open on real pointer events, and jsdom has no
+`PointerEvent` implementation. `fireEvent.pointerDown(trigger, …)` therefore
+never opens them and an option can never be clicked. Stubbing the usual
+suspects (`Element.prototype.hasPointerCapture` / `setPointerCapture` /
+`scrollIntoView`) does not help — the event itself is what is missing.
+
+What does work: `fireEvent.keyDown(trigger, { key: "ArrowDown" })` opens the
+listbox, so **the option set and its labels are testable**; selecting through
+the popup is not.
+
+Consequences:
+
+- Do test: the rendered trigger label, everything derived from props or state
+  (placeholders, `required`, disabled, formatting), the option list opened via
+  keyboard, and the submit payload.
+- Do not try to click an option. Verify the input state by rendering the
+  component with different props instead, and cover the pure derivation in a
+  `src/lib/**` unit test.
+- State reachable *only* by selecting belongs to browser acceptance. Record it
+  as such in the task rather than writing a test that asserts nothing, and do
+  not grow the shared `vitest.dom.setup.ts` for one component.
+
 ## Common Mistakes
 
 - `"use client"` on a layout or page "to make it work". It works, and it ships

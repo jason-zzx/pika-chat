@@ -240,6 +240,7 @@ describe("assistant.service", () => {
     const config = await createProviderConfig(
       {
         name: "byok",
+        apiFormat: "openai-compatible",
         baseUrl: "https://api.example.com/v1",
         apiKey: "sk-test",
         visibility: "private",
