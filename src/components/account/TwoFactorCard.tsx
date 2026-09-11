@@ -7,6 +7,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import SettingsBadge from "@/components/settings/SettingsBadge";
 import type { AppErrorMessageKey } from "@/lib/api/error-contract";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { fetchTotpQrCode } from "@/lib/api/two-factor";
@@ -59,7 +60,7 @@ function EnrollPanel({
           <img
             src={dataUrl}
             alt={t("qrAlt")}
-            className="size-40 rounded-md border border-border bg-background p-1"
+            className="size-44 rounded-lg border border-border bg-background p-2 shadow-xs"
           />
         </div>
       ) : null}
@@ -92,6 +93,7 @@ function EnrollPanel({
             inputMode="numeric"
             autoComplete="one-time-code"
             required
+            className="max-w-sm"
           />
         </div>
         <div className="flex gap-2">
@@ -111,7 +113,7 @@ function BackupCodeList({ codes }: BackupCodeListProps) {
   const t = useTranslations("Account.twoFactor");
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-4">
       <p className="font-medium text-sm">{t("backupCodesTitle")}</p>
       <p className="text-sm text-muted-foreground">{t("backupCodesIntro")}</p>
       <ul className="grid grid-cols-2 gap-1 font-mono text-xs">
@@ -306,13 +308,20 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
 
   // Derived once: the enrollment panel both displays and copies this secret.
   const manualSecret = uri === null ? "" : secretFromUri(uri);
+  const statusTone: "success" | "neutral" = view === "on" ? "success" : "neutral";
 
   return (
-    <section className="flex w-full max-w-md flex-col gap-3 rounded-md border border-border p-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="font-medium">{t("title")}</h2>
-        <p className="text-sm text-muted-foreground">{t("description")}</p>
-        <p className="text-sm">{view === "on" ? t("enabled") : t("disabled")}</p>
+    <section className="flex w-full flex-col gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-base font-semibold tracking-tight">
+            {t("title")}
+          </h2>
+          <p className="text-sm text-muted-foreground">{t("description")}</p>
+        </div>
+        <SettingsBadge tone={statusTone}>
+          {view === "on" ? t("statusOn") : t("statusOff")}
+        </SettingsBadge>
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -328,9 +337,10 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
               type="password"
               autoComplete="current-password"
               required
+              className="max-w-sm"
             />
           </div>
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending} className="w-fit">
             {pending ? t("working") : t("startSubmit")}
           </Button>
         </form>
@@ -361,9 +371,10 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
                 type="password"
                 autoComplete="current-password"
                 required
+                className="max-w-sm"
               />
             </div>
-            <Button type="submit" variant="outline" disabled={pending}>
+            <Button type="submit" variant="outline" disabled={pending} className="w-fit">
               {pending ? t("working") : t("regenerateSubmit")}
             </Button>
           </form>
@@ -377,9 +388,10 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
                 type="password"
                 autoComplete="current-password"
                 required
+                className="max-w-sm"
               />
             </div>
-            <Button type="submit" variant="destructive" disabled={pending}>
+            <Button type="submit" variant="destructive" disabled={pending} className="w-fit">
               {pending ? t("working") : t("disableSubmit")}
             </Button>
           </form>

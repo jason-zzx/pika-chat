@@ -48,7 +48,8 @@ function renderScreen(locale?: "en" | "zh-CN") {
 
 async function cardOf(name: string): Promise<HTMLElement> {
   const label = await screen.findByText(name);
-  const card = label.closest("article");
+  // Cards are <li> items; the visual surface is the SettingsCard inside.
+  const card = label.closest("li");
   expect(card).not.toBeNull();
   if (card === null) {
     throw new Error(`no card for ${name}`);

@@ -64,7 +64,7 @@ export default function ProviderConfigForm({
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="flex max-w-lg flex-col gap-2">
+    <form onSubmit={(event) => void handleSubmit(event)} className="flex max-w-lg flex-col gap-3">
       <div className="flex flex-col gap-1">
         <Label htmlFor={`${idPrefix}-name`}>{t("nameLabel")}</Label>
         <Input
@@ -111,7 +111,7 @@ export default function ProviderConfigForm({
         </Label>
       ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="mt-1 w-fit">
         {pending ? t("saving") : submitLabel}
       </Button>
     </form>

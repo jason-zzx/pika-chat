@@ -162,7 +162,7 @@ describe("TwoFactorCard", () => {
     await waitFor(() =>
       expect(screen.getByText(REVOKE_FAILED_COPY)).toBeDefined(),
     );
-    expect(screen.getByText("Two-factor authentication is on.")).toBeDefined();
+    expect(screen.getByText("On")).toBeDefined();
     expect(screen.getByText(FIRST_BACKUP_CODE)).toBeDefined();
   });
 
@@ -186,7 +186,7 @@ describe("TwoFactorCard", () => {
   it("shows the enabled state straight away for an account that already has 2FA on", () => {
     renderWithIntl(<TwoFactorCard enabled />);
 
-    expect(screen.getByText("Two-factor authentication is on.")).toBeDefined();
+    expect(screen.getByText("On")).toBeDefined();
     // Enrollment is gone. Both management forms re-ask for the password, so
     // each input is labelled by the field, not by the action it triggers.
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
@@ -200,7 +200,7 @@ describe("TwoFactorCard", () => {
   it("renders the card copy from the zh-CN catalog", () => {
     renderWithIntl(<TwoFactorCard enabled={false} />, { locale: "zh-CN" });
 
-    expect(screen.getByText("两步验证未开启。")).toBeDefined();
+    expect(screen.getByText("未开启")).toBeDefined();
     expect(screen.getByRole("button", { name: "继续" })).toBeDefined();
   });
 });

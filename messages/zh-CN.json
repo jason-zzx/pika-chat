@@ -110,8 +110,6 @@
     "twoFactor": {
       "title": "两步验证",
       "description": "登录时需要输入验证器应用生成的验证码。",
-      "enabled": "两步验证已开启。",
-      "disabled": "两步验证未开启。",
       "startSubmit": "继续",
       "passwordLabel": "你的密码",
       "qrCaption": "用验证器应用扫描此二维码。",
@@ -134,8 +132,12 @@
       "disable": "关闭两步验证",
       "disableSubmit": "关闭",
       "disabledDone": "两步验证已关闭。",
-      "otherSessionsNotRevoked": "两步验证已开启，但未能退出其他设备上的登录。请在其他设备上手动退出。"
-    }
+      "otherSessionsNotRevoked": "两步验证已开启，但未能退出其他设备上的登录。请在其他设备上手动退出。",
+      "statusOn": "已开启",
+      "statusOff": "未开启"
+    },
+    "passwordTitle": "密码",
+    "passwordDescription": "更改登录时使用的密码。"
   },
   "Chat": {
     "Composer": {
@@ -265,7 +267,9 @@
       "title": "通用",
       "description": "此浏览器的外观设置。",
       "theme": "主题",
-      "language": "语言"
+      "language": "语言",
+      "themeDescription": "选择此浏览器中的应用外观。",
+      "languageDescription": "选择界面使用的语言。"
     },
     "Providers": {
       "title": "服务商",
@@ -315,12 +319,14 @@
     "ban": "封禁",
     "resetPassword": "重置密码",
     "newPasswordPrompt": "新密码（至少 8 个字符）",
-    "bannedSuffix": " · 已封禁",
     "registrationTitle": "注册",
     "registrationOpen": "任何获得链接的人都可以创建普通用户账户。",
     "registrationClosed": "只有管理员可以创建账户。",
     "disableRegistration": "关闭注册",
-    "enableRegistration": "开放注册"
+    "enableRegistration": "开放注册",
+    "registrationStatusOpen": "开放中",
+    "registrationStatusClosed": "已关闭",
+    "bannedBadge": "已封禁"
   },
   "Provider": {
     "loading": "加载中…",

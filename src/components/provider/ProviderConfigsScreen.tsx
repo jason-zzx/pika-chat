@@ -4,6 +4,9 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
+import SettingsBadge from "@/components/settings/SettingsBadge";
+import SettingsCard from "@/components/settings/SettingsCard";
+import SettingsSection from "@/components/settings/SettingsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,19 +48,20 @@ export default function ProviderConfigsScreen({
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">{t("addProviderTitle")}</h2>
-        <ProviderConfigForm
-          idPrefix="create-provider"
-          canShare={canShare}
-          pending={createConfig.isPending}
-          submitLabel={t("create")}
-          onSubmit={async (input) => {
-            setError(null);
-            await createConfig.mutateAsync(input);
-          }}
-        />
-      </section>
+      <SettingsSection title={t("addProviderTitle")}>
+        <SettingsCard className="p-5">
+          <ProviderConfigForm
+            idPrefix="create-provider"
+            canShare={canShare}
+            pending={createConfig.isPending}
+            submitLabel={t("create")}
+            onSubmit={async (input) => {
+              setError(null);
+              await createConfig.mutateAsync(input);
+            }}
+          />
+        </SettingsCard>
+      </SettingsSection>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {configs.error ? (
@@ -66,8 +70,7 @@ export default function ProviderConfigsScreen({
         </p>
       ) : null}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">{t("yourProvidersTitle")}</h2>
+      <SettingsSection title={t("yourProvidersTitle")}>
         {configs.isPending ? (
           loading
         ) : (configs.data?.own.length ?? 0) === 0 ? (
@@ -88,10 +91,9 @@ export default function ProviderConfigsScreen({
             ))}
           </ul>
         )}
-      </section>
+      </SettingsSection>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">{t("sharedTitle")}</h2>
+      <SettingsSection title={t("sharedTitle")}>
         {configs.isPending ? (
           loading
         ) : (configs.data?.shared.length ?? 0) === 0 ? (
@@ -105,7 +107,7 @@ export default function ProviderConfigsScreen({
             ))}
           </ul>
         )}
-      </section>
+      </SettingsSection>
     </div>
   );
 }
@@ -138,16 +140,22 @@ function OwnProviderCard({
       : t("visibilityPrivate");
 
   return (
-    <article className="flex flex-col gap-3 rounded-md border border-border p-3">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="text-sm">
-          <p className="font-medium">{config.name}</p>
-          <p className="break-all text-muted-foreground">{config.baseUrl}</p>
-          <p className="text-muted-foreground">
-            {visibilityLabel}
+    <SettingsCard className="flex flex-col gap-4 p-4 sm:p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-base font-semibold tracking-tight">
+              {config.name}
+            </p>
+            <SettingsBadge dot={false}>{visibilityLabel}</SettingsBadge>
+          </div>
+          <p className="break-all text-sm text-muted-foreground">
+            {config.baseUrl}
+          </p>
+          <p className="text-xs text-muted-foreground">
             {config.apiKeyLastFour
-              ? ` · ${t("keyHint", { lastFour: config.apiKeyLastFour })}`
-              : ` · ${t("noKeyHint")}`}
+              ? t("keyHint", { lastFour: config.apiKeyLastFour })
+              : t("noKeyHint")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -217,7 +225,7 @@ function OwnProviderCard({
             {config.models.map((model) => (
               <li
                 key={model.id}
-                className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-sm"
+                className="flex items-center gap-1 rounded-full bg-muted py-1 pl-3 pr-1 text-sm"
               >
                 <button
                   type="button"
@@ -312,17 +320,17 @@ function OwnProviderCard({
           model={editingModel}
         />
       ) : null}
-    </article>
+    </SettingsCard>
   );
 }
 
 function SharedProviderCard({ config }: { config: SharedProviderConfig }) {
   const t = useTranslations("Provider");
   return (
-    <article className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <div className="text-sm">
-        <p className="font-medium">{config.name}</p>
-        <p className="text-muted-foreground">
+    <SettingsCard className="flex flex-col gap-3 p-4 sm:p-5">
+      <div className="flex flex-col gap-1">
+        <p className="text-base font-semibold tracking-tight">{config.name}</p>
+        <p className="text-sm text-muted-foreground">
           {t("sharedBy", { name: config.ownerName })}
         </p>
       </div>
@@ -333,7 +341,7 @@ function SharedProviderCard({ config }: { config: SharedProviderConfig }) {
           {config.models.map((model) => (
             <li
               key={model.id}
-              className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-sm"
+              className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm"
             >
               <ModelVendorIcon
                 modelId={model.modelId}
@@ -344,6 +352,6 @@ function SharedProviderCard({ config }: { config: SharedProviderConfig }) {
           ))}
         </ul>
       )}
-    </article>
+    </SettingsCard>
   );
 }

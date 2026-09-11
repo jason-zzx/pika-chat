@@ -69,7 +69,7 @@ export default function ChangePasswordForm() {
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {success ? <p className="text-sm">{t("passwordUpdated")}</p> : null}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="w-fit">
         {pending ? t("saving") : t("changePassword")}
       </Button>
     </form>

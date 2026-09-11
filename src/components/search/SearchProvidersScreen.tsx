@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
+import SettingsCard from "@/components/settings/SettingsCard";
+import SettingsSection from "@/components/settings/SettingsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,11 +78,10 @@ export default function SearchProvidersScreen() {
         </p>
       ) : null}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">{t("fallbackOrderTitle")}</h2>
-        <p className="text-sm text-muted-foreground">
-          {t("fallbackOrderDescription")}
-        </p>
+      <SettingsSection
+        title={t("fallbackOrderTitle")}
+        description={t("fallbackOrderDescription")}
+      >
         {providers.isPending ? (
           <p className="text-sm text-muted-foreground">{t("loading")}</p>
         ) : configured.length === 0 ? (
@@ -94,6 +95,7 @@ export default function SearchProvidersScreen() {
               <li key={setting.provider}>
                 <ConfiguredProviderCard
                   setting={setting}
+                  position={index + 1}
                   canMoveUp={index > 0 && !reorder.isPending}
                   canMoveDown={
                     index < configured.length - 1 && !reorder.isPending
@@ -105,11 +107,10 @@ export default function SearchProvidersScreen() {
             ))}
           </ul>
         )}
-      </section>
+      </SettingsSection>
 
       {!providers.isPending && unconfigured.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-lg font-medium">{t("addProviderTitle")}</h2>
+        <SettingsSection title={t("addProviderTitle")}>
           <ul className="flex flex-col gap-3">
             {unconfigured.map((provider) => (
               <li key={provider}>
@@ -117,7 +118,7 @@ export default function SearchProvidersScreen() {
               </li>
             ))}
           </ul>
-        </section>
+        </SettingsSection>
       ) : null}
     </div>
   );
@@ -212,12 +213,14 @@ function buildUpsertInput(
 
 function ConfiguredProviderCard({
   setting,
+  position,
   canMoveUp,
   canMoveDown,
   onMove,
   onError,
 }: {
   setting: SearchProviderSetting;
+  position: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMove: (direction: -1 | 1) => void;
@@ -232,9 +235,17 @@ function ConfiguredProviderCard({
   const [baseUrl, setBaseUrl] = useState(setting.baseUrl ?? "");
 
   return (
-    <article className="flex flex-col gap-3 rounded-md border border-border p-3">
+    <SettingsCard className="flex flex-col gap-3 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium">{meta.label}</p>
+        <div className="flex items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className="flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground"
+          >
+            {position}
+          </span>
+          <p className="text-base font-semibold tracking-tight">{meta.label}</p>
+        </div>
         <div className="flex items-center gap-1">
           <Button
             type="button"
@@ -298,7 +309,7 @@ function ConfiguredProviderCard({
           {t("delete")}
         </Button>
       </div>
-    </article>
+    </SettingsCard>
   );
 }
 
@@ -316,8 +327,8 @@ function NewProviderCard({
   const [baseUrl, setBaseUrl] = useState("");
 
   return (
-    <article className="flex flex-col gap-3 rounded-md border border-border p-3">
-      <p className="text-sm font-medium">{meta.label}</p>
+    <SettingsCard className="flex flex-col gap-3 p-4 sm:p-5">
+      <p className="text-base font-semibold tracking-tight">{meta.label}</p>
       <ProviderForm
         provider={provider}
         apiKey={apiKey}
@@ -335,6 +346,6 @@ function NewProviderCard({
         }}
         onError={onError}
       />
-    </article>
+    </SettingsCard>
   );
 }

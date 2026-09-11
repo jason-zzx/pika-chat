@@ -4,6 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
+import SettingsBadge from "@/components/settings/SettingsBadge";
+import SettingsCard from "@/components/settings/SettingsCard";
+import SettingsSection from "@/components/settings/SettingsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +39,9 @@ type AdminUser = {
 type AdminUsersScreenProps = {
   actor: Actor;
 };
+
+// Hoisted so JSX carries no bare string literal (i18next/no-literal-string).
+const TONE_DESTRUCTIVE = "destructive";
 
 async function listAdminUsers(): Promise<AdminUser[]> {
   const result = await authClient.admin.listUsers({
@@ -139,9 +145,12 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">{t("createUserTitle")}</h2>
-        <form onSubmit={onCreate} className="flex max-w-lg flex-col gap-2">
+      <SettingsSection title={t("createUserTitle")}>
+        <SettingsCard className="p-5">
+          <form
+            onSubmit={onCreate}
+            className="grid gap-3 sm:grid-cols-2"
+          >
           <div className="flex flex-col gap-1">
             <Label htmlFor="create-username">{t("usernameLabel")}</Label>
             <Input id="create-username" name="username" required />
@@ -178,11 +187,12 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
               </SelectContent>
             </Select>
           </div>
-          <Button type="submit" disabled={createUser.isPending}>
+          <Button type="submit" disabled={createUser.isPending} className="w-fit">
             {createUser.isPending ? t("creating") : t("create")}
           </Button>
         </form>
-      </section>
+        </SettingsCard>
+      </SettingsSection>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {users.error ? (
@@ -191,8 +201,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
         </p>
       ) : null}
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">{t("usersTitle")}</h2>
+      <SettingsSection title={t("usersTitle")}>
         <ul className="flex flex-col gap-3">
           {(users.data ?? []).map((user) => {
             const target = {
@@ -226,17 +235,31 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                   : t("roleUser");
 
             return (
-              <li
-                key={user.id}
-                className="flex flex-col gap-2 rounded-md border border-border p-3 md:flex-row md:items-center md:justify-between"
-              >
-                <div className="text-sm">
-                  <p className="font-medium">{user.username ?? user.name}</p>
-                  <p className="text-muted-foreground">{user.email}</p>
-                  <p>
-                    {roleLabel}
-                    {user.banned ? t("bannedSuffix") : ""}
-                  </p>
+              <li key={user.id}>
+                <SettingsCard className="flex flex-col gap-3 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground"
+                  >
+                    {(user.username ?? user.name ?? user.email).charAt(0)}
+                  </span>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <p className="truncate text-sm font-medium">
+                      {user.username ?? user.name}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {user.email}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <SettingsBadge dot={false}>{roleLabel}</SettingsBadge>
+                      {user.banned ? (
+                        <SettingsBadge tone={TONE_DESTRUCTIVE}>
+                          {t("bannedBadge")}
+                        </SettingsBadge>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {showSetRole ? (
@@ -272,11 +295,12 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                     </Button>
                   ) : null}
                 </div>
+                </SettingsCard>
               </li>
             );
           })}
         </ul>
-      </section>
+      </SettingsSection>
     </div>
   );
 }

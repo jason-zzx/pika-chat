@@ -4,6 +4,8 @@ import { getTranslations } from "next-intl/server";
 import LocaleControl from "@/components/layout/LocaleControl";
 import PageHeader from "@/components/layout/PageHeader";
 import ThemeControl from "@/components/layout/ThemeControl";
+import SettingsCard from "@/components/settings/SettingsCard";
+import SettingsRow from "@/components/settings/SettingsRow";
 import { parseThemeCookie, THEME_COOKIE_NAME } from "@/lib/theme";
 
 export default async function SettingsGeneralPage() {
@@ -15,14 +17,20 @@ export default async function SettingsGeneralPage() {
   return (
     <>
       <PageHeader title={t("title")} description={t("description")} />
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">{t("theme")}</p>
-        <ThemeControl initialMode={theme.mode} />
-      </div>
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">{t("language")}</p>
-        <LocaleControl />
-      </div>
+      <SettingsCard>
+        <div className="flex flex-col divide-y divide-border">
+          <SettingsRow
+            label={t("theme")}
+            description={t("themeDescription")}
+            control={<ThemeControl initialMode={theme.mode} />}
+          />
+          <SettingsRow
+            label={t("language")}
+            description={t("languageDescription")}
+            control={<LocaleControl />}
+          />
+        </div>
+      </SettingsCard>
     </>
   );
 }

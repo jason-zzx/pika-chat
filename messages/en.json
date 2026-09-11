@@ -110,8 +110,6 @@
     "twoFactor": {
       "title": "Two-factor authentication",
       "description": "Require a code from an authenticator app when you sign in.",
-      "enabled": "Two-factor authentication is on.",
-      "disabled": "Two-factor authentication is off.",
       "startSubmit": "Continue",
       "passwordLabel": "Your password",
       "qrCaption": "Scan this code with your authenticator app.",
@@ -134,8 +132,12 @@
       "disable": "Turn off two-factor authentication",
       "disableSubmit": "Turn off",
       "disabledDone": "Two-factor authentication is now off.",
-      "otherSessionsNotRevoked": "Two-factor authentication is on, but your other sessions could not be signed out. Sign out on any other devices yourself."
-    }
+      "otherSessionsNotRevoked": "Two-factor authentication is on, but your other sessions could not be signed out. Sign out on any other devices yourself.",
+      "statusOn": "On",
+      "statusOff": "Off"
+    },
+    "passwordTitle": "Password",
+    "passwordDescription": "Change the password you sign in with."
   },
   "Chat": {
     "Composer": {
@@ -265,7 +267,9 @@
       "title": "General",
       "description": "Appearance for this browser.",
       "theme": "Theme",
-      "language": "Language"
+      "language": "Language",
+      "themeDescription": "Choose how the app looks in this browser.",
+      "languageDescription": "Pick the language used across the interface."
     },
     "Providers": {
       "title": "Providers",
@@ -315,12 +319,14 @@
     "ban": "Ban",
     "resetPassword": "Reset password",
     "newPasswordPrompt": "New password (min 8 characters)",
-    "bannedSuffix": " · banned",
     "registrationTitle": "Registration",
     "registrationOpen": "Anyone with the link can create a user-role account.",
     "registrationClosed": "Only admins can create accounts.",
     "disableRegistration": "Disable registration",
-    "enableRegistration": "Enable registration"
+    "enableRegistration": "Enable registration",
+    "registrationStatusOpen": "Open",
+    "registrationStatusClosed": "Closed",
+    "bannedBadge": "Banned"
   },
   "Provider": {
     "loading": "Loading…",

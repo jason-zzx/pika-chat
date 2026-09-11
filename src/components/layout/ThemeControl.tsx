@@ -65,7 +65,7 @@ export default function ThemeControl({
   return (
     <Button
       type="button"
-      variant="ghost"
+      variant="outline"
       size="sm"
       className={cn("justify-start gap-2", className)}
       aria-label={t("theme.current", { theme: currentLabel })}
