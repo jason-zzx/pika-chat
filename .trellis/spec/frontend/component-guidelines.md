@@ -80,6 +80,25 @@ tokens there.
 - No inline `style` except for genuinely dynamic values a class cannot express.
 - Reach for a shadcn/ui primitive before writing a new one.
 
+### Settings surfaces
+
+Every `/settings/*` page composes the shared primitives in
+`src/components/settings/` instead of ad-hoc cards:
+
+- `SettingsCard` — the single surface (`rounded-xl border bg-card shadow-xs`);
+  padding belongs to the consumer (forms pad the card, row layouts divide
+  internally with `divide-y`).
+- `SettingsSection` — titled group (`title` + optional `description`) above a
+  card or list; replaces bare `<h2>` section headers.
+- `SettingsRow` — label/description left, control right; stacks on mobile.
+- `SettingsBadge` — status pill where a dot carries the tone (`neutral` /
+  `success` / `destructive`); pass `dot={false}` for category tags (roles,
+  visibility) that carry no status.
+
+Status color: the theme is deliberately monochrome; `--success` (declared in
+`globals.css` for light and dark) is the only accent, reserved for "on/open"
+state dots. Do not introduce further status colors without a spec discussion.
+
 ---
 
 ## Responsive layout
