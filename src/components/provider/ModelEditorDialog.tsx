@@ -1,7 +1,8 @@
 "use client";
 
+import { BrainIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 
 import ModelVendorIcon from "@/components/provider/ModelVendorIcon";
 import { Button } from "@/components/ui/button";
@@ -29,23 +30,66 @@ import {
   MODEL_VENDOR_LABELS,
 } from "@/lib/model-vendor";
 import {
+  DEFAULT_MODEL_CONTEXT_TOKENS,
   isReasoningEffortChoice,
   REASONING_EFFORT_CHOICES,
   SEEDED_REASONING_OPTIONS,
+  type AddProviderModelInput,
   type ProviderModel,
   type ReasoningEffortChoice,
 } from "@/lib/schemas/provider";
+import { cn } from "@/lib/utils";
 
-import { useUpdateProviderModel } from "./use-provider-configs";
+import { ModalityIcon } from "./model-capabilities";
+import {
+  useAddProviderModel,
+  useUpdateProviderModel,
+} from "./use-provider-configs";
 
 const INPUT_MODALITIES = ["text", "image", "audio", "video", "pdf"] as const;
+
+// Hoisted wire tokens (i18next/no-literal-string): dirty-field keys.
+const FIELD_CONTEXT_TOKENS = "contextTokens";
+const FIELD_REASONING = "reasoning";
+const FIELD_VENDOR_KEY = "vendorKey";
 
 type ModelEditorDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   configId: string;
-  model: ProviderModel;
+  /** Omit to switch into create mode with an editable model id. */
+  model?: ProviderModel;
 };
+
+/** Chip-style toggle used for modalities, reasoning, and effort options. */
+function ToggleChip({
+  pressed,
+  onToggle,
+  children,
+  disabled,
+}: {
+  pressed: boolean;
+  onToggle: (next: boolean) => void;
+  children: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      disabled={disabled}
+      onClick={() => onToggle(!pressed)}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm leading-none transition-colors",
+        pressed
+          ? "border-primary/60 bg-primary/15 text-foreground"
+          : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function ModelEditorDialog({
   open,
@@ -53,23 +97,47 @@ export default function ModelEditorDialog({
   configId,
   model,
 }: ModelEditorDialogProps) {
+  const isCreate = model === undefined;
   const t = useTranslations("Provider");
   const tErrors = useTranslations("Errors");
   const updateModel = useUpdateProviderModel();
+  const addModel = useAddProviderModel();
+  const [modelId, setModelId] = useState("");
   const [contextTokens, setContextTokens] = useState(
-    String(model.contextTokens),
+    String(model?.contextTokens ?? DEFAULT_MODEL_CONTEXT_TOKENS),
   );
   const [inputModalities, setInputModalities] = useState(
-    new Set(model.inputModalities),
+    () => new Set(model?.inputModalities ?? ["text"]),
   );
-  const [reasoning, setReasoning] = useState(model.reasoning);
+  const [reasoning, setReasoning] = useState(model?.reasoning ?? false);
   const [reasoningOptions, setReasoningOptions] = useState(
-    () => new Set(model.reasoningOptions.filter(isReasoningEffortChoice)),
+    () =>
+      new Set(
+        model?.reasoningOptions.filter(isReasoningEffortChoice) ??
+          SEEDED_REASONING_OPTIONS,
+      ),
   );
-  const [vendorKey, setVendorKey] = useState(model.vendorKey ?? "");
+  const [vendorKey, setVendorKey] = useState(model?.vendorKey ?? "");
+  // Create mode only sends fields the user touched, so catalog metadata for
+  // the model id still wins for everything else.
+  const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
+  const pending = updateModel.isPending || addModel.isPending;
+
+  function markDirty(field: string) {
+    setDirty((current) => {
+      if (current.has(field)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(field);
+      return next;
+    });
+  }
+
   function toggleModality(modality: string, checked: boolean) {
+    markDirty("inputModalities");
     setInputModalities((current) => {
       const next = new Set(current);
       if (checked) {
@@ -82,6 +150,7 @@ export default function ModelEditorDialog({
   }
 
   function toggleEffort(option: ReasoningEffortChoice, checked: boolean) {
+    markDirty("reasoning");
     setReasoningOptions((current) => {
       const next = new Set(current);
       if (checked) {
@@ -93,47 +162,97 @@ export default function ModelEditorDialog({
     });
   }
 
+  function parseContext(): number | null {
+    const parsed = Number.parseInt(contextTokens, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  function orderedModalities(): string[] {
+    return INPUT_MODALITIES.filter((modality) => inputModalities.has(modality));
+  }
+
+  function orderedEfforts(): ReasoningEffortChoice[] {
+    return REASONING_EFFORT_CHOICES.filter((option) =>
+      reasoningOptions.has(option),
+    );
+  }
+
+  async function handleCreate(parsedContext: number, modalities: string[]) {
+    const trimmedId = modelId.trim();
+    if (trimmedId.length === 0) {
+      return;
+    }
+    const input: AddProviderModelInput = { modelId: trimmedId };
+    if (dirty.has("contextTokens")) {
+      input.contextTokens = parsedContext;
+    }
+    if (dirty.has("inputModalities")) {
+      input.inputModalities = modalities;
+    }
+    if (dirty.has("reasoning")) {
+      input.reasoning = reasoning;
+      input.reasoningOptions = reasoning
+        ? orderedEfforts()
+        : [];
+    }
+    if (dirty.has("vendorKey")) {
+      input.vendorKey = isModelVendorKey(vendorKey) ? vendorKey : null;
+    }
+    await addModel.mutateAsync({ configId, input });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsedContext = Number.parseInt(contextTokens, 10);
-    if (!Number.isFinite(parsedContext) || parsedContext <= 0) {
+    const parsedContext = parseContext();
+    if (parsedContext === null) {
       setError(t("invalidContext"));
       return;
     }
-    const modalities = INPUT_MODALITIES.filter((modality) =>
-      inputModalities.has(modality),
-    );
+    const modalities = orderedModalities();
     if (modalities.length === 0) {
       setError(t("invalidModalities"));
       return;
     }
-    const options = reasoning
-      ? REASONING_EFFORT_CHOICES.filter((option) => reasoningOptions.has(option))
-      : model.reasoningOptions;
     setError(null);
     try {
-      await updateModel.mutateAsync({
-        configId,
-        modelId: model.modelId,
-        input: {
-          contextTokens: parsedContext,
-          inputModalities: [...modalities],
-          reasoning,
-          reasoningOptions: reasoning
-            ? options.length > 0
-              ? options
-              : [...SEEDED_REASONING_OPTIONS]
-            : undefined,
-          vendorKey: isModelVendorKey(vendorKey) ? vendorKey : null,
-        },
-      });
+      if (isCreate) {
+        await handleCreate(parsedContext, modalities);
+      } else {
+        const options = reasoning
+          ? orderedEfforts()
+          : (model?.reasoningOptions ?? []);
+        await updateModel.mutateAsync({
+          configId,
+          modelId: model?.modelId ?? "",
+          input: {
+            contextTokens: parsedContext,
+            inputModalities: modalities,
+            reasoning,
+            reasoningOptions: reasoning
+              ? options.length > 0
+                ? options
+                : [...SEEDED_REASONING_OPTIONS]
+              : undefined,
+            vendorKey: isModelVendorKey(vendorKey) ? vendorKey : null,
+          },
+        });
+      }
       onOpenChange(false);
     } catch (caught) {
-      setError(apiErrorMessage(caught, tErrors, "actions.saveModel"));
+      setError(
+        apiErrorMessage(
+          caught,
+          tErrors,
+          isCreate ? "actions.addModel" : "actions.saveModel",
+        ),
+      );
     }
   }
 
   async function handleReset() {
+    if (!model) {
+      return;
+    }
     setError(null);
     try {
       const next = await updateModel.mutateAsync({
@@ -162,83 +281,100 @@ export default function ModelEditorDialog({
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ModelVendorIcon
-                modelId={model.modelId}
-                vendorKey={vendorKey.length > 0 ? vendorKey : model.vendorKey}
-              />
-              {model.modelId}
+              {isCreate ? (
+                t("addModel")
+              ) : (
+                <>
+                  <ModelVendorIcon
+                    modelId={model.modelId}
+                    vendorKey={vendorKey.length > 0 ? vendorKey : model.vendorKey}
+                  />
+                  {model.modelId}
+                </>
+              )}
             </DialogTitle>
-            <DialogDescription>{t("contextDescription")}</DialogDescription>
+            <DialogDescription>
+              {isCreate ? t("addModelDescription") : t("contextDescription")}
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-4">
+            {isCreate ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="model-id">{t("modelIdLabel")}</Label>
+                <Input
+                  id="model-id"
+                  required
+                  value={modelId}
+                  placeholder={t("modelIdPlaceholder")}
+                  onChange={(event) => setModelId(event.currentTarget.value)}
+                />
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="model-context">{t("contextTokensLabel")}</Label>
               <Input
                 id="model-context"
                 inputMode="numeric"
                 value={contextTokens}
-                onChange={(event) =>
-                  setContextTokens(event.currentTarget.value)
-                }
+                onChange={(event) => {
+                  markDirty(FIELD_CONTEXT_TOKENS);
+                  setContextTokens(event.currentTarget.value);
+                }}
               />
             </div>
 
-            <fieldset className="flex flex-col gap-1">
+            <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-medium">
                 {t("inputModalitiesLabel")}
               </legend>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {INPUT_MODALITIES.map((modality) => (
-                  <Label key={modality} className="gap-2 font-normal">
-                    <input
-                      type="checkbox"
-                      checked={inputModalities.has(modality)}
-                      onChange={(event) =>
-                        toggleModality(modality, event.currentTarget.checked)
-                      }
-                      className="size-4 accent-primary"
-                    />
+                  <ToggleChip
+                    key={modality}
+                    pressed={inputModalities.has(modality)}
+                    onToggle={(next) => toggleModality(modality, next)}
+                  >
+                    <ModalityIcon modality={modality} className="size-3.5" />
                     {modality}
-                  </Label>
+                  </ToggleChip>
                 ))}
               </div>
             </fieldset>
 
-            <Label className="gap-2 font-normal">
-              <input
-                type="checkbox"
-                checked={reasoning}
-                onChange={(event) => setReasoning(event.currentTarget.checked)}
-                className="size-4 accent-primary"
-              />
-              {t("supportsReasoning")}
-            </Label>
-
-            {reasoning ? (
-              <fieldset className="flex flex-col gap-1">
-                <legend className="text-sm font-medium">
-                  {t("reasoningEffortLabel")}
-                </legend>
-                <div className="flex flex-wrap gap-2">
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium">
+                {t("supportsReasoning")}
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
+                <ToggleChip
+                  pressed={reasoning}
+                  onToggle={(next) => {
+                    markDirty(FIELD_REASONING);
+                    setReasoning(next);
+                  }}
+                >
+                  <BrainIcon className="size-3.5" />
+                  {reasoning ? t("reasoningOn") : t("reasoningOff")}
+                </ToggleChip>
+              </div>
+              {reasoning ? (
+                <div className="flex flex-wrap gap-1.5 pt-1">
                   {REASONING_EFFORT_CHOICES.map((option) => (
-                    <Label key={option} className="gap-2 font-normal">
-                      <input
-                        type="checkbox"
-                        checked={reasoningOptions.has(option)}
-                        onChange={(event) =>
-                          toggleEffort(option, event.currentTarget.checked)
-                        }
-                        className="size-4 accent-primary"
-                      />
+                    <ToggleChip
+                      key={option}
+                      pressed={reasoningOptions.has(option)}
+                      onToggle={(next) => toggleEffort(option, next)}
+                    >
                       {option}
-                    </Label>
+                    </ToggleChip>
                   ))}
                 </div>
-              </fieldset>
-            ) : null}
+              ) : null}
+            </fieldset>
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="model-vendor">{t("vendorIconLabel")}</Label>
               <Select
                 // eslint-disable-next-line i18next/no-literal-string -- "auto" vendor wire sentinel, not copy
@@ -247,6 +383,7 @@ export default function ModelEditorDialog({
                   if (typeof next !== "string") {
                     return;
                   }
+                  markDirty(FIELD_VENDOR_KEY);
                   setVendorKey(next === "auto" ? "" : next);
                 }}
               >
@@ -263,7 +400,10 @@ export default function ModelEditorDialog({
                   {MODEL_VENDOR_KEYS.map((key) => (
                     <SelectItem key={key} value={key}>
                       <span className="flex items-center gap-2">
-                        <ModelVendorIcon modelId={model.modelId} vendorKey={key} />
+                        <ModelVendorIcon
+                          modelId={isCreate ? modelId : model.modelId}
+                          vendorKey={key}
+                        />
                         {MODEL_VENDOR_LABELS[key]}
                       </span>
                     </SelectItem>
@@ -276,18 +416,20 @@ export default function ModelEditorDialog({
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={updateModel.isPending}
-              onClick={() => {
-                void handleReset();
-              }}
-            >
-              {t("resetFromCatalog")}
-            </Button>
-            <Button type="submit" disabled={updateModel.isPending}>
-              {updateModel.isPending ? t("saving") : t("save")}
+            {isCreate ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  void handleReset();
+                }}
+              >
+                {t("resetFromCatalog")}
+              </Button>
+            )}
+            <Button type="submit" disabled={pending}>
+              {pending ? t("saving") : isCreate ? t("add") : t("save")}
             </Button>
           </DialogFooter>
         </form>

@@ -1,10 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import ProviderConfigsScreen from "./ProviderConfigsScreen";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
 
 vi.mock("@/lib/api/provider", () => ({
   listProviderConfigs: vi.fn().mockResolvedValue({ own: [], shared: [] }),
@@ -31,6 +35,9 @@ function renderScreen(canShare: boolean) {
 describe("ProviderConfigsScreen", () => {
   it("hides the share toggle when canShare is false", () => {
     renderScreen(false);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a provider" }),
+    );
     expect(
       screen.queryByRole("checkbox", { name: "Share with the instance" }),
     ).toBeNull();
@@ -38,6 +45,9 @@ describe("ProviderConfigsScreen", () => {
 
   it("shows the share toggle when canShare is true", () => {
     renderScreen(true);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a provider" }),
+    );
     expect(
       screen.getByRole("checkbox", { name: "Share with the instance" }),
     ).toBeInTheDocument();
@@ -53,6 +63,8 @@ describe("ProviderConfigsScreen", () => {
       </QueryClientProvider>,
       { locale: "zh-CN" },
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "添加服务商" }));
 
     expect(
       screen.getByRole("checkbox", { name: "共享给实例" }),

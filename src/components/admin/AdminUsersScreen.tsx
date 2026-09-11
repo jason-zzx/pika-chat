@@ -1,13 +1,26 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import SettingsCard from "@/components/settings/SettingsCard";
-import SettingsSection from "@/components/settings/SettingsSection";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -34,6 +47,7 @@ type AdminUser = {
   role?: string | null;
   banned?: boolean | null;
   username?: string | null;
+  createdAt?: string | Date;
 };
 
 type AdminUsersScreenProps = {
@@ -58,7 +72,9 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
   const queryClient = useQueryClient();
   const t = useTranslations("Admin");
   const tErrors = useTranslations("Errors");
+  const format = useFormatter();
   const [error, setError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const users = useQuery({
     queryKey: ["admin-users"],
     queryFn: listAdminUsers,
@@ -87,6 +103,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
     },
     onSuccess: () => {
       setError(null);
+      setCreateOpen(false);
       void invalidate();
     },
     onError: (caught) =>
@@ -145,55 +162,6 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsSection title={t("createUserTitle")}>
-        <SettingsCard className="p-5">
-          <form
-            onSubmit={onCreate}
-            className="grid gap-3 sm:grid-cols-2"
-          >
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="create-username">{t("usernameLabel")}</Label>
-            <Input id="create-username" name="username" required />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="create-email">{t("emailLabel")}</Label>
-            <Input id="create-email" name="email" type="email" required />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="create-password">{t("passwordLabel")}</Label>
-            <Input
-              id="create-password"
-              name="password"
-              type="password"
-              required
-              minLength={8}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="create-role">{t("roleLabel")}</Label>
-            <Select
-              name="role"
-              defaultValue="user"
-              items={{ user: t("roleUser"), admin: t("roleAdmin") }}
-            >
-              <SelectTrigger id="create-role" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {/* eslint-disable-next-line i18next/no-literal-string -- select wire values, not copy */}
-                <SelectItem value="user">{t("roleUser")}</SelectItem>
-                {/* eslint-disable-next-line i18next/no-literal-string -- select wire values, not copy */}
-                <SelectItem value="admin">{t("roleAdmin")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="submit" disabled={createUser.isPending} className="w-fit">
-            {createUser.isPending ? t("creating") : t("create")}
-          </Button>
-        </form>
-        </SettingsCard>
-      </SettingsSection>
-
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {users.error ? (
         <p className="text-sm text-destructive">
@@ -201,106 +169,208 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
         </p>
       ) : null}
 
-      <SettingsSection title={t("usersTitle")}>
-        <ul className="flex flex-col gap-3">
-          {(users.data ?? []).map((user) => {
-            const target = {
-              userId: user.id,
-              role: parseActorRole(user.role),
-            };
-            const nextRole: AssignableRole =
-              // eslint-disable-next-line i18next/no-literal-string -- role tokens (data values), not copy
-              target.role === "admin" ? "user" : "admin";
-            const showSetRole = canAdminister(
-              actor,
-              target,
-              "set-role",
-              nextRole,
-            );
-            const showBan = canAdminister(
-              actor,
-              target,
-              user.banned ? "unban" : "ban",
-            );
-            const showReset = canAdminister(
-              actor,
-              target,
-              "set-user-password",
-            );
-            const roleLabel =
-              target.role === "super_admin"
-                ? t("roleSuperAdmin")
-                : target.role === "admin"
-                  ? t("roleAdmin")
-                  : t("roleUser");
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-base font-semibold tracking-tight">
+            {t("usersTitle")}
+          </h2>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+          >
+            <PlusIcon aria-hidden="true" />
+            {t("createUserTitle")}
+          </Button>
+        </div>
 
-            return (
-              <li key={user.id}>
-                <SettingsCard className="flex flex-col gap-3 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden="true"
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground"
-                  >
-                    {(user.username ?? user.name ?? user.email).charAt(0)}
-                  </span>
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <p className="truncate text-sm font-medium">
-                      {user.username ?? user.name}
-                    </p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {user.email}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <SettingsBadge dot={false}>{roleLabel}</SettingsBadge>
-                      {user.banned ? (
-                        <SettingsBadge tone={TONE_DESTRUCTIVE}>
-                          {t("bannedBadge")}
-                        </SettingsBadge>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {showSetRole ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void onSetRole(user.id, nextRole)}
-                    >
-                      {target.role === "admin"
-                        ? t("makeUser")
-                        : t("makeAdmin")}
-                    </Button>
-                  ) : null}
-                  {showBan ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void onToggleBan(user)}
-                    >
-                      {user.banned ? t("unban") : t("ban")}
-                    </Button>
-                  ) : null}
-                  {showReset ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void onResetPassword(user.id)}
-                    >
-                      {t("resetPassword")}
-                    </Button>
-                  ) : null}
-                </div>
-                </SettingsCard>
-              </li>
-            );
-          })}
-        </ul>
-      </SettingsSection>
+        <SettingsCard className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                    {t("userColumn")}
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                    {t("roleColumn")}
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                    {t("createdColumn")}
+                  </th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-muted-foreground">
+                    <span className="sr-only">{t("actionsColumn")}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(users.data ?? []).map((user) => {
+                  const target = {
+                    userId: user.id,
+                    role: parseActorRole(user.role),
+                  };
+                  const nextRole: AssignableRole =
+                    // eslint-disable-next-line i18next/no-literal-string -- role tokens (data values), not copy
+                    target.role === "admin" ? "user" : "admin";
+                  const showSetRole = canAdminister(
+                    actor,
+                    target,
+                    "set-role",
+                    nextRole,
+                  );
+                  const showBan = canAdminister(
+                    actor,
+                    target,
+                    user.banned ? "unban" : "ban",
+                  );
+                  const showReset = canAdminister(
+                    actor,
+                    target,
+                    "set-user-password",
+                  );
+                  const roleLabel =
+                    target.role === "super_admin"
+                      ? t("roleSuperAdmin")
+                      : target.role === "admin"
+                        ? t("roleAdmin")
+                        : t("roleUser");
+                  const displayName = user.username ?? user.name;
+
+                  return (
+                    <tr key={user.id} className="border-b border-border last:border-b-0">
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span
+                            aria-hidden="true"
+                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground"
+                          >
+                            {(displayName ?? user.email).charAt(0)}
+                          </span>
+                          <div className="flex min-w-0 flex-col">
+                            <p className="truncate font-medium">
+                              {displayName}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <SettingsBadge dot={false}>{roleLabel}</SettingsBadge>
+                          {user.banned ? (
+                            <SettingsBadge tone={TONE_DESTRUCTIVE}>
+                              {t("bannedBadge")}
+                            </SettingsBadge>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                        {user.createdAt
+                          ? format.dateTime(new Date(user.createdAt), {
+                              // eslint-disable-next-line i18next/no-literal-string -- Intl format token, not copy
+                              dateStyle: "medium",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {showSetRole || showBan || showReset ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              aria-label={t("userActions", {
+                                name: displayName ?? user.email,
+                              })}
+                              render={<Button variant="ghost" size="icon-sm" />}
+                            >
+                              <MoreHorizontalIcon aria-hidden="true" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {showSetRole ? (
+                                <DropdownMenuItem
+                                  onClick={() => void onSetRole(user.id, nextRole)}
+                                >
+                                  {target.role === "admin"
+                                    ? t("makeUser")
+                                    : t("makeAdmin")}
+                                </DropdownMenuItem>
+                              ) : null}
+                              {showReset ? (
+                                <DropdownMenuItem
+                                  onClick={() => void onResetPassword(user.id)}
+                                >
+                                  {t("resetPassword")}
+                                </DropdownMenuItem>
+                              ) : null}
+                              {showBan ? (
+                                <DropdownMenuItem
+                                  onClick={() => void onToggleBan(user)}
+                                >
+                                  {user.banned ? t("unban") : t("ban")}
+                                </DropdownMenuItem>
+                              ) : null}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </SettingsCard>
+      </section>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("createUserTitle")}</DialogTitle>
+            <DialogDescription>{t("createUserDescription")}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={onCreate} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="create-username">{t("usernameLabel")}</Label>
+              <Input id="create-username" name="username" required />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="create-email">{t("emailLabel")}</Label>
+              <Input id="create-email" name="email" type="email" required />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="create-password">{t("passwordLabel")}</Label>
+              <Input
+                id="create-password"
+                name="password"
+                type="password"
+                required
+                minLength={8}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="create-role">{t("roleLabel")}</Label>
+              <Select
+                name="role"
+                defaultValue="user"
+                items={{ user: t("roleUser"), admin: t("roleAdmin") }}
+              >
+                <SelectTrigger id="create-role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* eslint-disable-next-line i18next/no-literal-string -- select wire values, not copy */}
+                  <SelectItem value="user">{t("roleUser")}</SelectItem>
+                  {/* eslint-disable-next-line i18next/no-literal-string -- select wire values, not copy */}
+                  <SelectItem value="admin">{t("roleAdmin")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" disabled={createUser.isPending} className="mt-1 w-fit">
+              {createUser.isPending ? t("creating") : t("create")}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

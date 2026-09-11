@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import InsetHeader from "@/components/layout/InsetHeader";
-import PageContainer from "@/components/layout/PageContainer";
 import { resolveActor } from "@/server/auth/actor";
 
 export default async function SettingsLayout({
@@ -19,8 +18,8 @@ export default async function SettingsLayout({
   return (
     <>
       <InsetHeader />
-      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <PageContainer>{children}</PageContainer>
+      <div className="thin-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {children}
       </div>
     </>
   );

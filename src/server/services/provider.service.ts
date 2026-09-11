@@ -353,7 +353,27 @@ export async function addProviderModel(
   actor: Actor,
 ): Promise<ProviderModel> {
   await requireOwnedConfig(configId, actor);
-  const fill = await fillMetadataForModelId(input.modelId);
+  const { modelId, ...overrides } = input;
+  const fill = await fillMetadataForModelId(modelId);
+  const hasOverrides = Object.values(overrides).some(
+    (value) => value !== undefined,
+  );
+  let metadata: ModelMetadataFields = fill;
+  if (hasOverrides) {
+    metadata = {
+      contextTokens: input.contextTokens ?? fill.contextTokens,
+      outputTokens: input.outputTokens ?? fill.outputTokens,
+      inputModalities: input.inputModalities ?? fill.inputModalities,
+      outputModalities: input.outputModalities ?? fill.outputModalities,
+      reasoning: input.reasoning ?? fill.reasoning,
+      reasoningOptions: input.reasoningOptions ?? fill.reasoningOptions,
+      vendorKey: input.vendorKey === undefined ? fill.vendorKey : input.vendorKey,
+      metadataSource: "user",
+    };
+    if (metadata.reasoning && metadata.reasoningOptions.length === 0) {
+      metadata = { ...metadata, reasoningOptions: [...SEEDED_REASONING_OPTIONS] };
+    }
+  }
   const db = getDb();
   try {
     const inserted = await db
@@ -361,8 +381,8 @@ export async function addProviderModel(
       .values({
         id: newId(),
         providerConfigId: configId,
-        modelId: input.modelId,
-        ...fillValues(fill),
+        modelId,
+        ...fillValues(metadata),
       })
       .returning(providerModelColumns);
     const row = inserted[0];

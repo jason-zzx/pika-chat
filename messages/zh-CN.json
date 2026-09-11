@@ -326,7 +326,13 @@
     "enableRegistration": "开放注册",
     "registrationStatusOpen": "开放中",
     "registrationStatusClosed": "已关闭",
-    "bannedBadge": "已封禁"
+    "bannedBadge": "已封禁",
+    "createUserDescription": "新用户可使用用户名或邮箱登录。",
+    "userColumn": "用户",
+    "roleColumn": "身份",
+    "createdColumn": "创建日期",
+    "actionsColumn": "操作",
+    "userActions": "{name} 的操作"
   },
   "Provider": {
     "loading": "加载中…",
@@ -363,7 +369,7 @@
     "apiKeyNewPlaceholder": "本地端点可留空",
     "shareWithInstance": "共享给实例",
     "addModelsTitle": "添加模型",
-    "addModelsDescription": "从 {configName} 发现 ID，或直接在服务商卡片中输入。",
+    "addModelsDescription": "从 {configName} 发现 ID，或通过「添加模型」手动填写。",
     "discovering": "正在发现…",
     "discoverFromEndpoint": "从端点发现",
     "servedModels": "提供的模型",
@@ -377,7 +383,21 @@
     "auto": "自动",
     "resetFromCatalog": "从目录重置",
     "invalidContext": "上下文大小必须是正数 token 数。",
-    "invalidModalities": "请至少选择一种输入模态。"
+    "invalidModalities": "请至少选择一种输入模态。",
+    "addProviderDescription": "填写兼容 OpenAI 端点的基础信息。",
+    "editProviderTitle": "编辑服务商",
+    "modelCount": "{count} 个模型",
+    "addModel": "添加模型",
+    "addModelDescription": "填写模型 ID；未修改的字段将沿用目录默认值。",
+    "modelIdLabel": "模型 ID",
+    "reasoningOn": "开启",
+    "reasoningOff": "关闭",
+    "addSelectedCount": "添加所选（{count}）",
+    "deleteProviderTitle": "删除服务商",
+    "deleteProviderDescription": "将删除 {name} 及其全部模型，此操作无法撤销。",
+    "cancel": "取消",
+    "backToProviders": "返回服务商列表",
+    "selectProviderHint": "在左侧选择一个服务商查看详情。"
   },
   "Search": {
     "fallbackOrderTitle": "回退顺序",
@@ -393,7 +413,11 @@
     "moveUp": "上移 {name}",
     "moveDown": "下移 {name}",
     "keepKeyHint": "留空 API 密钥字段以保留已保存的密钥。",
-    "delete": "删除"
+    "delete": "删除",
+    "edit": "编辑",
+    "keyHint": "密钥 …{lastFour}",
+    "editProviderTitle": "编辑 {name}",
+    "addProviderNamedTitle": "添加 {name}"
   },
   "Errors": {
     "generic": "出错了，请重试。",

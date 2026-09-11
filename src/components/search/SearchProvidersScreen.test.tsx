@@ -57,6 +57,12 @@ async function cardOf(name: string): Promise<HTMLElement> {
   return card;
 }
 
+function openDialog() {
+  const dialog = screen.getByRole("dialog");
+  expect(dialog).toBeInTheDocument();
+  return dialog;
+}
+
 beforeEach(() => {
   vi.mocked(listSearchProviders).mockReset();
   vi.mocked(upsertSearchProvider).mockReset().mockResolvedValue(setting("tavily", 0));
@@ -67,7 +73,7 @@ beforeEach(() => {
 });
 
 describe("SearchProvidersScreen", () => {
-  it("shows every provider: configured ones in fallback order, the rest as add forms", async () => {
+  it("shows every provider: configured ones in fallback order, the rest as add entries", async () => {
     vi.mocked(listSearchProviders).mockResolvedValue({
       providers: [setting("exa", 0), setting("tavily", 1)],
     });
@@ -78,10 +84,14 @@ describe("SearchProvidersScreen", () => {
     expect(screen.getByText("Firecrawl")).toBeInTheDocument();
     expect(screen.getByText("Brave Search")).toBeInTheDocument();
 
-    // Configured providers mask the stored key in the input placeholder.
-    expect(
-      within(await cardOf("Exa")).getByLabelText("API key"),
-    ).toHaveAttribute("placeholder", "····1234");
+    // Configured providers mask the stored key in the edit dialog input.
+    fireEvent.click(
+      within(await cardOf("Exa")).getByRole("button", { name: "Edit" }),
+    );
+    expect(within(openDialog()).getByLabelText("API key")).toHaveAttribute(
+      "placeholder",
+      "····1234",
+    );
   });
 
   it("keeps Add disabled until a key is entered, then submits key and base URL", async () => {
@@ -93,10 +103,13 @@ describe("SearchProvidersScreen", () => {
     ).toBeInTheDocument();
 
     const card = await cardOf("Tavily");
-    const addButton = within(card).getByRole("button", { name: "Add" });
+    fireEvent.click(within(card).getByRole("button", { name: "Add" }));
+
+    const dialog = openDialog();
+    const addButton = within(dialog).getByRole("button", { name: "Add" });
     expect(addButton).toBeDisabled();
 
-    fireEvent.change(within(card).getByLabelText("API key"), {
+    fireEvent.change(within(dialog).getByLabelText("API key"), {
       target: { value: "  tvly-secret  " },
     });
     expect(addButton).toBeEnabled();
@@ -117,12 +130,13 @@ describe("SearchProvidersScreen", () => {
     renderScreen();
 
     const card = await cardOf("Tavily");
-    const input = within(card).getByLabelText("API key");
-    fireEvent.change(input, { target: { value: "" } });
-    fireEvent.change(within(card).getByLabelText("Base URL (optional)"), {
+    fireEvent.click(within(card).getByRole("button", { name: "Edit" }));
+
+    const dialog = openDialog();
+    fireEvent.change(within(dialog).getByLabelText("Base URL (optional)"), {
       target: { value: "https://proxy.example.com" },
     });
-    fireEvent.click(within(card).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(upsertSearchProvider).toHaveBeenCalledWith("tavily", {

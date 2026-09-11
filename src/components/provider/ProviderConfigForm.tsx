@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api/error-message";
@@ -100,15 +101,14 @@ export default function ProviderConfigForm({
         />
       </div>
       {canShare ? (
-        <Label className="gap-2 font-normal">
-          <input
-            type="checkbox"
+        <div className="flex items-center gap-2">
+          <Checkbox
             name="shared"
             defaultChecked={initial?.visibility === "shared"}
-            className="size-4 accent-primary"
+            aria-label={t("shareWithInstance")}
           />
-          {t("shareWithInstance")}
-        </Label>
+          <span className="text-sm">{t("shareWithInstance")}</span>
+        </div>
       ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending} className="mt-1 w-fit">

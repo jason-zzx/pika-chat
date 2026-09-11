@@ -326,7 +326,13 @@
     "enableRegistration": "Enable registration",
     "registrationStatusOpen": "Open",
     "registrationStatusClosed": "Closed",
-    "bannedBadge": "Banned"
+    "bannedBadge": "Banned",
+    "createUserDescription": "The new user can sign in with the username or email.",
+    "userColumn": "User",
+    "roleColumn": "Role",
+    "createdColumn": "Created",
+    "actionsColumn": "Actions",
+    "userActions": "Actions for {name}"
   },
   "Provider": {
     "loading": "Loading…",
@@ -363,7 +369,7 @@
     "apiKeyNewPlaceholder": "Optional for local endpoints",
     "shareWithInstance": "Share with the instance",
     "addModelsTitle": "Add models",
-    "addModelsDescription": "Discover ids from {configName}, or type one on the provider card.",
+    "addModelsDescription": "Discover ids from {configName}, or add one manually via Add model.",
     "discovering": "Discovering…",
     "discoverFromEndpoint": "Discover from endpoint",
     "servedModels": "Served models",
@@ -377,7 +383,21 @@
     "auto": "Auto",
     "resetFromCatalog": "Reset from catalog",
     "invalidContext": "Context size must be a positive number of tokens.",
-    "invalidModalities": "Choose at least one input modality."
+    "invalidModalities": "Choose at least one input modality.",
+    "addProviderDescription": "Fill in the basics of an OpenAI-compatible endpoint.",
+    "editProviderTitle": "Edit provider",
+    "modelCount": "{count} models",
+    "addModel": "Add model",
+    "addModelDescription": "Enter a model id. Fields you leave untouched keep their catalog defaults.",
+    "modelIdLabel": "Model ID",
+    "reasoningOn": "On",
+    "reasoningOff": "Off",
+    "addSelectedCount": "Add selected ({count})",
+    "deleteProviderTitle": "Delete provider",
+    "deleteProviderDescription": "This deletes {name} and all its models. This action cannot be undone.",
+    "cancel": "Cancel",
+    "backToProviders": "Back to providers",
+    "selectProviderHint": "Select a provider on the left to view details."
   },
   "Search": {
     "fallbackOrderTitle": "Fallback order",
@@ -393,7 +413,11 @@
     "moveUp": "Move {name} up",
     "moveDown": "Move {name} down",
     "keepKeyHint": "Leave the API key field empty to keep the saved key.",
-    "delete": "Delete"
+    "delete": "Delete",
+    "edit": "Edit",
+    "keyHint": "key …{lastFour}",
+    "editProviderTitle": "Edit {name}",
+    "addProviderNamedTitle": "Add {name}"
   },
   "Errors": {
     "generic": "Something went wrong. Please try again.",

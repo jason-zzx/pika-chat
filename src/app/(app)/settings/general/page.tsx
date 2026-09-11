@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
 import LocaleControl from "@/components/layout/LocaleControl";
+import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
 import ThemeControl from "@/components/layout/ThemeControl";
 import SettingsCard from "@/components/settings/SettingsCard";
@@ -15,7 +16,7 @@ export default async function SettingsGeneralPage() {
   const t = await getTranslations("Settings.General");
 
   return (
-    <>
+    <PageContainer>
       <PageHeader title={t("title")} description={t("description")} />
       <SettingsCard>
         <div className="flex flex-col divide-y divide-border">
@@ -31,6 +32,6 @@ export default async function SettingsGeneralPage() {
           />
         </div>
       </SettingsCard>
-    </>
+    </PageContainer>
   );
 }

@@ -438,6 +438,44 @@ describe("provider.service", () => {
     expect(after.map((entry) => entry.modelId)).toEqual(["local-llama"]);
   });
 
+  it("applies metadata overrides when adding a model", async () => {
+    const { userActor } = await seedActors();
+    const config = await createProviderConfig(
+      {
+        name: "overrides",
+        baseUrl: "https://relay.example.com/v1",
+        visibility: "private",
+      },
+      userActor,
+    );
+
+    const model = await addProviderModel(
+      config.id,
+      {
+        modelId: "custom-vision",
+        inputModalities: ["text", "image"],
+        reasoning: true,
+        reasoningOptions: ["low", "high"],
+        vendorKey: "google",
+      },
+      userActor,
+    );
+    expect(model.inputModalities).toEqual(["text", "image"]);
+    expect(model.reasoning).toBe(true);
+    expect(model.reasoningOptions).toEqual(["low", "high"]);
+    expect(model.vendorKey).toBe("google");
+    expect(model.metadataSource).toBe("user");
+
+    // Untouched fields still fall back to the catalog/default fill.
+    const untouched = await addProviderModel(
+      config.id,
+      { modelId: "plain-model" },
+      userActor,
+    );
+    expect(untouched.metadataSource).not.toBe("user");
+  });
+
+
   it("deletes a config and its models", async () => {
     const { userActor } = await seedActors();
     const config = await createProviderConfig(

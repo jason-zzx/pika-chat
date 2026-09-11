@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import ChangePasswordForm from "@/components/account/ChangePasswordForm";
 import TwoFactorCard from "@/components/account/TwoFactorCard";
+import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSection from "@/components/settings/SettingsSection";
@@ -13,7 +14,7 @@ export default async function SettingsAccountPage() {
   const session = await auth.api.getSession({ headers: await headers() });
 
   return (
-    <>
+    <PageContainer>
       <PageHeader title={t("title")} description={t("description")} />
       <SettingsSection
         title={t("passwordTitle")}
@@ -24,6 +25,6 @@ export default async function SettingsAccountPage() {
         </SettingsCard>
       </SettingsSection>
       <TwoFactorCard enabled={session?.user.twoFactorEnabled === true} />
-    </>
+    </PageContainer>
   );
 }

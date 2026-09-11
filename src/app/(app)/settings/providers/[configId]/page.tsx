@@ -8,7 +8,12 @@ import ProviderConfigsScreen from "@/components/provider/ProviderConfigsScreen";
 import { isStaffRole } from "@/lib/auth-hierarchy";
 import { resolveActor } from "@/server/auth/actor";
 
-export default async function SettingsProvidersPage() {
+export default async function SettingsProviderDetailPage({
+  params,
+}: {
+  params: Promise<{ configId: string }>;
+}) {
+  const { configId } = await params;
   const actor = await resolveActor(await headers());
   if (!actor) {
     redirect("/sign-in");
@@ -18,7 +23,11 @@ export default async function SettingsProvidersPage() {
   return (
     <PageContainer className="max-w-none md:min-h-0">
       <PageHeader title={t("title")} description={t("description")} />
-      <ProviderConfigsScreen canShare={isStaffRole(actor.role)} />
+      <ProviderConfigsScreen
+        key={configId}
+        canShare={isStaffRole(actor.role)}
+        selectedConfigId={configId}
+      />
     </PageContainer>
   );
 }

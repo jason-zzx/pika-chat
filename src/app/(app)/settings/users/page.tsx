@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import AdminUsersScreen from "@/components/admin/AdminUsersScreen";
 import RegistrationToggle from "@/components/admin/RegistrationToggle";
+import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
 import { resolveActor } from "@/server/auth/actor";
 
@@ -15,10 +16,10 @@ export default async function SettingsUsersPage() {
   const t = await getTranslations("Settings.Users");
 
   return (
-    <>
+    <PageContainer>
       <PageHeader title={t("title")} />
       <RegistrationToggle />
       <AdminUsersScreen actor={actor} />
-    </>
+    </PageContainer>
   );
 }

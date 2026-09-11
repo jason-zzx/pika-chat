@@ -103,11 +103,6 @@ export const updateProviderConfigSchema = z.object({
 });
 export type UpdateProviderConfigInput = z.infer<typeof updateProviderConfigSchema>;
 
-export const addProviderModelSchema = z.object({
-  modelId: z.string().trim().min(1),
-});
-export type AddProviderModelInput = z.infer<typeof addProviderModelSchema>;
-
 export const updateProviderModelSchema = z.object({
   contextTokens: z.number().int().positive().optional(),
   outputTokens: z.number().int().positive().optional(),
@@ -119,6 +114,15 @@ export const updateProviderModelSchema = z.object({
   resetFromCatalog: z.boolean().optional(),
 });
 export type UpdateProviderModelInput = z.infer<typeof updateProviderModelSchema>;
+
+// Optional metadata fields are explicit overrides applied on top of the
+// catalog fill, so an add dialog only sends the fields the user touched.
+export const addProviderModelSchema = z
+  .object({
+    modelId: z.string().trim().min(1),
+  })
+  .merge(updateProviderModelSchema.omit({ resetFromCatalog: true }));
+export type AddProviderModelInput = z.infer<typeof addProviderModelSchema>;
 
 export const discoverModelsResponseSchema = z.object({
   modelIds: z.array(z.string()),

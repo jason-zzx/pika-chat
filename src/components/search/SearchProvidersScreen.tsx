@@ -8,6 +8,13 @@ import EmptyState from "@/components/common/EmptyState";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSection from "@/components/settings/SettingsSection";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api/error-message";
@@ -124,80 +131,6 @@ export default function SearchProvidersScreen() {
   );
 }
 
-type ProviderFormProps = {
-  provider: SearchProvider;
-  apiKey: string;
-  onApiKeyChange: (value: string) => void;
-  apiKeyPlaceholder?: string;
-  baseUrl: string;
-  onBaseUrlChange: (value: string) => void;
-  pending: boolean;
-  submitDisabled: boolean;
-  submitLabel: string;
-  onSubmit: () => Promise<void>;
-  onError: (message: string | null) => void;
-};
-
-function ProviderForm({
-  provider,
-  apiKey,
-  onApiKeyChange,
-  apiKeyPlaceholder,
-  baseUrl,
-  onBaseUrlChange,
-  pending,
-  submitDisabled,
-  submitLabel,
-  onSubmit,
-  onError,
-}: ProviderFormProps) {
-  const meta = SEARCH_PROVIDER_META[provider];
-  const t = useTranslations("Search");
-  const tErrors = useTranslations("Errors");
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onError(null);
-    try {
-      await onSubmit();
-    } catch (caught) {
-      onError(apiErrorMessage(caught, tErrors, "actions.saveSearchProvider"));
-    }
-  }
-
-  return (
-    <form className="flex flex-col gap-3" onSubmit={(event) => void handleSubmit(event)}>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor={`${provider}-api-key`}>{t("apiKeyLabel")}</Label>
-        <Input
-          id={`${provider}-api-key`}
-          type="password"
-          autoComplete="off"
-          placeholder={apiKeyPlaceholder}
-          value={apiKey}
-          onChange={(event) => onApiKeyChange(event.currentTarget.value)}
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor={`${provider}-base-url`}>{t("baseUrlLabel")}</Label>
-        <Input
-          id={`${provider}-base-url`}
-          type="url"
-          autoComplete="off"
-          placeholder={meta.defaultBaseUrl}
-          value={baseUrl}
-          onChange={(event) => onBaseUrlChange(event.currentTarget.value)}
-        />
-      </div>
-      <div>
-        <Button type="submit" size="sm" disabled={pending || submitDisabled}>
-          {submitLabel}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 function buildUpsertInput(
   apiKey: string,
   baseUrl: string,
@@ -227,69 +160,55 @@ function ConfiguredProviderCard({
   onError: (message: string | null) => void;
 }) {
   const meta = SEARCH_PROVIDER_META[setting.provider];
-  const upsert = useUpsertSearchProvider();
   const remove = useDeleteSearchProvider();
   const t = useTranslations("Search");
   const tErrors = useTranslations("Errors");
-  const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState(setting.baseUrl ?? "");
+  const [editOpen, setEditOpen] = useState(false);
 
   return (
-    <SettingsCard className="flex flex-col gap-3 p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <span
-            aria-hidden="true"
-            className="flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground"
-          >
-            {position}
-          </span>
-          <p className="text-base font-semibold tracking-tight">{meta.label}</p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("moveUp", { name: meta.label })}
-            disabled={!canMoveUp}
-            onClick={() => onMove(-1)}
-          >
-            <ChevronUpIcon aria-hidden="true" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("moveDown", { name: meta.label })}
-            disabled={!canMoveDown}
-            onClick={() => onMove(1)}
-          >
-            <ChevronDownIcon aria-hidden="true" />
-          </Button>
-        </div>
+    <SettingsCard className="flex items-center gap-3 p-4 sm:px-5">
+      <span
+        aria-hidden="true"
+        className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground"
+      >
+        {position}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <p className="text-sm font-semibold tracking-tight">{meta.label}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {t("keyHint", { lastFour: setting.apiKeyLastFour })}
+          {setting.baseUrl ? ` · ${setting.baseUrl}` : ""}
+        </p>
       </div>
-      <ProviderForm
-        provider={setting.provider}
-        apiKey={apiKey}
-        onApiKeyChange={setApiKey}
-        apiKeyPlaceholder={`····${setting.apiKeyLastFour}`}
-        baseUrl={baseUrl}
-        onBaseUrlChange={setBaseUrl}
-        pending={upsert.isPending}
-        submitDisabled={false}
-        submitLabel={t("save")}
-        onSubmit={async () => {
-          await upsert.mutateAsync({
-            provider: setting.provider,
-            input: buildUpsertInput(apiKey, baseUrl),
-          });
-          setApiKey("");
-        }}
-        onError={onError}
-      />
-      <p className="text-xs text-muted-foreground">{t("keepKeyHint")}</p>
-      <div>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t("moveUp", { name: meta.label })}
+          disabled={!canMoveUp}
+          onClick={() => onMove(-1)}
+        >
+          <ChevronUpIcon aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t("moveDown", { name: meta.label })}
+          disabled={!canMoveDown}
+          onClick={() => onMove(1)}
+        >
+          <ChevronDownIcon aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setEditOpen(true)}
+        >
+          {t("edit")}
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -309,6 +228,13 @@ function ConfiguredProviderCard({
           {t("delete")}
         </Button>
       </div>
+      <ProviderFormDialog
+        provider={setting.provider}
+        setting={setting}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onError={onError}
+      />
     </SettingsCard>
   );
 }
@@ -321,31 +247,139 @@ function NewProviderCard({
   onError: (message: string | null) => void;
 }) {
   const meta = SEARCH_PROVIDER_META[provider];
-  const upsert = useUpsertSearchProvider();
   const t = useTranslations("Search");
-  const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
   return (
-    <SettingsCard className="flex flex-col gap-3 p-4 sm:p-5">
-      <p className="text-base font-semibold tracking-tight">{meta.label}</p>
-      <ProviderForm
+    <SettingsCard className="flex items-center gap-3 p-4 sm:px-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <p className="text-sm font-semibold tracking-tight">{meta.label}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {meta.defaultBaseUrl}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={() => setAddOpen(true)}
+      >
+        {t("add")}
+      </Button>
+      <ProviderFormDialog
         provider={provider}
-        apiKey={apiKey}
-        onApiKeyChange={setApiKey}
-        baseUrl={baseUrl}
-        onBaseUrlChange={setBaseUrl}
-        pending={upsert.isPending}
-        submitDisabled={apiKey.trim().length === 0}
-        submitLabel={t("add")}
-        onSubmit={async () => {
-          await upsert.mutateAsync({
-            provider,
-            input: buildUpsertInput(apiKey, baseUrl),
-          });
-        }}
+        setting={null}
+        open={addOpen}
+        onOpenChange={setAddOpen}
         onError={onError}
       />
     </SettingsCard>
+  );
+}
+
+type ProviderFormDialogProps = {
+  provider: SearchProvider;
+  /** Null switches the dialog into add mode (a key is required). */
+  setting: SearchProviderSetting | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onError: (message: string | null) => void;
+};
+
+function ProviderFormDialog({
+  provider,
+  setting,
+  open,
+  onOpenChange,
+  onError,
+}: ProviderFormDialogProps) {
+  const meta = SEARCH_PROVIDER_META[provider];
+  const upsert = useUpsertSearchProvider();
+  const t = useTranslations("Search");
+  const tErrors = useTranslations("Errors");
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState(setting?.baseUrl ?? "");
+  const isEdit = setting !== null;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onError(null);
+    try {
+      await upsert.mutateAsync({
+        provider,
+        input: buildUpsertInput(apiKey, baseUrl),
+      });
+      setApiKey("");
+      onOpenChange(false);
+    } catch (caught) {
+      onError(apiErrorMessage(caught, tErrors, "actions.saveSearchProvider"));
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          setApiKey("");
+          setBaseUrl(setting?.baseUrl ?? "");
+        }
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit
+              ? t("editProviderTitle", { name: meta.label })
+              : t("addProviderNamedTitle", { name: meta.label })}
+          </DialogTitle>
+          {isEdit ? (
+            <DialogDescription>{t("keepKeyHint")}</DialogDescription>
+          ) : null}
+        </DialogHeader>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => void handleSubmit(event)}
+        >
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={`${provider}-api-key`}>{t("apiKeyLabel")}</Label>
+            <Input
+              id={`${provider}-api-key`}
+              type="password"
+              autoComplete="off"
+              placeholder={
+                isEdit ? `····${setting.apiKeyLastFour}` : undefined
+              }
+              value={apiKey}
+              onChange={(event) => setApiKey(event.currentTarget.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={`${provider}-base-url`}>{t("baseUrlLabel")}</Label>
+            <Input
+              id={`${provider}-base-url`}
+              type="url"
+              autoComplete="off"
+              placeholder={meta.defaultBaseUrl}
+              value={baseUrl}
+              onChange={(event) => setBaseUrl(event.currentTarget.value)}
+            />
+          </div>
+          <div>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={
+                upsert.isPending || (!isEdit && apiKey.trim().length === 0)
+              }
+            >
+              {isEdit ? t("save") : t("add")}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

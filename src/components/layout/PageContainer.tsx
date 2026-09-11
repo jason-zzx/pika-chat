@@ -1,8 +1,21 @@
 import type { ReactNode } from "react";
 
-export default function PageContainer({ children }: { children: ReactNode }) {
+import { cn } from "@/lib/utils";
+
+export default function PageContainer({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6 pb-12">
+    <div
+      className={cn(
+        "mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6 pb-12",
+        className,
+      )}
+    >
       {children}
     </div>
   );
