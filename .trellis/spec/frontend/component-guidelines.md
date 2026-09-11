@@ -99,6 +99,45 @@ Status color: the theme is deliberately monochrome; `--success` (declared in
 `globals.css` for light and dark) is the only accent, reserved for "on/open"
 state dots. Do not introduce further status colors without a spec discussion.
 
+Entity management on settings pages is dialog-first: creation and editing
+happen in modal `Dialog`s (`ProviderConfigForm`, `ModelEditorDialog`,
+`ProviderFormDialog`, admin user dialogs), never in inline stacked forms.
+Lists with per-item detail use a master-detail layout instead of stacked
+cards, and destructive actions (delete provider) go through a confirmation
+dialog before mutating.
+
+`DialogFooter` is deliberately flat: no top border, no muted background —
+the footer is a plain button row on the same surface as the content.
+
+`src/components/ui/checkbox.tsx` is the styled checkbox primitive (base-ui
+`Checkbox`); native `<input type="checkbox">` is not used in new UI.
+
+### Providers master-detail
+
+`/settings/providers` is the reference master-detail implementation:
+
+- Full width: the page passes `className="max-w-none md:min-h-0"` to
+  `PageContainer`; other settings pages keep `max-w-3xl`.
+- Desktop (md+): fixed-height two-column grid
+  (`md:grid-cols-[260px_minmax(0,1fr)]`) with an absolute full-height
+  divider at `left-[276px]` (260px column + half the 2rem gap). The height
+  chain — settings layout scroll container `flex flex-col`, `PageContainer`
+  `flex-1`, screen root `flex-1`, grid `md:flex-1`, with `md:min-h-0` at
+  every level — keeps the page itself from scrolling; each column scrolls
+  internally (`md:overflow-y-auto`). `min-h-0` must stay `md:`-prefixed or
+  mobile page scroll breaks.
+- Mobile: two real pages. The list route renders the list only; selecting
+  an entry `router.push`es `/settings/providers/[configId]`, which renders
+  the detail only, with a back link. Column visibility derives from the
+  route param (`selectedConfigId` prop) via `hidden md:flex` / `md:hidden`,
+  never from a JS media query — desktop selection is local state and does
+  not touch the URL.
+- Model capability iconography is shared via
+  `src/components/provider/model-capabilities.tsx`: eye = vision/image
+  input (consistent with the chat `ModelPicker`), `BrainIcon` = reasoning,
+  per-modality icons for audio/video/pdf. Reuse `ModalityIcon` /
+  `ModelCapabilityIcons` instead of inventing new capability glyphs.
+
 ---
 
 ## Responsive layout

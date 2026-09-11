@@ -71,6 +71,7 @@ review blocker, not a style nit.
 | [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit |
 | [Chat Message Versions](./chat-message-versions.md) | Regenerate-as-versions contract: group_id/is_selected, selected-version view, regenerate/select/delete endpoints, reseed rule |
 | [Chat Search Tools](./chat-search-tools.md) | Search provider settings, searchWeb tool + fallback chain, searchMode wiring, builtin fetch injection, tool-part persistence/replay/rendering |
+| [Provider Configs](./provider-configs.md) | `addProviderModel` optional metadata overrides vs catalog fill, `metadataSource` marking, `vendorKey` null-vs-undefined |
 | [Topic Favorites](./topic-favorites.md) | `topics.is_favorite` column, PATCH favorite endpoint, `topics.updatedAt` last-active semantics (which mutations may bump it) |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logs, levels, redaction |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, types, tests, forbidden patterns |
