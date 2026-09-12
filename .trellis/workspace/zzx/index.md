@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
+- **Total Sessions**: 22
 - **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~594 | Active |
+| `journal-1.md` | ~616 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-09-12 | 聊天附件上传与解析（一期）：全链路落地、dogfood 修复与 ponytail 瘦身 | `83509ef` | `main` |
 | 21 | 2026-09-12 | 供应商端点格式扩充：支持 Claude 与 Google | `4aa1690` | `feat/provider-api-format` |
 | 20 | 2026-09-11 | Optional TOTP two-factor authentication | `ccd42da`, `e3365a0`, `5eb2a24` | `feat/totp-2fa` |
 | 19 | 2026-09-10 | i18n wrap-up: browser acceptance, widget localization fixes, doc audit | `819884f`, `ceedd6d`, `003755e` | `feat/i18n-guard` |

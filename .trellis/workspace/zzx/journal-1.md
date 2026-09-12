@@ -592,3 +592,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 22: 聊天附件上传与解析（一期）：全链路落地、dogfood 修复与 ponytail 瘦身
+<!-- trellis-session: v=2 fp=17ddfeb606ddf1bb -->
+
+**Date**: 2026-09-12
+**Task**: 聊天附件上传与解析（一期）：全链路落地、dogfood 修复与 ponytail 瘦身
+**Branch**: `main`
+
+### Summary
+
+聊天附件一期完整交付：files 表 + 磁盘存储抽象 + 上传时即时抽取缓存（unpdf/mammoth/xlsx，C0 控制字符清洗防 Postgres NUL 崩溃）、按模型 inputModalities 的发送路由（图片/PDF 原生 base64，其余降级 <attachment> 文本）、路由先于 appendUserMessage 防话题卡死、Composer 芯片（选择即上传/粘贴/全聊天区拖拽）与消息附件卡片（图片宽度同步锚点修复幻影间距）。两轮 trellis-check + 修复阻断项；ponytail 评审瘦身：迁移 squash 为单个 0015、删 extractorVersion 死列与零调用函数、合并重复类型定义。质量门 lint/typecheck/768 tests/build 全绿；端到端验证三类附件混合一轮多模态回答。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `83509ef` | feat(chat): file attachments with capability routing and text extraction |
+
+### Status
+
+[OK] **Completed**
