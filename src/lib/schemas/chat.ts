@@ -49,10 +49,35 @@ export const chatTextPartSchema = z.object({
   text: z.string(),
 });
 
+/**
+ * Attachment reference persisted in a user message. Only the canonical
+ * `/api/files/<id>` path is accepted — the server re-reads the row and ignores
+ * every other client-declared field, so a forged url or mediaType cannot make
+ * it route an arbitrary payload to the model.
+ */
+export const chatFilePartSchema = z.object({
+  type: z.literal("file"),
+  url: z.string().regex(/^\/api\/files\/[\w-]+$/),
+  mediaType: z.string().min(1),
+  filename: z.string().min(1).optional(),
+  // Stamped server-side from the stored row so attachment cards can show the
+  // size; optional to stay compatible with messages persisted before it.
+  sizeBytes: z.number().int().nonnegative().optional(),
+});
+export type ChatFilePart = z.infer<typeof chatFilePartSchema>;
+
+export const chatRequestPartSchema = z.union([
+  chatTextPartSchema,
+  chatFilePartSchema,
+]);
+export type ChatRequestPart = z.infer<typeof chatRequestPartSchema>;
+
 export const chatRequestMessageSchema = z.object({
   id: z.string().min(1),
   role: z.literal("user"),
-  parts: z.array(chatTextPartSchema).min(1),
+  // `.min(1)` still holds for an attachment-only message: the file part is a
+  // part. PRD R4 allows sending attachments with no text.
+  parts: z.array(chatRequestPartSchema).min(1),
 });
 
 export const chatRequestSchema = z.object({
@@ -136,6 +161,7 @@ const chatToolFetchPagePartSchema = toolPartSchema(
 
 export const chatStoredPartSchema = z.union([
   chatTextPartSchema,
+  chatFilePartSchema,
   z.object({
     type: z.literal("reasoning"),
     text: z.string(),

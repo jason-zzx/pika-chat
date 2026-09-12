@@ -9,7 +9,10 @@ import {
   type AvailableModel,
 } from "@/lib/schemas/provider";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
-import { useComposerStore } from "@/stores/composer-store";
+import {
+  useComposerStore,
+  type StagedAttachment,
+} from "@/stores/composer-store";
 
 import Composer from "./Composer";
 
@@ -31,6 +34,7 @@ function renderComposer(options?: {
   models?: AvailableModel[];
   reasoningEffort?: string | null;
   chatMapDisabled?: boolean;
+  attachments?: StagedAttachment[];
 }) {
   vi.mocked(listAvailableModels).mockResolvedValue(options?.models ?? []);
   const client = new QueryClient({
@@ -40,6 +44,9 @@ function renderComposer(options?: {
   const onStop = vi.fn();
   const onReasoningEffortChange = vi.fn();
   const onOpenChatMap = vi.fn();
+  const onAddFiles = vi.fn();
+  const onRemoveAttachment = vi.fn();
+  const onRetryAttachment = vi.fn();
   renderWithIntl(
     <QueryClientProvider client={client}>
       <Composer
@@ -56,10 +63,38 @@ function renderComposer(options?: {
         onReasoningEffortChange={onReasoningEffortChange}
         onOpenChatMap={onOpenChatMap}
         chatMapDisabled={options?.chatMapDisabled}
+        attachments={options?.attachments}
+        onAddFiles={onAddFiles}
+        onRemoveAttachment={onRemoveAttachment}
+        onRetryAttachment={onRetryAttachment}
       />
     </QueryClientProvider>,
   );
-  return { onSend, onStop, onReasoningEffortChange, onOpenChatMap };
+  return {
+    onSend,
+    onStop,
+    onReasoningEffortChange,
+    onOpenChatMap,
+    onAddFiles,
+    onRemoveAttachment,
+    onRetryAttachment,
+  };
+}
+
+function stagedAttachment(
+  overrides: Partial<StagedAttachment> = {},
+): StagedAttachment {
+  const filename = overrides.filename ?? "notes.txt";
+  const mediaType = overrides.mediaType ?? "text/plain";
+  return {
+    id: "att-1",
+    file: new File(["contents"], filename, { type: mediaType }),
+    filename,
+    mediaType,
+    sizeBytes: 2048,
+    status: "ready",
+    ...overrides,
+  };
 }
 
 describe("Composer", () => {
@@ -343,5 +378,139 @@ describe("Composer", () => {
         Object.defineProperty(HTMLElement.prototype, "clientHeight", client);
       }
     }
+  });
+});
+
+describe("Composer attachments", () => {
+  it("renders a chip with name and size and removes it from a labelled button", () => {
+    const { onRemoveAttachment } = renderComposer({
+      attachments: [stagedAttachment()],
+    });
+
+    expect(screen.getByText("notes.txt")).toBeInTheDocument();
+    expect(screen.getByText("2.0 KB")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove notes.txt" }));
+    expect(onRemoveAttachment).toHaveBeenCalledWith("att-1");
+  });
+
+  it("shows an upload spinner while the file is in flight", () => {
+    renderComposer({
+      attachments: [stagedAttachment({ status: "uploading" })],
+    });
+
+    expect(screen.getByText("Uploading…")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Retry upload" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("surfaces a failed upload with a visible message and a retry action", () => {
+    const { onRetryAttachment } = renderComposer({
+      attachments: [
+        stagedAttachment({
+          status: "error",
+          error: {
+            error: {
+              code: "VALIDATION_FAILED",
+              messageKey: "file.tooLarge",
+              params: { limit: "20 MB" },
+            },
+          },
+        }),
+      ],
+    });
+
+    expect(
+      screen.getByText("File is larger than the 20 MB limit"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry upload" }));
+    expect(onRetryAttachment).toHaveBeenCalledWith("att-1");
+  });
+
+  it("shows visible warnings for an empty or truncated extraction (no hover)", () => {
+    renderComposer({
+      attachments: [
+        stagedAttachment({
+          filename: "scan.pdf",
+          mediaType: "application/pdf",
+          extraction: { status: "empty", truncated: true },
+        }),
+      ],
+    });
+
+    expect(screen.getByText("No extractable text")).toBeInTheDocument();
+    expect(
+      screen.getByText("Long file — content will be truncated"),
+    ).toBeInTheDocument();
+  });
+
+  it("exposes a tap-reachable attach control wired to a whitelist file input", () => {
+    renderComposer();
+
+    const attach = screen.getByRole("button", { name: "Attach files" });
+    expect(attach).toHaveAttribute("type", "button");
+    const input = document.querySelector("input[type=file]");
+    expect(input).not.toBeNull();
+    expect(input).toHaveAttribute("multiple");
+    expect(input?.getAttribute("accept")).toContain("image/png");
+    expect(input?.getAttribute("accept")).toContain(".md");
+  });
+
+  it("adds pasted files", () => {
+    const { onAddFiles } = renderComposer();
+    const textarea = screen.getByRole("textbox", { name: "Message" });
+    const file = new File(["x"], "pasted.png", { type: "image/png" });
+
+    fireEvent.paste(textarea, { clipboardData: { files: [file] } });
+
+    expect(onAddFiles).toHaveBeenCalledWith([file]);
+  });
+
+  it("renders the attach control after the model picker, styled like the outline pickers", () => {
+    renderComposer();
+
+    const modelPicker = screen.getByRole("button", { name: "Select a model" });
+    const attach = screen.getByRole("button", { name: "Attach files" });
+    expect(
+      modelPicker.compareDocumentPosition(attach) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // outline variant + transparent background matches the Select-based
+    // pickers on the muted composer container.
+    expect(attach.className).toContain("bg-transparent");
+    expect(attach.className).toContain("border");
+  });
+
+  it("keeps the attach control enabled when rejected chips fill the list", () => {
+    // Only uploadable entries occupy a slot: five rejected chips must not
+    // disable the picker, or the user has to clear them before retrying.
+    const rejected = Array.from({ length: 5 }, (_, index) =>
+      stagedAttachment({
+        id: `bad-${index}`,
+        filename: `bad-${index}.bin`,
+        mediaType: "application/octet-stream",
+        status: "error",
+        error: {
+          error: {
+            code: "VALIDATION_FAILED",
+            messageKey: "file.unsupportedType",
+          },
+        },
+      }),
+    );
+    renderComposer({ attachments: rejected });
+
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeEnabled();
+  });
+
+  it("disables the attach control once uploadable attachments reach the cap", () => {
+    const ready = Array.from({ length: 5 }, (_, index) =>
+      stagedAttachment({ id: `ok-${index}`, filename: `ok-${index}.txt` }),
+    );
+    renderComposer({ attachments: ready });
+
+    expect(
+      screen.getByRole("button", { name: "Attach files" }),
+    ).toBeDisabled();
   });
 });

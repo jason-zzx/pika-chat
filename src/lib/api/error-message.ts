@@ -66,19 +66,59 @@ function asDynamic(t: ErrorsTranslator): DynamicTranslator {
 }
 
 /**
- * Resolves a thrown API error to display text.
+ * Parses a raw response body that may carry our envelope as JSON text. The
+ * AI SDK's `useChat` throws `new Error(await response.text())`, so the envelope
+ * reaches the client as a string rather than an object.
+ */
+function parseEnvelopeString(value: string): ParsedApiError | undefined {
+  const trimmed = value.trim();
+  // Cheap rejection for the overwhelmingly common non-JSON network error
+  // before paying for `JSON.parse` on arbitrary text.
+  if (!trimmed.startsWith("{")) {
+    return undefined;
+  }
+  try {
+    return parseApiError(JSON.parse(trimmed));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Extracts our envelope from every shape an API client can throw: the parsed
+ * envelope object, a raw JSON body string, or an `Error` whose message carries
+ * that body. Anything else returns `undefined`.
+ */
+function parseApiErrorFromUnknown(error: unknown): ParsedApiError | undefined {
+  const direct = parseApiError(error);
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (typeof error === "string") {
+    return parseEnvelopeString(error);
+  }
+  if (error instanceof Error) {
+    return parseEnvelopeString(error.message);
+  }
+  return undefined;
+}
+
+/**
+ * Resolves a thrown API error to display text, including the raw response body
+ * the AI SDK wraps in `Error.message`.
  *
  * `t` is the caller's `useTranslations("Errors")`. A known `messageKey` is
  * resolved with its params; an unknown key falls back to the localized
  * `generic` entry; anything that is not our envelope falls back to the
- * caller's action-specific key.
+ * caller's action-specific key. This is the single owner of the resolution
+ * path — every other entry point delegates here.
  */
-export function apiErrorMessage(
+export function apiErrorMessageFromUnknown(
   error: unknown,
   t: ErrorsTranslator,
   fallbackKey: AppErrorMessageKey,
 ): string {
-  const parsed = parseApiError(error);
+  const parsed = parseApiErrorFromUnknown(error);
   if (parsed === undefined) {
     return t(fallbackKey);
   }
@@ -86,4 +126,14 @@ export function apiErrorMessage(
   return dynamic.has(parsed.messageKey)
     ? dynamic(parsed.messageKey, parsed.params)
     : dynamic("generic");
+}
+
+/** Alias kept for call sites that already hold a parsed envelope or an
+ * arbitrary object; `apiErrorMessageFromUnknown` is the owner of the logic. */
+export function apiErrorMessage(
+  error: unknown,
+  t: ErrorsTranslator,
+  fallbackKey: AppErrorMessageKey,
+): string {
+  return apiErrorMessageFromUnknown(error, t, fallbackKey);
 }

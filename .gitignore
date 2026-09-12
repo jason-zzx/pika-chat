@@ -12,6 +12,9 @@
 # testing
 /coverage
 
+# locally stored chat attachments
+/.data/
+
 # next.js
 /.next/
 /out/

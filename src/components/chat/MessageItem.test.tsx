@@ -993,3 +993,134 @@ describe("MessageItem thinking duration", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("MessageItem attachments", () => {
+  it("renders a file card linking to the canonical attachment url", () => {
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "user-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/f1",
+              mediaType: "application/pdf",
+              filename: "report.pdf",
+            },
+            { type: "text", text: "see attached" },
+          ],
+        }}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: "report.pdf" });
+    expect(link).toHaveAttribute("href", "/api/files/f1");
+    // Opens in a new tab; no hover gate, the tap is the interaction.
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(screen.getByText("see attached")).toBeInTheDocument();
+  });
+
+  it("renders the attachment size when the part carries one", () => {
+    // Declared as a variable so the stored-only `sizeBytes` field is carried
+    // structurally (excess-property checks skip non-fresh objects), mirroring
+    // the reasoning `durationMs` pattern above.
+    const parts = [
+      {
+        type: "file" as const,
+        url: "/api/files/f1",
+        mediaType: "text/plain",
+        filename: "notes.txt",
+        sizeBytes: 1536,
+      },
+    ];
+    renderWithIntl(
+      <MessageItem message={{ id: "user-1", role: "user", parts }} />,
+    );
+
+    expect(screen.getByText("1.5 KB")).toBeInTheDocument();
+  });
+
+  it("renders an image thumbnail for an image attachment", () => {
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "user-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/img-1",
+              mediaType: "image/png",
+              filename: "cat.png",
+            },
+          ],
+        }}
+      />,
+    );
+
+    const image = screen.getByRole("img", { name: "cat.png" });
+    expect(image).toHaveAttribute("src", "/api/files/img-1");
+    const link = image.closest("a");
+    expect(link).toHaveAttribute("href", "/api/files/img-1");
+    // The frame is drawn on the img itself so it hugs the rendered size; a
+    // bordered wrapper cannot track an image capped by both max-w and max-h
+    // and leaves a blank gap beside it.
+    expect(link?.className).toContain("inline-block");
+    expect(image.className).toContain("border");
+    expect(image.className).toContain("rounded-lg");
+    expect(image.className).not.toContain("object-cover");
+  });
+
+  it("shrinks the image link to the rendered image width on load", () => {
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "user-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/img-1",
+              mediaType: "image/png",
+              filename: "cat.png",
+            },
+          ],
+        }}
+      />,
+    );
+
+    const image = screen.getByRole("img", { name: "cat.png" });
+    // jsdom never loads images: fake the intrinsic/rendered size and fire the
+    // load event the ref callback listens for.
+    Object.defineProperty(image, "naturalWidth", { value: 1200 });
+    Object.defineProperty(image, "offsetWidth", { value: 256 });
+    fireEvent.load(image);
+
+    const link = image.closest("a");
+    expect(link?.style.width).toBe("256px");
+  });
+
+  it("renders an attachment-only message without a text bubble", () => {
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "user-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/f1",
+              mediaType: "text/plain",
+              filename: "notes.txt",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "notes.txt" })).toBeInTheDocument();
+    // No empty muted bubble is rendered when the message carries no text.
+    expect(document.querySelector("div.bg-muted p")).toBeNull();
+  });
+});

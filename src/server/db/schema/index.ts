@@ -6,6 +6,7 @@ export {
   chatMessageRole,
   chatMessages,
 } from "./chat";
+export { fileExtractionStatus, files } from "./file";
 export {
   modelMetadataSource,
   providerConfigs,

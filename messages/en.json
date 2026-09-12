@@ -423,6 +423,18 @@
     "editProviderTitle": "Edit {name}",
     "addProviderNamedTitle": "Add {name}"
   },
+  "Files": {
+    "attach": "Attach files",
+    "uploading": "Uploading…",
+    "retry": "Retry upload",
+    "remove": "Remove {filename}",
+    "dropHint": "Release to attach files",
+    "warning": {
+      "empty": "No extractable text",
+      "failed": "This file cannot be read",
+      "truncated": "Long file — content will be truncated"
+    }
+  },
   "Errors": {
     "generic": "Something went wrong. Please try again.",
     "unexpected": "An unexpected error occurred",
@@ -499,8 +511,20 @@
     "stream": {
       "notFound": "Stream not found"
     },
+    "file": {
+      "tooLarge": "File is larger than the {limit} limit",
+      "unsupportedType": "This file type is not supported",
+      "tooMany": "You can attach at most {max} files to one message",
+      "notFound": "File not found",
+      "noTextLayer": "This file has no extractable text; use a model that supports it natively",
+      "unreadable": "This file could not be read",
+      "imageRequiresVision": "This model cannot view images",
+      "inUse": "This file is still used by a message",
+      "uploadFailed": "Upload failed. Please try again."
+    },
     "actions": {
       "saveDefaultModel": "Unable to save default model",
+      "sendMessage": "Unable to send the message",
       "regenerate": "Unable to regenerate the response",
       "deleteMessage": "Unable to delete the message",
       "switchVersions": "Unable to switch versions",

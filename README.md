@@ -54,3 +54,9 @@ export CREDENTIAL_ENCRYPTION_SECRET=...
 export BETTER_AUTH_SECRET=...
 docker compose -f docker-compose.prod.yml up --build
 ```
+
+Uploaded chat attachments are written to `FILE_STORAGE_DIR` (default
+`.data/files`). The production compose file mounts a `files_prod_data` named
+volume at `/data/files`; keep that volume (or a host bind mount) in any custom
+deployment — attachment bytes are not stored in the database and are lost if
+the directory is not persisted.

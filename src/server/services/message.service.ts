@@ -13,6 +13,10 @@ import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { chatMessages } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
+import {
+  deleteFilesIfUnreferenced,
+  fileIdsFromParts,
+} from "@/server/files/file.service";
 import { findTopicContextForActor } from "@/server/services/topic.service";
 
 type ChatMessageRow = typeof chatMessages.$inferSelect;
@@ -192,7 +196,12 @@ export async function appendUserMessage(
   await requireOwnedTopic(input.topicId, actor);
   const db = getDb();
   const id = input.message.id.length > 0 ? input.message.id : newId();
-  const parts = input.message.parts.filter((part) => part.type === "text");
+  // Attachments ride along in the persisted parts so the history keeps the
+  // file references the UI renders; the model payload is routed separately at
+  // send time (`resolveAttachmentsForModel`).
+  const parts = input.message.parts.filter(
+    (part) => part.type === "text" || part.type === "file",
+  );
   const inserted = await db
     .insert(chatMessages)
     .values({
@@ -275,7 +284,10 @@ export async function deleteMessage(
 ): Promise<{ deleted: true; groupEmpty: boolean }> {
   await requireOwnedTopic(input.topicId, actor);
   const db = getDb();
-  return db.transaction(async (tx) => {
+  // Attachment ids referenced by the row being removed, collected inside the
+  // transaction so the post-commit cleanup sees the reference already gone.
+  let releasedFileIds: string[] = [];
+  const result = await db.transaction(async (tx) => {
     const targets = await tx
       .select()
       .from(chatMessages)
@@ -291,6 +303,7 @@ export async function deleteMessage(
       // Missing and foreign messages are indistinguishable to the caller.
       throw new AppError("NOT_FOUND", 404, "message.notFound");
     }
+    releasedFileIds = fileIdsFromParts(target.parts);
     await tx.delete(chatMessages).where(eq(chatMessages.id, target.id));
     const remaining = await tx
       .select()
@@ -311,8 +324,12 @@ export async function deleteMessage(
         .set({ isSelected: true })
         .where(eq(chatMessages.id, latest.id));
     }
-    return { deleted: true, groupEmpty };
+    return { deleted: true as const, groupEmpty };
   });
+  // After the row is gone so the reference check no longer sees it. Best-effort
+  // by contract; a failure is reclaimed by the orphan sweeper later.
+  await deleteFilesIfUnreferenced(releasedFileIds, actor);
+  return result;
 }
 
 export async function selectMessageVersion(

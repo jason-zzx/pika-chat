@@ -465,6 +465,38 @@ describe("appendUserMessage", () => {
     expect(capturedValues).toMatchObject({ id: "user-9", groupId: "user-9" });
     expect(message.id).toBe("user-9");
   });
+
+  it("persists file parts alongside text (attachments ride in the parts jsonb)", async () => {
+    await appendUserMessage(
+      {
+        topicId: "topic-1",
+        message: {
+          id: "user-10",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/f1",
+              mediaType: "application/pdf",
+              filename: "a.pdf",
+            },
+            { type: "text", text: "summarize this" },
+          ],
+        },
+      },
+      actor,
+    );
+
+    expect(capturedValues?.parts).toEqual([
+      {
+        type: "file",
+        url: "/api/files/f1",
+        mediaType: "application/pdf",
+        filename: "a.pdf",
+      },
+      { type: "text", text: "summarize this" },
+    ]);
+  });
 });
 
 describe("appendAssistantMessage", () => {

@@ -10,9 +10,13 @@ import {
 import { newId } from "@/lib/id";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { assistants, topicColumns, topics } from "@/server/db/schema";
+import { assistants, chatMessages, topicColumns, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
+import {
+  deleteFilesIfUnreferenced,
+  fileIdsFromParts,
+} from "@/server/files/file.service";
 import { requireOwnedAssistant } from "@/server/services/assistant.service";
 
 function ownedAssistantIds(actor: Actor) {
@@ -97,13 +101,28 @@ export async function setTopicFavorite(
 
 export async function deleteTopic(id: string, actor: Actor): Promise<void> {
   const db = getDb();
+  const owned = and(
+    eq(topics.id, id),
+    inArray(topics.assistantId, ownedAssistantIds(actor)),
+  );
+  // Collect attachment references before the topic's messages cascade away.
+  const messageRows = await db
+    .select({ parts: chatMessages.parts })
+    .from(chatMessages)
+    .innerJoin(topics, eq(topics.id, chatMessages.topicId))
+    .where(owned);
   const deleted = await db
     .delete(topics)
-    .where(and(eq(topics.id, id), inArray(topics.assistantId, ownedAssistantIds(actor))))
+    .where(owned)
     .returning({ id: topics.id });
   if (!deleted[0]) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
+  // References are gone now; drop whatever no other message still needs.
+  await deleteFilesIfUnreferenced(
+    messageRows.flatMap((row) => fileIdsFromParts(row.parts)),
+    actor,
+  );
   logger.info({ userId: actor.userId, topicId: id }, "topic deleted");
 }
 

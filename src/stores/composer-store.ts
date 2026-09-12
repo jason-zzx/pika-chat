@@ -5,6 +5,7 @@ import {
   type StateStorage,
 } from "zustand/middleware";
 
+import type { FileExtractionState } from "@/lib/schemas/file";
 import {
   searchModeSchema,
   type SearchMode,
@@ -15,9 +16,39 @@ export type ComposerModelPick = {
   modelId: string;
 };
 
+/** Extraction metadata for an uploaded attachment (mirrors the API response). */
+export type AttachmentExtraction = {
+  status: FileExtractionState;
+  truncated: boolean;
+};
+
+/**
+ * A file staged in the composer for the current draft. `file` is the original
+ * browser File kept in memory so a failed upload can be retried; attachments
+ * are session-only client state and are never persisted (see `partialize`).
+ */
+export type StagedAttachment = {
+  id: string;
+  file: File;
+  filename: string;
+  mediaType: string;
+  sizeBytes: number;
+  status: "uploading" | "ready" | "error";
+  /** Canonical `/api/files/<id>` url once uploaded. */
+  url?: string;
+  extraction?: AttachmentExtraction;
+  /** Thrown API/client error, resolved to copy at render time. */
+  error?: unknown;
+};
+
 type ComposerState = {
   drafts: Record<string, string>;
   setDraft: (key: string, value: string) => void;
+  attachments: Record<string, StagedAttachment[]>;
+  updateAttachments: (
+    key: string,
+    updater: (current: StagedAttachment[]) => StagedAttachment[],
+  ) => void;
   recentAssistantId: string | null;
   setRecentAssistantId: (id: string | null) => void;
   pickedModel: ComposerModelPick | null;
@@ -58,6 +89,14 @@ export const useComposerStore = create<ComposerState>()(
         set((state) => ({
           drafts: { ...state.drafts, [key]: value },
         })),
+      attachments: {},
+      updateAttachments: (key, updater) =>
+        set((state) => ({
+          attachments: {
+            ...state.attachments,
+            [key]: updater(state.attachments[key] ?? []),
+          },
+        })),
       recentAssistantId: null,
       setRecentAssistantId: (recentAssistantId) => set({ recentAssistantId }),
       pickedModel: null,
@@ -73,8 +112,8 @@ export const useComposerStore = create<ComposerState>()(
       storage: createJSONStorage(() =>
         typeof window === "undefined" ? noopStorage : window.localStorage,
       ),
-      // Drafts and the model pick stay session-only; only the search mode
-      // survives reloads.
+      // Drafts, the model pick, and staged attachments stay session-only;
+      // only the search mode survives reloads.
       partialize: (state): PersistedComposerState => ({
         searchMode: state.searchMode,
       }),

@@ -7,6 +7,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 
 const alias = {
   "@": resolve(root, "src"),
+  "@test": resolve(root, "test"),
   "server-only": resolve(root, "test/server-only-stub.ts"),
 };
 

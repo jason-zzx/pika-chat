@@ -423,6 +423,18 @@
     "editProviderTitle": "编辑 {name}",
     "addProviderNamedTitle": "添加 {name}"
   },
+  "Files": {
+    "attach": "添加附件",
+    "uploading": "上传中…",
+    "retry": "重试上传",
+    "remove": "移除 {filename}",
+    "dropHint": "松开以添加附件",
+    "warning": {
+      "empty": "无可提取的文本",
+      "failed": "无法读取此文件",
+      "truncated": "文件较长——内容将被截断"
+    }
+  },
   "Errors": {
     "generic": "出错了，请重试。",
     "unexpected": "发生意外错误",
@@ -499,8 +511,20 @@
     "stream": {
       "notFound": "流不存在"
     },
+    "file": {
+      "tooLarge": "文件超过 {limit} 上限",
+      "unsupportedType": "不支持该文件类型",
+      "tooMany": "单条消息最多可附加 {max} 个文件",
+      "notFound": "文件不存在",
+      "noTextLayer": "该文件没有可提取的文本，请改用原生支持它的模型",
+      "unreadable": "无法读取该文件",
+      "imageRequiresVision": "当前模型无法查看图片",
+      "inUse": "该文件仍被某条消息使用",
+      "uploadFailed": "上传失败，请重试。"
+    },
     "actions": {
       "saveDefaultModel": "无法保存默认模型",
+      "sendMessage": "无法发送消息",
       "regenerate": "无法重新生成回复",
       "deleteMessage": "无法删除该消息",
       "switchVersions": "无法切换版本",

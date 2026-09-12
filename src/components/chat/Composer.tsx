@@ -6,10 +6,12 @@ import {
   MapIcon,
   Maximize2Icon,
   Minimize2Icon,
+  PaperclipIcon,
   SquareIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
+  type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
   useLayoutEffect,
@@ -24,11 +26,18 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
+import { SUPPORTED_FILE_ACCEPT } from "@/lib/files/media-types";
 import { cn } from "@/lib/utils";
-import type { ComposerModelPick } from "@/stores/composer-store";
+import type {
+  ComposerModelPick,
+  StagedAttachment,
+} from "@/stores/composer-store";
 
+import AttachmentChip from "./AttachmentChip";
 import AssistantPicker from "./AssistantPicker";
 import ComposerPickerContent from "./ComposerPickerContent";
+import { stagedAttachmentSlotCount } from "./use-composer-attachments";
 import ComposerSelectTrigger from "./ComposerSelectTrigger";
 import { findAvailableModel } from "./model-pick";
 import ModelPicker from "./ModelPicker";
@@ -57,6 +66,11 @@ type ComposerProps = {
   onOpenChatMap: () => void;
   /** No messages yet — there is nothing to jump to. */
   chatMapDisabled?: boolean;
+  /** Attachments staged for the active draft (upload-on-selection). */
+  attachments?: StagedAttachment[];
+  onAddFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
+  onRetryAttachment?: (id: string) => void;
 };
 
 export default function Composer({
@@ -76,11 +90,17 @@ export default function Composer({
   onReasoningEffortChange,
   onOpenChatMap,
   chatMapDisabled = false,
+  attachments = [],
+  onAddFiles,
+  onRemoveAttachment,
+  onRetryAttachment,
 }: ComposerProps) {
   const t = useTranslations("Chat.Composer");
+  const tFiles = useTranslations("Files");
   const models = useAvailableModels();
   const selected = findAvailableModel(models.data, model);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowsCollapsed, setOverflowsCollapsed] = useState(false);
   const showExpandToggle = expanded || overflowsCollapsed;
@@ -125,6 +145,24 @@ export default function Composer({
     }
   }
 
+  function addFiles(files: FileList | null) {
+    if (inFlight || !files || files.length === 0 || !onAddFiles) {
+      return;
+    }
+    onAddFiles(Array.from(files));
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = event.clipboardData?.files;
+    if (files && files.length > 0 && onAddFiles) {
+      event.preventDefault();
+      addFiles(files);
+    }
+  }
+
+  const attachmentCapReached =
+    stagedAttachmentSlotCount(attachments) >= MAX_ATTACHMENTS_PER_MESSAGE;
+
   return (
     <form
       className={cn(
@@ -135,6 +173,19 @@ export default function Composer({
     >
       <div className="mx-auto flex min-h-0 w-full max-w-[52.5rem] flex-1 flex-col">
         <div className="relative flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-muted/40">
+          {attachments.length > 0 ? (
+            <div className="flex flex-wrap gap-2 px-3 pt-2">
+              {attachments.map((attachment) => (
+                <AttachmentChip
+                  key={attachment.id}
+                  attachment={attachment}
+                  disabled={inFlight}
+                  onRemove={() => onRemoveAttachment?.(attachment.id)}
+                  onRetry={() => onRetryAttachment?.(attachment.id)}
+                />
+              ))}
+            </div>
+          ) : null}
           <Textarea
             ref={textareaRef}
             aria-label={t("messageLabel")}
@@ -142,6 +193,7 @@ export default function Composer({
             value={draft}
             onChange={(event) => handleDraftChange(event.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             disabled={inFlight}
             rows={MIN_ROWS}
             className={cn(
@@ -167,6 +219,38 @@ export default function Composer({
                 disabled={inFlight || modelPickerDisabled}
                 iconOnly
               />
+              {onAddFiles ? (
+                <>
+                  <Button
+                    // Composer root is a <form>: without an explicit type
+                    // this would submit the draft.
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    // bg-transparent matches the Select-based pickers on the
+                    // muted composer container (outline variant defaults to
+                    // bg-background).
+                    className="bg-transparent"
+                    aria-label={tFiles("attach")}
+                    disabled={inFlight || attachmentCapReached}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <PaperclipIcon aria-hidden="true" />
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept={SUPPORTED_FILE_ACCEPT}
+                    className="hidden"
+                    onChange={(event) => {
+                      addFiles(event.target.files);
+                      // Allow re-selecting the same file after removing it.
+                      event.target.value = "";
+                    }}
+                  />
+                </>
+              ) : null}
               <SearchModePicker disabled={inFlight} />
               {selected?.reasoning ? (
                 <ReasoningEffortSelect

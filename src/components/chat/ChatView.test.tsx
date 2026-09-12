@@ -75,6 +75,7 @@ const captured = vi.hoisted(() => ({
   setMessages: undefined as
     | Dispatch<SetStateAction<ChatUIMessage[]>>
     | undefined,
+  status: "ready" as "ready" | "submitted" | "streaming",
 }));
 
 vi.mock("@ai-sdk/react", async () => {
@@ -86,7 +87,7 @@ vi.mock("@ai-sdk/react", async () => {
       captured.setMessages = setMessages;
       return {
         messages,
-        status: "ready" as const,
+        status: captured.status,
         error: undefined,
         sendMessage: vi.fn(),
         stop: vi.fn().mockResolvedValue(undefined),
@@ -95,6 +96,21 @@ vi.mock("@ai-sdk/react", async () => {
     },
   };
 });
+
+const attachmentMocks = vi.hoisted(() => ({ addFiles: vi.fn() }));
+
+// Composer is stubbed out above; the drop zone on the content root needs an
+// observable addFiles, so the attachment hook is stubbed too.
+vi.mock("./use-composer-attachments", () => ({
+  useComposerAttachments: () => ({
+    attachments: [],
+    addFiles: attachmentMocks.addFiles,
+    removeAttachment: vi.fn(),
+    retryAttachment: vi.fn(),
+    clearAttachments: vi.fn(),
+    restoreAttachments: vi.fn(),
+  }),
+}));
 
 type StoredMessage = ChatMessagesResponse["messages"][number];
 
@@ -312,5 +328,88 @@ describe("ChatView session-created topic history (B8)", () => {
       expect(screen.queryByText("first answer")).toBeNull();
       expect(screen.queryByText("question")).toBeNull();
     });
+  });
+});
+
+describe("ChatView attachment drop zone", () => {
+  beforeEach(() => {
+    attachmentMocks.addFiles.mockClear();
+  });
+
+  function contentRoot(container: HTMLElement): HTMLElement {
+    return container.firstElementChild as HTMLElement;
+  }
+
+  it("shows the drop overlay while files are dragged over the content area", () => {
+    const { container } = renderChatView({ assistantId: "a1" });
+    const root = contentRoot(container);
+    expect(screen.queryByText("Release to attach files")).toBeNull();
+
+    fireEvent.dragEnter(root, { dataTransfer: { types: ["Files"] } });
+    expect(screen.getByText("Release to attach files")).toBeInTheDocument();
+
+    fireEvent.dragLeave(root, { dataTransfer: { types: ["Files"] } });
+    expect(screen.queryByText("Release to attach files")).toBeNull();
+  });
+
+  it("keeps the overlay through nested enter/leave pairs from child elements", () => {
+    const { container } = renderChatView({ assistantId: "a1" });
+    const root = contentRoot(container);
+
+    fireEvent.dragEnter(root, { dataTransfer: { types: ["Files"] } });
+    // Crossing into a child fires another enter; leaving the child must not
+    // hide the overlay while the pointer is still inside the zone.
+    fireEvent.dragEnter(root, { dataTransfer: { types: ["Files"] } });
+    fireEvent.dragLeave(root, { dataTransfer: { types: ["Files"] } });
+    expect(screen.getByText("Release to attach files")).toBeInTheDocument();
+
+    fireEvent.dragLeave(root, { dataTransfer: { types: ["Files"] } });
+    expect(screen.queryByText("Release to attach files")).toBeNull();
+  });
+
+  it("routes dropped files to the composer attachments and hides the overlay", () => {
+    const { container } = renderChatView({ assistantId: "a1" });
+    const root = contentRoot(container);
+
+    fireEvent.dragEnter(root, { dataTransfer: { types: ["Files"] } });
+    const file = new File(["x"], "dropped.txt", { type: "text/plain" });
+    fireEvent.drop(root, {
+      dataTransfer: { types: ["Files"], files: [file] },
+    });
+
+    expect(attachmentMocks.addFiles).toHaveBeenCalledWith([file]);
+    expect(screen.queryByText("Release to attach files")).toBeNull();
+  });
+
+  it("ignores drags that carry no files", () => {
+    const { container } = renderChatView({ assistantId: "a1" });
+    const root = contentRoot(container);
+
+    fireEvent.dragEnter(root, { dataTransfer: { types: ["text/plain"] } });
+    fireEvent.drop(root, {
+      dataTransfer: { types: ["text/plain"], files: [] },
+    });
+
+    expect(screen.queryByText("Release to attach files")).toBeNull();
+    expect(attachmentMocks.addFiles).not.toHaveBeenCalled();
+  });
+
+  it("does not invite a drop while a turn is in flight", () => {
+    captured.status = "streaming";
+    try {
+      const { container } = renderChatView({ assistantId: "a1" });
+      const root = contentRoot(container);
+
+      fireEvent.dragEnter(root, { dataTransfer: { types: ["Files"] } });
+      expect(screen.queryByText("Release to attach files")).toBeNull();
+
+      const file = new File(["x"], "dropped.txt", { type: "text/plain" });
+      fireEvent.drop(root, {
+        dataTransfer: { types: ["Files"], files: [file] },
+      });
+      expect(attachmentMocks.addFiles).not.toHaveBeenCalled();
+    } finally {
+      captured.status = "ready";
+    }
   });
 });

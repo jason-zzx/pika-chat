@@ -101,6 +101,30 @@ describe("replayModelMessages", () => {
     expect(converted).toHaveLength(2);
   });
 
+  it("replays an inlined image file part without error", async () => {
+    // Native routing hands the model a data URL rather than the internal
+    // /api/files/<id> path, and that is what history replay sees on the next
+    // turn (routing runs before replay, persistence keeps the file part).
+    const converted = await replayModelMessages([
+      {
+        id: "u1",
+        role: "user",
+        parts: [
+          { type: "text", text: "what is this?" },
+          {
+            type: "file",
+            url: `data:image/png;base64,${Buffer.from("abc").toString("base64")}`,
+            mediaType: "image/png",
+            filename: "cat.png",
+          },
+        ],
+      },
+    ]);
+
+    expect(converted).toHaveLength(1);
+    expect(JSON.stringify(converted)).toContain("image/png");
+  });
+
   it("still replays a completed tool-fetchPage call with its result", async () => {
     const converted = await replayModelMessages([
       { id: "u1", role: "user", parts: [{ type: "text", text: "read it" }] },

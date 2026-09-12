@@ -9,8 +9,9 @@ import {
   parseJsonEventStream,
   readUIMessageStream,
   uiMessageChunkSchema,
+  type FileUIPart,
 } from "ai";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 
 import {
   assistantKeys,
@@ -28,7 +29,7 @@ import {
   selectMessageVersion,
   stopChatStream,
 } from "@/lib/api/chat";
-import { apiErrorMessage } from "@/lib/api/error-message";
+import { apiErrorMessage, apiErrorMessageFromUnknown } from "@/lib/api/error-message";
 import {
   assistantTopicHref,
   parseAssistantPath,
@@ -38,8 +39,10 @@ import {
   composerDraftKey,
   useComposerStore,
   type ComposerModelPick,
+  type StagedAttachment,
 } from "@/stores/composer-store";
 
+import { useComposerAttachments } from "./use-composer-attachments";
 import ChatMapDialog from "./ChatMapDialog";
 import Composer from "./Composer";
 import MessageList, { type MessageListHandle } from "./MessageList";
@@ -109,6 +112,7 @@ export default function ChatView({
   const queryClient = useQueryClient();
   const t = useTranslations("Chat.MessageList");
   const tChat = useTranslations("Chat");
+  const tFiles = useTranslations("Files");
   const tErrors = useTranslations("Errors");
   const tree = useAssistantTree();
   const models = useAvailableModels();
@@ -139,6 +143,12 @@ export default function ChatView({
   // through this handle, so all scroll knowledge stays in MessageList.
   const messageListRef = useRef<MessageListHandle>(null);
   const [chatMapOpen, setChatMapOpen] = useState(false);
+  // Whole-content-area drop zone (message list + composer): the enter/leave
+  // counter keeps the overlay steady while the pointer crosses children —
+  // dragenter/dragleave fire in pairs per element, so the zone is active
+  // exactly while the counter is positive.
+  const [dragActive, setDragActive] = useState(false);
+  const dragDepthRef = useRef(0);
   const [defaultModelError, setDefaultModelError] = useState<string | null>(
     null,
   );
@@ -180,6 +190,20 @@ export default function ChatView({
   const resolvedAssistantId = assistantId ?? recentAssistantId ?? assistants[0]?.id;
   const draftKey = composerDraftKey(activeTopicId, resolvedAssistantId);
   const draft = useComposerStore((state) => state.drafts[draftKey] ?? "");
+  const {
+    attachments,
+    addFiles,
+    removeAttachment,
+    retryAttachment,
+    clearAttachments,
+    restoreAttachments,
+  } = useComposerAttachments(draftKey);
+  // Attachments cleared on send are put back if the request fails, so the user
+  // can switch model / retry without re-uploading.
+  const pendingSendAttachments = useRef<{
+    key: string;
+    attachments: StagedAttachment[];
+  } | null>(null);
   const resolvedAssistant = assistants.find((row) => row.id === resolvedAssistantId);
   // Once a session-created topic exists the topic's assistant is fixed; the
   // picker only belongs on a fresh draft. createdTopicId resets when the URL
@@ -261,7 +285,12 @@ export default function ChatView({
           assistantTopicHref(assistant, part.data.topicId),
         );
       },
-      onFinish: () => {
+      onFinish: (event) => {
+        const pending = pendingSendAttachments.current;
+        if (pending && event.isError) {
+          restoreAttachments(pending.key, pending.attachments);
+        }
+        pendingSendAttachments.current = null;
         const topic = latestRef.current.topicId;
         void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
         if (topic) {
@@ -407,8 +436,18 @@ export default function ChatView({
 
   const inFlight =
     status === "submitted" || status === "streaming" || regen !== null;
+  // Only `ready` attachments are sent; while anything is uploading (or failed)
+  // sending is held back so the user never silently drops an attachment.
+  const readyAttachments = attachments.filter(
+    (attachment): attachment is StagedAttachment & { url: string } =>
+      attachment.status === "ready" && attachment.url !== undefined,
+  );
+  const attachmentsSettled = attachments.every(
+    (attachment) => attachment.status === "ready",
+  );
   const canSend =
-    draft.trim().length > 0 &&
+    (draft.trim().length > 0 || readyAttachments.length > 0) &&
+    attachmentsSettled &&
     Boolean(resolvedAssistantId) &&
     Boolean(pickedModel) &&
     !inFlight &&
@@ -779,6 +818,59 @@ export default function ChatView({
     await runRegeneration(topic, target, targetIndex, pick, plan);
   }
 
+  function isFileDrag(event: DragEvent<HTMLElement>): boolean {
+    return event.dataTransfer.types.includes("Files");
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLElement>) {
+    if (!isFileDrag(event)) {
+      return;
+    }
+    event.preventDefault();
+    // The composer is inert while a turn streams (paperclip, textarea and the
+    // drop handler itself all refuse input), so do not invite a drop that
+    // would be silently ignored.
+    if (inFlight) {
+      return;
+    }
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLElement>) {
+    // Required so the drop is allowed; non-file drags (e.g. text selection)
+    // keep their default behavior and never show the overlay.
+    if (isFileDrag(event)) {
+      event.preventDefault();
+    }
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLElement>) {
+    if (!isFileDrag(event)) {
+      return;
+    }
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setDragActive(false);
+    }
+  }
+
+  function handleFileDrop(event: DragEvent<HTMLElement>) {
+    if (!isFileDrag(event)) {
+      return;
+    }
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+    if (inFlight) {
+      return;
+    }
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+      addFiles(Array.from(files));
+    }
+  }
+
   // Close first, then scroll on the next frame: the dialog's exit animation
   // still holds the layout (and scroll lock) during this commit.
   function handleSelectMessage(key: string) {
@@ -803,23 +895,48 @@ export default function ChatView({
       titlePick: pickedModel,
     };
     const text = draft.trim();
+    const outgoingFiles: FileUIPart[] = readyAttachments.map((attachment) => ({
+      type: "file",
+      url: attachment.url,
+      mediaType: attachment.mediaType,
+      filename: attachment.filename,
+    }));
+    pendingSendAttachments.current =
+      outgoingFiles.length > 0
+        ? { key: draftKey, attachments: readyAttachments }
+        : null;
+    // Clear the chips now that the message owns them; onFinish puts them back
+    // if the request failed.
+    if (outgoingFiles.length > 0) {
+      clearAttachments(draftKey);
+    }
     setDraft(draftKey, "");
     const selected = findAvailableModel(models.data, pickedModel);
     const effort = reasoningEffortRequestValue(selected, reasoningEffort);
     const searchMode = useComposerStore.getState().searchMode;
-    void sendMessage(
-      { text, metadata: { createdAt: new Date().toISOString() } },
-      {
-        body: {
-          assistantId: resolvedAssistantId,
-          topicId: activeTopicId,
-          providerConfigId: pickedModel.configId,
-          modelId: pickedModel.modelId,
-          ...(effort === undefined ? {} : { reasoningEffort: effort }),
-          searchMode,
+    const body = {
+      assistantId: resolvedAssistantId,
+      topicId: activeTopicId,
+      providerConfigId: pickedModel.configId,
+      modelId: pickedModel.modelId,
+      ...(effort === undefined ? {} : { reasoningEffort: effort }),
+      searchMode,
+    };
+    const metadata = { createdAt: new Date().toISOString() };
+    // The AI SDK's no-text overload omits the empty text part an attachment-only
+    // message would otherwise carry.
+    if (text.length > 0) {
+      void sendMessage(
+        {
+          text,
+          ...(outgoingFiles.length > 0 ? { files: outgoingFiles } : {}),
+          metadata,
         },
-      },
-    );
+        { body },
+      );
+    } else {
+      void sendMessage({ files: outgoingFiles, metadata }, { body });
+    }
   }
 
   if (topicId && history.isError) {
@@ -837,7 +954,13 @@ export default function ChatView({
   const historyPending = Boolean(topicId) && history.isPending;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleFileDrop}
+    >
       <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
       {historyPending ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -864,7 +987,7 @@ export default function ChatView({
       )}
       {error ? (
         <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">
-          {error.message}
+          {apiErrorMessageFromUnknown(error, tErrors, "actions.sendMessage")}
         </p>
       ) : null}
       {actionError ? (
@@ -876,6 +999,18 @@ export default function ChatView({
         <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">
           {defaultModelError}
         </p>
+      ) : null}
+      {dragActive ? (
+        // Decorative, transient feedback for pointer users; the labelled
+        // attach button is the keyboard/screen-reader path.
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 m-2 flex items-center justify-center rounded-xl border-2 border-dashed border-foreground/40 bg-background/80"
+        >
+          <p className="text-sm font-medium text-foreground">
+            {tFiles("dropHint")}
+          </p>
+        </div>
       ) : null}
       <Composer
         key={draftKey}
@@ -900,6 +1035,10 @@ export default function ChatView({
         onReasoningEffortChange={setReasoningEffort}
         onOpenChatMap={() => setChatMapOpen(true)}
         chatMapDisabled={messages.length === 0}
+        attachments={attachments}
+        onAddFiles={addFiles}
+        onRemoveAttachment={removeAttachment}
+        onRetryAttachment={retryAttachment}
       />
       <ChatMapDialog
         open={chatMapOpen}

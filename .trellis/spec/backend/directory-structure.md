@@ -15,12 +15,14 @@ src/
 │   └── api/
 │       ├── auth/[...all]/route.ts  # Better Auth catch-all
 │       ├── chat/route.ts           # streaming completion
+│       ├── files/                  # attachment upload/download/delete
 │       ├── providers/              # provider + model configuration
 │       ├── assistants/
 │       ├── topics/
 │       └── admin/                  # admin-only endpoints
 ├── server/                         # server-only; never imported by a client component
 │   ├── services/                   # business logic, one module per domain
+│   ├── files/                      # attachment storage, extraction, file service
 │   ├── db/
 │   │   ├── schema/                 # Drizzle tables, one file per domain
 │   │   ├── client.ts               # db connection

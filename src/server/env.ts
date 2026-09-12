@@ -8,6 +8,9 @@ const envSchema = z.object({
   CREDENTIAL_ENCRYPTION_SECRET: z.string().min(32),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url().optional(),
+  // Root directory for locally stored chat attachments. Defaults to
+  // `.data/files` relative to the process working directory.
+  FILE_STORAGE_DIR: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

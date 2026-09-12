@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新增 src/server/files/ 与 src/app/api/files/ 必须落在既有分层约定内"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "files 表与迁移须遵循 Drizzle/PostgreSQL 约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "附件错误分类走 AppError + withErrorHandling 既有管道"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "files API 的 requireActor 认证与归属校验"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "上传/抽取/清理日志上下文约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Composer chip 与附件卡片的组件规范"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "composer-store 暂存附件的分桶与生命周期"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Files 命名空间与 Errors 新 key 的添加方式"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "附件数据横跨 schema→API→service→AI 载荷→UI 五层，需逐层核对"}

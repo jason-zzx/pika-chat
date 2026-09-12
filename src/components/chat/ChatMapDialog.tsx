@@ -18,14 +18,23 @@ type ChatMapDialogProps = {
   onSelect: (key: string) => void;
 };
 
-/** Collapses runs of whitespace so a multi-line message previews on one row. */
+/** Collapses runs of whitespace so a multi-line message previews on one row.
+ * Attachment-only messages preview by filename rather than "No text". */
 function previewText(message: ChatUIMessage): string {
-  return message.parts
+  const text = message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
+  if (text.length > 0) {
+    return text;
+  }
+  return message.parts
+    .filter((part) => part.type === "file")
+    .map((part) => part.filename ?? "")
+    .filter((name) => name.length > 0)
+    .join(" ");
 }
 
 /**

@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端检查门：lint/typecheck/test 与测试分层约定"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端检查门与组件测试约定"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "file part 贯穿前后端的类型一致性检查"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对八类附件错误的状态码与 i18n key 是否全部落地"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "检查是否重复造轮子（如既有上传/下载辅助、既有校验工具）"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "验收时逐层追踪一个附件从上传到模型载荷的完整链路"}

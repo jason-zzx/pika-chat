@@ -11,10 +11,12 @@ import { newId } from "@/lib/id";
 import {
   chatRequestSchema,
   type ChatMessageOutcome,
+  type ChatRequestPart,
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
 import { getTranslations } from "next-intl/server";
 import { createChatModelHandle } from "@/server/ai/chat-model";
+import { resolveAttachmentsForModel } from "@/server/ai/attachments";
 import {
   stripMarkupFromTextParts,
   stripToolCallMarkupTransform,
@@ -36,6 +38,9 @@ import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
+import {
+  resolveOwnedFileParts,
+} from "@/server/files/file.service";
 import { logger } from "@/server/logger";
 import {
   appendAssistantMessage,
@@ -51,12 +56,12 @@ import {
 
 function requestToUserMessage(message: {
   id: string;
-  parts: Array<{ type: "text"; text: string }>;
+  parts: ChatRequestPart[];
 }): ChatUIMessage {
   return {
     id: message.id,
     role: "user",
-    parts: message.parts.map((part) => ({ type: "text", text: part.text })),
+    parts: message.parts,
   };
 }
 
@@ -96,6 +101,23 @@ export const POST = withErrorHandling(async (request) => {
     input.reasoningEffort,
   );
 
+  // Validate attachments before any topic row exists, so a forged or foreign
+  // file id cannot leave a draft behind. The service re-reads each row and
+  // canonicalizes mediaType/filename/url from what was actually uploaded.
+  const normalizedFileParts = await resolveOwnedFileParts(
+    input.message.parts.filter((part) => part.type === "file"),
+    actor,
+  );
+  const normalizedTextParts = input.message.parts.filter(
+    (part) => part.type === "text",
+  );
+  // Files first, then the question — models read the attachment before the
+  // prompt more reliably in that order (design §6).
+  const userMessage = requestToUserMessage({
+    id: input.message.id,
+    parts: [...normalizedFileParts, ...normalizedTextParts],
+  });
+
   const handle = await createChatModelHandle(
     {
       providerConfigId: input.providerConfigId,
@@ -123,6 +145,7 @@ export const POST = withErrorHandling(async (request) => {
 
   let topicId = input.topicId;
   let systemPrompt: string | null = null;
+  let history: ChatUIMessage[] = [];
 
   if (topicId) {
     const context = await findTopicContextForActor(topicId, actor);
@@ -130,7 +153,22 @@ export const POST = withErrorHandling(async (request) => {
       throw new AppError("NOT_FOUND", 404, "topic.notFound");
     }
     systemPrompt = context.assistant.systemPrompt;
-  } else {
+    history = await listTopicMessages({ topicId }, actor);
+  }
+
+  // Route attachments *before* any topic row exists. An unroutable attachment
+  // (scanned PDF for a text-only model, image without vision, …) must fail the
+  // turn without leaving the message in history — and for a new topic, without
+  // leaving an empty topic behind either. Once persisted, every later send with
+  // the same model would re-route the same part and fail again, wedging the
+  // topic. The persisted parts keep their file references (the UI renders
+  // attachment cards from them); only the model payload is rewritten.
+  const routedMessages = await resolveAttachmentsForModel(
+    [...history, userMessage],
+    { inputModalities: selected.inputModalities },
+  );
+
+  if (!topicId) {
     const created = await createTopicForChat(
       { assistantId: input.assistantId },
       actor,
@@ -141,8 +179,6 @@ export const POST = withErrorHandling(async (request) => {
     systemPrompt = context?.assistant.systemPrompt ?? null;
   }
 
-  const history = await listTopicMessages({ topicId }, actor);
-  const userMessage = requestToUserMessage(input.message);
   const storedUser = await appendUserMessage(
     { topicId, message: userMessage },
     actor,
@@ -150,7 +186,7 @@ export const POST = withErrorHandling(async (request) => {
   await touchTopicUpdatedAt(topicId, actor);
 
   const originalMessages: ChatUIMessage[] = [...history, storedUser];
-  const modelMessages = await replayModelMessages(originalMessages);
+  const modelMessages = await replayModelMessages(routedMessages);
 
   const streamId = newId();
   const abortSignal = registerStream(streamId, actor.userId);

@@ -7,9 +7,11 @@ import {
   type Ref,
 } from "react";
 
+import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
-import type { ChatUIMessage } from "@/lib/schemas/chat";
+import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
 
+import AttachmentIcon from "./AttachmentIcon";
 import Markdown from "./Markdown";
 import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
 import MessageActions from "./MessageActions";
@@ -33,6 +35,83 @@ type ContentBlock =
   | { kind: "text"; key: string; text: string }
   | { kind: "tool-searchWeb"; key: string; part: SearchWebToolPart }
   | { kind: "tool-fetchPage"; key: string; part: FetchPageToolPart };
+
+type FilePart = ChatFilePart;
+
+// Non-copy wire values for attachment links; hoisted so the i18next guard does
+// not read them as rendered copy.
+const EXTERNAL_LINK_TARGET = "_blank";
+const EXTERNAL_LINK_REL = "noreferrer noopener";
+
+type UserAttachmentProps = { part: FilePart };
+
+/**
+ * Shrink the image link to the image's *rendered* width once loaded. The
+ * anchor's fit-content uses the image's intrinsic width — a child's
+ * max-w/max-h caps never feed into it — so without this the link stays
+ * bubble-wide while the image renders at 16rem, and the invisible surplus
+ * reads as a stray gap beside the preview. Synchronous DOM write (no state),
+ * same pattern as the MessageList scroll reserve. `max-w-full` on the anchor
+ * still wins on narrow bubbles, so this only ever tightens the click target.
+ */
+function shrinkLinkToRenderedImage(img: HTMLImageElement | null) {
+  if (!img) {
+    return;
+  }
+  const apply = () => {
+    img.parentElement?.style.setProperty("width", `${img.offsetWidth}px`);
+  };
+  if (img.complete && img.naturalWidth > 0) {
+    apply();
+  } else {
+    img.addEventListener("load", apply, { once: true });
+  }
+}
+
+/** User-message attachment card: a thumbnail for images, a name card otherwise. */
+function UserAttachment({ part }: UserAttachmentProps) {
+  const linkClass =
+    "flex max-w-[16rem] items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground";
+  if (part.mediaType.startsWith("image/")) {
+    return (
+      <a
+        href={part.url}
+        target={EXTERNAL_LINK_TARGET}
+        rel={EXTERNAL_LINK_REL}
+        className="inline-block max-w-full"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- attachment bytes are served by our own authenticated route; next/image would proxy and resize. The frame lives on the img itself so it always hugs the rendered size (see shrinkLinkToRenderedImage for the anchor's width). */}
+        <img
+          ref={shrinkLinkToRenderedImage}
+          src={part.url}
+          alt={part.filename ?? ""}
+          className="block h-auto max-h-64 w-auto max-w-[min(100%,16rem)] rounded-lg border border-border"
+        />
+      </a>
+    );
+  }
+  return (
+    <a
+      href={part.url}
+      target={EXTERNAL_LINK_TARGET}
+      rel={EXTERNAL_LINK_REL}
+      className={linkClass}
+    >
+      <AttachmentIcon
+        mediaType={part.mediaType}
+        filename={part.filename ?? ""}
+      />
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate">{part.filename}</span>
+        {part.sizeBytes !== undefined ? (
+          <span className="text-xs text-muted-foreground">
+            {formatBytes(part.sizeBytes)}
+          </span>
+        ) : null}
+      </span>
+    </a>
+  );
+}
 
 /** Reads the persisted per-phase duration off a reasoning part (the field
  * lives in the stored-part schema, outside the SDK's UIMessage part type). */
@@ -169,6 +248,9 @@ export default function MessageItem({
   const reasoningMs = metadata?.reasoningMs;
   const reasoningDurations = metadata?.reasoningDurations;
   const textParts = message.parts.filter((part) => part.type === "text");
+  const fileParts = message.parts.filter(
+    (part): part is FilePart => part.type === "file",
+  );
   const reasoningParts = message.parts.filter(
     (part) => part.type === "reasoning",
   );
@@ -251,13 +333,22 @@ export default function MessageItem({
         onClick={handleArticleClick}
       >
         <MessageTimestamp createdAt={createdAt} />
-        <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-          {textParts.map((part, index) => (
-            <p key={index} className="whitespace-pre-wrap">
-              {part.text}
-            </p>
-          ))}
-        </div>
+        {fileParts.length > 0 ? (
+          <div className="flex max-w-[min(100%,42rem)] flex-wrap justify-end gap-2">
+            {fileParts.map((part, index) => (
+              <UserAttachment key={`${part.url}-${index}`} part={part} />
+            ))}
+          </div>
+        ) : null}
+        {hasAnswer ? (
+          <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+            {textParts.map((part, index) => (
+              <p key={index} className="whitespace-pre-wrap">
+                {part.text}
+              </p>
+            ))}
+          </div>
+        ) : null}
         {actions}
       </article>
     );

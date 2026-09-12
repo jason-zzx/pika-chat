@@ -15,6 +15,7 @@ import {
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
 import { createChatModelHandle } from "@/server/ai/chat-model";
+import { resolveAttachmentsForModel } from "@/server/ai/attachments";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
@@ -122,7 +123,14 @@ export const POST = withErrorHandling(async (request, context) => {
     { topicId, messageId },
     actor,
   );
-  const modelMessages = await replayModelMessages(history);
+  // Regeneration runs on the composer's current model, so historical
+  // attachments are re-routed here: switching to a text-only model degrades a
+  // PDF to its cached extraction, switching to a vision model inlines images.
+  const modelMessages = await replayModelMessages(
+    await resolveAttachmentsForModel(history, {
+      inputModalities: selected.inputModalities,
+    }),
+  );
 
   const streamId = newId();
   const abortSignal = registerStream(streamId, actor.userId);

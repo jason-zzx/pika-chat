@@ -74,6 +74,7 @@ const eslintConfig = defineConfig([
               "t[A-Z][A-Za-z]*",
               // String arguments are catalog keys / mode tokens, never copy.
               "apiErrorMessage",
+              "apiErrorMessageFromUnknown",
               "canAdminister",
               "setEditor",
               "toggleSection",
