@@ -60,3 +60,45 @@ Uploaded chat attachments are written to `FILE_STORAGE_DIR` (default
 volume at `/data/files`; keep that volume (or a host bind mount) in any custom
 deployment — attachment bytes are not stored in the database and are lost if
 the directory is not persisted.
+
+## S3-compatible attachment storage
+
+Attachments default to local disk. Set `S3_BUCKET` to move them to any
+S3-compatible object store (AWS S3, MinIO, RustFS, R2); leave it unset and
+nothing changes. `S3_BUCKET` wins when both it and `FILE_STORAGE_DIR` are set.
+
+```bash
+S3_BUCKET=pika-attachments
+S3_ENDPOINT=http://minio:9000        # omit for the official AWS endpoint
+S3_REGION=us-east-1                  # optional, defaults to us-east-1
+S3_ACCESS_KEY_ID=...                 # required whenever S3_BUCKET is set
+S3_SECRET_ACCESS_KEY=...             # required whenever S3_BUCKET is set
+```
+
+Setting a custom `S3_ENDPOINT` automatically switches requests to path-style
+URLs, which MinIO/RustFS-style endpoints on a container network require; the
+official AWS endpoint keeps the virtual-hosted default.
+
+The bucket is created on first use if it does not exist, so there is nothing to
+provision by hand. Credentials are read from the environment only and are never
+logged. Removing the `S3_*` variables switches back to local disk; objects
+already written to the bucket are not copied back.
+
+### Bundled RustFS deployment
+
+To run attachment storage in a container alongside the app, stack the override
+file on top of the production compose file. `docker-compose.prod.yml` itself is
+unchanged:
+
+```bash
+export CREDENTIAL_ENCRYPTION_SECRET=...
+export BETTER_AUTH_SECRET=...
+export S3_ACCESS_KEY_ID=...
+export S3_SECRET_ACCESS_KEY=...
+export S3_BUCKET=pika-attachments    # optional, this is the default
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.rustfs.yml up --build
+```
+
+RustFS listens on `9000` inside the compose network only; its console (`9001`)
+is not published to the host. Add `ports: ["9001:9001"]` to the `rustfs`
+service in a further override if you want it reachable.

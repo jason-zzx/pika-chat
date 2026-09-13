@@ -1,0 +1,33 @@
+services:
+  rustfs:
+    image: docker.io/rustfs/rustfs:latest
+    environment:
+      # 镜像只认自己的 env 名，值映射自用户唯一的 S3_* 配置来源，
+      # 保证 rustfs 凭据与 app 的 S3 凭据永远一致，且不引入 RUSTFS_* 用户变量
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # 控制台端口默认不暴露到宿主机；需要时用户自行加 ports: 9001:9001
+
+  app:
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-pika-attachments}
+      S3_ENDPOINT: http://rustfs:9000
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+      # S3_ENDPOINT 存在时服务端默认 path-style，无需显式设置
+    depends_on:
+      rustfs:
+        condition: service_healthy
+
+volumes:
+  rustfs_data:
