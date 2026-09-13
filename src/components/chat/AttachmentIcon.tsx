@@ -1,8 +1,11 @@
 import {
+  BookOpenTextIcon,
+  FileAudioIcon,
   FileCode2Icon,
   FileIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
+  FileVideoIcon,
   ImageIcon,
 } from "lucide-react";
 
@@ -18,6 +21,9 @@ type AttachmentIconProps = {
 const CATEGORY_ICONS = {
   image: ImageIcon,
   pdf: FileTextIcon,
+  audio: FileAudioIcon,
+  video: FileVideoIcon,
+  ebook: BookOpenTextIcon,
   text: FileCode2Icon,
 } as const;
 

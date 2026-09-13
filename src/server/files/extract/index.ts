@@ -59,6 +59,9 @@ export async function extractDocument(
       break;
     case "image":
       throw new Error("extractDocument does not handle image attachments");
+    case "audio":
+    case "video":
+      throw new Error("extractDocument does not handle media attachments");
     default:
       return {
         status: "failed",

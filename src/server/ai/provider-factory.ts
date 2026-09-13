@@ -11,12 +11,34 @@ import {
   type FetchFunction,
 } from "@/server/ai/builtin-search";
 
-type ProviderEndpoint = {
+/** One provider config's endpoint, as needed to build an SDK provider. */
+export type ProviderEndpoint = {
   apiFormat: ProviderApiFormat;
   name: string;
   baseUrl: string;
   apiKey: string;
 };
+
+/**
+ * SDK provider instances for the callable formats, shared by the chat-model
+ * builders below and the Files API transport so the endpoint wiring exists
+ * exactly once. `openai-compatible` is absent: it needs a `name` and
+ * `.chatModel()`, and it has no Files API at all.
+ */
+const FORMAT_SDK_PROVIDERS = {
+  claude: (endpoint: ProviderEndpoint, fetchImpl?: FetchFunction) =>
+    createAnthropic({
+      baseURL: endpoint.baseUrl,
+      apiKey: endpoint.apiKey,
+      ...(fetchImpl ? { fetch: fetchImpl } : {}),
+    }),
+  google: (endpoint: ProviderEndpoint, fetchImpl?: FetchFunction) =>
+    createGoogle({
+      baseURL: endpoint.baseUrl,
+      apiKey: endpoint.apiKey,
+      ...(fetchImpl ? { fetch: fetchImpl } : {}),
+    }),
+} as const;
 
 /**
  * One entry per format. Keys are exhaustively typed, so adding a format to
@@ -44,17 +66,9 @@ const FORMAT_PROVIDERS: Record<
       ...(fetchImpl ? { fetch: fetchImpl } : {}),
     }).chatModel(modelId),
   claude: (endpoint, modelId, fetchImpl) =>
-    createAnthropic({
-      baseURL: endpoint.baseUrl,
-      apiKey: endpoint.apiKey,
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
-    })(modelId),
+    FORMAT_SDK_PROVIDERS.claude(endpoint, fetchImpl)(modelId),
   google: (endpoint, modelId, fetchImpl) =>
-    createGoogle({
-      baseURL: endpoint.baseUrl,
-      apiKey: endpoint.apiKey,
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
-    })(modelId),
+    FORMAT_SDK_PROVIDERS.google(endpoint, fetchImpl)(modelId),
 };
 
 export function createLanguageModel(
@@ -66,4 +80,35 @@ export function createLanguageModel(
     ? withBuiltinWebSearch(endpoint.apiFormat)
     : undefined;
   return FORMAT_PROVIDERS[endpoint.apiFormat](endpoint, modelId, fetchImpl);
+}
+
+/**
+ * Provider instances that expose a Files API (`.files()`), for reference-based
+ * attachment transport. `null` means the format has no Files API at all —
+ * `openai-compatible` most of all, whose chat serialization does not even
+ * understand provider references.
+ */
+export type FilesApiProvider =
+  | ReturnType<typeof createGoogle>
+  | ReturnType<typeof createAnthropic>;
+
+const FORMAT_FILES_APIS: Record<
+  ProviderApiFormat,
+  ((endpoint: ProviderEndpoint) => FilesApiProvider) | null
+> = {
+  "openai-compatible": null,
+  claude: FORMAT_SDK_PROVIDERS.claude,
+  google: FORMAT_SDK_PROVIDERS.google,
+};
+
+/**
+ * Builds the provider instance the Files API can be taken from, or `null` for
+ * formats without one. Exhaustively keyed, so adding a format to
+ * `PROVIDER_API_FORMATS` fails compilation until it is decided here.
+ */
+export function createFilesApi(
+  endpoint: ProviderEndpoint,
+): FilesApiProvider | null {
+  const create = FORMAT_FILES_APIS[endpoint.apiFormat];
+  return create ? create(endpoint) : null;
 }

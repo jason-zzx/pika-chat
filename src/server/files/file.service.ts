@@ -8,6 +8,7 @@ import {
   MAX_FILE_SIZE_LABEL,
 } from "@/lib/files/constants";
 import {
+  avMediaTypeForExtension,
   classifyFile,
   type FileCategory,
   fileExtension,
@@ -76,6 +77,9 @@ export function fileIdsFromParts(parts: unknown): string[] {
   return [...ids];
 }
 
+/** Placeholder browsers send for content they cannot sniff. It says nothing. */
+const GENERIC_BINARY_MEDIA_TYPE = "application/octet-stream";
+
 /**
  * Media type to persist. Browsers send `""` for many code/text files, which
  * still classify by extension — this gives those a truthful stored type so the
@@ -83,6 +87,20 @@ export function fileIdsFromParts(parts: unknown): string[] {
  */
 function storedMediaType(declared: string, filename: string): string {
   const normalized = normalizeMediaType(declared);
+  // Audio/video first, for an empty *or* generic declared type: several mobile
+  // pickers report `application/octet-stream` for media. `classifyFile` still
+  // routes those by extension, so persisting the placeholder would let the
+  // upload through and then fail every send on a type no endpoint can
+  // serialize.
+  if (
+    normalized.length === 0 ||
+    normalized === GENERIC_BINARY_MEDIA_TYPE
+  ) {
+    const avMediaType = avMediaTypeForExtension(filename);
+    if (avMediaType !== null) {
+      return avMediaType;
+    }
+  }
   if (normalized.length > 0) {
     return normalized;
   }
@@ -133,7 +151,11 @@ async function extractAndCache(
   data: Buffer,
   userId: string,
 ): Promise<{ status: FileExtractionState; truncated: boolean }> {
-  if (category === "image") {
+  // Images are transmitted natively or rejected, never extracted. Audio and
+  // video are the same in the other direction: they are only ever sent as
+  // bytes to a model that declares the modality, and there is no
+  // transcription service to fall back on, so `none` is their resting state.
+  if (category === "image" || category === "audio" || category === "video") {
     return { status: "none", truncated: false };
   }
 

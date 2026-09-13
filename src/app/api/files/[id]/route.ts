@@ -36,8 +36,13 @@ function contentDisposition(filename: string, inline: boolean): string {
 }
 
 function contentHeaders(file: FileRecord): Headers {
+  // Media is served inline so it plays in the message's native
+  // `<audio>`/`<video>` player; everything else is a download.
   const inline =
-    file.mediaType.startsWith("image/") || file.mediaType === PDF_MEDIA_TYPE;
+    file.mediaType.startsWith("image/") ||
+    file.mediaType.startsWith("audio/") ||
+    file.mediaType.startsWith("video/") ||
+    file.mediaType === PDF_MEDIA_TYPE;
   const headers = new Headers();
   headers.set("Content-Type", file.mediaType);
   headers.set("Content-Length", String(file.sizeBytes));

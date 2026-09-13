@@ -3,9 +3,14 @@ import "server-only";
 import type { LanguageModel } from "ai";
 import { eq } from "drizzle-orm";
 
+import type { ProviderApiFormat } from "@/lib/provider-format";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { describeProviderError } from "@/server/ai/provider-error";
-import { createLanguageModel } from "@/server/ai/provider-factory";
+import {
+  createFilesApi,
+  createLanguageModel,
+  type FilesApiProvider,
+} from "@/server/ai/provider-factory";
 import type { Actor } from "@/server/auth/actor";
 import { decryptSecret } from "@/server/crypto";
 import { getDb } from "@/server/db/client";
@@ -15,6 +20,15 @@ import { AppError } from "@/server/errors";
 export type ChatModelHandle = {
   model: LanguageModel;
   describeError: (error: unknown) => ReturnType<typeof describeProviderError>;
+  /** Endpoint format of the config the model was built from. */
+  apiFormat: ProviderApiFormat;
+  /** Config the model belongs to — attachments namespace references by it. */
+  providerConfigId: string;
+  /**
+   * Provider instance exposing the Files API, or `null` for formats without
+   * one. `null` here is what keeps `openai-compatible` on the inline path.
+   */
+  filesApi: FilesApiProvider | null;
 };
 
 async function loadConfigRow(providerConfigId: string) {
@@ -67,18 +81,18 @@ export async function createChatModelHandle(
   const apiKey = config.encryptedApiKey
     ? decryptSecret(config.encryptedApiKey)
     : "";
-  const model = createLanguageModel(
-    {
-      apiFormat: config.apiFormat,
-      name: config.name,
-      baseUrl: config.baseUrl,
-      apiKey,
-    },
-    pair.modelId,
-    options,
-  );
+  const endpoint = {
+    apiFormat: config.apiFormat,
+    name: config.name,
+    baseUrl: config.baseUrl,
+    apiKey,
+  };
+  const model = createLanguageModel(endpoint, pair.modelId, options);
   return {
     model,
     describeError: (error: unknown) => describeProviderError(error, apiKey),
+    apiFormat: config.apiFormat,
+    providerConfigId: pair.providerConfigId,
+    filesApi: createFilesApi(endpoint),
   };
 }

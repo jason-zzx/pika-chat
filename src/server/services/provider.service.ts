@@ -312,6 +312,7 @@ export async function updateProviderConfig(
     apiFormat?: ProviderApiFormat;
     encryptedApiKey?: string | null;
     apiKeyLastFour?: string | null;
+    filesApiUnsupportedAt?: Date | null;
     visibility: "private" | "shared";
     updatedAt: Date;
   } = {
@@ -335,6 +336,15 @@ export async function updateProviderConfig(
       patch.encryptedApiKey = encryptSecret(input.apiKey);
       patch.apiKeyLastFour = lastFour(input.apiKey);
     }
+  }
+  // The Files API negative cache describes one endpoint with one credential —
+  // any of the three changing invalidates it, so the config gets to try again.
+  const endpointChanged =
+    input.baseUrl !== undefined ||
+    input.apiKey !== undefined ||
+    input.apiFormat !== undefined;
+  if (endpointChanged) {
+    patch.filesApiUnsupportedAt = null;
   }
 
   try {

@@ -940,5 +940,60 @@ describe("provider.service", () => {
       expect(updated.apiFormat).toBe("google");
       expect(updated.apiKeyLastFour).toBe("cret");
     });
+
+    it("clears the files api negative cache when the endpoint changes", async () => {
+      const { userActor } = await seedActors();
+      const config = await createProviderConfig(
+        {
+          name: "files-api-cache",
+          baseUrl: "http://127.0.0.1:11434/v1",
+          apiKey: "sk-local",
+          visibility: "private",
+        },
+        userActor,
+      );
+      await db
+        .update(providerConfigs)
+        .set({ filesApiUnsupportedAt: new Date() })
+        .where(eq(providerConfigs.id, config.id));
+
+      await updateProviderConfig(
+        config.id,
+        { baseUrl: "http://127.0.0.1:21434/v1" },
+        userActor,
+      );
+
+      const rows = await db
+        .select({ at: providerConfigs.filesApiUnsupportedAt })
+        .from(providerConfigs)
+        .where(eq(providerConfigs.id, config.id));
+      expect(rows[0]?.at).toBeNull();
+    });
+
+    it("keeps the files api negative cache on a name-only patch", async () => {
+      const { userActor } = await seedActors();
+      const config = await createProviderConfig(
+        {
+          name: "files-api-cache-name",
+          baseUrl: "http://127.0.0.1:11434/v1",
+          apiKey: "sk-local",
+          visibility: "private",
+        },
+        userActor,
+      );
+      const marked = new Date();
+      await db
+        .update(providerConfigs)
+        .set({ filesApiUnsupportedAt: marked })
+        .where(eq(providerConfigs.id, config.id));
+
+      await updateProviderConfig(config.id, { name: "renamed" }, userActor);
+
+      const rows = await db
+        .select({ at: providerConfigs.filesApiUnsupportedAt })
+        .from(providerConfigs)
+        .where(eq(providerConfigs.id, config.id));
+      expect(rows[0]?.at?.getTime()).toBe(marked.getTime());
+    });
   });
 });

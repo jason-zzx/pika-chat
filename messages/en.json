@@ -429,6 +429,10 @@
     "retry": "Retry upload",
     "remove": "Remove {filename}",
     "dropHint": "Release to attach files",
+    "preview": {
+      "audio": "Audio player for {filename}",
+      "video": "Video player for {filename}"
+    },
     "warning": {
       "empty": "No extractable text",
       "failed": "This file cannot be read",
@@ -519,6 +523,7 @@
       "noTextLayer": "This file has no extractable text; use a model that supports it natively",
       "unreadable": "This file could not be read",
       "imageRequiresVision": "This model cannot view images",
+      "mediaUnsupported": "This model cannot read this audio or video file",
       "inUse": "This file is still used by a message",
       "uploadFailed": "Upload failed. Please try again."
     },

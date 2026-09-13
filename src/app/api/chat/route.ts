@@ -165,7 +165,12 @@ export const POST = withErrorHandling(async (request) => {
   // attachment cards from them); only the model payload is rewritten.
   const routedMessages = await resolveAttachmentsForModel(
     [...history, userMessage],
-    { inputModalities: selected.inputModalities },
+    {
+      inputModalities: selected.inputModalities,
+      apiFormat: handle.apiFormat,
+      providerConfigId: handle.providerConfigId,
+      filesApi: handle.filesApi,
+    },
   );
 
   if (!topicId) {

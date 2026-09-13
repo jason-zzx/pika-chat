@@ -45,6 +45,10 @@ export const providerConfigs = pgTable(
     encryptedApiKey: text("encrypted_api_key"),
     apiKeyLastFour: text("api_key_last_four"),
     visibility: providerVisibility("visibility").notNull().default("private"),
+    // Negative cache: set when the endpoint answered the Files API with a
+    // permanent error (no such endpoint, unsupported file type). Cleared
+    // whenever baseUrl / api key / apiFormat change.
+    filesApiUnsupportedAt: timestamptz("files_api_unsupported_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },

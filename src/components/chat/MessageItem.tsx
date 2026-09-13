@@ -7,6 +7,7 @@ import {
   type Ref,
 } from "react";
 
+import { classifyFile } from "@/lib/files/media-types";
 import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
 import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
@@ -68,11 +69,13 @@ function shrinkLinkToRenderedImage(img: HTMLImageElement | null) {
   }
 }
 
-/** User-message attachment card: a thumbnail for images, a name card otherwise. */
+/** User-message attachment card: a thumbnail for images, a native player for
+ * audio/video, a name card for everything else. */
 function UserAttachment({ part }: UserAttachmentProps) {
-  const linkClass =
-    "flex max-w-[16rem] items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground";
-  if (part.mediaType.startsWith("image/")) {
+  const t = useTranslations("Files");
+  const filename = part.filename ?? "";
+  const category = classifyFile({ mediaType: part.mediaType, filename });
+  if (category === "image") {
     return (
       <a
         href={part.url}
@@ -90,17 +93,16 @@ function UserAttachment({ part }: UserAttachmentProps) {
       </a>
     );
   }
-  return (
+  const linkClass =
+    "flex max-w-[16rem] items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground";
+  const card = (
     <a
       href={part.url}
       target={EXTERNAL_LINK_TARGET}
       rel={EXTERNAL_LINK_REL}
       className={linkClass}
     >
-      <AttachmentIcon
-        mediaType={part.mediaType}
-        filename={part.filename ?? ""}
-      />
+      <AttachmentIcon mediaType={part.mediaType} filename={filename} />
       <span className="flex min-w-0 flex-col">
         <span className="truncate">{part.filename}</span>
         {part.sizeBytes !== undefined ? (
@@ -111,6 +113,38 @@ function UserAttachment({ part }: UserAttachmentProps) {
       </span>
     </a>
   );
+  // Audio/video play in place through the same authenticated endpoint. Native
+  // controls are the tap path on touch clients (no hover anywhere), and the
+  // filename row stays a link so the file can still be opened in a new tab.
+  if (category === "audio" || category === "video") {
+    return (
+      <div className="flex w-[min(100%,16rem)] flex-col gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
+        {category === "audio" ? (
+          // User media arrives without a caption track and we generate none
+          // (transcription is out of scope); the player is the affordance.
+          // eslint-disable-next-line jsx-a11y/media-has-caption -- no track exists to attach
+          <audio
+            controls
+            preload="none"
+            src={part.url}
+            className="w-full"
+            aria-label={t("preview.audio", { filename })}
+          />
+        ) : (
+          // eslint-disable-next-line jsx-a11y/media-has-caption -- no track exists to attach
+          <video
+            controls
+            preload="none"
+            src={part.url}
+            className="h-auto max-h-64 w-full rounded"
+            aria-label={t("preview.video", { filename })}
+          />
+        )}
+        {card}
+      </div>
+    );
+  }
+  return card;
 }
 
 /** Reads the persisted per-phase duration off a reasoning part (the field
@@ -285,10 +319,12 @@ export default function MessageItem({
 
   function handleArticleClick(event: ReactMouseEvent<HTMLElement>) {
     // Buttons and links inside the message (actions, reasoning toggle,
-    // streamdown copy buttons, anchors) handle their own clicks.
+    // streamdown copy buttons, anchors) handle their own clicks, and so do the
+    // native audio/video controls — their shadow content is not a button this
+    // check could see.
     if (
       event.target instanceof HTMLElement &&
-      event.target.closest("button, a")
+      event.target.closest("button, a, audio, video")
     ) {
       return;
     }

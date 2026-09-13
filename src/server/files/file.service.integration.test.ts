@@ -196,6 +196,56 @@ describe("file.service", () => {
     expect(row.extractedText).toBeNull();
   });
 
+  it("records audio and video as no-extraction (no transcription path)", async () => {
+    const owner = await seedUser("owner");
+    for (const [filename, mediaType] of [
+      ["clip.mp3", "audio/mpeg"],
+      ["clip.mp4", "video/mp4"],
+    ] as const) {
+      const uploaded = await uploadFile(
+        { filename, mediaType, data: Buffer.from([0x00, 0x01, 0x02]) },
+        owner,
+      );
+      expect(uploaded.extraction).toEqual({ status: "none", truncated: false });
+      const row = await getFileForActor(uploaded.id, owner);
+      expect(row.extractionStatus).toBe("none");
+      expect(row.extractedText).toBeNull();
+    }
+  });
+
+  it("infers a media type from the extension when the browser sends none", async () => {
+    const owner = await seedUser("owner");
+    const uploaded = await uploadFile(
+      {
+        filename: "voice.m4a",
+        mediaType: "",
+        data: Buffer.from([0x00, 0x01, 0x02]),
+      },
+      owner,
+    );
+    // Not text/plain: the stored type drives both the download response and
+    // the native-transmission route.
+    expect(uploaded.mediaType).toBe("audio/mp4");
+    expect(uploaded.extraction.status).toBe("none");
+  });
+
+  it("infers a media type when the browser sends a generic binary type", async () => {
+    const owner = await seedUser("owner");
+    const uploaded = await uploadFile(
+      {
+        filename: "clip.mp4",
+        mediaType: "application/octet-stream",
+        data: Buffer.from([0x00, 0x01, 0x02]),
+      },
+      owner,
+    );
+    // Mobile pickers report the octet-stream placeholder for media. Storing it
+    // would let the upload through (classification falls back to the
+    // extension) and then fail every send on a type no endpoint can serialize.
+    expect(uploaded.mediaType).toBe("video/mp4");
+    expect(uploaded.extraction.status).toBe("none");
+  });
+
   it("infers a text media type when the browser sends none", async () => {
     const owner = await seedUser("owner");
     const uploaded = await uploadFile(

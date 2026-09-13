@@ -1,0 +1,2 @@
+ALTER TABLE "files" ADD COLUMN "provider_references" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "provider_configs" ADD COLUMN "files_api_unsupported_at" timestamp with time zone;

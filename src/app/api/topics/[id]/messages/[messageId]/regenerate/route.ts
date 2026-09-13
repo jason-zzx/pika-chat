@@ -129,6 +129,9 @@ export const POST = withErrorHandling(async (request, context) => {
   const modelMessages = await replayModelMessages(
     await resolveAttachmentsForModel(history, {
       inputModalities: selected.inputModalities,
+      apiFormat: handle.apiFormat,
+      providerConfigId: handle.providerConfigId,
+      filesApi: handle.filesApi,
     }),
   );
 

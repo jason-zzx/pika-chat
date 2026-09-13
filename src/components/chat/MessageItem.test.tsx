@@ -1123,4 +1123,88 @@ describe("MessageItem attachments", () => {
     // No empty muted bubble is rendered when the message carries no text.
     expect(document.querySelector("div.bg-muted p")).toBeNull();
   });
+
+  it("renders audio as a native player plus the name card", () => {
+    const parts = [
+      {
+        type: "file" as const,
+        url: "/api/files/a1",
+        mediaType: "audio/mpeg",
+        filename: "clip.mp3",
+        sizeBytes: 15_360,
+      },
+    ];
+    renderWithIntl(
+      <MessageItem message={{ id: "user-1", role: "user", parts }} />,
+    );
+
+    const audio = document.querySelector("audio");
+    expect(audio).not.toBeNull();
+    expect(audio).toHaveAttribute("src", "/api/files/a1");
+    // Native controls are the tap path — no hover anywhere in this card.
+    expect(audio).toHaveAttribute("controls");
+    expect(audio).toHaveAttribute("preload", "none");
+    expect(audio).toHaveAttribute(
+      "aria-label",
+      "Audio player for clip.mp3",
+    );
+    // The name card's accessible name folds in the size, so match the prefix.
+    expect(screen.getByRole("link", { name: /clip\.mp3/ })).toHaveAttribute(
+      "href",
+      "/api/files/a1",
+    );
+    expect(screen.getByText("15 KB")).toBeInTheDocument();
+  });
+
+  it("renders video as a native player", () => {
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "user-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/v1",
+              mediaType: "video/mp4",
+              filename: "clip.mp4",
+            },
+          ],
+        }}
+      />,
+    );
+
+    const video = document.querySelector("video");
+    expect(video).toHaveAttribute("src", "/api/files/v1");
+    expect(video).toHaveAttribute("controls");
+    expect(video).toHaveAttribute("aria-label", "Video player for clip.mp4");
+  });
+
+  it("does not report a reveal when the media controls are tapped", () => {
+    const onReveal = vi.fn();
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "user-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/a1",
+              mediaType: "audio/mpeg",
+              filename: "clip.mp3",
+            },
+          ],
+        }}
+        onReveal={onReveal}
+      />,
+    );
+
+    const audio = document.querySelector("audio");
+    if (!audio) {
+      throw new Error("expected an audio player");
+    }
+    fireEvent.click(audio);
+    expect(onReveal).not.toHaveBeenCalled();
+  });
 });

@@ -429,6 +429,10 @@
     "retry": "重试上传",
     "remove": "移除 {filename}",
     "dropHint": "松开以添加附件",
+    "preview": {
+      "audio": "{filename} 的音频播放器",
+      "video": "{filename} 的视频播放器"
+    },
     "warning": {
       "empty": "无可提取的文本",
       "failed": "无法读取此文件",
@@ -519,6 +523,7 @@
       "noTextLayer": "该文件没有可提取的文本，请改用原生支持它的模型",
       "unreadable": "无法读取该文件",
       "imageRequiresVision": "当前模型无法查看图片",
+      "mediaUnsupported": "当前模型无法读取该音频或视频文件",
       "inUse": "该文件仍被某条消息使用",
       "uploadFailed": "上传失败，请重试。"
     },
