@@ -49,9 +49,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Runtime guard for a stored record. jsonb content is not validated by the
  * driver, and a malformed entry must read as "no reference" rather than crash
- * the send path.
+ * the send path. Shared with the provider-delete retry queue, which reads the
+ * same jsonb and must not trust it either.
  */
-function parseReference(value: unknown): ProviderFileReference | null {
+export function parseProviderFileReference(
+  value: unknown,
+): ProviderFileReference | null {
   if (
     !isRecord(value) ||
     !isRecord(value.reference) ||
@@ -253,7 +256,7 @@ export async function ensureProviderReference(args: {
       return { kind: "fallback" };
     }
     const stored = usableReference(
-      parseReference(file.providerReferences[configId]),
+      parseProviderFileReference(file.providerReferences[configId]),
     );
     if (stored !== null) {
       return { kind: "reference", reference: stored };

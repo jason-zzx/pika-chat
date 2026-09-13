@@ -61,6 +61,10 @@ volume at `/data/files`; keep that volume (or a host bind mount) in any custom
 deployment — attachment bytes are not stored in the database and are lost if
 the directory is not persisted.
 
+A single attachment is capped at 20 MiB by default. Set `FILE_UPLOAD_MAX_MB`
+to a value between 1 and 100 to change it; a value outside that range makes
+the server refuse to start.
+
 ## S3-compatible attachment storage
 
 Attachments default to local disk. Set `S3_BUCKET` to move them to any
@@ -83,6 +87,28 @@ The bucket is created on first use if it does not exist, so there is nothing to
 provision by hand. Credentials are read from the environment only and are never
 logged. Removing the `S3_*` variables switches back to local disk; objects
 already written to the bucket are not copied back.
+
+### Direct S3 access
+
+By default the browser uploads to the app server, which relays the bytes to
+storage, and downloads/previews are relayed the same way. With S3 configured,
+set `S3_DIRECT_ACCESS=1` to let the browser talk to the bucket directly in
+both directions: uploads use a short-lived presigned POST policy, and
+downloads/previews get a 302 redirect to a presigned GET — the bytes never
+pass through the app process, and S3 serves Range requests natively.
+
+```bash
+S3_DIRECT_ACCESS=1    # requires S3_BUCKET; default off
+```
+
+Direct uploads require the bucket's CORS configuration to allow browser POSTs
+from the app's origin; the 302 downloads need no CORS setup because the
+browser simply follows a redirect. The size limit is still enforced on both
+ends (the signed policy and the server-side completion check), so a client
+cannot upload past `FILE_UPLOAD_MAX_MB`. Direct access requires S3: enabling
+the flag without `S3_BUCKET` makes the server refuse to start rather than
+silently falling back to the relay path, so every deployment of the same
+environment behaves alike.
 
 ### Bundled RustFS deployment
 

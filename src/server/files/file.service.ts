@@ -2,11 +2,8 @@ import "server-only";
 
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
-import {
-  MAX_ATTACHMENTS_PER_MESSAGE,
-  MAX_FILE_BYTES,
-  MAX_FILE_SIZE_LABEL,
-} from "@/lib/files/constants";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
+import { formatBytes } from "@/lib/files/format";
 import {
   avMediaTypeForExtension,
   classifyFile,
@@ -17,7 +14,7 @@ import {
 } from "@/lib/files/media-types";
 import { newId } from "@/lib/id";
 import type { ChatFilePart } from "@/lib/schemas/chat";
-import type { FileExtractionState } from "@/lib/schemas/file";
+import type { FileExtractionState, PresignedUpload } from "@/lib/schemas/file";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { chatMessages, files } from "@/server/db/schema";
@@ -25,6 +22,11 @@ import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 
 import { extractDocument } from "./extract";
+import { maxFileBytes } from "./limits";
+import {
+  deleteProviderFileReferences,
+  processDeleteRetries,
+} from "./provider-delete";
 import { getFileStorage } from "./storage";
 
 /** Persisted attachment row, including the extraction cache. */
@@ -44,6 +46,13 @@ export type UploadedFile = {
 
 /** Attachments unreferenced for this long are reclaimable by the sweeper. */
 export const ORPHAN_FILE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Presigned POST lifetime. Long enough for a slow mobile upload at the
+ * configured ceiling, short enough that a leaked policy is not a lasting
+ * grant. The row it produced lives on until `completeFile` or the 24h sweep.
+ */
+export const PRESIGN_EXPIRES_SEC = 900;
 
 export function fileUrl(fileId: string): string {
   return `${FILE_URL_PREFIX}${fileId}`;
@@ -139,6 +148,34 @@ async function removeObjectQuietly(
 }
 
 /**
+ * True when a storage read failed because the object is absent — a direct
+ * upload that never landed, or one whose policy expired. Local disk raises
+ * ENOENT; S3 raises NoSuchKey, and implementations disagree on the error name,
+ * so the HTTP status is consulted as a fallback.
+ */
+function isObjectMissing(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  if (error.name === "NoSuchKey" || error.name === "NotFound") {
+    return true;
+  }
+  if ("code" in error && error.code === "ENOENT") {
+    return true;
+  }
+  const metadata =
+    "$metadata" in error
+      ? (error as { $metadata?: unknown }).$metadata
+      : undefined;
+  if (typeof metadata !== "object" || metadata === null) {
+    return false;
+  }
+  return (
+    "httpStatusCode" in metadata && metadata.httpStatusCode === 404
+  );
+}
+
+/**
  * Runs extraction and caches the outcome on the row. A corrupt or encrypted
  * file is recorded as `failed` instead of failing the upload — the send path
  * turns that into a user-visible `file.unreadable`.
@@ -199,9 +236,10 @@ export async function uploadFile(
     throw new AppError("VALIDATION_FAILED", 400, "file.unsupportedType");
   }
   const sizeBytes = input.data.byteLength;
-  if (sizeBytes > MAX_FILE_BYTES) {
+  const limitBytes = maxFileBytes();
+  if (sizeBytes > limitBytes) {
     throw new AppError("VALIDATION_FAILED", 400, "file.tooLarge", {
-      limit: MAX_FILE_SIZE_LABEL,
+      limit: formatBytes(limitBytes),
     });
   }
 
@@ -258,6 +296,132 @@ export async function uploadFile(
     url: fileUrl(id),
     filename,
     mediaType,
+    sizeBytes,
+    extraction,
+  };
+}
+
+/**
+ * Starts a direct browser→storage upload. Validates the declared type up front
+ * (the same whitelist the relay path uses) and writes a *pending* row before
+ * signing: `sizeBytes = 0` until {@link completeFile} reads the object back.
+ * An abandoned direct upload is therefore just an orphan the existing 24h
+ * sweep reclaims — no S3-side reconciliation is needed.
+ */
+export async function presignFile(
+  input: { filename: string; mediaType: string },
+  actor: Actor,
+): Promise<PresignedUpload> {
+  const filename = input.filename.trim().length > 0 ? input.filename : "file";
+  const category = classifyFile({ mediaType: input.mediaType, filename });
+  if (!category) {
+    throw new AppError("VALIDATION_FAILED", 400, "file.unsupportedType");
+  }
+
+  const storage = getFileStorage();
+  if (!storage.createPresignedPost) {
+    // The boot check refuses S3_DIRECT_ACCESS without S3; reaching here
+    // means the flag and the storage singleton disagree. Fail loudly rather
+    // than silently relaying — the client asked for a direct upload.
+    throw new AppError("INTERNAL", 500, "file.uploadFailed");
+  }
+
+  const mediaType = storedMediaType(input.mediaType, filename);
+  const id = newId();
+  const storageKey = `${actor.userId}/${id}`;
+  await getDb().insert(files).values({
+    id,
+    userId: actor.userId,
+    filename,
+    mediaType,
+    sizeBytes: 0,
+    storageKey,
+  });
+
+  const post = await storage.createPresignedPost(storageKey, {
+    maxBytes: maxFileBytes(),
+    expiresSec: PRESIGN_EXPIRES_SEC,
+  });
+
+  logger.info(
+    { userId: actor.userId, fileId: id, mediaType },
+    "attachment upload presigned",
+  );
+
+  return { fileId: id, post };
+}
+
+/**
+ * Finalizes a direct upload. The object's real size is read back from storage
+ * and re-checked against the configured limit — the policy's
+ * `content-length-range` is the first gate, not the only one, and a
+ * client-reported size is never trusted. Extraction then runs here so the
+ * composer chip shows its parse state exactly as on the relay path.
+ */
+export async function completeFile(
+  fileId: string,
+  actor: Actor,
+): Promise<UploadedFile> {
+  const file = await getFileForActor(fileId, actor);
+  const storage = getFileStorage();
+
+  let data: Buffer;
+  try {
+    data = await storage.get(file.storageKey);
+  } catch (error) {
+    if (isObjectMissing(error)) {
+      // The pending row exists but no object landed behind it. A re-upload is
+      // possible until the orphan sweep reclaims the row.
+      throw new AppError("NOT_FOUND", 404, "file.uploadFailed");
+    }
+    throw error;
+  }
+
+  const sizeBytes = data.byteLength;
+  const limitBytes = maxFileBytes();
+  if (sizeBytes > limitBytes) {
+    // Object first: if the delete fails the row survives, so the orphan sweep
+    // can retry both — a row pointing at nothing is the worse failure.
+    await storage.delete(file.storageKey);
+    await getDb().delete(files).where(eq(files.id, fileId));
+    throw new AppError("VALIDATION_FAILED", 400, "file.tooLarge", {
+      limit: formatBytes(limitBytes),
+    });
+  }
+
+  await getDb()
+    .update(files)
+    .set({ sizeBytes, updatedAt: new Date() })
+    .where(eq(files.id, fileId));
+
+  const category = classifyFile({
+    mediaType: file.mediaType,
+    filename: file.filename,
+  });
+  if (!category) {
+    // Unreachable: presign classified the same pair before signing.
+    throw new AppError("VALIDATION_FAILED", 400, "file.unsupportedType");
+  }
+
+  const extraction = await extractAndCache(
+    fileId,
+    category,
+    file.mediaType,
+    file.filename,
+    data,
+    actor.userId,
+  );
+
+  logger.info(
+    { userId: actor.userId, fileId, mediaType: file.mediaType, sizeBytes },
+    "attachment direct upload completed",
+  );
+
+  return {
+    id: fileId,
+    url: fileUrl(fileId),
+    filename: file.filename,
+    mediaType: file.mediaType,
     sizeBytes,
     extraction,
   };
@@ -394,6 +558,9 @@ export async function deleteFile(id: string, actor: Actor): Promise<void> {
   await getFileStorage().delete(file.storageKey);
   await getDb().delete(files).where(eq(files.id, id));
   logger.info({ userId: actor.userId, fileId: id }, "attachment deleted");
+  // The local row is gone; the provider copy (if any) is now an orphan. This
+  // never throws and never blocks the delete that already succeeded.
+  await deleteProviderFileReferences(file);
 }
 
 /**
@@ -414,7 +581,11 @@ export async function deleteFilesIfUnreferenced(
   for (const id of unique) {
     try {
       const rows = await db
-        .select({ id: files.id, storageKey: files.storageKey })
+        .select({
+          id: files.id,
+          storageKey: files.storageKey,
+          providerReferences: files.providerReferences,
+        })
         .from(files)
         .where(and(eq(files.id, id), eq(files.userId, actor.userId)))
         .limit(1);
@@ -428,6 +599,7 @@ export async function deleteFilesIfUnreferenced(
         { userId: actor.userId, fileId: id },
         "attachment cleaned up with its message",
       );
+      await deleteProviderFileReferences(row);
     } catch (error) {
       logger.warn(
         { err: error, userId: actor.userId, fileId: id },
@@ -447,7 +619,11 @@ export async function sweepOrphanFiles(actor: Actor): Promise<void> {
     const db = getDb();
     const cutoff = new Date(Date.now() - ORPHAN_FILE_TTL_MS);
     const rows = await db
-      .select({ id: files.id, storageKey: files.storageKey })
+      .select({
+        id: files.id,
+        storageKey: files.storageKey,
+        providerReferences: files.providerReferences,
+      })
       .from(files)
       .where(
         and(
@@ -470,6 +646,7 @@ export async function sweepOrphanFiles(actor: Actor): Promise<void> {
           { userId: actor.userId, fileId: row.id },
           "orphan attachment swept",
         );
+        await deleteProviderFileReferences(row);
       } catch (error) {
         logger.warn(
           { err: error, userId: actor.userId, fileId: row.id },
@@ -483,4 +660,7 @@ export async function sweepOrphanFiles(actor: Actor): Promise<void> {
       "orphan attachment sweep failed",
     );
   }
+  // Drained after the local sweep so a failed orphan query above cannot starve
+  // the provider-side queue. An empty queue is a single indexed read.
+  await processDeleteRetries();
 }

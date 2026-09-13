@@ -23,7 +23,7 @@ src/components/chat/AttachmentIcon.tsx            category icon (shared with car
 src/components/chat/Composer.tsx                  picker/paste + chip row
 src/components/chat/ChatView.tsx                  content-area drop zone (enter/leave counter + overlay)
 src/components/chat/MessageItem.tsx               user-message attachment cards
-src/lib/api/files.ts                              uploadChatFile / deleteChatFile
+src/lib/api/files.ts                              uploadChatFile / deleteChatFile / fetchFileLimits / uploadChatFileDirect
 src/lib/files/media-types.ts                      classifyFile / SUPPORTED_FILE_ACCEPT
 src/lib/files/format.ts                           formatBytes
 ```
@@ -52,7 +52,15 @@ sendMessage({ text, files })   // files: FileUIPart[] = { type:"file", url, medi
 ### 3. Contracts
 
 - **Upload on selection**, not on send: each accepted file immediately
-  `POST /api/files`; the chip reflects `uploading → ready | error`.
+  `POST /api/files`; the chip reflects `uploading → ready | error`. When
+  `GET /api/files/limits` reports `directUpload: true`, the same helper instead
+  runs presign → browser-to-S3 POST → complete; the chip state machine and the
+  resulting message part are identical either way.
+- **The size limit is runtime config.** The composer fetches
+  `/api/files/limits` on mount, pre-checks against `maxFileBytes`, and labels
+  the `file.tooLarge` error with `formatBytes(maxFileBytes)`. If that fetch
+  fails it falls back to `DEFAULT_FILE_LIMITS` (20 MiB, relay) — never a
+  hardcoded label.
 - **Slots**: `MAX_ATTACHMENTS_PER_MESSAGE` (5) counts only entries that are not
   `status: "error"` — one shared helper drives both `addFiles` and the attach
   button's `disabled` state.
@@ -91,7 +99,7 @@ sendMessage({ text, files })   // files: FileUIPart[] = { type:"file", url, medi
 
 | Condition | Client behaviour |
 |---|---|
-| `file.size > MAX_FILE_BYTES` | error chip, `file.tooLarge` with `{limit}` — does not consume a slot |
+| `file.size > limits.maxFileBytes` (runtime limit from `GET /api/files/limits`, 20 MiB fallback) | error chip, `file.tooLarge` with `{limit}` — does not consume a slot |
 | `classifyFile()` returns null | error chip, `file.unsupportedType` — does not consume a slot |
 | accepted uploads already at 5 | error chip, `file.tooMany` with `{max}` |
 | upload request fails | error chip with a retry action; sending stays disabled |

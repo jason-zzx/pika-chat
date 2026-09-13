@@ -21,6 +21,8 @@
     "@ai-sdk/openai-compatible": "3.0.41",
     "@ai-sdk/react": "4.0.88",
     "@aws-sdk/client-s3": "^3.1131.0",
+    "@aws-sdk/s3-presigned-post": "^3.1131.0",
+    "@aws-sdk/s3-request-presigner": "^3.1131.0",
     "@base-ui/react": "1.7.0",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",

@@ -5,8 +5,10 @@ import { requireActor } from "@/server/auth/actor";
 import {
   deleteFile,
   type FileRecord,
-  readFileForActor,
+  getFileForActor,
 } from "@/server/files/file.service";
+import { isS3DirectAccessEnabled } from "@/server/files/limits";
+import { getFileStorage } from "@/server/files/storage";
 
 function fileId(context: Parameters<typeof requireParam>[0]): Promise<string> {
   return requireParam(context, "id", "file.notFound");
@@ -35,26 +37,66 @@ function contentDisposition(filename: string, inline: boolean): string {
   return `${kind}; filename="${asciiFallback(filename)}"; filename*=UTF-8''${rfc5987(filename)}`;
 }
 
-function contentHeaders(file: FileRecord): Headers {
-  // Media is served inline so it plays in the message's native
-  // `<audio>`/`<video>` player; everything else is a download.
-  const inline =
+// Media is served inline so it plays in the message's native
+// `<audio>`/`<video>` player; everything else is a download.
+function servesInline(file: FileRecord): boolean {
+  return (
     file.mediaType.startsWith("image/") ||
     file.mediaType.startsWith("audio/") ||
     file.mediaType.startsWith("video/") ||
-    file.mediaType === PDF_MEDIA_TYPE;
+    file.mediaType === PDF_MEDIA_TYPE
+  );
+}
+
+function contentHeaders(file: FileRecord): Headers {
   const headers = new Headers();
   headers.set("Content-Type", file.mediaType);
   headers.set("Content-Length", String(file.sizeBytes));
   headers.set("Cache-Control", "private, max-age=3600");
   headers.set("X-Content-Type-Options", "nosniff");
-  headers.set("Content-Disposition", contentDisposition(file.filename, inline));
+  headers.set(
+    "Content-Disposition",
+    contentDisposition(file.filename, servesInline(file)),
+  );
   return headers;
 }
 
+/** Lifetime of the presigned GET a direct-access download redirects to. */
+const PRESIGNED_GET_EXPIRES_SEC = 3600;
+/** Redirect caching must expire long before the signed URL does. */
+const REDIRECT_CACHE_MAX_AGE_SEC = 300;
+
 export const GET = withErrorHandling(async (request, context) => {
   const actor = await requireActor(request.headers);
-  const { file, data } = await readFileForActor(await fileId(context), actor);
+  // Ownership is checked before anything is signed: a foreign id is a 404 and
+  // never produces a presigned URL.
+  const file = await getFileForActor(await fileId(context), actor);
+  const storage = getFileStorage();
+
+  if (isS3DirectAccessEnabled() && storage.createPresignedGet) {
+    // Direct access: the bytes never pass through the app. The signed URL
+    // overrides the response headers so the redirected object answers with
+    // exactly the Content-Type and inline/attachment disposition the relay
+    // path below would have used — and clients (img/audio/video tags, new
+    // tabs) follow the 302 without any client-side branch.
+    const url = await storage.createPresignedGet(file.storageKey, {
+      expiresSec: PRESIGNED_GET_EXPIRES_SEC,
+      responseContentType: file.mediaType,
+      responseContentDisposition: contentDisposition(
+        file.filename,
+        servesInline(file),
+      ),
+    });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: url,
+        "Cache-Control": `private, max-age=${REDIRECT_CACHE_MAX_AGE_SEC}`,
+      },
+    });
+  }
+
+  const data = await storage.get(file.storageKey);
   return new Response(new Uint8Array(data), { headers: contentHeaders(file) });
 });
 

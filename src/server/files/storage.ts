@@ -11,8 +11,16 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { createPresignedPost as createS3PresignedPost } from "@aws-sdk/s3-presigned-post";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { getEnv } from "@/server/env";
+
+/** A presigned POST policy a browser can upload one object with. */
+export type PresignedPost = {
+  url: string;
+  fields: Record<string, string>;
+};
 
 /**
  * Blob storage for chat attachments. Keys are opaque to callers; the current
@@ -23,6 +31,29 @@ export interface FileStorage {
   put(key: string, data: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
+  /**
+   * Presigned POST policy for a direct browser→storage upload. Only object
+   * storage implements it — local disk has no equivalent, which is why
+   * `S3_DIRECT_ACCESS` requires S3 at boot.
+   */
+  createPresignedPost?(
+    key: string,
+    options: { maxBytes: number; expiresSec: number },
+  ): Promise<PresignedPost>;
+  /**
+   * Presigned GET URL a browser can follow straight to the object, with the
+   * response's Content-Type and Content-Disposition overridden so the
+   * redirect keeps the relay path's inline/download semantics. S3-only, for
+   * the same reason as {@link FileStorage.createPresignedPost}.
+   */
+  createPresignedGet?(
+    key: string,
+    options: {
+      expiresSec: number;
+      responseContentType: string;
+      responseContentDisposition: string;
+    },
+  ): Promise<string>;
 }
 
 /**
@@ -119,6 +150,55 @@ export class S3FileStorage implements FileStorage {
     await this.ensureBucket();
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+  }
+
+  /**
+   * Signs a POST policy whose `content-length-range` is the first of two size
+   * gates: S3 refuses a body outside 1..maxBytes, and `completeFile` re-checks
+   * the object's real byte count because a client-reported size is never
+   * evidence.
+   */
+  async createPresignedPost(
+    key: string,
+    options: { maxBytes: number; expiresSec: number },
+  ): Promise<PresignedPost> {
+    assertValidStorageKey(key);
+    await this.ensureBucket();
+    return createS3PresignedPost(this.client, {
+      Bucket: this.bucket,
+      Key: key,
+      Conditions: [["content-length-range", 1, options.maxBytes]],
+      Expires: options.expiresSec,
+    });
+  }
+
+  /**
+   * Signs a GET whose response header overrides make the object answer with
+   * the same Content-Type and inline/attachment disposition the relay path
+   * would have used — the 302 the file route hands out is otherwise a plain
+   * S3 response. The bucket is resolved first so a first-ever download does
+   * not sign a URL for a bucket that does not exist yet.
+   */
+  async createPresignedGet(
+    key: string,
+    options: {
+      expiresSec: number;
+      responseContentType: string;
+      responseContentDisposition: string;
+    },
+  ): Promise<string> {
+    assertValidStorageKey(key);
+    await this.ensureBucket();
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ResponseContentType: options.responseContentType,
+        ResponseContentDisposition: options.responseContentDisposition,
+      }),
+      { expiresIn: options.expiresSec },
     );
   }
 

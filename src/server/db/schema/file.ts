@@ -64,3 +64,27 @@ export const files = pgTable(
   },
   (table) => [index("files_user_idx").on(table.userId)],
 );
+
+/**
+ * Bounded retry queue for provider-side file deletions that failed transiently
+ * (429 / 5xx / network). A row's local attachment is already gone; this is the
+ * only remaining record of the provider file, so it is deliberately *not*
+ * foreign-keyed to `provider_configs` — deleting a config must not silently
+ * drop the queue entry, or the provider file becomes unreachable.
+ *
+ * Processed lazily at the tail of the orphan sweep (`processDeleteRetries`),
+ * which the project already triggers on every upload; there is no background
+ * timer infrastructure.
+ */
+export const providerFileDeleteRetries = pgTable("provider_file_delete_retries", {
+  id: text("id").primaryKey(),
+  providerConfigId: text("provider_config_id").notNull(),
+  /** Provider-side file id, e.g. Anthropic's `file_…`. */
+  providerFileId: text("provider_file_id").notNull(),
+  /** Failed retries so far. 5 is the ceiling before the entry is abandoned. */
+  attempts: integer("attempts").notNull().default(0),
+  nextRetryAt: timestamptz("next_retry_at").notNull(),
+  /** HTTP status of the most recent attempt; null when there was none. */
+  lastStatus: integer("last_status"),
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
+});

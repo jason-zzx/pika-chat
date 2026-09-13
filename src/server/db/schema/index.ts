@@ -9,6 +9,7 @@ export {
 export {
   fileExtractionStatus,
   files,
+  providerFileDeleteRetries,
   type ProviderFileReference,
 } from "./file";
 export {

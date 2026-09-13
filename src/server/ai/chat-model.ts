@@ -10,6 +10,7 @@ import {
   createFilesApi,
   createLanguageModel,
   type FilesApiProvider,
+  type ProviderEndpoint,
 } from "@/server/ai/provider-factory";
 import type { Actor } from "@/server/auth/actor";
 import { decryptSecret } from "@/server/crypto";
@@ -48,6 +49,29 @@ async function loadConfigRow(providerConfigId: string) {
 }
 
 /**
+ * Loads a provider config by id into the endpoint shape the provider factory
+ * and the Files API transport consume. Returns `null` when the config no
+ * longer exists — callers that act on a stored provider reference treat that
+ * as an abandoned reference rather than an error.
+ */
+export async function loadProviderEndpoint(
+  providerConfigId: string,
+): Promise<ProviderEndpoint | null> {
+  const config = await loadConfigRow(providerConfigId);
+  if (!config) {
+    return null;
+  }
+  return {
+    apiFormat: config.apiFormat,
+    name: config.name,
+    baseUrl: config.baseUrl,
+    apiKey: config.encryptedApiKey
+      ? decryptSecret(config.encryptedApiKey)
+      : "",
+  };
+}
+
+/**
  * Resolves the pair against the caller's own ∪ shared configs before decrypting
  * anything — `loadConfigRow` reads by id alone, so this is the ownership gate.
  */
@@ -69,8 +93,8 @@ export async function createChatModelHandle(
     );
   }
 
-  const config = await loadConfigRow(pair.providerConfigId);
-  if (!config) {
+  const endpoint = await loadProviderEndpoint(pair.providerConfigId);
+  if (!endpoint) {
     throw new AppError(
       "VALIDATION_FAILED",
       400,
@@ -78,20 +102,11 @@ export async function createChatModelHandle(
     );
   }
 
-  const apiKey = config.encryptedApiKey
-    ? decryptSecret(config.encryptedApiKey)
-    : "";
-  const endpoint = {
-    apiFormat: config.apiFormat,
-    name: config.name,
-    baseUrl: config.baseUrl,
-    apiKey,
-  };
   const model = createLanguageModel(endpoint, pair.modelId, options);
   return {
     model,
-    describeError: (error: unknown) => describeProviderError(error, apiKey),
-    apiFormat: config.apiFormat,
+    describeError: (error: unknown) => describeProviderError(error, endpoint.apiKey),
+    apiFormat: endpoint.apiFormat,
     providerConfigId: pair.providerConfigId,
     filesApi: createFilesApi(endpoint),
   };

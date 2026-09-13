@@ -1,16 +1,20 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { deleteChatFile, uploadChatFile } from "@/lib/api/files";
-import type { ErrorMessageParams } from "@/lib/api/error-contract";
 import {
-  MAX_ATTACHMENTS_PER_MESSAGE,
-  MAX_FILE_BYTES,
-  MAX_FILE_SIZE_LABEL,
-} from "@/lib/files/constants";
+  DEFAULT_FILE_LIMITS,
+  deleteChatFile,
+  fetchFileLimits,
+  uploadChatFile,
+  uploadChatFileDirect,
+} from "@/lib/api/files";
+import type { ErrorMessageParams } from "@/lib/api/error-contract";
+import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
+import { formatBytes } from "@/lib/files/format";
 import { classifyFile, fileIdFromUrl } from "@/lib/files/media-types";
 import { newId } from "@/lib/id";
+import type { FileLimits } from "@/lib/schemas/file";
 import {
   useComposerStore,
   type StagedAttachment,
@@ -71,10 +75,31 @@ export function useComposerAttachments(draftKey: string) {
   const updateAttachments = useComposerStore(
     (state) => state.updateAttachments,
   );
+  // Starts at the fallback limits so a file selected before the fetch settles
+  // is still pre-checked, then tightens to the operator's configured size.
+  const [limits, setLimits] = useState<FileLimits>(DEFAULT_FILE_LIMITS);
+
+  useEffect(() => {
+    let active = true;
+    void fetchFileLimits().then((fetched) => {
+      if (active) {
+        setLimits(fetched);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const upload = useCallback(
     (localId: string, file: File) => {
-      void uploadChatFile(file).then(
+      // Direct upload when the server advertises it: presign → browser→S3 →
+      // complete. The relay path is unchanged and stays the default. Either
+      // way a failure lands on the chip as a retryable error.
+      const request = limits.directUpload
+        ? uploadChatFileDirect(file)
+        : uploadChatFile(file);
+      void request.then(
         (uploaded) => {
           updateAttachments(draftKey, (current) =>
             current.map((entry) =>
@@ -104,7 +129,7 @@ export function useComposerAttachments(draftKey: string) {
         },
       );
     },
-    [draftKey, updateAttachments],
+    [draftKey, limits.directUpload, updateAttachments],
   );
 
   const addFiles = useCallback(
@@ -122,13 +147,13 @@ export function useComposerAttachments(draftKey: string) {
       let count = stagedAttachmentSlotCount(current);
       for (const file of files) {
         const id = newId();
-        if (file.size > MAX_FILE_BYTES) {
+        if (file.size > limits.maxFileBytes) {
           staged.push(
             stagedFile(
               id,
               file,
               validationError("file.tooLarge", {
-                limit: MAX_FILE_SIZE_LABEL,
+                limit: formatBytes(limits.maxFileBytes),
               }),
             ),
           );
@@ -168,7 +193,7 @@ export function useComposerAttachments(draftKey: string) {
         upload(pending.id, pending.file);
       }
     },
-    [draftKey, updateAttachments, upload],
+    [draftKey, limits.maxFileBytes, updateAttachments, upload],
   );
 
   const removeAttachment = useCallback(

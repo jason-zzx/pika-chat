@@ -20,6 +20,15 @@ const envSchema = z.object({
   S3_ENDPOINT: z.url().optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  // Largest single chat attachment the server accepts, in MiB. Optional:
+  // unset means 20. Values outside 1–100 fail at boot rather than silently
+  // clamping — a limit the operator did not choose is worse than a crash.
+  FILE_UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(100).optional(),
+  // Direct client↔S3 byte transfer, both directions: presigned POST uploads
+  // and 302-redirect presigned GET downloads. "1" or "true" turns it on;
+  // unset keeps the server-side relay. Requires S3_BUCKET — enforced in
+  // instrumentation.ts.
+  S3_DIRECT_ACCESS: z.enum(["1", "true"]).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

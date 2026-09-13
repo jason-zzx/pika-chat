@@ -29,10 +29,16 @@ try {
     "test-credential-encryption-secret-min-32";
 }
 
-const { send, s3ClientConfigs } = vi.hoisted(() => ({
-  send: vi.fn<(command: unknown) => Promise<unknown>>(),
-  s3ClientConfigs: new Array<unknown>(),
-}));
+const { send, s3ClientConfigs, createPresignedPost, getSignedUrl } =
+  vi.hoisted(() => ({
+    send: vi.fn<(command: unknown) => Promise<unknown>>(),
+    s3ClientConfigs: new Array<unknown>(),
+    createPresignedPost: vi.fn(),
+    getSignedUrl: vi.fn(),
+  }));
+
+vi.mock("@aws-sdk/s3-presigned-post", () => ({ createPresignedPost }));
+vi.mock("@aws-sdk/s3-request-presigner", () => ({ getSignedUrl }));
 
 // The command classes stay real (their `input` is what the assertions read);
 // only the client is faked, so `send` is a spy and the constructor argument is
@@ -102,6 +108,13 @@ describe("LocalDiskFileStorage", () => {
     );
     await expect(storage.delete("..")).rejects.toThrow(/Invalid storage key/);
   });
+
+  it("has no presigned-post support on local disk", () => {
+    // Direct access is an object-storage feature; the server refuses to boot
+    // with the flag on and no bucket, so the absence is a contract, not a gap.
+    expect((storage as FileStorage).createPresignedPost).toBeUndefined();
+    expect((storage as FileStorage).createPresignedGet).toBeUndefined();
+  });
 });
 
 const S3_BUCKET = "pika-attachments";
@@ -131,6 +144,8 @@ describe("S3FileStorage", () => {
   beforeEach(() => {
     send.mockReset();
     send.mockResolvedValue({});
+    createPresignedPost.mockReset();
+    getSignedUrl.mockReset();
     s3ClientConfigs.length = 0;
     s3 = new S3FileStorage(new S3Client({ region: "us-east-1" }), S3_BUCKET);
   });
@@ -236,6 +251,79 @@ describe("S3FileStorage", () => {
     expect(
       sentCommands().filter((command) => command instanceof HeadBucketCommand),
     ).toHaveLength(1);
+  });
+
+  it("signs a POST policy bounded by the size range", async () => {
+    createPresignedPost.mockResolvedValue({
+      url: "https://s3.test/pika-attachments",
+      fields: { key: "user-1/file-1", policy: "signed" },
+    });
+
+    const post = await s3.createPresignedPost("user-1/file-1", {
+      maxBytes: 50 * 1024 * 1024,
+      expiresSec: 900,
+    });
+
+    expect(post).toEqual({
+      url: "https://s3.test/pika-attachments",
+      fields: { key: "user-1/file-1", policy: "signed" },
+    });
+    // The bucket is resolved before signing so a first-ever upload does not
+    // hand out a policy for a bucket that does not exist yet.
+    expect(sentCommands()[0]).toBeInstanceOf(HeadBucketCommand);
+    expect(createPresignedPost).toHaveBeenCalledTimes(1);
+    expect(createPresignedPost.mock.calls[0]?.[1]).toMatchObject({
+      Bucket: S3_BUCKET,
+      Key: "user-1/file-1",
+      Conditions: [["content-length-range", 1, 50 * 1024 * 1024]],
+      Expires: 900,
+    });
+  });
+
+  it("refuses to sign a key that would escape the prefix", async () => {
+    await expect(
+      s3.createPresignedPost("../escape", { maxBytes: 1, expiresSec: 900 }),
+    ).rejects.toThrow(/Invalid storage key/);
+    expect(createPresignedPost).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("signs a GET with response header overrides", async () => {
+    getSignedUrl.mockResolvedValue("https://s3.test/signed-get");
+
+    const url = await s3.createPresignedGet("user-1/file-1", {
+      expiresSec: 3600,
+      responseContentType: "image/png",
+      responseContentDisposition: 'inline; filename="a.png"',
+    });
+
+    expect(url).toBe("https://s3.test/signed-get");
+    // The bucket is resolved before signing, same as the POST policy.
+    expect(sentCommands()[0]).toBeInstanceOf(HeadBucketCommand);
+    expect(getSignedUrl).toHaveBeenCalledTimes(1);
+    const [, command, options] = getSignedUrl.mock.calls[0] ?? [];
+    expect(command).toBeInstanceOf(GetObjectCommand);
+    expect(command).toMatchObject({
+      input: {
+        Bucket: S3_BUCKET,
+        Key: "user-1/file-1",
+        ResponseContentType: "image/png",
+        ResponseContentDisposition: 'inline; filename="a.png"',
+      },
+    });
+    expect(options).toEqual({ expiresIn: 3600 });
+  });
+
+  it("refuses to sign a GET for a key that would escape the prefix", async () => {
+    await expect(
+      s3.createPresignedGet("../escape", {
+        expiresSec: 3600,
+        responseContentType: "image/png",
+        responseContentDisposition: "inline",
+      }),
+    ).rejects.toThrow(/Invalid storage key/);
+    expect(getSignedUrl).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 });
 
