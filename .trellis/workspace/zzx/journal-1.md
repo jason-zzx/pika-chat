@@ -643,3 +643,28 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [WIP] **实现完成，待手测与提交**
+
+
+## Session 24: 附件二期：pptx/epub 解析、S3 存储与 Files API 引用传输
+<!-- trellis-session: v=2 fp=b6f45d1f5ff48456 -->
+
+**Date**: 2026-09-13
+**Task**: 附件二期：pptx/epub 解析、S3 存储与 Files API 引用传输
+**Branch**: `main`
+
+### Summary
+
+落地聊天附件二期三个子任务并拆分四个提交：pptx/epub 抽取管道（jszip+@xmldom 解析幻灯片与演讲备注，epub 按 spine 顺序转文本）；S3 兼容对象存储（S3_BUCKET 切换后端、bucket 惰性自建、启动时 instrumentation.ts 快速失败、rustfs compose overlay 复用 S3_* 变量）；google/claude Files API 引用传输（provider_references 惰性上传、Gemini 48h 过期续传、永久失败负缓存、全路径内联回退不阻塞发送）与音视频原生直通（白名单+模型模态×apiFormat 序列化双判定硬错误）。ponytail-review 精简约 90 行（删 S3_FORCE_PATH_STYLE 开关、epub 路径解析改用 posix.normalize、共享 SDK provider 构建器等）。859/859 测试全绿；四个任务全部归档。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4517aad` | feat(files): pptx and epub extraction in the attachment pipeline |
+| `f5f20b6` | feat(files): S3-compatible attachment storage with rustfs compose variant |
+| `e5a1d02` | feat(chat): provider Files API references and native audio/video attachments |
+| `71d2be0` | chore(trellis): phase-2 attachment task artifacts, spec updates and journal |
+
+### Status
+
+[OK] **Completed**
