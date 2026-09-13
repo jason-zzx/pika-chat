@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "上传路径插桩点与文件生命周期契约"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "app_settings/users 加列与 migration 规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "QUOTA_EXCEEDED 新错误码与 413 形态规范"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "requireAdmin 与管理端点 authz 规范"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "管理 UI 组件落位规范"}

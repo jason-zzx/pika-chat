@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "列表端点与删除语义对照既有附件生命周期"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "401/404/409 端点错误形态规范"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "前端附件既有模式（chip/预览/上传客户端）"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "设置页原语与组件规范"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "settings/files 页面落位规范"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "文案 key 与双语同步规范"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "客户端数据获取 hook 规范"}

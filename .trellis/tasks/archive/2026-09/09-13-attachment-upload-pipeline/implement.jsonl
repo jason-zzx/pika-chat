@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "附件体系核心 spec：上传/抽取/存储/删除生命周期契约"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "新表 provider_file_delete_retries 与 migration 规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError 与路由错误形态规范"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "C 删除联动/重试的日志规范"}
+{"file": ".trellis/spec/backend/provider-configs.md", "reason": "provider config 加载与 key 解密约定"}

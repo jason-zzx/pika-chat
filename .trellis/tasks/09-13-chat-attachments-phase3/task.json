@@ -1,0 +1,30 @@
+{
+  "id": "chat-attachments-phase3",
+  "name": "chat-attachments-phase3",
+  "title": "聊天附件三期：附件管理页、配额与大文件放宽",
+  "description": "附件三期父任务：用户附件管理页、管理员配额配置、Claude Files API 孤儿文件清理、大文件上限放宽评估",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "zzx",
+  "assignee": "zzx",
+  "createdAt": "2026-09-13",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-13-attachment-upload-pipeline",
+    "09-13-attachment-quota",
+    "09-13-attachment-management-page"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
