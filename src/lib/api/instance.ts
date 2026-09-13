@@ -1,7 +1,8 @@
 import { instanceStateSchema, type InstanceState } from "@/lib/schemas/instance";
 import {
-  instanceSettingsSchema,
+  instanceSettingsResponseSchema,
   type InstanceSettings,
+  type InstanceSettingsResponse,
 } from "@/lib/schemas/instance-settings";
 import type { CredentialsInput } from "@/lib/schemas/credentials";
 
@@ -39,13 +40,22 @@ export async function submitRegistration(input: CredentialsInput): Promise<void>
   await parseResponse(response, () => undefined);
 }
 
+export async function fetchInstanceSettings(): Promise<InstanceSettingsResponse> {
+  const response = await fetch("/api/admin/settings");
+  return parseResponse(response, (data) =>
+    instanceSettingsResponseSchema.parse(data),
+  );
+}
+
 export async function updateInstanceSettings(
   input: InstanceSettings,
-): Promise<InstanceSettings> {
+): Promise<InstanceSettingsResponse> {
   const response = await fetch("/api/admin/settings", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  return parseResponse(response, (data) => instanceSettingsSchema.parse(data));
+  return parseResponse(response, (data) =>
+    instanceSettingsResponseSchema.parse(data),
+  );
 }

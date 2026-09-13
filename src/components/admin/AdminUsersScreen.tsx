@@ -38,6 +38,8 @@ import {
 } from "@/lib/auth-hierarchy";
 import { authClient } from "@/lib/auth-client";
 
+import UserQuotaDialog from "./UserQuotaDialog";
+
 type AssignableRole = "admin" | "user";
 
 type AdminUser = {
@@ -75,6 +77,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
   const format = useFormatter();
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [quotaUser, setQuotaUser] = useState<AdminUser | null>(null);
   const users = useQuery({
     queryKey: ["admin-users"],
     queryFn: listAdminUsers,
@@ -228,6 +231,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                     target,
                     "set-user-password",
                   );
+                  const showQuota = canAdminister(actor, target, "set-quota");
                   const roleLabel =
                     target.role === "super_admin"
                       ? t("roleSuperAdmin")
@@ -275,7 +279,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {showSetRole || showBan || showReset ? (
+                        {showSetRole || showBan || showReset || showQuota ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger
                               aria-label={t("userActions", {
@@ -300,6 +304,13 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                                   onClick={() => void onResetPassword(user.id)}
                                 >
                                   {t("resetPassword")}
+                                </DropdownMenuItem>
+                              ) : null}
+                              {showQuota ? (
+                                <DropdownMenuItem
+                                  onClick={() => setQuotaUser(user)}
+                                >
+                                  {t("quotaAction")}
                                 </DropdownMenuItem>
                               ) : null}
                               {showBan ? (
@@ -371,6 +382,19 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {quotaUser ? (
+        <UserQuotaDialog
+          key={quotaUser.id}
+          userId={quotaUser.id}
+          label={quotaUser.username ?? quotaUser.name}
+          onOpenChange={(next) => {
+            if (!next) {
+              setQuotaUser(null);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -22,6 +22,7 @@ src/server/files/storage.ts        FileStorage + LocalDiskFileStorage + getFileS
 src/server/files/file.service.ts   upload/get/delete/cascade/orphan sweep + presign/complete
 src/server/files/limits.ts         maxFileBytes() / isS3DirectAccessEnabled()
 src/server/files/provider-delete.ts  provider-side delete linkage + bounded retry queue
+src/server/files/quota.ts          usageBytes / effectiveQuotaBytes / assertUploadQuota
 src/server/files/extract/          extractDocument() media-type dispatcher
 src/server/ai/attachments.ts       resolveAttachmentsForModel()
 src/lib/files/                     isomorphic media-type table + upload limits
@@ -30,6 +31,7 @@ src/app/api/files/[id]/route.ts    GET / DELETE
 src/app/api/files/limits/route.ts  GET  (maxFileBytes / maxAttachmentsPerMessage / directUpload)
 src/app/api/files/presign/route.ts POST (404 when S3_DIRECT_ACCESS is off)
 src/app/api/files/complete/route.ts POST (404 when S3_DIRECT_ACCESS is off)
+src/app/api/admin/users/[userId]/quota/route.ts GET / PATCH (admin; per-user quota override)
 ```
 
 ### 2. Signatures
@@ -67,6 +69,22 @@ ensureProviderReference({ file, configId, apiFormat, filesApi }):
 maxFileBytes(): number          // FILE_UPLOAD_MAX_MB (1..100) or 20 MiB
 isS3DirectAccessEnabled(): boolean  // S3_DIRECT_ACCESS truthy AND S3_BUCKET set
 
+// files/quota.ts
+usageBytes(userId): Promise<number>            // SUM(size_bytes) over the actor's rows, coalesce 0
+                                               // (postgres-js has no int8 parser → narrowed in the module)
+effectiveQuotaBytes(actor): Promise<number | null>
+  // users.file_quota_bytes ?? app_settings.file_storage_quota_bytes ?? null (= unlimited)
+assertUploadQuota(actor, incomingBytes): Promise<void>
+  // throws AppError QUOTA_EXCEEDED / 413 when used + incoming > quota; equality passes
+DEFAULT_FILE_STORAGE_QUOTA_BYTES = 5368709120  // 5 GiB: the DDL default on app_settings.file_storage_quota_bytes
+MAX_QUOTA_MB                                   // input ceiling, floor(MAX_SAFE_INTEGER / BYTES_PER_MB)
+
+// admin
+GET   /api/admin/settings             → instance settings incl. fileStorageQuotaMb (admin)
+PATCH /api/admin/settings             { fileStorageQuotaMb: number | null } (admin)
+GET   /api/admin/users/[userId]/quota → { userId, quotaBytes } (admin)
+PATCH /api/admin/users/[userId]/quota { quotaMb: number | null } (admin)
+
 // storage.ts — optional; S3FileStorage only (local disk has no direct-access meaning)
 createPresignedPost?(key, { maxBytes, expiresSec }): Promise<{ url: string; fields: Record<string, string> }>
 createPresignedGet?(key, { expiresSec, responseContentType, responseContentDisposition }): Promise<string>
@@ -101,6 +119,12 @@ negative cache for the Files API; it is cleared whenever `baseUrl`, the api key,
 or `apiFormat` change.
 | `created_at` / `updated_at` | `timestamptz` | `updated_at` refreshed by the extraction write |
 
+`app_settings.file_storage_quota_bytes` (bigint, nullable, DDL default
+`5368709120` = 5 GiB) is the instance-wide default quota; `users.file_quota_bytes`
+(bigint, nullable) is the per-user override. A `null` override follows the
+global; both `null` = unlimited. The DDL default is what an existing deployment
+inherits on migration — the out-of-box posture is a 5 GiB cap, not unlimited.
+
 `provider_file_delete_retries` (migration `0017`) is the transient queue for
 provider-side deletes that failed with a retryable status: `id` PK,
 `provider_config_id`, `provider_file_id`, `attempts`, `next_retry_at`,
@@ -123,8 +147,21 @@ for pre-upload checks (the limit is runtime config, not a compile-time
 constant).
 
 ```json
-{ "maxFileBytes": 20971520, "maxAttachmentsPerMessage": 5, "directUpload": false }
+{ "maxFileBytes": 20971520, "maxAttachmentsPerMessage": 5, "directUpload": false,
+  "usedBytes": 1048576, "quotaBytes": 5368709120 }
 ```
+
+`quotaBytes` is `null` only when both the per-user override and the instance
+default are cleared; `usedBytes` counts every one of the actor's rows
+(referenced or not — it answers "how much of my storage is in use").
+
+**Quota is a total, not a per-file cap.** Both write paths call
+`assertUploadQuota(actor, incomingBytes)` before bytes become durable: the relay
+path before `storage.put` (a rejection leaves neither object nor row), the
+direct path in `completeFile` right after the real size is known, reusing the
+oversize cleanup (object first, then row). `presignFile` **never** pre-checks —
+it has no real size; the single gate lives at complete. The comparison is
+`used + incoming > quota`, so equality passes.
 
 **`POST /api/files/presign`** / **`POST /api/files/complete`** — the direct
 upload pair, present only when `S3_DIRECT_ACCESS` is on (404 otherwise).
@@ -208,6 +245,7 @@ a hard error, not a degraded text part.
 | Condition | code | status | messageKey |
 |---|---|---|---|
 | file > `maxFileBytes()` (`FILE_UPLOAD_MAX_MB`, default 20 MiB) | `VALIDATION_FAILED` | 400 | `file.tooLarge` (`{limit}`) |
+| usage + new file > effective quota (5 GiB default) | `QUOTA_EXCEEDED` | 413 | `file.quotaExceeded` (`{used}`, `{quota}`, formatBytes strings) |
 | direct upload off + presign/complete called | `NOT_FOUND` | 404 | `file.notFound` |
 | direct upload never landed (object missing at complete) | `NOT_FOUND` | 404 | `file.uploadFailed` |
 | direct upload landed larger than the limit (policy bypassed) | `VALIDATION_FAILED` | 400 | `file.tooLarge` (`{limit}`), object **and** row removed |
@@ -245,6 +283,12 @@ a hard error, not a degraded text part.
   24 h orphan sweep preserving referenced files.
 - `api/chat/route.test.ts`: attachment resolution failure leaves neither a user
   message nor a new topic.
+- `quota.integration.test.ts` (real DB): usage sum, precedence matrix
+  (override / global / both null), the `used + incoming == quota` boundary, and
+  a rejected relay upload leaving no object and no row.
+- `user-quota.service.integration.test.ts`: admin → user allowed, admin →
+  admin / super_admin 403, super_admin → admin allowed, non-admin 403, and a
+  rejected path writing no override.
 - `MessageItem.test.tsx`: card renders filename + size; missing `sizeBytes`
   renders without a size (old rows).
 
@@ -348,6 +392,8 @@ the existing 24 h orphan sweep — no S3 list-and-diff mechanism.
 | provider delete: 401/403 | abandoned + warn (retrying cannot help) |
 | provider delete: 429/5xx/network | queued, retried on the next sweep, 5 attempts max |
 | provider delete: config deleted or format changed | abandoned + warn |
+| upload would exceed the storage quota | 413 `file.quotaExceeded` (`{used}`, `{quota}`); the direct path also removes object + row |
+| `fileStorageQuotaMb` / `quotaMb` above `MAX_QUOTA_MB`, negative, or non-integer | 400 (`VALIDATION_FAILED`) at the boundary, not a bigint-overflow 500 |
 
 ### 5. Good / Base / Bad Cases
 
@@ -444,6 +490,12 @@ if (data.byteLength > maxFileBytes()) {
 - **Reaching for `createPresignedPost` in `@aws-sdk/s3-request-presigner`.**
   That package only exports `getSignedUrl`; the POST-policy helper lives in
   `@aws-sdk/s3-presigned-post`.
+- **Using `.positive()` for `quotaBytes`.** Zero is a legitimate quota (an admin
+  may cap a user at 0 bytes); `.positive()` makes the client reject a valid
+  limits payload and silently fall back to "unlimited".
+- **Expecting `presignFile` to enforce the quota.** It has no real size — only
+  `completeFile` can, and it and the relay path share one `assertUploadQuota`
+  call site each.
 
 ### Design Decisions
 
@@ -471,6 +523,17 @@ bearer-URL window is bounded by a 1 h signature and a 5 min redirect cache.
 pending row at presign time lets the existing 24 h sweep own unfinished
 uploads, avoiding a second reclamation mechanism (S3 list-and-diff). The trade
 is that `sizeBytes` cannot be a readiness flag.
+
+**Quota is a hard total, default 5 GiB, and race-tolerant on purpose.**
+`app_settings.file_storage_quota_bytes` ships a DDL default of 5 GiB so a fresh
+install and an upgraded install reach the same posture with no seed step; an
+admin clears it (and any override) to mean unlimited. The check runs at the last
+moment before bytes become durable, but there is deliberately **no lock or
+reservation**: the worst case is a small overshoot bounded by the per-file
+limit, and the operator contract is "expected growth", not an exact ledger.
+Quota input is MB at every boundary (UI + admin schemas) and bytes in the DB;
+`parseQuotaMb` and `MAX_QUOTA_MB` are the shared conversion and ceiling, so a
+silly number is a 400, not a Postgres bigint error.
 
 **Provider cleanup is event-driven, never a reconciliation UI.** Deletes are
 recorded per reference and retried in a bounded loop; there is no admin

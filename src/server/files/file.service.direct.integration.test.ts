@@ -10,8 +10,11 @@ import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import {
   accounts,
+  appSettings,
+  APP_SETTINGS_ROW_ID,
   assistants,
   chatMessages,
+  DEFAULT_FILE_STORAGE_QUOTA_BYTES,
   files,
   providerFileDeleteRetries,
   sessions,
@@ -81,6 +84,10 @@ async function resetState(): Promise<void> {
   await db.delete(accounts);
   await db.delete(verifications);
   await db.delete(users);
+  await db
+    .update(appSettings)
+    .set({ fileStorageQuotaBytes: DEFAULT_FILE_STORAGE_QUOTA_BYTES })
+    .where(eq(appSettings.id, APP_SETTINGS_ROW_ID));
 }
 
 async function seedUser(label: string): Promise<Actor> {
@@ -218,6 +225,30 @@ describe("direct upload", () => {
       params: { limit: "1.0 MB" },
     });
 
+    expect(await fileRowCount(owner.userId)).toBe(0);
+    await expect(getFileStorage().get(key)).rejects.toThrow();
+  });
+
+  it("removes the object and the row when the storage quota is exceeded", async () => {
+    const owner = await seedUser("owner");
+    await db
+      .update(appSettings)
+      .set({ fileStorageQuotaBytes: 5 })
+      .where(eq(appSettings.id, APP_SETTINGS_ROW_ID));
+    const presigned = await presignFile(
+      { filename: "notes.txt", mediaType: "text/plain" },
+      owner,
+    );
+    const key = `${owner.userId}/${presigned.fileId}`;
+    await getFileStorage().put(key, Buffer.from("too big for the quota"));
+
+    await expect(completeFile(presigned.fileId, owner)).rejects.toMatchObject({
+      code: "QUOTA_EXCEEDED",
+      status: 413,
+      messageKey: "file.quotaExceeded",
+    });
+
+    // Same cleanup as the size gate: object and row both gone.
     expect(await fileRowCount(owner.userId)).toBe(0);
     await expect(getFileStorage().get(key)).rejects.toThrow();
   });

@@ -28,6 +28,13 @@ export const fileLimitsSchema = z.object({
   maxFileBytes: z.number().int().positive(),
   maxAttachmentsPerMessage: z.number().int().positive(),
   directUpload: z.boolean(),
+  // Current storage usage and effective quota. `quotaBytes` is null only when
+  // both the per-user override and the instance default are cleared.
+  usedBytes: z.number().int().nonnegative(),
+  // Zero is a legitimate quota (an admin may cap a user at 0 bytes), so this
+  // must be nonnegative — `.positive()` here would make the client reject an
+  // entirely valid limits payload and fall back to "unlimited".
+  quotaBytes: z.number().int().nonnegative().nullable(),
 });
 export type FileLimits = z.infer<typeof fileLimitsSchema>;
 

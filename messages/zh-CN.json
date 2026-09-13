@@ -332,7 +332,19 @@
     "roleColumn": "身份",
     "createdColumn": "创建日期",
     "actionsColumn": "操作",
-    "userActions": "{name} 的操作"
+    "userActions": "{name} 的操作",
+    "quotaAction": "存储配额",
+    "quotaTitle": "{name} 的存储配额",
+    "quotaDescription": "该用户附件可占用的最大存储空间。留空则跟随实例默认值。",
+    "quotaLabel": "存储配额（MB）",
+    "quotaFollowDefault": "跟随实例默认值",
+    "quotaSave": "保存",
+    "quotaSaving": "保存中…",
+    "quotaGlobalTitle": "默认存储配额",
+    "quotaGlobalDescription": "适用于未单独设置配额的用户。留空表示不限。",
+    "quotaGlobalLabel": "默认配额（MB）",
+    "quotaGlobalUnlimited": "不限",
+    "quotaGlobalValue": "每用户 {value}"
   },
   "Provider": {
     "loading": "加载中…",
@@ -448,6 +460,8 @@
     "auth": {
       "required": "需要登录",
       "adminRequired": "需要管理员权限",
+      "userNotFound": "用户不存在",
+      "targetNotAllowed": "你无法管理该用户",
       "signInFailed": "用户名、邮箱或密码无效",
       "invalidTwoFactorCode": "该验证码不正确"
     },
@@ -525,6 +539,7 @@
       "imageRequiresVision": "当前模型无法查看图片",
       "mediaUnsupported": "当前模型无法读取该音频或视频文件",
       "inUse": "该文件仍被某条消息使用",
+      "quotaExceeded": "存储配额已用尽：已用 {used}，配额 {quota}",
       "uploadFailed": "上传失败，请重试。"
     },
     "actions": {
@@ -561,7 +576,9 @@
       "disableTwoFactor": "无法关闭两步验证",
       "verifyTwoFactor": "无法验证该验证码",
       "generateBackupCodes": "无法生成备用验证码",
-      "loadQrCode": "无法加载二维码"
+      "loadQrCode": "无法加载二维码",
+      "loadStorageQuota": "无法加载存储配额",
+      "saveStorageQuota": "无法保存存储配额"
     }
   },
   "Validation": {

@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -19,6 +20,9 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   displayUsername: text("display_username"),
   role: text("role").notNull().default("user"),
+  // Per-user attachment storage quota override; NULL means follow the
+  // instance-wide default (`app_settings.file_storage_quota_bytes`).
+  fileQuotaBytes: bigint("file_quota_bytes", { mode: "number" }),
   banned: boolean("banned").notNull().default(false),
   banReason: text("ban_reason"),
   banExpires: timestamptz("ban_expires"),

@@ -34,7 +34,8 @@ the `Errors` catalog, so a throw site with a non-existent key does not compile.
 `Error.message` carries the raw key for stack traces only.
 
 Common codes: `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_FAILED`,
-`CONFLICT`, `RATE_LIMITED`, `PROVIDER_ERROR`, `INTERNAL`.
+`CONFLICT`, `QUOTA_EXCEEDED` (413, a limit the caller cannot argue with rather
+than a malformed request), `RATE_LIMITED`, `PROVIDER_ERROR`, `INTERNAL`.
 
 ---
 

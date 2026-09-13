@@ -332,7 +332,19 @@
     "roleColumn": "Role",
     "createdColumn": "Created",
     "actionsColumn": "Actions",
-    "userActions": "Actions for {name}"
+    "userActions": "Actions for {name}",
+    "quotaAction": "Storage quota",
+    "quotaTitle": "Storage quota for {name}",
+    "quotaDescription": "Maximum storage this user's attachments may occupy. Leave blank to follow the instance default.",
+    "quotaLabel": "Storage quota (MB)",
+    "quotaFollowDefault": "Follow instance default",
+    "quotaSave": "Save",
+    "quotaSaving": "Saving…",
+    "quotaGlobalTitle": "Default storage quota",
+    "quotaGlobalDescription": "Applies to users without an individual override. Leave blank for unlimited.",
+    "quotaGlobalLabel": "Default quota (MB)",
+    "quotaGlobalUnlimited": "Unlimited",
+    "quotaGlobalValue": "{value} per user"
   },
   "Provider": {
     "loading": "Loading…",
@@ -448,6 +460,8 @@
     "auth": {
       "required": "Authentication required",
       "adminRequired": "Admin access required",
+      "userNotFound": "User not found",
+      "targetNotAllowed": "You cannot manage this user",
       "signInFailed": "Invalid username, email, or password",
       "invalidTwoFactorCode": "That code was not accepted"
     },
@@ -525,6 +539,7 @@
       "imageRequiresVision": "This model cannot view images",
       "mediaUnsupported": "This model cannot read this audio or video file",
       "inUse": "This file is still used by a message",
+      "quotaExceeded": "Storage quota exceeded: {used} used of {quota}",
       "uploadFailed": "Upload failed. Please try again."
     },
     "actions": {
@@ -561,7 +576,9 @@
       "disableTwoFactor": "Unable to turn off two-factor authentication",
       "verifyTwoFactor": "Unable to verify the code",
       "generateBackupCodes": "Unable to generate backup codes",
-      "loadQrCode": "Unable to load the QR code"
+      "loadQrCode": "Unable to load the QR code",
+      "loadStorageQuota": "Unable to load storage quota",
+      "saveStorageQuota": "Unable to save storage quota"
     }
   },
   "Validation": {

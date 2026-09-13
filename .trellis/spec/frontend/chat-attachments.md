@@ -103,6 +103,7 @@ sendMessage({ text, files })   // files: FileUIPart[] = { type:"file", url, medi
 | `classifyFile()` returns null | error chip, `file.unsupportedType` — does not consume a slot |
 | accepted uploads already at 5 | error chip, `file.tooMany` with `{max}` |
 | upload request fails | error chip with a retry action; sending stays disabled |
+| upload rejected with `QUOTA_EXCEEDED` / 413 | error chip: `AttachmentChip` resolves the envelope's `messageKey` through `apiErrorMessage`, so it renders `file.quotaExceeded` with `{used}`/`{quota}` — does not consume a slot |
 | `extraction.status === "empty"` | visible "no extractable text" warning on the chip |
 | `extraction.status === "failed"` | visible "cannot read file" warning on the chip |
 | `extraction.truncated === true` | visible "content will be truncated" warning on the chip |

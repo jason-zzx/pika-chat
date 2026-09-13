@@ -15,6 +15,7 @@ export type AppErrorCode =
   | "CONFLICT"
   | "RATE_LIMITED"
   | "PROVIDER_ERROR"
+  | "QUOTA_EXCEEDED"
   | "INTERNAL";
 
 /** ICU interpolation values inside the `Errors` catalog. */

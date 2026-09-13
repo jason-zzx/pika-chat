@@ -25,6 +25,8 @@ describe("fetchFileLimits", () => {
       maxFileBytes: 50 * 1024 * 1024,
       maxAttachmentsPerMessage: 5,
       directUpload: true,
+      usedBytes: 1024,
+      quotaBytes: 5 * 1024 * 1024 * 1024,
     };
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify(limits), { status: 200 }),

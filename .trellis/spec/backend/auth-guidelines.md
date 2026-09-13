@@ -37,6 +37,13 @@ target of set-role, ban, unban, or admin password-reset.
 | `admin` | `user` only — not other admins, not the super admin, not themselves |
 | `user` | nobody |
 
+The same target hierarchy is enforced for project-owned admin mutations that
+live outside Better Auth's routes — currently `set-quota`
+(`PATCH /api/admin/users/[userId]/quota`) via
+`canAdminister(actor, target, "set-quota")` in `src/lib/auth-hierarchy.ts`.
+Better Auth knows nothing about the `users.file_quota_bytes` column, so the
+service, not the library, is the gate.
+
 Staff (`super_admin` and `admin`) can both list users, create `admin`/`user`
 accounts, and flip the registration toggle.
 

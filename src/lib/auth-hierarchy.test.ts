@@ -96,5 +96,15 @@ describe("canAdminister", () => {
   it("rejects a user-role actor", () => {
     expect(canAdminister(member, member, "ban")).toBe(false);
     expect(canAdminister(member, null, "create-user", "user")).toBe(false);
+    expect(canAdminister(member, member, "set-quota")).toBe(false);
+  });
+
+  it("applies the target hierarchy to set-quota", () => {
+    expect(canAdminister(superAdmin, member, "set-quota")).toBe(true);
+    expect(canAdminister(superAdmin, admin, "set-quota")).toBe(true);
+    expect(canAdminister(superAdmin, superAdmin, "set-quota")).toBe(false);
+    expect(canAdminister(admin, member, "set-quota")).toBe(true);
+    expect(canAdminister(admin, otherAdmin, "set-quota")).toBe(false);
+    expect(canAdminister(admin, admin, "set-quota")).toBe(false);
   });
 });

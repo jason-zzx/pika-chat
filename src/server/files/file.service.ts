@@ -27,7 +27,8 @@ import {
   deleteProviderFileReferences,
   processDeleteRetries,
 } from "./provider-delete";
-import { getFileStorage } from "./storage";
+import { assertUploadQuota, quotaExceededError } from "./quota";
+import { getFileStorage, type FileStorage } from "./storage";
 
 /** Persisted attachment row, including the extraction cache. */
 export type FileRecord = typeof files.$inferSelect;
@@ -176,6 +177,20 @@ function isObjectMissing(error: unknown): boolean {
 }
 
 /**
+ * Removes a direct upload rejected at {@link completeFile} — the object first,
+ * then the row, so a failed object delete leaves the row for the orphan sweep
+ * to retry instead of a row pointing at nothing.
+ */
+async function discardRejectedDirectUpload(
+  storage: FileStorage,
+  storageKey: string,
+  fileId: string,
+): Promise<void> {
+  await storage.delete(storageKey);
+  await getDb().delete(files).where(eq(files.id, fileId));
+}
+
+/**
  * Runs extraction and caches the outcome on the row. A corrupt or encrypted
  * file is recorded as `failed` instead of failing the upload — the send path
  * turns that into a user-visible `file.unreadable`.
@@ -242,6 +257,9 @@ export async function uploadFile(
       limit: formatBytes(limitBytes),
     });
   }
+  // Checked before the bytes reach storage, so a rejected upload leaves no
+  // object behind (and no row, which is only written after the put).
+  await assertUploadQuota(actor, sizeBytes);
 
   const mediaType = storedMediaType(input.mediaType, filename);
   const id = newId();
@@ -307,6 +325,10 @@ export async function uploadFile(
  * signing: `sizeBytes = 0` until {@link completeFile} reads the object back.
  * An abandoned direct upload is therefore just an orphan the existing 24h
  * sweep reclaims — no S3-side reconciliation is needed.
+ *
+ * Storage quota is deliberately *not* checked here: presign has no real size
+ * to measure. The single quota gate for this path is {@link completeFile},
+ * which reads the object's actual bytes before finalizing the row.
  */
 export async function presignFile(
   input: { filename: string; mediaType: string },
@@ -379,14 +401,17 @@ export async function completeFile(
 
   const sizeBytes = data.byteLength;
   const limitBytes = maxFileBytes();
-  if (sizeBytes > limitBytes) {
-    // Object first: if the delete fails the row survives, so the orphan sweep
-    // can retry both — a row pointing at nothing is the worse failure.
-    await storage.delete(file.storageKey);
-    await getDb().delete(files).where(eq(files.id, fileId));
-    throw new AppError("VALIDATION_FAILED", 400, "file.tooLarge", {
-      limit: formatBytes(limitBytes),
-    });
+  // Both gates share one rejection path: the object is deleted before the row
+  // so a failed object delete leaves the row for the orphan sweep to retry.
+  const rejection =
+    sizeBytes > limitBytes
+      ? new AppError("VALIDATION_FAILED", 400, "file.tooLarge", {
+          limit: formatBytes(limitBytes),
+        })
+      : await quotaExceededError(actor, sizeBytes);
+  if (rejection) {
+    await discardRejectedDirectUpload(storage, file.storageKey, fileId);
+    throw rejection;
   }
 
   await getDb()

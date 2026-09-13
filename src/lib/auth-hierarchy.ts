@@ -10,6 +10,7 @@ export type AdminAction =
   | "ban"
   | "unban"
   | "set-user-password"
+  | "set-quota"
   | "create-user";
 
 export function isStaffRole(role: ActorRole): boolean {

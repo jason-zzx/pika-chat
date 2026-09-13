@@ -22,6 +22,8 @@ export const DEFAULT_FILE_LIMITS: FileLimits = {
   maxFileBytes: DEFAULT_MAX_FILE_BYTES,
   maxAttachmentsPerMessage: MAX_ATTACHMENTS_PER_MESSAGE,
   directUpload: false,
+  usedBytes: 0,
+  quotaBytes: null,
 };
 
 /** Fetches the current upload limits, falling back to the defaults on any failure. */

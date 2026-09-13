@@ -1,6 +1,6 @@
 import "server-only";
 
-import { DEFAULT_MAX_FILE_BYTES } from "@/lib/files/constants";
+import { BYTES_PER_MB, DEFAULT_MAX_FILE_BYTES } from "@/lib/files/constants";
 import { getEnv } from "@/server/env";
 
 /**
@@ -12,7 +12,7 @@ import { getEnv } from "@/server/env";
  */
 export function maxFileBytes(): number {
   const maxMb = getEnv().FILE_UPLOAD_MAX_MB;
-  return maxMb === undefined ? DEFAULT_MAX_FILE_BYTES : maxMb * 1024 * 1024;
+  return maxMb === undefined ? DEFAULT_MAX_FILE_BYTES : maxMb * BYTES_PER_MB;
 }
 
 /**
