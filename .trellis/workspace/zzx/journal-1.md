@@ -614,3 +614,32 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 23: 聊天附件二期：pptx/epub 解析、S3 存储、供应商 Files API 与音视频直通
+
+**Date**: 2026-09-13
+**Task**: 09-13-chat-attachments-phase2（父任务 + 3 子任务）
+**Branch**: `main`
+
+### Summary
+
+父任务三个子任务全部实现完成，代码未提交，待浏览器手测后提交归档。
+
+- **pptx/epub 解析**：新增 `extract/{pptx,epub,result,zip}.ts`（jszip + @xmldom/xmldom）；pptx 按数值页码排序抽 `## Slide N` + speaker notes，epub 走 container.xml → OPF → spine → node-html-markdown（href 相对 OPF 目录）。新增 `ebook` 类别。
+- **S3 兼容存储**：`@aws-sdk/client-s3` 的 `S3FileStorage`，key 守卫 `assertValidStorageKey` 两后端共用，promise 缓存的 `ensureBucket()` 自举（失败不缓存以免瞬时错误被永久重放），env 切换；新增 `docker-compose.prod.rustfs.yml` 覆盖文件，基础 compose 不动。业务调用点零改动。
+- **Files API 引用传输 + 音视频直通**：migration 0016（files.provider_references jsonb + provider_configs.files_api_unsupported_at）；`provider-files.ts` 惰性上传/引用复用/48h+30min 过期续传/永久-瞬时错误分类负缓存；attachments 三级路由；audio/video 白名单 + 双判定（模态 × apiFormat 序列化表）硬错误 `file.mediaUnsupported`；前端原生播放器。
+
+### 关键实证
+
+- `convertToModelMessages` 确实透传 file part 的 `providerReference`（`ai/dist/index.js:11209`），无需改 `chatFilePartSchema`。
+- Google 上传失败抛无 `statusCode` 的 `AISDKError`（状态只在消息里）；Anthropic 抛带 `statusCode` 的 `APICallError`；网络错误无状态。
+- 踩坑：错误状态从消息里抓 `/:\s*(\d{3})\b/` 会把连接错误的端口（`10.0.0.1:404`）当成 404，导致健康配置被永久负缓存。已收紧为 `/:\s+(\d{3})\b/` + 100–599 范围。
+
+### 待办
+
+浏览器手测（pptx/epub 上传、S3 全链路、Gemini 附件引用续传、音视频发送与报错）后提交并归档三个子任务与父任务。
+
+### Status
+
+[WIP] **实现完成，待手测与提交**

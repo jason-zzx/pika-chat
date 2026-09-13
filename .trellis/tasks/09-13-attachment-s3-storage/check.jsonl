@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "验收存储后端切换不破坏附件链路"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "检查测试覆盖与 lint/typecheck"}

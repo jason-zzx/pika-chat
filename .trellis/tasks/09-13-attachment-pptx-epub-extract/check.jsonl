@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "验收一期管道契约不被破坏"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "检查测试覆盖与 lint/typecheck"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "accept/错误文案 i18n 合规"}

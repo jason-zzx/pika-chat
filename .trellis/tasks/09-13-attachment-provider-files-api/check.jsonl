@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "验收路由扩展不破坏一期语义（memory #54/#48）"}
+{"file": ".trellis/spec/backend/provider-configs.md", "reason": "负缓存列与 config 变更清除逻辑验收"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "AV 附件 UI 验收（含移动端 tap，memory #15）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "检查测试覆盖与 lint/typecheck"}

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "一期附件管道契约：上传时抽取、缓存、降级注入语义"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端测试与质量约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError 错误分类与 i18n key 约定"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "复用既有抽取/清洗/截断管道而非另起炉灶"}

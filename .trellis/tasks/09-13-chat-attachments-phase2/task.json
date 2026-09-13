@@ -1,0 +1,30 @@
+{
+  "id": "chat-attachments-phase2",
+  "name": "chat-attachments-phase2",
+  "title": "聊天附件二期：S3 存储、供应商 Files API 与 pptx/epub 解析",
+  "description": "附件二期：S3 兼容对象存储实现（复用 StorageProvider 接口）、供应商 Files API 传输优化（静态能力默认值 + 运行时探测负缓存 + 内联回退，无用户开关）、pptx/epub 文档解析接入抽取管道",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "zzx",
+  "assignee": "zzx",
+  "createdAt": "2026-09-13",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-13-attachment-pptx-epub-extract",
+    "09-13-attachment-s3-storage",
+    "09-13-attachment-provider-files-api"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

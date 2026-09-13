@@ -36,7 +36,7 @@ interface FileStorage {
   get(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
 }
-getFileStorage(): FileStorage          // singleton, root = FILE_STORAGE_DIR ?? ".data/files"
+getFileStorage(): FileStorage          // singleton; S3-compatible when S3_BUCKET is set, else local disk
 
 // extract/index.ts
 extractDocument(buffer: Buffer, mediaType: string, filename?: string): Promise<ExtractionResult>
@@ -45,8 +45,18 @@ extractDocument(buffer: Buffer, mediaType: string, filename?: string): Promise<E
 // ai/attachments.ts
 resolveAttachmentsForModel(
   messages: ChatUIMessage[],
-  caps: { inputModalities: string[] },
+  caps: {
+    inputModalities: string[],
+    apiFormat: ProviderApiFormat,      // gates audio/video serialization
+    providerConfigId: string,          // namespace for provider file references
+    filesApi: FilesApiProvider | null, // null for openai-compatible: always inline
+  },
 ): Promise<ChatUIMessage[]>          // pure: returns new arrays, persisted parts untouched
+
+// ai/provider-files.ts
+ensureProviderReference({ file, configId, apiFormat, filesApi }):
+  Promise<{ kind: "reference"; reference: ProviderReference } | { kind: "fallback" }>
+  // never throws; `fallback` means inline the bytes as before
 ```
 
 DB (`files`, migration `0015` + `0016`):
@@ -59,8 +69,13 @@ DB (`files`, migration `0015` + `0016`):
 | `size_bytes` | `integer` | ≤ `MAX_FILE_BYTES` |
 | `storage_key` | `text` UNIQUE | `<userId>/<fileId>` |
 | `extracted_text` | `text` NULL | extraction cache, written at upload |
-| `extraction_status` | `file_extraction_status` enum (`none`/`ok`/`empty`/`failed`) | `none` = image |
+| `extraction_status` | `file_extraction_status` enum (`none`/`ok`/`empty`/`failed`) | `none` = image, audio, video |
 | `extraction_truncated` | `boolean` | true when text hit `MAX_EXTRACTED_CHARS` |
+| `provider_references` | `jsonb` NOT NULL DEFAULT `'{}'` | `Record<providerConfigId, { reference, uploadedAt, expiresAt }>` — regenerable cache, merged per config |
+
+`provider_configs.files_api_unsupported_at` (`timestamptz`, nullable) is the
+negative cache for the Files API; it is cleared whenever `baseUrl`, the api key,
+or `apiFormat` change.
 | `created_at` / `updated_at` | `timestamptz` | `updated_at` refreshed by the extraction write |
 
 ### 3. Contracts
@@ -73,9 +88,11 @@ DB (`files`, migration `0015` + `0016`):
   "extraction": { "status": "ok", "truncated": false } }
 ```
 
-**`GET /api/files/[id]`** — bytes; `Content-Type` from the row; `inline` for
-images and PDF, `attachment` for everything else; `Cache-Control: private,
-max-age=3600`; `X-Content-Type-Options: nosniff`.
+**`GET /api/files/[id]`** — bytes; `Content-Type` from the row (always a
+whitelisted type, so `inline` cannot be talked into serving a document type);
+`inline` for images, PDF, audio and video (the message's native player fetches
+it), `attachment` for everything else; `Cache-Control: private, max-age=3600`;
+`X-Content-Type-Options: nosniff`.
 
 **`DELETE /api/files/[id]`** — 204 when unreferenced; `409 file.inUse` when a
 persisted message part references it.
@@ -88,9 +105,17 @@ persisted message part references it.
   filename?: string, sizeBytes?: number }
 ```
 
-**Environment**: `FILE_STORAGE_DIR` (optional, default `.data/files`). The
-production compose file must mount a persistent volume there and the runner
-image must own that path.
+**Environment**: storage backend is selected by env. With no `S3_*`
+variables, `FILE_STORAGE_DIR` (optional, default `.data/files`) selects local
+disk and the production compose file must mount a persistent volume there.
+Setting `S3_BUCKET` switches to S3-compatible object storage (`S3_ENDPOINT`, `S3_REGION` default `us-east-1`, `S3_ACCESS_KEY_ID` /
+`S3_SECRET_ACCESS_KEY`); a custom `S3_ENDPOINT` automatically switches
+requests to path-style URLs, which is what MinIO/RustFS-style endpoints on a
+container network require. The bucket is created lazily on first use. A bucket without credentials
+fails at server boot via `src/instrumentation.ts`, not on the first upload.
+`docker-compose.prod.rustfs.yml` is an override that adds a rustfs service
+and wires the app's `S3_*` vars to it; its credentials come from the same
+`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` the app reads.
 
 **Model payload rewrite** (`resolveAttachmentsForModel`):
 
@@ -100,10 +125,19 @@ image must own that path.
 | image | — | `file.imageRequiresVision` |
 | pdf | `pdf` | native data URL (as above) |
 | pdf | — | cached text wrapped as a text part |
-| office (docx/xlsx) | — (always) | cached text wrapped as a text part |
+| office (docx/xlsx/pptx) | — (always) | cached text wrapped as a text part |
+| ebook (epub) | — (always) | cached text wrapped as a text part |
 | text (txt/md/csv/code) | — (always) | cached text wrapped as a text part |
+| audio / video | the modality **and** the api format can serialize that media type | file part kept; a provider Files API reference when one resolves (google/claude), else `data:…;base64,…` |
+| audio / video | either gate fails | `file.mediaUnsupported` |
 
 Wrapped text is `<attachment filename="…" truncated="true|false">\n…\n</attachment>`.
+
+Native parts on a reference keep `url: /api/files/<id>` (the UI card still
+renders) and add `providerReference`; the SDK prefers the reference over the
+url. `openai-compatible` has no Files API, so it always inlines. Never extracted
+for audio/video: there is no transcription path, so an unsupported media file is
+a hard error, not a degraded text part.
 
 ### 4. Validation & Error Matrix
 
@@ -116,6 +150,7 @@ Wrapped text is `<attachment filename="…" truncated="true|false">\n…\n</atta
 | scanned PDF + model cannot consume pdf | `VALIDATION_FAILED` | 400 | `file.noTextLayer` |
 | corrupt / encrypted file | `VALIDATION_FAILED` | 400 | `file.unreadable` |
 | image + model without `image` modality | `VALIDATION_FAILED` | 400 | `file.imageRequiresVision` |
+| audio/video the model does not declare, or the api format cannot serialize | `VALIDATION_FAILED` | 400 | `file.mediaUnsupported` |
 | delete of a referenced file | `CONFLICT` | 409 | `file.inUse` |
 
 ### 5. Good / Base / Bad Cases

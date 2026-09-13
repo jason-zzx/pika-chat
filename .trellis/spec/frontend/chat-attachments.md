@@ -64,9 +64,12 @@ sendMessage({ text, files })   // files: FileUIPart[] = { type:"file", url, medi
   file is not yet referenced; a `409` means it is already on a message, so the
   chip is dropped without surfacing an error.
 - **Render**: user messages render file parts in part order (files precede
-  text); images as `<img src={url}>` thumbnails, other files as an icon +
-  filename + `formatBytes(sizeBytes)` card. `sizeBytes` is optional — old rows
-  render without a size. The image frame (rounded border) is drawn on the
+  text); images as `<img src={url}>` thumbnails, audio as
+  `<audio controls preload="none">` and video as `<video controls preload="none">`
+  (both `src={url}`, the authenticated download endpoint) above the icon +
+  filename + `formatBytes(sizeBytes)` card, other files as just that card.
+  Native controls are the tap path on touch clients — no hover anywhere.
+  `sizeBytes` is optional — old rows render without a size. The image frame (rounded border) is drawn on the
   `<img>` itself, never on a wrapper: a shrink-wrapped container cannot track
   a replaced element capped by both `max-w` and `max-h` (its fit-content uses
   the intrinsic width), so a bordered wrapper always leaves a blank gap

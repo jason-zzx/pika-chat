@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "能力路由与抽取缓存契约（本任务直接扩展路由层）"}
+{"file": ".trellis/spec/backend/provider-configs.md", "reason": "provider config schema/服务层约定（负缓存列、apiFormat）"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "migration 与 jsonb 列约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误分类与新 i18n key"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "附件 chip/卡片前端契约（AV 预览扩展）"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "新错误文案与卡片标签 i18n 合规"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "schema→路由→前端跨层数据流"}
