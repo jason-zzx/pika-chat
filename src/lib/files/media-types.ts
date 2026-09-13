@@ -17,16 +17,24 @@ export const DOCX_MEDIA_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 export const XLSX_MEDIA_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+export const PPTX_MEDIA_TYPE =
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
-export const OFFICE_MEDIA_TYPES = [DOCX_MEDIA_TYPE, XLSX_MEDIA_TYPE] as const;
+export const OFFICE_MEDIA_TYPES = [
+  DOCX_MEDIA_TYPE,
+  XLSX_MEDIA_TYPE,
+  PPTX_MEDIA_TYPE,
+] as const;
+
+export const EPUB_MEDIA_TYPE = "application/epub+zip";
 
 /**
  * How an attachment reaches the model:
  * - `image` / `pdf`: natively when the model advertises the modality, else
  *   extracted text (pdf only — images require a vision model).
- * - `office` / `text`: always server-side text extraction.
+ * - `office` / `ebook` / `text`: always server-side text extraction.
  */
-export type FileCategory = "image" | "pdf" | "office" | "text";
+export type FileCategory = "image" | "pdf" | "office" | "ebook" | "text";
 
 const IMAGE_MEDIA_TYPE_SET = new Set<string>(IMAGE_MEDIA_TYPES);
 const OFFICE_MEDIA_TYPE_SET = new Set<string>(OFFICE_MEDIA_TYPES);
@@ -166,9 +174,23 @@ export function classifyFile(input: {
   if (OFFICE_MEDIA_TYPE_SET.has(mediaType)) {
     return "office";
   }
+  if (mediaType === EPUB_MEDIA_TYPE) {
+    return "ebook";
+  }
+  const extension = fileExtension(input.filename);
+  // Browsers hand us an empty or generic media type for pptx/epub often enough
+  // that the extension has to carry the classification. Both formats are always
+  // extracted and never handed to a model natively, so accepting them by name
+  // cannot smuggle anything into a native path.
+  if (extension === "pptx") {
+    return "office";
+  }
+  if (extension === "epub") {
+    return "ebook";
+  }
   const base = basename(input.filename).toLowerCase();
   if (
-    TEXT_EXTENSIONS.has(fileExtension(input.filename)) ||
+    TEXT_EXTENSIONS.has(extension) ||
     TEXT_FILENAMES.has(base) ||
     mediaType.startsWith("text/")
   ) {
@@ -179,14 +201,18 @@ export function classifyFile(input: {
 
 /**
  * `accept` attribute for the attachment file picker, derived from the same
- * whitelist `classifyFile` enforces so the two cannot drift. Text formats are
- * offered by extension (browsers report inconsistent media types for them).
+ * whitelist `classifyFile` enforces so the two cannot drift. Text formats (and
+ * pptx/epub, which browsers also report inconsistently) are offered by
+ * extension as well as by media type.
  */
 export const SUPPORTED_FILE_ACCEPT: string = [
   ...IMAGE_MEDIA_TYPES,
   PDF_MEDIA_TYPE,
   ...OFFICE_MEDIA_TYPES,
+  EPUB_MEDIA_TYPE,
   ...[...TEXT_EXTENSIONS].map((extension) => `.${extension}`),
+  ".pptx",
+  ".epub",
 ].join(",");
 
 /** Canonical `/api/files/<id>` prefix used by stored attachment parts. */

@@ -2,6 +2,7 @@ import "server-only";
 
 import { classifyFile, normalizeMediaType } from "@/lib/files/media-types";
 
+import { extractEpub } from "./epub";
 import { extractOffice } from "./office";
 import { extractPdf } from "./pdf";
 import { extractPlainText } from "./text";
@@ -28,9 +29,11 @@ export function sanitizeExtractedText(text: string): string {
  * Dispatches a document to the extractor for its media type.
  *
  * Images are intentionally not handled: they are sent to vision models
- * natively or rejected, never extracted. Passing one is a programming error.
- * Unsupported formats return `failed` rather than throwing so an unguarded
- * caller degrades to a user-visible "unreadable" error.
+ * natively or rejected, never extracted. Audio and video are the same in the
+ * other direction — native or rejected, with no extraction fallback. Passing
+ * any of them is a programming error. Unsupported formats return `failed`
+ * rather than throwing so an unguarded caller degrades to a user-visible
+ * "unreadable" error.
  */
 export async function extractDocument(
   buffer: Buffer,
@@ -46,7 +49,10 @@ export async function extractDocument(
       result = await extractPdf(buffer);
       break;
     case "office":
-      result = await extractOffice(buffer, normalized);
+      result = await extractOffice(buffer, normalized, filename);
+      break;
+    case "ebook":
+      result = await extractEpub(buffer);
       break;
     case "text":
       result = extractPlainText(buffer);
