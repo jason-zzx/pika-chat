@@ -23,9 +23,10 @@ export type PresignedPost = {
 };
 
 /**
- * Blob storage for chat attachments. Keys are opaque to callers; the current
- * layout is `<userId>/<fileId>`. Implementations swap freely behind this
- * interface without touching the file service.
+ * Blob storage for chat attachments. Keys are opaque to callers; new rows
+ * use `<userId>/<fileId>.<ext>` so objects are recognizable in a storage
+ * console, older rows keep their extension-less keys. Implementations swap
+ * freely behind this interface without touching the file service.
  */
 export interface FileStorage {
   put(key: string, data: Buffer): Promise<void>;

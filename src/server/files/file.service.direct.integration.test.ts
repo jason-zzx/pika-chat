@@ -141,13 +141,13 @@ describe("direct upload", () => {
     expect(presigned.post).toEqual({
       url: "https://storage.test/pika-attachments",
       fields: {
-        key: `${owner.userId}/${presigned.fileId}`,
+        key: `${owner.userId}/${presigned.fileId}.txt`,
         policy: "signed",
       },
     });
     expect(presignCalls).toEqual([
       {
-        key: `${owner.userId}/${presigned.fileId}`,
+        key: `${owner.userId}/${presigned.fileId}.txt`,
         maxBytes: 1024 * 1024,
         expiresSec: 900,
       },
@@ -172,7 +172,7 @@ describe("direct upload", () => {
     );
 
     // The client posts straight to storage after the presign.
-    const key = `${owner.userId}/${presigned.fileId}`;
+    const key = `${owner.userId}/${presigned.fileId}.txt`;
     await getFileStorage().put(key, Buffer.from("hello direct upload"));
 
     const uploaded = await completeFile(presigned.fileId, owner);
@@ -214,7 +214,7 @@ describe("direct upload", () => {
       { filename: "big.txt", mediaType: "text/plain" },
       owner,
     );
-    const key = `${owner.userId}/${presigned.fileId}`;
+    const key = `${owner.userId}/${presigned.fileId}.txt`;
     // Simulate a policy bypass: the object is bigger than maxBytes.
     await getFileStorage().put(key, Buffer.alloc(1024 * 1024 + 1));
 
@@ -239,7 +239,7 @@ describe("direct upload", () => {
       { filename: "notes.txt", mediaType: "text/plain" },
       owner,
     );
-    const key = `${owner.userId}/${presigned.fileId}`;
+    const key = `${owner.userId}/${presigned.fileId}.txt`;
     await getFileStorage().put(key, Buffer.from("too big for the quota"));
 
     await expect(completeFile(presigned.fileId, owner)).rejects.toMatchObject({
@@ -260,7 +260,7 @@ describe("direct upload", () => {
       { filename: "notes.txt", mediaType: "text/plain" },
       owner,
     );
-    const key = `${owner.userId}/${presigned.fileId}`;
+    const key = `${owner.userId}/${presigned.fileId}.txt`;
     await getFileStorage().put(key, Buffer.from("mine"));
 
     await expect(completeFile(presigned.fileId, other)).rejects.toMatchObject({
@@ -290,7 +290,7 @@ describe("direct upload", () => {
       owner,
     );
     await getFileStorage().put(
-      `${owner.userId}/${good.fileId}`,
+      `${owner.userId}/${good.fileId}.txt`,
       Buffer.from("ok"),
     );
     await completeFile(good.fileId, owner);

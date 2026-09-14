@@ -2,8 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Actor } from "@/server/auth/actor";
 
-import { fileIdsFromParts, fileUrl, presignFile, uploadFile } from "./file.service";
+import {
+  fileIdsFromParts,
+  fileUrl,
+  presignFile,
+  storageKeyFor,
+  uploadFile,
+} from "./file.service";
 import { maxFileBytes } from "./limits";
+import { assertValidStorageKey } from "./storage";
 
 // `maxFileBytes()` reads the environment through `getEnv()`, which validates
 // the whole schema, so the required variables have to exist before the upload
@@ -44,6 +51,41 @@ describe("fileIdsFromParts", () => {
   it("returns [] for a non-array payload", () => {
     expect(fileIdsFromParts(null)).toEqual([]);
     expect(fileIdsFromParts({})).toEqual([]);
+  });
+});
+
+describe("storageKeyFor", () => {
+  it("appends the lowercased extension for console readability", () => {
+    expect(storageKeyFor("u1", "f1", "pic.png")).toBe("u1/f1.png");
+    expect(storageKeyFor("u1", "f1", "deck.PPTX")).toBe("u1/f1.pptx");
+  });
+
+  it("keeps only [a-z0-9] characters and caps the extension at 10 chars", () => {
+    // The last dotted segment wins, matching `fileExtension()`.
+    expect(storageKeyFor("u1", "f1", "archive.tar.gz")).toBe("u1/f1.gz");
+    // Non-ASCII characters are filtered out entirely.
+    expect(storageKeyFor("u1", "f1", "report.中文")).toBe("u1/f1");
+    expect(storageKeyFor("u1", "f1", "my file.jpeg")).toBe("u1/f1.jpeg");
+    expect(storageKeyFor("u1", "f1", `a.${"x".repeat(20)}`)).toBe(
+      `u1/f1.${"x".repeat(10)}`,
+    );
+  });
+
+  it("omits the dot when there is no usable extension", () => {
+    expect(storageKeyFor("u1", "f1", "README")).toBe("u1/f1");
+    // A leading dot is a dotfile, not an extension.
+    expect(storageKeyFor("u1", "f1", ".gitignore")).toBe("u1/f1");
+    // An all-punctuation extension filters down to nothing.
+    expect(storageKeyFor("u1", "f1", "notes.---")).toBe("u1/f1");
+  });
+
+  it("produces keys the traversal guard accepts", () => {
+    for (const key of [
+      storageKeyFor("u1", "f1", "pic.png"),
+      storageKeyFor("u1", "f1", "no-extension"),
+    ]) {
+      expect(() => assertValidStorageKey(key)).not.toThrow();
+    }
   });
 });
 

@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { FILE_LIST_DEFAULT_LIMIT } from "@/lib/files/constants";
+import { FILE_LIST_CATEGORIES } from "@/lib/files/media-types";
+
 /** Extraction state the upload endpoint reports for a fresh attachment. */
 export const fileExtractionStateSchema = z.enum([
   "none",
@@ -64,3 +67,42 @@ export const completeFileRequestSchema = z.object({
   fileId: z.string().min(1),
 });
 export type CompleteFileRequest = z.infer<typeof completeFileRequestSchema>;
+
+/**
+ * Query params of `GET /api/files` (see src/app/api/files/route.ts). Offset and
+ * limit are cosmetic pagination knobs, so a malformed value falls back to the
+ * default instead of 400ing a list request; an unknown `category`, in
+ * contrast, is a real client bug and is rejected.
+ */
+export const fileListQuerySchema = z.object({
+  offset: z.coerce.number().int().nonnegative().catch(0),
+  limit: z.coerce.number().int().positive().catch(FILE_LIST_DEFAULT_LIMIT),
+  category: z.enum(FILE_LIST_CATEGORIES).optional(),
+});
+export type FileListQuery = z.infer<typeof fileListQuerySchema>;
+
+/** One row of `GET /api/files`. */
+export const listedFileSchema = z.object({
+  id: z.string().min(1),
+  filename: z.string().min(1),
+  mediaType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  extractionStatus: fileExtractionStateSchema,
+  // ISO timestamp; `Response.json` serializes the Date column this way.
+  createdAt: z.string().min(1),
+  // True while a persisted message part still points at the file.
+  referenced: z.boolean(),
+});
+export type ListedFile = z.infer<typeof listedFileSchema>;
+
+/**
+ * Response of `GET /api/files`. `totalCount` follows the category filter
+ * ("N in this category"); `totalBytes` is the actor's whole storage usage and
+ * does not change with the filter, matching the usage card's denominator.
+ */
+export const fileListResponseSchema = z.object({
+  files: z.array(listedFileSchema),
+  totalCount: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative(),
+});
+export type FileListResponse = z.infer<typeof fileListResponseSchema>;

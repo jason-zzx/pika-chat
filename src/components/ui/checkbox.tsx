@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
-import { CheckIcon } from "lucide-react"
+import { CheckIcon, MinusIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -19,9 +19,19 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
       )}
       {...props}
     >
-      <CheckboxPrimitive.Indicator className="flex items-center justify-center">
-        <CheckIcon className="size-3.5" strokeWidth={3} />
-      </CheckboxPrimitive.Indicator>
+      {/* Hand edit inside generated shadcn/ui territory: the indicator renders
+          for `indeterminate` too, so the glyph is chosen from state via the
+          render prop (re-apply after any `shadcn` regen). */}
+      <CheckboxPrimitive.Indicator
+        className="flex items-center justify-center"
+        render={(props, state) =>
+          state.indeterminate ? (
+            <MinusIcon {...props} className={cn(props.className, "size-3.5")} strokeWidth={3} />
+          ) : (
+            <CheckIcon {...props} className={cn(props.className, "size-3.5")} strokeWidth={3} />
+          )
+        }
+      />
     </CheckboxPrimitive.Root>
   )
 }

@@ -11,6 +11,8 @@ const DOT_STYLES: Record<SettingsBadgeTone, string> = {
 };
 
 type SettingsBadgeProps = {
+  /** DOM id so a control can point `aria-describedby` at the badge. */
+  id?: string;
   tone?: SettingsBadgeTone;
   /** Set false for category tags (roles, visibility) that carry no status. */
   dot?: boolean;
@@ -19,12 +21,14 @@ type SettingsBadgeProps = {
 
 /** Quiet status pill — the dot carries the tone, the text stays neutral. */
 export default function SettingsBadge({
+  id,
   tone = "neutral",
   dot = true,
   children,
 }: SettingsBadgeProps) {
   return (
     <span
+      id={id}
       className={cn(
         "inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground",
       )}

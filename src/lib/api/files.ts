@@ -3,12 +3,17 @@ import {
   DEFAULT_MAX_FILE_BYTES,
   MAX_ATTACHMENTS_PER_MESSAGE,
 } from "@/lib/files/constants";
-import { FILE_URL_PREFIX } from "@/lib/files/media-types";
+import {
+  FILE_URL_PREFIX,
+  type FileListCategory,
+} from "@/lib/files/media-types";
 import {
   fileLimitsSchema,
+  fileListResponseSchema,
   presignedUploadSchema,
   uploadedFileSchema,
   type FileLimits,
+  type FileListResponse,
   type PresignedUpload,
   type UploadedFile,
 } from "@/lib/schemas/file";
@@ -29,15 +34,36 @@ export const DEFAULT_FILE_LIMITS: FileLimits = {
 /** Fetches the current upload limits, falling back to the defaults on any failure. */
 export async function fetchFileLimits(): Promise<FileLimits> {
   try {
-    const response = await fetch("/api/files/limits");
-    if (!response.ok) {
-      return DEFAULT_FILE_LIMITS;
-    }
-    const parsed = fileLimitsSchema.safeParse(await response.json());
-    return parsed.success ? parsed.data : DEFAULT_FILE_LIMITS;
+    return await getFileLimits();
   } catch {
     return DEFAULT_FILE_LIMITS;
   }
+}
+
+/**
+ * Current usage and quota without the composer's silent fallback: a settings
+ * screen wants to show the failure, not report zero usage.
+ */
+export async function getFileLimits(): Promise<FileLimits> {
+  const response = await fetch("/api/files/limits");
+  return parseJson(response, (data) => fileLimitsSchema.parse(data));
+}
+
+/** One newest-first page of the caller's own attachments. */
+export async function listChatFiles(params: {
+  offset: number;
+  limit: number;
+  category?: FileListCategory | null;
+}): Promise<FileListResponse> {
+  const search = new URLSearchParams({
+    offset: String(params.offset),
+    limit: String(params.limit),
+  });
+  if (params.category) {
+    search.set("category", params.category);
+  }
+  const response = await fetch(`/api/files?${search.toString()}`);
+  return parseJson(response, (data) => fileListResponseSchema.parse(data));
 }
 
 /** Uploads one attachment (multipart field `file`) and returns its row. */

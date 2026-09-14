@@ -1,20 +1,53 @@
 import "server-only";
 
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  like,
+  lt,
+  not,
+  or,
+  sql,
+  type SQL,
+  type SQLWrapper,
+} from "drizzle-orm";
 
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
+import {
+  FILE_LIST_MAX_LIMIT,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+} from "@/lib/files/constants";
 import { formatBytes } from "@/lib/files/format";
 import {
+  AUDIO_FILE_EXTENSIONS,
+  AUDIO_MEDIA_TYPES,
   avMediaTypeForExtension,
+  CLASSIFIED_MEDIA_TYPES,
   classifyFile,
+  EBOOK_FILE_EXTENSIONS,
+  EPUB_MEDIA_TYPE,
   type FileCategory,
   fileExtension,
+  type FileListCategory,
   FILE_URL_PREFIX,
+  IMAGE_MEDIA_TYPES,
   normalizeMediaType,
+  OFFICE_FILE_EXTENSIONS,
+  OFFICE_MEDIA_TYPES,
+  PDF_MEDIA_TYPE,
+  TEXT_FILE_EXTENSIONS,
+  TEXT_FILE_NAMES,
+  VIDEO_FILE_EXTENSIONS,
+  VIDEO_MEDIA_TYPES,
 } from "@/lib/files/media-types";
 import { newId } from "@/lib/id";
 import type { ChatFilePart } from "@/lib/schemas/chat";
-import type { FileExtractionState, PresignedUpload } from "@/lib/schemas/file";
+import type {
+  FileExtractionState,
+  FileListResponse,
+  PresignedUpload,
+} from "@/lib/schemas/file";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { chatMessages, files } from "@/server/db/schema";
@@ -27,7 +60,7 @@ import {
   deleteProviderFileReferences,
   processDeleteRetries,
 } from "./provider-delete";
-import { assertUploadQuota, quotaExceededError } from "./quota";
+import { assertUploadQuota, quotaExceededError, usageBytes } from "./quota";
 import { getFileStorage, type FileStorage } from "./storage";
 
 /** Persisted attachment row, including the extraction cache. */
@@ -44,6 +77,28 @@ export type UploadedFile = {
   sizeBytes: number;
   extraction: { status: FileExtractionState; truncated: boolean };
 };
+
+/**
+ * Storage key for a *new* attachment: `<userId>/<fileId>.<ext>`. The extension
+ * comes from the original filename — lowercased, restricted to `[a-z0-9]`,
+ * capped at 10 chars — and exists only so objects are recognizable in an
+ * S3/RustFS console. It is never trusted for behaviour: the row's media_type
+ * stays the source of truth for Content-Type, and `assertValidStorageKey`
+ * accepts a dotted segment. Rows written before this layout keep their
+ * extension-less keys forever (the column is the truth on read).
+ */
+export function storageKeyFor(
+  userId: string,
+  fileId: string,
+  filename: string,
+): string {
+  const extension = fileExtension(filename)
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 10);
+  return extension.length > 0
+    ? `${userId}/${fileId}.${extension}`
+    : `${userId}/${fileId}`;
+}
 
 /** Attachments unreferenced for this long are reclaimable by the sweeper. */
 export const ORPHAN_FILE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -263,7 +318,7 @@ export async function uploadFile(
 
   const mediaType = storedMediaType(input.mediaType, filename);
   const id = newId();
-  const storageKey = `${actor.userId}/${id}`;
+  const storageKey = storageKeyFor(actor.userId, id, filename);
   const storage = getFileStorage();
   await storage.put(storageKey, input.data);
 
@@ -350,7 +405,7 @@ export async function presignFile(
 
   const mediaType = storedMediaType(input.mediaType, filename);
   const id = newId();
-  const storageKey = `${actor.userId}/${id}`;
+  const storageKey = storageKeyFor(actor.userId, id, filename);
   await getDb().insert(files).values({
     id,
     userId: actor.userId,
@@ -548,6 +603,170 @@ export async function resolveOwnedFileParts(
   });
 }
 
+/**
+ * The one definition of "a message part references this file": jsonb
+ * containment of `{ url: "/api/files/<id>" }` against a message's `parts`.
+ * The list's in-use badge, {@link isFileReferenced} and the orphan sweep all
+ * build on it, so the three cannot disagree about what a reference is.
+ */
+function messageReferencesFileSql(
+  parts: SQLWrapper,
+  fileId: SQLWrapper,
+): SQL<boolean> {
+  return sql<boolean>`${parts} @> jsonb_build_array(
+    jsonb_build_object('url', ${FILE_URL_PREFIX} || ${fileId})
+  )`;
+}
+
+/**
+ * EXISTS over `chat_messages` for the list's in-use badge: true when a
+ * persisted message still points at this row's file id. Interpolating
+ * `files.id` renders it qualified in the select list, matching the sweeper's
+ * predicate.
+ */
+function referencedByMessageSql(): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1 from chat_messages cm
+    where ${messageReferencesFileSql(sql`cm.parts`, files.id)}
+  )`;
+}
+
+/** Basename of a stored filename, mirroring `basename()` in media-types.ts. */
+const FILENAME_BASENAME_PATTERN = "^.*[/\\\\]";
+/** Last dotted segment, applied only once the basename has a non-leading dot. */
+const FILENAME_EXTENSION_PATTERN = "^.*\\.";
+
+/** Lowercased, path-less filename of the current row. */
+function basenameSql(): SQL<string> {
+  return sql<string>`lower(regexp_replace(${files.filename}, ${FILENAME_BASENAME_PATTERN}, ''))`;
+}
+
+/**
+ * Lowercased extension of the current row's filename, mirroring
+ * `fileExtension()`: empty when there is no dot or when the only dot starts the
+ * name (a dotfile like `.gitignore` has no extension).
+ */
+function extensionSql(): SQL<string> {
+  const base = basenameSql();
+  return sql<string>`case
+    when strpos(substr(${base}, 2), '.') > 0
+      then regexp_replace(${base}, ${FILENAME_EXTENSION_PATTERN}, '')
+    else ''
+  end`;
+}
+
+/**
+ * `mediaType`/extension predicate for one coarse list category, mirroring
+ * `fileListCategoryOf` → `classifyFile` exactly: a recognized media type wins,
+ * and only an unclassified type falls through to the extension rules in the
+ * same order (office/ebook extension, then audio/video extension, then text).
+ * Every table it reads is exported from `@/lib/files/media-types`, so a row's
+ * badge and its filter membership cannot drift.
+ */
+function categoryCondition(category: FileListCategory): SQL {
+  const typeIn = (types: readonly string[]) =>
+    inArray(files.mediaType, [...types]);
+  const classified = typeIn(CLASSIFIED_MEDIA_TYPES);
+  const notClassified = not(classified);
+  const extensionIn = (extensions: readonly string[]) =>
+    inArray(extensionSql(), [...extensions]);
+  // Extension rules only apply to a row whose media type classified nothing.
+  const byExtension = (condition: SQL | undefined) =>
+    and(notClassified, condition);
+
+  if (category === "image") {
+    return typeIn(IMAGE_MEDIA_TYPES);
+  }
+
+  const avAudio = extensionIn(AUDIO_FILE_EXTENSIONS);
+  const avVideo = extensionIn(VIDEO_FILE_EXTENSIONS);
+
+  if (category === "audio") {
+    return or(typeIn(AUDIO_MEDIA_TYPES), byExtension(avAudio))!;
+  }
+  if (category === "video") {
+    return or(typeIn(VIDEO_MEDIA_TYPES), byExtension(avVideo))!;
+  }
+
+  // document = pdf + office + ebook + text. The text rule runs last in
+  // `classifyFile`, so an audio/video extension has to be excluded from it:
+  // `text/plain` named `clip.mp4` is a video, not a document.
+  const text = or(
+    extensionIn(TEXT_FILE_EXTENSIONS),
+    inArray(basenameSql(), [...TEXT_FILE_NAMES]),
+    like(files.mediaType, "text/%"),
+  )!;
+  return or(
+    typeIn([PDF_MEDIA_TYPE]),
+    typeIn(OFFICE_MEDIA_TYPES),
+    typeIn([EPUB_MEDIA_TYPE]),
+    byExtension(extensionIn(OFFICE_FILE_EXTENSIONS)),
+    byExtension(extensionIn(EBOOK_FILE_EXTENSIONS)),
+    byExtension(and(not(or(avAudio, avVideo)!), text)),
+  )!;
+}
+
+/**
+ * Newest-first page of the actor's attachments, plus the filtered row count and
+ * the actor's whole storage usage. Ownership is never broader than the actor:
+ * there is no admin view over other users' files.
+ */
+export async function listFilesForActor(
+  actor: Actor,
+  opts: { offset: number; limit: number; category?: FileListCategory },
+): Promise<FileListResponse> {
+  // Clamp rather than reject: pagination knobs are cosmetic, and a client
+  // asking for 1000 rows still deserves a well-formed page.
+  const limit = Math.min(Math.max(opts.limit, 1), FILE_LIST_MAX_LIMIT);
+  const offset = Math.max(opts.offset, 0);
+  const owner = eq(files.userId, actor.userId);
+  const where = opts.category
+    ? and(owner, categoryCondition(opts.category))
+    : owner;
+
+  const [rows, countRows, totalBytes] = await Promise.all([
+    getDb()
+      .select({
+        id: files.id,
+        filename: files.filename,
+        mediaType: files.mediaType,
+        sizeBytes: files.sizeBytes,
+        extractionStatus: files.extractionStatus,
+        createdAt: files.createdAt,
+        referenced: referencedByMessageSql(),
+      })
+      .from(files)
+      .where(where)
+      // created_at is not unique; the id tiebreak keeps offset pages stable.
+      .orderBy(desc(files.createdAt), desc(files.id))
+      .limit(limit)
+      .offset(offset),
+    // A separate count, not a window over the page: an offset past the end
+    // would otherwise report 0 instead of the real filtered total.
+    getDb()
+      .select({ total: sql<string>`count(*)::int` })
+      .from(files)
+      .where(where),
+    // Usage answers "how much storage do I use", so the category selection
+    // must not move this number — it stays the full usage, matching the card.
+    usageBytes(actor.userId),
+  ]);
+
+  return {
+    files: rows.map((row) => ({
+      id: row.id,
+      filename: row.filename,
+      mediaType: row.mediaType,
+      sizeBytes: row.sizeBytes,
+      extractionStatus: row.extractionStatus,
+      createdAt: row.createdAt.toISOString(),
+      referenced: row.referenced,
+    })),
+    totalCount: Number(countRows[0]?.total ?? 0),
+    totalBytes,
+  };
+}
+
 /** Owned-row lookup plus the stored bytes, for download and native routing. */
 export async function readFileForActor(
   id: string,
@@ -561,14 +780,14 @@ export async function readFileForActor(
 /**
  * True when any persisted message still references the attachment. Not scoped
  * to the owner: a file referenced by anyone must survive until that reference
- * is gone.
+ * is gone. Built from the same jsonb predicate as {@link referencedByMessageSql}
+ * and the sweep, so all three agree by construction.
  */
 async function isFileReferenced(fileId: string): Promise<boolean> {
-  const payload = JSON.stringify([{ url: fileUrl(fileId) }]);
   const rows = await getDb()
     .select({ id: chatMessages.id })
     .from(chatMessages)
-    .where(sql`${chatMessages.parts} @> ${payload}::jsonb`)
+    .where(messageReferencesFileSql(chatMessages.parts, sql`${fileId}`))
     .limit(1);
   return rows.length > 0;
 }
@@ -654,12 +873,7 @@ export async function sweepOrphanFiles(actor: Actor): Promise<void> {
         and(
           eq(files.userId, actor.userId),
           lt(files.createdAt, cutoff),
-          sql`not exists (
-            select 1 from chat_messages cm
-            where cm.parts @> jsonb_build_array(
-              jsonb_build_object('url', '/api/files/' || ${files.id})
-            )
-          )`,
+          not(referencedByMessageSql()),
         ),
       );
 

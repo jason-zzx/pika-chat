@@ -267,9 +267,11 @@ model/assistant pickers, tool-call headers) until the fix landed.
 2. Where a ui primitive class string carries `cursor-default` (utilities layer
    beats base), it is changed to `cursor-pointer` — currently 4 occurrences in
    `ui/dropdown-menu.tsx` and 3 in `ui/select.tsx` (items + scroll buttons).
-   These are hand edits inside generated `components/ui/` territory (see
-   "Popup positioning" for the first): a `shadcn` regen would silently revert
-   them, so re-apply after any regen.
+   `ui/checkbox.tsx` additionally renders a minus icon for the indeterminate
+   state via an Indicator render-prop hand edit. These are hand edits inside
+   generated `components/ui/` territory (see "Popup positioning" for the
+   first): a `shadcn` regen would silently revert them, so re-apply after any
+   regen.
 
 Semantic cursors keep winning: `:not(:disabled)` excludes disabled controls
 (`disabled:cursor-not-allowed` on `ui/select.tsx` still applies), and explicit

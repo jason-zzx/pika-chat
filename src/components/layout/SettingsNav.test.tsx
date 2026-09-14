@@ -39,6 +39,10 @@ describe("SettingsNav", () => {
       "href",
       "/settings/account",
     );
+    expect(screen.getByRole("link", { name: "Files" })).toHaveAttribute(
+      "href",
+      "/settings/files",
+    );
     expect(screen.getByRole("link", { name: "Providers" })).toHaveAttribute(
       "href",
       "/settings/providers",

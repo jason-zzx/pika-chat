@@ -47,7 +47,10 @@ export default defineConfig({
           environment: "node",
           include: ["src/**/*.integration.test.ts"],
           globalSetup: "./vitest.integration.setup.ts",
-          setupFiles: ["./vitest.integration.env.ts"],
+          setupFiles: [
+            "./vitest.integration.env.ts",
+            "./vitest.integration.storage.ts",
+          ],
           testTimeout: 30_000,
           fileParallelism: false,
         },

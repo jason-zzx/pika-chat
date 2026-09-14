@@ -11,7 +11,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-type SettingsTabLabelKey = `settingsNav.${"general" | "account" | "providers" | "search" | "users"}`;
+type SettingsTabLabelKey = `settingsNav.${"general" | "account" | "files" | "providers" | "search" | "users"}`;
 
 type SettingsTab = {
   href: string;
@@ -22,6 +22,7 @@ type SettingsTab = {
 const SETTINGS_TABS: SettingsTab[] = [
   { href: "/settings/general", labelKey: "settingsNav.general" },
   { href: "/settings/account", labelKey: "settingsNav.account" },
+  { href: "/settings/files", labelKey: "settingsNav.files" },
   { href: "/settings/providers", labelKey: "settingsNav.providers" },
   { href: "/settings/search", labelKey: "settingsNav.search" },
   { href: "/settings/users", labelKey: "settingsNav.users", staffOnly: true },

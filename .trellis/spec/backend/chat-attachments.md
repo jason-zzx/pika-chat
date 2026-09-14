@@ -26,7 +26,7 @@ src/server/files/quota.ts          usageBytes / effectiveQuotaBytes / assertUplo
 src/server/files/extract/          extractDocument() media-type dispatcher
 src/server/ai/attachments.ts       resolveAttachmentsForModel()
 src/lib/files/                     isomorphic media-type table + upload limits
-src/app/api/files/route.ts         POST (+ GET list, phase 3)
+src/app/api/files/route.ts         POST (upload) + GET (list, paginated, category-filtered)
 src/app/api/files/[id]/route.ts    GET / DELETE
 src/app/api/files/limits/route.ts  GET  (maxFileBytes / maxAttachmentsPerMessage / directUpload)
 src/app/api/files/presign/route.ts POST (404 when S3_DIRECT_ACCESS is off)
@@ -108,7 +108,7 @@ DB (`files`, migration `0015` + `0016`):
 | `user_id` | `text` FK → `users.id` ON DELETE CASCADE | owner |
 | `filename` / `media_type` | `text` | as uploaded (normalized media type) |
 | `size_bytes` | `integer` | ≤ `maxFileBytes()` at write time |
-| `storage_key` | `text` UNIQUE | `<userId>/<fileId>` |
+| `storage_key` | `text` UNIQUE | `<userId>/<fileId>.<ext>` — ext from the original filename (lowercase, `[a-z0-9]`, ≤10 chars); readability only |
 | `extracted_text` | `text` NULL | extraction cache, written at upload |
 | `extraction_status` | `file_extraction_status` enum (`none`/`ok`/`empty`/`failed`) | `none` = image, audio, video |
 | `extraction_truncated` | `boolean` | true when text hit `MAX_EXTRACTED_CHARS` |
@@ -141,6 +141,42 @@ gone" and abandons the entry.
   "mediaType": "application/pdf", "sizeBytes": 12345,
   "extraction": { "status": "ok", "truncated": false } }
 ```
+
+**`GET /api/files`** — the actor's own attachments, newest first (`createdAt
+desc, id desc`), offset-paginated. Query: `offset` (default 0, clamped ≥ 0),
+`limit` (default 50, clamped 1..100), `category` (`image` / `document` /
+`audio` / `video`; anything else is a 400).
+
+```json
+{ "files": [{ "id": "…", "filename": "report.pdf",
+              "mediaType": "application/pdf", "sizeBytes": 12345,
+              "extractionStatus": "ok", "createdAt": "2026-09-13T…Z",
+              "referenced": true }],
+  "totalCount": 12, "totalBytes": 8388608 }
+```
+
+`totalCount` follows the category filter ("N in this category"); `totalBytes`
+is the actor's whole usage (`usageBytes(actor.userId)`, the same value the
+limits endpoint reports) and **does not** change with the filter. `referenced`
+comes from the same jsonb EXISTS predicate the orphan sweep uses, so "in use"
+means exactly "the sweep would spare it". Malformed `offset`/`limit` fall back
+to defaults (`catch`), an unknown `category` 400s — pagination knobs are
+cosmetic, a bad category is a client bug.
+
+**The category filter must mirror `classifyFile`, extension fallback
+included.** The badge on a row and the filter that hides it are two renderings
+of one classification: a real `deck.pptx` or `notes.txt` often arrives as
+`application/octet-stream`, and `script.py` as `application/x-python`, so a
+`mediaType IN (…)`-only predicate drops rows that display a "document" badge.
+The predicate is built from the same exported tables `classifyFile` reads
+(`CLASSIFIED_MEDIA_TYPES`, `TEXT_FILE_EXTENSIONS`, `TEXT_FILE_NAMES`,
+`AUDIO_FILE_EXTENSIONS`, `VIDEO_FILE_EXTENSIONS`, `OFFICE_FILE_EXTENSIONS`,
+`EBOOK_FILE_EXTENSIONS`) with the same precedence and the same guards:
+extension fallbacks apply only to rows **no** media-type set matched, and the
+text branch additionally excludes audio/video extensions (a `text/plain`
+`clip.mp4` is a video). The equivalence is locked by a table-driven test that
+compares the filter result against per-row `fileListCategoryOf` for every
+category — see Tests Required.
 
 **`GET /api/files/limits`** — authenticated; the client's only source of truth
 for pre-upload checks (the limit is runtime config, not a compile-time
@@ -252,6 +288,8 @@ a hard error, not a degraded text part.
 | unsupported media type / no file field | `VALIDATION_FAILED` | 400 | `file.unsupportedType` |
 | > `MAX_ATTACHMENTS_PER_MESSAGE` (5) | `VALIDATION_FAILED` | 400 | `file.tooMany` (`{max}`) |
 | foreign or missing file id | `NOT_FOUND` | 404 | `file.notFound` |
+| unknown `category` on `GET /api/files` | `VALIDATION_FAILED` | 400 | `validation.failed` |
+| unauthenticated `GET /api/files` | `UNAUTHENTICATED` | 401 | `auth.unauthenticated` |
 | scanned PDF + model cannot consume pdf | `VALIDATION_FAILED` | 400 | `file.noTextLayer` |
 | corrupt / encrypted file | `VALIDATION_FAILED` | 400 | `file.unreadable` |
 | image + model without `image` modality | `VALIDATION_FAILED` | 400 | `file.imageRequiresVision` |
@@ -286,6 +324,16 @@ a hard error, not a degraded text part.
 - `quota.integration.test.ts` (real DB): usage sum, precedence matrix
   (override / global / both null), the `used + incoming == quota` boundary, and
   a rejected relay upload leaving no object and no row.
+- `file.service.integration.test.ts` → `listFilesForActor`: owner isolation,
+  offset/limit clamp, `totalCount` following the filter while `totalBytes` does
+  not, `referenced` true across multiple parts **and** multiple messages, and
+  the **category-equivalence table**: 40+ `(mediaType, filename)` rows
+  (octet-stream pptx/epub/txt, `application/x-python` + `.py`, `video/mp2t` +
+  `.ts`, `text/plain` + `.mp4`, `application/json` + `.mp4`, extensionless
+  names, `Makefile`) asserted set-for-set against `fileListCategoryOf` for each
+  of image/document/audio/video.
+- `api/files/route.test.ts`: list endpoint 401, unknown category 400, and the
+  clamped page shape.
 - `user-quota.service.integration.test.ts`: admin → user allowed, admin →
   admin / super_admin 403, super_admin → admin allowed, non-admin 403, and a
   rejected path writing no override.
@@ -496,6 +544,11 @@ if (data.byteLength > maxFileBytes()) {
 - **Expecting `presignFile` to enforce the quota.** It has no real size — only
   `completeFile` can, and it and the relay path share one `assertUploadQuota`
   call site each.
+- **Filtering the file list by `mediaType` alone.** Browsers report
+  `application/octet-stream` for pptx/epub/txt often enough that
+  `classifyFile` falls back to the extension; a type-only predicate then hides
+  rows whose badge says "document". Reuse the exported classification tables
+  and mirror `classifyFile`'s precedence instead of hand-writing a second list.
 
 ### Design Decisions
 

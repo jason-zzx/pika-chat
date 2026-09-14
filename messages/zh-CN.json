@@ -14,6 +14,7 @@
       "label": "设置",
       "general": "通用",
       "account": "账户",
+      "files": "文件",
       "providers": "服务商",
       "search": "搜索",
       "users": "用户"
@@ -281,6 +282,51 @@
     },
     "Users": {
       "title": "用户"
+    },
+    "Files": {
+      "title": "文件",
+      "description": "你上传的附件以及占用的存储空间。",
+      "usageTitle": "存储用量",
+      "usageLabel": "已用 {used} / {quota}（{percent}%）",
+      "usageLabelUnlimited": "已用 {used}",
+      "usageDescription": "你在聊天中上传的附件计入此存储上限。",
+      "listTitle": "附件",
+      "listCount": "附件：{count}",
+      "filterLabel": "按类型筛选",
+      "filterAll": "全部",
+      "filterImage": "图片",
+      "filterDocument": "文档",
+      "filterAudio": "音频",
+      "filterVideo": "视频",
+      "loading": "加载中…",
+      "emptyTitle": "暂无附件",
+      "emptyDescription": "你在聊天中上传的文件会显示在这里。",
+      "emptyFilteredTitle": "该分类下暂无附件",
+      "emptyFilteredDescription": "没有符合当前筛选条件的附件。",
+      "loadMore": "加载更多",
+      "loadMorePending": "加载中…",
+      "inUse": "使用中",
+      "inUseHint": "仍被消息引用，无法删除。",
+      "categoryImage": "图片",
+      "categoryDocument": "文档",
+      "categoryAudio": "音频",
+      "categoryVideo": "视频",
+      "preview": "预览 {filename}",
+      "open": "打开 {filename}",
+      "delete": "删除 {filename}",
+      "deleteTitle": "删除附件？",
+      "deleteDescription": "将永久删除 {filename}。此操作无法撤销。",
+      "deleteConfirm": "删除",
+      "deleting": "删除中…",
+      "selectAll": "全选",
+      "selectFile": "选择 {filename}",
+      "selectedCount": "已选 {count} 项",
+      "deleteSelected": "删除",
+      "batchTitle": "删除所选文件？",
+      "batchDescription": "将永久删除 {count} 个文件。此操作无法撤销。",
+      "batchDeleting": "删除中…",
+      "batchResult": "已删除 {deleted} · 跳过 {skipped} 个（使用中）",
+      "batchResultClean": "已删除 {deleted} 个文件"
     }
   },
   "Assistant": {
@@ -578,7 +624,9 @@
       "generateBackupCodes": "无法生成备用验证码",
       "loadQrCode": "无法加载二维码",
       "loadStorageQuota": "无法加载存储配额",
-      "saveStorageQuota": "无法保存存储配额"
+      "saveStorageQuota": "无法保存存储配额",
+      "loadFiles": "无法加载文件",
+      "deleteFile": "无法删除文件"
     }
   },
   "Validation": {

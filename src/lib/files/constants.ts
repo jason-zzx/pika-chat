@@ -9,6 +9,12 @@ export const DEFAULT_MAX_FILE_BYTES = 20 * 1024 * 1024;
 /** Largest number of attachments allowed on one chat message. */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
 
+/** Page size of `GET /api/files` when the request omits `limit`. */
+export const FILE_LIST_DEFAULT_LIMIT = 50;
+
+/** Hard ceiling on `GET /api/files`'s page size; larger requests are clamped. */
+export const FILE_LIST_MAX_LIMIT = 100;
+
 /**
  * Bytes in one mebibyte. The storage quota is configured and displayed in MB,
  * so the services convert at this boundary and keep bytes in the database.

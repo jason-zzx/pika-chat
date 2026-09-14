@@ -1,9 +1,5 @@
 import "server-only";
 
-import { rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -24,12 +20,8 @@ import {
   verifications,
 } from "@/server/db/schema";
 
-import { uploadFile } from "./file.service";
+import { deleteFile, uploadFile } from "./file.service";
 import { assertUploadQuota, effectiveQuotaBytes, usageBytes } from "./quota";
-
-// A throwaway storage root; the successful-upload case writes real bytes.
-const storageRoot = join(tmpdir(), `pika-quota-it-${process.pid}-${newId()}`);
-process.env.FILE_STORAGE_DIR = storageRoot;
 
 const db = getDb();
 
@@ -100,7 +92,6 @@ describe("quota", () => {
 
   afterAll(async () => {
     await resetState();
-    await rm(storageRoot, { recursive: true, force: true });
   });
 
   describe("usageBytes", () => {
@@ -230,6 +221,10 @@ describe("quota", () => {
       );
       expect(uploaded.sizeBytes).toBe(5);
       expect(await usageBytes(owner.userId)).toBe(105);
+
+      // The leak invariant (vitest.integration.storage.ts) requires every
+      // put to be balanced by a delete within the same test.
+      await deleteFile(uploaded.id, owner);
     });
   });
 });

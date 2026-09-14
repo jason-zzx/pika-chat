@@ -23,9 +23,10 @@ src/components/chat/AttachmentIcon.tsx            category icon (shared with car
 src/components/chat/Composer.tsx                  picker/paste + chip row
 src/components/chat/ChatView.tsx                  content-area drop zone (enter/leave counter + overlay)
 src/components/chat/MessageItem.tsx               user-message attachment cards
-src/lib/api/files.ts                              uploadChatFile / deleteChatFile / fetchFileLimits / uploadChatFileDirect
-src/lib/files/media-types.ts                      classifyFile / SUPPORTED_FILE_ACCEPT
+src/lib/api/files.ts                              uploadChatFile / deleteChatFile / fetchFileLimits / uploadChatFileDirect / listChatFiles / getFileLimits
+src/lib/files/media-types.ts                      classifyFile / SUPPORTED_FILE_ACCEPT / coarse list categories
 src/lib/files/format.ts                           formatBytes
+src/components/settings/files/                    management page: FilesScreen / UsageCard / CategoryFilter / FilesList / FilePreviewDialog / DeleteFileDialog / use-files.ts
 ```
 
 ### 2. Signatures
@@ -160,3 +161,145 @@ const capReached =
   attachments on a failed send.
 - Showing chip status only through color: pair it with text or an icon that is
   present on screen.
+
+---
+
+## Scenario: attachment management page (`/settings/files`)
+
+### 1. Scope / Trigger
+
+A user-facing surface over the whole attachment lifecycle (list → preview →
+delete) that reuses the composer's classification and the same authenticated
+`/api/files/[id]` transport. It is a settings page, so it inherits the settings
+layout guard and the `src/components/settings/` primitives, and it must stay
+usable on touch-only clients.
+
+### 2. Signatures
+
+```ts
+// src/lib/api/files.ts
+listChatFiles({ offset, limit, category }): Promise<FileListResponse>  // GET /api/files
+getFileLimits(): Promise<FileLimits>   // usedBytes / quotaBytes drive the usage card
+
+// src/components/settings/files/use-files.ts
+useFileList(category): UseInfiniteQueryResult   // fileKeys factory; category is part of the key
+useFileLimits(): UseQueryResult                 // the usage card's only data source
+useDeleteFile(): UseMutationResult              // DELETE /api/files/[id], invalidates fileKeys.all
+```
+
+### 3. Contracts
+
+- **Route registration**: `/settings/files` is a `SETTINGS_TABS` entry visible to
+  every signed-in user (not `staffOnly`); `SettingsTabLabelKey` gains the
+  matching key, and the settings layout supplies the sign-in redirect. Page
+  width is the page's own choice (`max-w-3xl`), not the layout's.
+- **Usage card reads the limits endpoint only** — never the list response's
+  `totalBytes`. It renders `used / quota (N%)`, degrades to `used` alone when
+  `quotaBytes === null` (unlimited), and treats `quotaBytes === 0` as a real
+  quota (0%), not as unlimited. `??`/`=== null` checks only — a falsy check
+  silently turns a 0-byte quota into "unlimited".
+- **Row actions are always visible.** Preview / download / delete are inline
+  buttons, never hover-revealed (touch has no hover); narrow screens may shrink
+  labels to icons but not hide them. This is the same rule as the composer
+  chips.
+- **Preview by category**: images open in a dialog with
+  `<img src={/api/files/<id>}>` (the authenticated same-origin GET; no object
+  URL, no `next/image` — the optimizer would not carry the session cookie and
+  is silenced per line with a reason), everything else is a plain `<a
+  target="_blank">` and lets the server's `Content-Disposition` decide inline
+  vs download.
+- **Delete** is dialog-confirmed; `referenced: true` rows disable the action and
+  state why in visible text plus `aria-describedby` (a disabled button cannot
+  take focus and `title` is hover-only). The 409 is still handled: the mock-free
+  truth is the server, so a stale `referenced: false` surfaces the localized
+  `file.inUse` message inline. On success the mutation invalidates the whole
+  `fileKeys` domain, so the list *and* the usage card refresh together.
+- **Pending rows** (`sizeBytes === 0`, a presign placeholder or a genuinely
+  empty file) render as `0 B` — never as an error or a spinner-less void.
+  Do not infer "unfinished upload" from the size: 0 is sendable.
+- **Batch selection**: a row checkbox plus a header select-all that covers
+  only the loaded, unreferenced rows (indeterminate state included);
+  `referenced` rows are unselectable with `aria-describedby` at the in-use
+  badge, same contract as the disabled delete button. A toolbar shows when
+  the selection is non-empty; confirming deletes with
+  `Promise.allSettled(ids.map(deleteChatFile))` — deliberately **no server
+  bulk endpoint**, so the per-file semantics (ownership, 409, provider-side
+  cleanup) stay exactly the DELETE contract — then one `fileKeys.all`
+  invalidation and a summary "Deleted X · skipped Y (in use)" (the skip is
+  the 409 race: a file referenced between list load and delete). The
+  selection clears on category switch, dialog close, or cancel, and never
+  silently adopts rows fetched by "load more".
+- Pagination is offset-based "load more": `hasMore = files.length <
+  totalCount` where `totalCount` is the **filtered** count; switching category
+  resets to the first page by way of the query key.
+
+### 4. Validation & Error Matrix
+
+| Condition | Client behaviour |
+|---|---|
+| list request fails | error state with retry; the page keeps its chrome |
+| limits request fails | usage card shows an error/placeholder, the list still works |
+| `quotaBytes === null` | `used` only, no percentage |
+| `quotaBytes === 0` | `used / 0 B (…%)` — a real cap, not unlimited |
+| row `referenced: true` | delete disabled + visible "in use" badge, `aria-describedby` |
+| delete returns 409 `file.inUse` | localized `file.inUse` message inline; row refreshed to `referenced: true` |
+| delete succeeds | row removed, list + usage refetched |
+| category with no rows | empty state that names the active filter |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: filter to "document", load a second page, preview an image in the
+  dialog, delete an unused file → it disappears and the usage number drops.
+- **Base**: no attachments at all → friendly empty state, usage shows
+  `0 B / 5 GiB (0%)`.
+- **Bad**: deriving the badge from the list response's `sizeBytes` or the
+  filter from `mediaType` alone — the server's category predicate mirrors
+  `classifyFile`, extension fallback included, so the client must never
+  re-implement a second classification for display.
+
+### 6. Tests Required
+
+- `FilesList.test.tsx`: renders filename/size/time/badge; `sizeBytes === 0`
+  renders `0 B`; actions are always visible (no `opacity-0` / `group-hover`
+  ancestor); disabled delete carries `aria-describedby` at the in-use badge.
+- `UsageCard.test.tsx`: `quotaBytes === 0` (0 B denominator, and 100% when
+  used > 0) and `quotaBytes === null` (no percentage).
+- `FilesScreen.test.tsx`: empty state per category; "load more" within an
+  active category advances the offset and stops at the last page; delete
+  confirm → success removes the row and invalidates both queries; 409 keeps the
+  dialog open with the localized message.
+- `SettingsNav.test.tsx`: `/settings/files` is listed for non-staff users.
+- `FilesScreen.test.tsx` batch cases: select-all covers loaded unreferenced
+  rows only; mixed 409s yield the "Deleted X · skipped Y" summary; the
+  selection clears on dialog close and category switch.
+- Backend side (see [backend/chat-attachments.md](../backend/chat-attachments.md))
+  owns the filter/badge equivalence table.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```tsx
+// A falsy check turns an explicit 0-byte quota into "unlimited".
+const unlimited = !limits.quotaBytes;
+```
+
+#### Correct
+
+```tsx
+const unlimited = limits.quotaBytes === null;
+```
+
+#### Wrong
+
+```tsx
+// Hover-revealed row actions: unreachable on a touch-only client.
+<div className="opacity-0 group-hover/row:opacity-100">…</div>
+```
+
+#### Correct
+
+```tsx
+// Always mounted, always visible; only the label shrinks on narrow screens.
+<Button type="button" variant="ghost" size="icon-sm" aria-label={t("preview")} …>
+```

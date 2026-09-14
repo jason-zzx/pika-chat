@@ -14,6 +14,7 @@
       "label": "Settings",
       "general": "General",
       "account": "Account",
+      "files": "Files",
       "providers": "Providers",
       "search": "Search",
       "users": "Users"
@@ -281,6 +282,51 @@
     },
     "Users": {
       "title": "Users"
+    },
+    "Files": {
+      "title": "Files",
+      "description": "Your uploaded attachments and how much storage they use.",
+      "usageTitle": "Storage usage",
+      "usageLabel": "Used {used} of {quota} ({percent}%)",
+      "usageLabelUnlimited": "Used {used}",
+      "usageDescription": "Attachments you upload to a chat count toward this storage limit.",
+      "listTitle": "Attachments",
+      "listCount": "Attachments: {count}",
+      "filterLabel": "Filter by type",
+      "filterAll": "All",
+      "filterImage": "Images",
+      "filterDocument": "Documents",
+      "filterAudio": "Audio",
+      "filterVideo": "Video",
+      "loading": "Loading…",
+      "emptyTitle": "No attachments yet",
+      "emptyDescription": "Files you attach to a chat appear here.",
+      "emptyFilteredTitle": "Nothing in this category",
+      "emptyFilteredDescription": "No attachments match the selected filter.",
+      "loadMore": "Load more",
+      "loadMorePending": "Loading…",
+      "inUse": "In use",
+      "inUseHint": "Still used by a message, so it cannot be deleted.",
+      "categoryImage": "Image",
+      "categoryDocument": "Document",
+      "categoryAudio": "Audio",
+      "categoryVideo": "Video",
+      "preview": "Preview {filename}",
+      "open": "Open {filename}",
+      "delete": "Delete {filename}",
+      "deleteTitle": "Delete attachment?",
+      "deleteDescription": "This permanently removes {filename}. This cannot be undone.",
+      "deleteConfirm": "Delete",
+      "deleting": "Deleting…",
+      "selectAll": "Select all",
+      "selectFile": "Select {filename}",
+      "selectedCount": "{count} selected",
+      "deleteSelected": "Delete",
+      "batchTitle": "Delete selected files?",
+      "batchDescription": "This permanently removes {count} files. This cannot be undone.",
+      "batchDeleting": "Deleting…",
+      "batchResult": "Deleted {deleted} · skipped {skipped} (in use)",
+      "batchResultClean": "Deleted {deleted} files"
     }
   },
   "Assistant": {
@@ -578,7 +624,9 @@
       "generateBackupCodes": "Unable to generate backup codes",
       "loadQrCode": "Unable to load the QR code",
       "loadStorageQuota": "Unable to load storage quota",
-      "saveStorageQuota": "Unable to save storage quota"
+      "saveStorageQuota": "Unable to save storage quota",
+      "loadFiles": "Unable to load files",
+      "deleteFile": "Unable to delete the file"
     }
   },
   "Validation": {
