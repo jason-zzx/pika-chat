@@ -690,3 +690,62 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**（子任务已归档；父任务待收口；浏览器手测项待用户过一遍）
+
+---
+
+## 2026-09-14 · Ponytail cleanup：三期附件代码精简（无任务，评审驱动）
+
+### Context
+
+- 三期 3 子任务全部归档后，对 `993e65e..HEAD` 整段 diff（~10300 行）做 ponytail-review
+  （只找可删的复杂度），外加测试代码精简扫描。
+- 三路并行评审（backend / frontend / tests lane，pi-subagents reviewer），
+  原始报告存 `.trellis/workspace/zzx/ponytail-phase3/result-*.log`。
+
+### Key Events
+
+- 评审共产出 ~50 个发现；采纳 27 项执行，净 **-482 行**（39 文件）。
+- 不采纳 2 项：`storageKeyFor` 扩展名（用户拍板功能）、"pending 行 0B"冒烟测试（PRD 验收项）。
+- 顺带修复：composer 手写 useEffect+fetch 拉 limits → 共享 `fileKeys.limits()` 查询缓存，
+  修复 hook-guidelines "禁止 useEffect+fetch" 违规（`src/hooks/use-file-limits.ts` 由此提升共享）。
+- 删除主体：readFileForActor（死代码）、fetchFileLimits 包装、DeleteFileDialog 并入
+  BatchDeleteDialog（N=1）、3 处不可达守卫、27 个重复/测 mock 自身/同码路排列的测试。
+- spec 同步：frontend/backend chat-attachments.md、frontend/i18n.md（新增 apiErrorCode 契约）。
+
+### Verification
+
+- 1012 测试 / 125 文件全绿；tsc、eslint 干净。
+- 遗留观察项：StorageQuotaCard/UserQuotaDialog 的 render-sync 草稿模式重复（-6 行可抽 hook，
+  未采纳，留待第二处以上复现再提）。
+
+### Git Commits
+
+| Commit | Message |
+|--------|---------|
+| `593fc1f` | refactor(attachments): ponytail cleanup — dead code, shared limits query, test dedup |
+
+### Status
+
+[OK] **Completed**（父任务 09-13-chat-attachments-phase3 待用户授权归档）
+---
+
+## 2026-09-14 · /settings/files 使用中行的选择框视觉区分
+
+### Context
+
+- 用户反馈：管理页「使用中」文件的 checkbox 只是 disabled 变灰，与可删除行区分度不够。
+
+### Key Events
+
+- 使用中行改渲染虚线锁形占位块（LockIcon，aria-hidden，语义由「使用中」badge 承载），
+  可删除行保持原生 Checkbox；删除按钮的 aria-describedby 不动。
+- 测试改写（锁占位断言），spec 批量选择契约同步（frontend/chat-attachments.md）。
+
+### Verification
+
+- files 域 20/20 测试、tsc、eslint 全绿；桌面/窄屏视觉待用户确认。
+
+### Status
+
+[OK] **Completed**
+
