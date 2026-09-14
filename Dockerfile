@@ -28,7 +28,7 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 # Attachment volume mountpoint: created here with nextjs ownership so the
-# named volume (docker-compose.prod.yml) is writable by the unprivileged
+# named volume (docker-compose.*.yml) is writable by the unprivileged
 # runtime user on first mount.
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs \

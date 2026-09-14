@@ -108,3 +108,42 @@ describe("register boot guard", () => {
     await expect(register()).resolves.toBeUndefined();
   });
 });
+
+describe("resolveDatabaseUrl", () => {
+  it("prioritizes DATABASE_URL if set", async () => {
+    const { resolveDatabaseUrl } = await loadEnvModule();
+    expect(
+      resolveDatabaseUrl({
+        DATABASE_URL: "postgres://direct:secret@custom:5432/mydb",
+        POSTGRES_HOST: "other",
+      }),
+    ).toBe("postgres://direct:secret@custom:5432/mydb");
+  });
+
+  it("assembles connection URI from discrete variables with encoding", async () => {
+    const { resolveDatabaseUrl } = await loadEnvModule();
+    expect(
+      resolveDatabaseUrl({
+        POSTGRES_USER: "my/user",
+        POSTGRES_PASSWORD: "p@ss:word#123",
+        POSTGRES_HOST: "pg.internal",
+        POSTGRES_PORT: "5433",
+        POSTGRES_DB: "custom_db",
+      }),
+    ).toBe("postgres://my%2Fuser:p%40ss%3Aword%23123@pg.internal:5433/custom_db");
+  });
+
+  it("uses sensible defaults for omitted discrete variables", async () => {
+    const { resolveDatabaseUrl } = await loadEnvModule();
+    expect(
+      resolveDatabaseUrl({
+        POSTGRES_HOST: "192.168.1.50",
+      }),
+    ).toBe("postgres://postgres@192.168.1.50:5432/pika_chat");
+  });
+
+  it("returns undefined when no database variables exist", async () => {
+    const { resolveDatabaseUrl } = await loadEnvModule();
+    expect(resolveDatabaseUrl({})).toBeUndefined();
+  });
+});

@@ -53,6 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Comprehensive test suite with Vitest and PostgreSQL integration tests across 130 test files and 1,000+ test cases.
 - Production Docker container with Next.js standalone output and automated database migration on container boot.
-- Bundled RustFS Compose override (`docker-compose.prod.rustfs.yml`) for an all-in-one local S3 storage stack.
+- Production Docker Compose configurations: all-in-one stack (`docker-compose.full.yml`), standalone app (`docker-compose.standalone.yml`), and local dev (`docker-compose.dev.yml`).
 - GitHub Actions CI for continuous linting, typechecking, integration tests, and Docker build smoke testing.
 - Multi-architecture container build workflow (`linux/amd64` and `linux/arm64`) with automated GitHub Releases.

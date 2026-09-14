@@ -87,32 +87,34 @@
 
 ## Quick Start
 
-### Option 1: Production with Docker Compose (Recommended)
+### Option 1: Production All-in-One (`docker-compose.full.yml`, Recommended)
 
-Run PostgreSQL and Pika Chat in Docker with persistent storage and automated migrations on boot.
+Runs Pika Chat, PostgreSQL, and RustFS (S3-compatible attachment storage) together in an all-in-one stack with persistent volumes and automatic migrations on boot. Pulls the official prebuilt image (`ghcr.io/jason-zzx/pika-chat:latest`) by default.
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/pika-chat.git
+   git clone https://github.com/jason-zzx/pika-chat.git
    cd pika-chat
    ```
 
-2. **Generate secrets**:
+2. **Configure environment variables**:
    ```bash
-   # Generate authenticated encryption secret (AES-256-GCM)
-   openssl rand -base64 48
-
-   # Generate session signing secret
+   cp .env.example .env
+   ```
+   Open `.env` and configure your instance secrets. Generate 32+ character secrets with:
+   ```bash
    openssl rand -base64 48
    ```
+   Fill them into `.env`:
+   ```env
+   CREDENTIAL_ENCRYPTION_SECRET=your-generated-encryption-secret
+   BETTER_AUTH_SECRET=your-generated-auth-secret
+   POSTGRES_PASSWORD=your-db-password
+   ```
 
-3. **Launch production containers**:
+3. **Launch all-in-one stack**:
    ```bash
-   export CREDENTIAL_ENCRYPTION_SECRET="<your-generated-encryption-secret>"
-   export BETTER_AUTH_SECRET="<your-generated-auth-secret>"
-   export POSTGRES_PASSWORD="<choose-a-db-password>"
-
-   docker compose -f docker-compose.prod.yml up -d --build
+   docker compose -f docker-compose.full.yml up -d
    ```
 
 4. **Initialize Super Admin**:
@@ -120,23 +122,49 @@ Run PostgreSQL and Pika Chat in Docker with persistent storage and automated mig
 
 ---
 
-### Option 2: Production with Bundled RustFS (All-in-One S3 Storage)
+### Option 2: Production Standalone (`docker-compose.standalone.yml`)
 
-To run high-performance S3-compatible attachment storage in a container alongside the app without external cloud storage:
+If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neon, or self-hosted) and optional external S3 storage, run the application container alone without launching redundant local containers:
 
-```bash
-export CREDENTIAL_ENCRYPTION_SECRET="<your-generated-encryption-secret>"
-export BETTER_AUTH_SECRET="<your-generated-auth-secret>"
-export S3_ACCESS_KEY_ID="<your-chosen-s3-key>"
-export S3_SECRET_ACCESS_KEY="<your-chosen-s3-secret>"
-export S3_BUCKET="pika-attachments" # optional, defaults to pika-attachments
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/jason-zzx/pika-chat.git
+   cd pika-chat
+   ```
 
-docker compose -f docker-compose.prod.yml -f docker-compose.prod.rustfs.yml up -d --build
-```
+2. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env` to connect to your external PostgreSQL database:
+   ```env
+   # Method A: Provide a single connection string
+   DATABASE_URL=postgres://user:password@your-pg-host:5432/pika_chat
+
+   # Method B: Or provide discrete variables (credentials are automatically URL-encoded)
+   # POSTGRES_HOST=your-pg-host
+   # POSTGRES_PORT=5432
+   # POSTGRES_USER=user
+   # POSTGRES_PASSWORD=password
+   # POSTGRES_DB=pika_chat
+
+   CREDENTIAL_ENCRYPTION_SECRET=your-generated-encryption-secret
+   BETTER_AUTH_SECRET=your-generated-auth-secret
+
+   # Optional: configure external S3 storage
+   # S3_BUCKET=my-bucket
+   # S3_ACCESS_KEY_ID=...
+   # S3_SECRET_ACCESS_KEY=...
+   ```
+
+3. **Launch standalone application**:
+   ```bash
+   docker compose -f docker-compose.standalone.yml up -d
+   ```
 
 ---
 
-### Option 3: Local Development
+### Option 3: Local Development (`docker-compose.dev.yml`)
 
 #### Prerequisites
 - **Node.js**: >= 22
@@ -147,7 +175,7 @@ docker compose -f docker-compose.prod.yml -f docker-compose.prod.rustfs.yml up -
 
 1. **Clone and install dependencies**:
    ```bash
-   git clone https://github.com/your-username/pika-chat.git
+   git clone https://github.com/jason-zzx/pika-chat.git
    cd pika-chat
    pnpm install
    ```
@@ -156,14 +184,11 @@ docker compose -f docker-compose.prod.yml -f docker-compose.prod.rustfs.yml up -
    ```bash
    cp .env.example .env
    ```
-   Open `.env` and replace `CREDENTIAL_ENCRYPTION_SECRET` and `BETTER_AUTH_SECRET` with generated random strings:
-   ```bash
-   openssl rand -base64 48
-   ```
+   Open `.env` and set `CREDENTIAL_ENCRYPTION_SECRET` and `BETTER_AUTH_SECRET` with values from `openssl rand -base64 48`.
 
-3. **Start PostgreSQL database**:
+3. **Start local PostgreSQL development database**:
    ```bash
-   docker compose up -d
+   docker compose -f docker-compose.dev.yml up -d
    ```
 
 4. **Run database migrations**:
@@ -186,7 +211,12 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 
 | Variable | Required | Default | Description |
 |---|:---:|:---:|---|
-| `DATABASE_URL` | **Yes** | — | PostgreSQL connection URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat`). |
+| `DATABASE_URL` | **Yes\*** | — | PostgreSQL connection URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat`). \*Alternatively, provide discrete `POSTGRES_*` variables. |
+| `POSTGRES_HOST` | No | `localhost` / `postgres` | Hostname of external PostgreSQL server (used when `DATABASE_URL` is omitted). |
+| `POSTGRES_PORT` | No | `5432` | Port of external PostgreSQL server. |
+| `POSTGRES_USER` | No | `postgres` / `pika` | Username for PostgreSQL (auto-encoded). |
+| `POSTGRES_PASSWORD` | No | — | Password for PostgreSQL (auto-encoded). |
+| `POSTGRES_DB` | No | `pika_chat` | Database name. |
 | `CREDENTIAL_ENCRYPTION_SECRET` | **Yes** | — | Secret key (min 32 chars) used for AES-256-GCM encryption of provider API keys at rest. **Do not lose this**; losing it orphans stored credentials permanently. |
 | `BETTER_AUTH_SECRET` | **Yes** | — | Secret key (min 32 chars) used for signing Better Auth session tokens. |
 | `BETTER_AUTH_URL` | No | `http://localhost:3000` | Canonical public URL of your deployment. Required when deployed behind reverse proxies. |
@@ -198,6 +228,7 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 | `S3_ACCESS_KEY_ID` | If S3 set | — | S3 access key credential. |
 | `S3_SECRET_ACCESS_KEY` | If S3 set | — | S3 secret access key credential. |
 | `S3_DIRECT_ACCESS` | No | `false` | Set to `1` or `true` to enable direct browser S3 uploads (presigned POST) and downloads (presigned 302 GET), bypassing server transfer. Requires `S3_BUCKET`. |
+| `PIKA_IMAGE` | No | `ghcr.io/jason-zzx/pika-chat:latest` | Container image tag override in Docker Compose. |
 | `TEST_DATABASE_URL` | Dev only | — | Dedicated test database URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat_test`) for running Vitest integration tests. |
 
 ---

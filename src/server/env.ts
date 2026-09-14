@@ -35,12 +35,41 @@ export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | undefined;
 
+/**
+ * Resolves the database connection string. If `DATABASE_URL` is omitted,
+ * assembles one from discrete `POSTGRES_*` environment variables with proper
+ * URL encoding for credentials.
+ */
+export function resolveDatabaseUrl(
+  raw: Record<string, string | undefined> = process.env,
+): string | undefined {
+  if (raw.DATABASE_URL && raw.DATABASE_URL.length > 0) {
+    return raw.DATABASE_URL;
+  }
+  if (raw.POSTGRES_HOST || raw.POSTGRES_USER || raw.POSTGRES_DB) {
+    const user = encodeURIComponent(raw.POSTGRES_USER || "postgres");
+    const pass =
+      raw.POSTGRES_PASSWORD !== undefined
+        ? `:${encodeURIComponent(raw.POSTGRES_PASSWORD)}`
+        : "";
+    const host = raw.POSTGRES_HOST || "localhost";
+    const port = raw.POSTGRES_PORT || "5432";
+    const db = raw.POSTGRES_DB || "pika_chat";
+    return `postgres://${user}${pass}@${host}:${port}/${db}`;
+  }
+  return undefined;
+}
+
 export function getEnv(): Env {
   if (cached) {
     return cached;
   }
 
-  const parsed = envSchema.safeParse(process.env);
+  const dbUrl = resolveDatabaseUrl(process.env);
+  const parsed = envSchema.safeParse({
+    ...process.env,
+    ...(dbUrl ? { DATABASE_URL: dbUrl } : {}),
+  });
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((issue) => `${issue.path.join(".")}: ${issue.message}`)

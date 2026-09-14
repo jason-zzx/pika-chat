@@ -53,6 +53,6 @@
 
 - 完善的自动化测试体系：包含 130 个测试套件、1000+ 测试用例的 Vitest 单元与 PostgreSQL 集成测试。
 - 生产级 Dockerfile：Next.js Standalone 独立构建输出，容器启动时自动执行增量数据库迁移。
-- 预置 RustFS Compose 编排模板（`docker-compose.prod.rustfs.yml`），单机一键拉起 S3 兼容存储。
+- 生产级 Docker Compose 编排：全功能一体化（`docker-compose.full.yml`）、独立应用接入外部数据库（`docker-compose.standalone.yml`）与本地开发数据库（`docker-compose.dev.yml`）。
 - 配置 GitHub Actions CI：涵盖 Lint 代码检查、Typecheck 类型校验、全量集成测试与 Docker 构建冒烟测试。
 - 多架构容器镜像自动化发布流水线：支持 `linux/amd64` 与 `linux/arm64` 跨架构构建并自动推送到 GHCR，自动根据 CHANGELOG 生成 GitHub Release。

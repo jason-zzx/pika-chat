@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_USER: pika
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pika}
+      POSTGRES_DB: pika_chat
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pika -d pika_chat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rustfs:
+    image: docker.io/rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:-pika-rustfs-access-key}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:-pika-rustfs-secret-key}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    image: ${PIKA_IMAGE:-ghcr.io/jason-zzx/pika-chat:latest}
+    # To build from local source instead, uncomment the line below:
+    # build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://pika:${POSTGRES_PASSWORD:-pika}@postgres:5432/pika_chat
+      CREDENTIAL_ENCRYPTION_SECRET: ${CREDENTIAL_ENCRYPTION_SECRET:?set CREDENTIAL_ENCRYPTION_SECRET}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      S3_BUCKET: ${S3_BUCKET:-pika-attachments}
+      S3_ENDPOINT: http://rustfs:9000
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-pika-rustfs-access-key}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-pika-rustfs-secret-key}
+      FILE_STORAGE_DIR: /data/files
+    volumes:
+      - files_prod_data:/data/files
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+
+volumes:
+  postgres_prod_data:
+  rustfs_data:
+  files_prod_data:
