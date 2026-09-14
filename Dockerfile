@@ -8,6 +8,11 @@ FROM docker.io/library/node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DOCKER_BUILD=1
+# Next.js evaluates server components at build time to collect page data.
+# Provide dummy build-time values; runtime values are supplied when running the container.
+ENV DATABASE_URL="postgres://build:build@localhost:5432/build"
+ENV CREDENTIAL_ENCRYPTION_SECRET="build-dummy-credential-encryption-secret-min32"
+ENV BETTER_AUTH_SECRET="build-dummy-better-auth-secret-min-32-chars"
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
