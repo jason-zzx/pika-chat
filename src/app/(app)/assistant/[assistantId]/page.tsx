@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import ChatView from "@/components/chat/ChatView";
 import { resolveActor } from "@/server/auth/actor";
@@ -22,8 +22,10 @@ export default async function AssistantDraftPage({
   try {
     assistant = await requireOwnedAssistant(assistantId, actor);
   } catch (error) {
+    // A deleted or unknown assistant makes this a stale URL rather than a
+    // missing page: fall back to the home draft instead of a 404.
     if (error instanceof AppError && error.code === "NOT_FOUND") {
-      notFound();
+      redirect("/");
     }
     throw error;
   }

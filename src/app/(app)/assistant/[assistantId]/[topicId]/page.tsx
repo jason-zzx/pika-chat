@@ -1,7 +1,8 @@
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import ChatView from "@/components/chat/ChatView";
+import { assistantDraftHref } from "@/lib/assistant-path";
 import { resolveActor } from "@/server/auth/actor";
 import { findTopicContextForActor } from "@/server/services/topic.service";
 
@@ -16,8 +17,10 @@ export default async function AssistantTopicPage({ params }: TopicPageProps) {
   }
   const { assistantId, topicId } = await params;
   const context = await findTopicContextForActor(topicId, actor);
+  // A deleted, unknown, or re-parented topic makes this a stale URL rather
+  // than a missing page: land on this assistant's new-topic draft.
   if (!context || context.assistant.id !== assistantId) {
-    notFound();
+    redirect(assistantDraftHref(assistantId));
   }
 
   return (
