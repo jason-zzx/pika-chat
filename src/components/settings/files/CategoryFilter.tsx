@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   FILE_LIST_CATEGORIES,
+  FILE_LIST_CATEGORY_LABEL_KEYS,
   type FileListCategory,
 } from "@/lib/files/media-types";
 
@@ -16,13 +17,6 @@ type CategoryFilterProps = {
 // Hoisted so the JSX carries no bare string literal (i18next/no-literal-string).
 const ALL_FILTER_KEY = "all";
 
-const FILTER_LABEL_KEYS = {
-  image: "filterImage",
-  document: "filterDocument",
-  audio: "filterAudio",
-  video: "filterVideo",
-} as const;
-
 /** Coarse type filter above the list. Switching resets pagination via the key. */
 export default function CategoryFilter({
   value,
@@ -33,7 +27,7 @@ export default function CategoryFilter({
     { key: null, label: t("filterAll") },
     ...FILE_LIST_CATEGORIES.map((category) => ({
       key: category,
-      label: t(FILTER_LABEL_KEYS[category]),
+      label: t(FILE_LIST_CATEGORY_LABEL_KEYS[category]),
     })),
   ];
 

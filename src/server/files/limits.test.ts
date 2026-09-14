@@ -13,11 +13,7 @@ try {
     "test-credential-encryption-secret-min-32";
 }
 
-const MANAGED = [
-  "FILE_UPLOAD_MAX_MB",
-  "S3_DIRECT_ACCESS",
-  "S3_BUCKET",
-] as const;
+const MANAGED = ["FILE_UPLOAD_MAX_MB", "S3_DIRECT_ACCESS"] as const;
 
 let saved: Record<string, string | undefined> = {};
 
@@ -66,23 +62,9 @@ describe("isS3DirectAccessEnabled", () => {
     expect(isS3DirectAccessEnabled()).toBe(false);
   });
 
-  it("is on with the switch and an S3 backend", async () => {
-    process.env.S3_DIRECT_ACCESS = "1";
-    process.env.S3_BUCKET = "pika-attachments";
-    const { isS3DirectAccessEnabled } = await loadLimits();
-    expect(isS3DirectAccessEnabled()).toBe(true);
-  });
-
-  it("accepts the spelled-out truthy value", async () => {
-    process.env.S3_DIRECT_ACCESS = "true";
-    process.env.S3_BUCKET = "pika-attachments";
-    const { isS3DirectAccessEnabled } = await loadLimits();
-    expect(isS3DirectAccessEnabled()).toBe(true);
-  });
-
-  it("stays off when the switch has no S3 backend", async () => {
+  it("is on with the switch", async () => {
     process.env.S3_DIRECT_ACCESS = "1";
     const { isS3DirectAccessEnabled } = await loadLimits();
-    expect(isS3DirectAccessEnabled()).toBe(false);
+    expect(isS3DirectAccessEnabled()).toBe(true);
   });
 });

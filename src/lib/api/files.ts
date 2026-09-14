@@ -31,19 +31,7 @@ export const DEFAULT_FILE_LIMITS: FileLimits = {
   quotaBytes: null,
 };
 
-/** Fetches the current upload limits, falling back to the defaults on any failure. */
-export async function fetchFileLimits(): Promise<FileLimits> {
-  try {
-    return await getFileLimits();
-  } catch {
-    return DEFAULT_FILE_LIMITS;
-  }
-}
-
-/**
- * Current usage and quota without the composer's silent fallback: a settings
- * screen wants to show the failure, not report zero usage.
- */
+/** Fetches the current upload limits. */
 export async function getFileLimits(): Promise<FileLimits> {
   const response = await fetch("/api/files/limits");
   return parseJson(response, (data) => fileLimitsSchema.parse(data));

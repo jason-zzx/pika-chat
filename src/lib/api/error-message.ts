@@ -5,6 +5,7 @@ import type {
 } from "@/lib/api/error-contract";
 
 type ParsedApiError = {
+  code?: string;
   messageKey: string;
   params?: ErrorMessageParams;
 };
@@ -58,7 +59,12 @@ function parseApiError(error: unknown): ParsedApiError | undefined {
   if (typeof messageKey !== "string" || messageKey.length === 0) {
     return undefined;
   }
-  return { messageKey, params: parseParams(wrapped["params"]) };
+  const code = wrapped["code"];
+  return {
+    code: typeof code === "string" && code.length > 0 ? code : undefined,
+    messageKey,
+    params: parseParams(wrapped["params"]),
+  };
 }
 
 function asDynamic(t: ErrorsTranslator): DynamicTranslator {
@@ -101,6 +107,14 @@ function parseApiErrorFromUnknown(error: unknown): ParsedApiError | undefined {
     return parseEnvelopeString(error.message);
   }
   return undefined;
+}
+
+/**
+ * The envelope's machine-readable `code` (e.g. `CONFLICT`), extracted from any
+ * shape an API client can throw. `undefined` for non-envelope errors.
+ */
+export function apiErrorCode(error: unknown): string | undefined {
+  return parseApiErrorFromUnknown(error)?.code;
 }
 
 /**

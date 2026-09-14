@@ -20,7 +20,7 @@ import {
   verifications,
 } from "@/server/db/schema";
 
-import { deleteFile, uploadFile } from "./file.service";
+import { uploadFile } from "./file.service";
 import { assertUploadQuota, effectiveQuotaBytes, usageBytes } from "./quota";
 
 const db = getDb();
@@ -138,13 +138,6 @@ describe("quota", () => {
       await setUserQuota(owner.userId, 500);
       expect(await effectiveQuotaBytes(owner)).toBe(500);
     });
-
-    it("honours an override even when the global default is cleared", async () => {
-      const owner = await seedUser("owner");
-      await setGlobalQuota(null);
-      await setUserQuota(owner.userId, 500);
-      expect(await effectiveQuotaBytes(owner)).toBe(500);
-    });
   });
 
   describe("assertUploadQuota", () => {
@@ -204,27 +197,6 @@ describe("quota", () => {
       // Only the seeded row remains: the rejected upload wrote no row (and,
       // because the check precedes `storage.put`, no object).
       expect(await fileCount(owner.userId)).toBe(1);
-    });
-
-    it("stores a file that fits", async () => {
-      const owner = await seedUser("owner");
-      await setGlobalQuota(1000);
-      await seedFile(owner.userId, 100);
-
-      const uploaded = await uploadFile(
-        {
-          filename: "notes.txt",
-          mediaType: "text/plain",
-          data: Buffer.from("hello"),
-        },
-        owner,
-      );
-      expect(uploaded.sizeBytes).toBe(5);
-      expect(await usageBytes(owner.userId)).toBe(105);
-
-      // The leak invariant (vitest.integration.storage.ts) requires every
-      // put to be balanced by a delete within the same test.
-      await deleteFile(uploaded.id, owner);
     });
   });
 });

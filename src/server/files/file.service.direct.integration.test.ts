@@ -43,7 +43,20 @@ vi.mock("./storage", async (importOriginal) => {
   const disk = new actual.LocalDiskFileStorage(mockStorageRoot);
   const hybrid = {
     put: (key: string, data: Buffer) => disk.put(key, data),
-    get: (key: string) => disk.get(key),
+    get: async (key: string) => {
+      try {
+        return await disk.get(key);
+      } catch (error) {
+        // The service reads missing-object errors in the S3 shape only; the
+        // disk stand-in raises ENOENT, so translate it here.
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+          const missing = new Error(`missing object: ${key}`);
+          missing.name = "NoSuchKey";
+          throw missing;
+        }
+        throw error;
+      }
+    },
     delete: (key: string) => disk.delete(key),
     createPresignedPost: async (
       key: string,

@@ -73,13 +73,15 @@ export const GET = withErrorHandling(async (request, context) => {
   const file = await getFileForActor(await fileId(context), actor);
   const storage = getFileStorage();
 
-  if (isS3DirectAccessEnabled() && storage.createPresignedGet) {
+  if (isS3DirectAccessEnabled()) {
     // Direct access: the bytes never pass through the app. The signed URL
     // overrides the response headers so the redirected object answers with
     // exactly the Content-Type and inline/attachment disposition the relay
     // path below would have used — and clients (img/audio/video tags, new
-    // tabs) follow the 302 without any client-side branch.
-    const url = await storage.createPresignedGet(file.storageKey, {
+    // tabs) follow the 302 without any client-side branch. `createPresignedGet`
+    // is optional only because local disk cannot sign; direct access requires
+    // S3 at boot.
+    const url = await storage.createPresignedGet!(file.storageKey, {
       expiresSec: PRESIGNED_GET_EXPIRES_SEC,
       responseContentType: file.mediaType,
       responseContentDisposition: contentDisposition(

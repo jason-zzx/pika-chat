@@ -205,18 +205,15 @@ async function removeObjectQuietly(
 
 /**
  * True when a storage read failed because the object is absent — a direct
- * upload that never landed, or one whose policy expired. Local disk raises
- * ENOENT; S3 raises NoSuchKey, and implementations disagree on the error name,
- * so the HTTP status is consulted as a fallback.
+ * upload that never landed, or one whose policy expired. Only reachable with
+ * direct access on, i.e. against S3: it raises NoSuchKey, and implementations
+ * disagree on the error name, so the HTTP status is consulted as a fallback.
  */
 function isObjectMissing(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
   if (error.name === "NoSuchKey" || error.name === "NotFound") {
-    return true;
-  }
-  if ("code" in error && error.code === "ENOENT") {
     return true;
   }
   const metadata =
@@ -396,13 +393,6 @@ export async function presignFile(
   }
 
   const storage = getFileStorage();
-  if (!storage.createPresignedPost) {
-    // The boot check refuses S3_DIRECT_ACCESS without S3; reaching here
-    // means the flag and the storage singleton disagree. Fail loudly rather
-    // than silently relaying — the client asked for a direct upload.
-    throw new AppError("INTERNAL", 500, "file.uploadFailed");
-  }
-
   const mediaType = storedMediaType(input.mediaType, filename);
   const id = newId();
   const storageKey = storageKeyFor(actor.userId, id, filename);
@@ -415,7 +405,9 @@ export async function presignFile(
     storageKey,
   });
 
-  const post = await storage.createPresignedPost(storageKey, {
+  // Optional in the interface because local disk cannot sign; the presign
+  // route only runs with direct access on, which boot guarantees is S3.
+  const post = await storage.createPresignedPost!(storageKey, {
     maxBytes: maxFileBytes(),
     expiresSec: PRESIGN_EXPIRES_SEC,
   });
@@ -474,14 +466,12 @@ export async function completeFile(
     .set({ sizeBytes, updatedAt: new Date() })
     .where(eq(files.id, fileId));
 
+  // `!`: presign classified the same filename + stored media type pair
+  // before signing, and `storedMediaType` only narrows toward classifiable.
   const category = classifyFile({
     mediaType: file.mediaType,
     filename: file.filename,
-  });
-  if (!category) {
-    // Unreachable: presign classified the same pair before signing.
-    throw new AppError("VALIDATION_FAILED", 400, "file.unsupportedType");
-  }
+  })!;
 
   const extraction = await extractAndCache(
     fileId,
@@ -765,16 +755,6 @@ export async function listFilesForActor(
     totalCount: Number(countRows[0]?.total ?? 0),
     totalBytes,
   };
-}
-
-/** Owned-row lookup plus the stored bytes, for download and native routing. */
-export async function readFileForActor(
-  id: string,
-  actor: Actor,
-): Promise<{ file: FileRecord; data: Buffer }> {
-  const file = await getFileForActor(id, actor);
-  const data = await getFileStorage().get(file.storageKey);
-  return { file, data };
 }
 
 /**

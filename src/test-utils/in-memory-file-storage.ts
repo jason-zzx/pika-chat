@@ -19,10 +19,10 @@ export class InMemoryFileStorage implements FileStorage {
   async get(key: string): Promise<Buffer> {
     const data = this.objects.get(key);
     if (data === undefined) {
-      // ENOENT matches LocalDiskFileStorage so `isObjectMissing()` in the
-      // service keeps its missing-object semantics.
-      const error = new Error(`missing object: ${key}`) as NodeJS.ErrnoException;
-      error.code = "ENOENT";
+      // The NoSuchKey name matches S3's missing-object error so
+      // `isObjectMissing()` in the service keeps its semantics.
+      const error = new Error(`missing object: ${key}`);
+      error.name = "NoSuchKey";
       throw error;
     }
     return data;

@@ -13,11 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { apiErrorMessage } from "@/lib/api/error-message";
+import { fileKeys } from "@/hooks/use-file-limits";
+import { apiErrorCode, apiErrorMessage } from "@/lib/api/error-message";
 import { deleteChatFile } from "@/lib/api/files";
 import type { ListedFile } from "@/lib/schemas/file";
-
-import { fileKeys } from "./use-files";
 
 type BatchDeleteDialogProps = {
   files: ListedFile[];
@@ -26,23 +25,18 @@ type BatchDeleteDialogProps = {
 
 type BatchResult = { deleted: number; skipped: number };
 
-/** The 409 race: the envelope the file route answers for a referenced file. */
-function isInUseConflict(reason: unknown): boolean {
-  return (
-    typeof reason === "object" &&
-    reason !== null &&
-    "error" in reason &&
-    (reason as { error?: { code?: string } }).error?.code === "CONFLICT"
-  );
-}
-
 /**
- * Confirms and performs a batch delete. There is deliberately no server-side
- * batch endpoint: each file goes through the same `DELETE /api/files/[id]`
- * (ownership, in-use 409, and provider-side cleanup included), and the results
- * are settled client-side. A rejection means "not deleted" — the expected case
- * is the 409 race where a message started referencing the file after the list
- * loaded — so it is reported as skipped and the refetch marks it in use.
+ * Confirms and performs the delete of one or more files. There is deliberately
+ * no server-side batch endpoint: each file goes through the same
+ * `DELETE /api/files/[id]` (ownership, in-use 409, and provider-side cleanup
+ * included), and the results are settled client-side. A rejection means "not
+ * deleted" — the expected case is the 409 race where a message started
+ * referencing the file after the list loaded.
+ *
+ * A single file keeps the row action's flow: success closes the dialog, any
+ * failure stays open with the error inline. A batch stays open with a summary
+ * — a 409 is reported as skipped (the refetch marks the row in use) and only
+ * other failures surface as an error alongside the summary.
  */
 export default function BatchDeleteDialog({
   files,
@@ -55,6 +49,7 @@ export default function BatchDeleteDialog({
   const [result, setResult] = useState<BatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const single = files.length === 1 ? files[0] : undefined;
 
   async function onConfirm() {
     setError(null);
@@ -66,14 +61,27 @@ export default function BatchDeleteDialog({
       const deleted = results.filter(
         (entry) => entry.status === "fulfilled",
       ).length;
-      // One invalidate refreshes the list and the usage card together; the
-      // skipped rows come back marked in-use.
+      // Settled, not success: a 409 means a message started referencing the
+      // file after this page loaded, so the list refetches to show it as
+      // in-use either way. One invalidate refreshes the list and the usage
+      // card together.
       await queryClient.invalidateQueries({ queryKey: fileKeys.all });
-      setResult({ deleted, skipped: results.length - deleted });
       const failure = results.find((entry) => entry.status === "rejected");
-      if (failure?.status === "rejected" && !isInUseConflict(failure.reason)) {
-        // A 409 `file.inUse` is the expected race and already counted as
-        // skipped; anything else is surfaced alongside the summary.
+      if (single) {
+        if (failure?.status === "rejected") {
+          setError(
+            apiErrorMessage(failure.reason, tErrors, "actions.deleteFile"),
+          );
+        } else {
+          onOpenChange(false);
+        }
+        return;
+      }
+      setResult({ deleted, skipped: results.length - deleted });
+      if (
+        failure?.status === "rejected" &&
+        apiErrorCode(failure.reason) !== "CONFLICT"
+      ) {
         setError(
           apiErrorMessage(failure.reason, tErrors, "actions.deleteFile"),
         );
@@ -87,7 +95,9 @@ export default function BatchDeleteDialog({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("batchTitle")}</DialogTitle>
+          <DialogTitle>
+            {single ? t("deleteTitle") : t("batchTitle")}
+          </DialogTitle>
           {result ? (
             <DialogDescription>
               {result.skipped > 0
@@ -99,7 +109,9 @@ export default function BatchDeleteDialog({
             </DialogDescription>
           ) : (
             <DialogDescription>
-              {t("batchDescription", { count: files.length })}
+              {single
+                ? t("deleteDescription", { filename: single.filename })
+                : t("batchDescription", { count: files.length })}
             </DialogDescription>
           )}
         </DialogHeader>
@@ -124,7 +136,13 @@ export default function BatchDeleteDialog({
                 disabled={isDeleting}
                 onClick={() => void onConfirm()}
               >
-                {isDeleting ? t("batchDeleting") : t("deleteSelected")}
+                {isDeleting
+                  ? single
+                    ? t("deleting")
+                    : t("batchDeleting")
+                  : single
+                    ? t("deleteConfirm")
+                    : t("deleteSelected")}
               </Button>
             </>
           )}

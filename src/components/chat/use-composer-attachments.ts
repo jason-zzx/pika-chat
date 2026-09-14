@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 
+import { fileKeys } from "@/hooks/use-file-limits";
 import {
   DEFAULT_FILE_LIMITS,
   deleteChatFile,
-  fetchFileLimits,
+  getFileLimits,
   uploadChatFile,
   uploadChatFileDirect,
 } from "@/lib/api/files";
@@ -14,8 +16,7 @@ import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
 import { formatBytes } from "@/lib/files/format";
 import { classifyFile, fileIdFromUrl } from "@/lib/files/media-types";
 import { newId } from "@/lib/id";
-import type { FileLimits } from "@/lib/schemas/file";
-import {
+import type { FileLimits } from "@/lib/schemas/file";import {
   useComposerStore,
   type StagedAttachment,
 } from "@/stores/composer-store";
@@ -75,21 +76,16 @@ export function useComposerAttachments(draftKey: string) {
   const updateAttachments = useComposerStore(
     (state) => state.updateAttachments,
   );
-  // Starts at the fallback limits so a file selected before the fetch settles
-  // is still pre-checked, then tightens to the operator's configured size.
-  const [limits, setLimits] = useState<FileLimits>(DEFAULT_FILE_LIMITS);
-
-  useEffect(() => {
-    let active = true;
-    void fetchFileLimits().then((fetched) => {
-      if (active) {
-        setLimits(fetched);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Starts at the fallback limits so a file selected before the query
+  // settles is still pre-checked, then tightens to the operator's configured
+  // size. Shares the limits cache with the settings usage card; a failed
+  // fetch just keeps the fallback.
+  const { data: fetchedLimits } = useQuery({
+    queryKey: fileKeys.limits(),
+    queryFn: getFileLimits,
+    retry: false,
+  });
+  const limits: FileLimits = fetchedLimits ?? DEFAULT_FILE_LIMITS;
 
   const upload = useCallback(
     (localId: string, file: File) => {

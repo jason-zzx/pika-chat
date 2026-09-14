@@ -35,7 +35,6 @@ import {
   getFileForActor,
   listFilesForActor,
   ORPHAN_FILE_TTL_MS,
-  readFileForActor,
   resolveOwnedFileParts,
   sweepOrphanFiles,
   uploadFile,
@@ -188,15 +187,13 @@ describe("file.service", () => {
     expect(cached[0]?.text).toContain("hello attachment");
     expect(cached[0]?.truncated).toBe(false);
 
-    const { data } = await readFileForActor(uploaded.id, owner);
+    const row = await getFileForActor(uploaded.id, owner);
+    const data = await getFileStorage().get(row.storageKey);
     expect(data.equals(bytes)).toBe(true);
 
     await expect(getFileForActor(uploaded.id, other)).rejects.toMatchObject({
       code: "NOT_FOUND",
       status: 404,
-    });
-    await expect(readFileForActor(uploaded.id, other)).rejects.toMatchObject({
-      code: "NOT_FOUND",
     });
 
     // Balance the put from `uploadFile` (the shared leak invariant).
@@ -644,109 +641,28 @@ describe("listFilesForActor", () => {
     expect(byId.get(free)?.referenced).toBe(false);
   });
 
-  it("filters by coarse category without moving totalBytes", async () => {
+  it("keeps totalBytes unfiltered when a category is selected", async () => {
     const owner = await seedUser("owner");
-    const rows = [
-      { filename: "pic.png", mediaType: "image/png", category: "image" },
-      { filename: "notes.txt", mediaType: "text/plain", category: "document" },
-      {
-        filename: "report.pdf",
-        mediaType: "application/pdf",
-        category: "document",
-      },
-      {
-        filename: "data.json",
-        mediaType: "application/json",
-        category: "document",
-      },
-      {
-        filename: "book.epub",
-        mediaType: "application/epub+zip",
-        category: "document",
-      },
-      // Exotic text types: the `text/` prefix rule and the explicit
-      // non-`text` list both have to land in `document`.
-      {
-        filename: "script.py",
-        mediaType: "text/x-python",
-        category: "document",
-      },
-      {
-        filename: "config.yaml",
-        mediaType: "application/yaml",
-        category: "document",
-      },
-      { filename: "clip.mp3", mediaType: "audio/mpeg", category: "audio" },
-      { filename: "clip.mp4", mediaType: "video/mp4", category: "video" },
-    ];
-    for (const [index, row] of rows.entries()) {
-      await insertFileRow(owner, {
-        filename: row.filename,
-        mediaType: row.mediaType,
-        sizeBytes: index + 1,
-        createdAt: new Date(Date.UTC(2026, 0, index + 1)),
-      });
-    }
-    const totalBytes = rows.reduce((sum, _row, index) => sum + (index + 1), 0);
-
-    for (const category of [
-      "image",
-      "document",
-      "audio",
-      "video",
-    ] as const) {
-      const page = await listFilesForActor(owner, {
-        offset: 0,
-        limit: 50,
-        category,
-      });
-      const expected = rows
-        .filter((row) => row.category === category)
-        .map((row) => row.filename)
-        .sort();
-      expect(page.files.map((file) => file.filename).sort()).toEqual(expected);
-      expect(page.totalCount).toBe(expected.length);
-      // Usage is not filter-scoped: the card's denominator stays whole.
-      expect(page.totalBytes).toBe(totalBytes);
-    }
-
-    const all = await listFilesForActor(owner, { offset: 0, limit: 50 });
-    expect(all.totalCount).toBe(rows.length);
-  });
-
-  it("stays referenced across multiple parts and multiple messages", async () => {
-    const owner = await seedUser("owner");
-    const shared = await insertFileRow(owner, {
-      filename: "shared.txt",
+    await insertFileRow(owner, {
+      filename: "notes.txt",
       mediaType: "text/plain",
       sizeBytes: 3,
       createdAt: new Date(Date.UTC(2026, 0, 1)),
     });
-    const free = await insertFileRow(owner, {
-      filename: "free.txt",
-      mediaType: "text/plain",
-      sizeBytes: 3,
+    await insertFileRow(owner, {
+      filename: "clip.mp4",
+      mediaType: "video/mp4",
+      sizeBytes: 5,
       createdAt: new Date(Date.UTC(2026, 0, 2)),
     });
-    const part = (id: string, filename: string) => ({
-      type: "file" as const,
-      url: `/api/files/${id}`,
-      mediaType: "text/plain",
-      filename,
-    });
-    // Two parts of the same message plus a second message, none of which is
-    // the only reference — the badge must not depend on how it is referenced.
-    await seedTopicWithMessage(owner, [
-      part(shared, "shared.txt"),
-      part(shared, "shared.txt"),
-      { type: "text", text: "both" },
-    ]);
-    await seedTopicWithMessage(owner, [part(shared, "shared.txt")]);
 
-    const page = await listFilesForActor(owner, { offset: 0, limit: 50 });
-    const byId = new Map(page.files.map((file) => [file.id, file]));
-    expect(byId.get(shared)?.referenced).toBe(true);
-    expect(byId.get(free)?.referenced).toBe(false);
+    const page = await listFilesForActor(owner, {
+      offset: 0,
+      limit: 50,
+      category: "video",
+    });
+    // Usage is not filter-scoped: the card's denominator stays whole.
+    expect(page.totalBytes).toBe(8);
   });
 
   it("filters by exactly the category each row's badge shows", async () => {

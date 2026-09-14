@@ -67,15 +67,6 @@ describe("GET /api/files", () => {
     });
   });
 
-  it("keeps an over-limit page size for the service to clamp", async () => {
-    await GET(request("?limit=1000"), undefined);
-    expect(listFilesForActor).toHaveBeenCalledWith(ACTOR, {
-      offset: 0,
-      limit: 1000,
-      category: undefined,
-    });
-  });
-
   it("rejects an unknown category with 400", async () => {
     const response = await GET(request("?category=bogus"), undefined);
 

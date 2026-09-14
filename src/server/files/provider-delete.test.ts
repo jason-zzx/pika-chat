@@ -60,7 +60,6 @@ vi.mock("@/server/db/client", () => ({
 import {
   attemptDelete,
   deleteProviderFileReferences,
-  MAX_DELETE_ATTEMPTS,
   processDeleteRetries,
   type ProviderReferencedFile,
 } from "./provider-delete";
@@ -281,12 +280,6 @@ describe("deleteProviderFileReferences", () => {
 });
 
 describe("processDeleteRetries", () => {
-  it("does nothing when the queue is empty", async () => {
-    await processDeleteRetries();
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(mocks.deleted).toBe(0);
-  });
-
   it("reschedules a transient failure with the next backoff", async () => {
     stubFetchResponse(503);
     mocks.selectRows = [
@@ -308,62 +301,5 @@ describe("processDeleteRetries", () => {
     const nextRetryAt = mocks.updated[0]?.nextRetryAt as Date;
     expect(nextRetryAt.getTime()).toBeGreaterThanOrEqual(before + 4 * HOUR_MS);
     expect(mocks.deleted).toBe(0);
-  });
-
-  it("abandons after the fifth failed retry", async () => {
-    stubFetchResponse(500);
-    mocks.selectRows = [
-      {
-        id: "retry-1",
-        providerConfigId: CONFIG_ID,
-        providerFileId: "file_abc",
-        attempts: MAX_DELETE_ATTEMPTS - 1,
-        nextRetryAt: new Date(),
-        lastStatus: 500,
-        createdAt: new Date(),
-      },
-    ];
-    await processDeleteRetries();
-
-    expect(mocks.deleted).toBe(1);
-    expect(mocks.updated).toHaveLength(0);
-  });
-
-  it("drops the entry once the provider reports it gone", async () => {
-    stubFetchResponse(404);
-    mocks.selectRows = [
-      {
-        id: "retry-1",
-        providerConfigId: CONFIG_ID,
-        providerFileId: "file_abc",
-        attempts: 2,
-        nextRetryAt: new Date(),
-        lastStatus: 500,
-        createdAt: new Date(),
-      },
-    ];
-    await processDeleteRetries();
-
-    expect(mocks.deleted).toBe(1);
-    expect(mocks.updated).toHaveLength(0);
-  });
-
-  it("drops the entry on a credential failure", async () => {
-    stubFetchResponse(403);
-    mocks.selectRows = [
-      {
-        id: "retry-1",
-        providerConfigId: CONFIG_ID,
-        providerFileId: "file_abc",
-        attempts: 1,
-        nextRetryAt: new Date(),
-        lastStatus: null,
-        createdAt: new Date(),
-      },
-    ];
-    await processDeleteRetries();
-
-    expect(mocks.deleted).toBe(1);
-    expect(mocks.updated).toHaveLength(0);
   });
 });

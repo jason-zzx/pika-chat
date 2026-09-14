@@ -27,15 +27,17 @@ async function loadTarget(userId: string) {
 
 /** Reads one user's quota override for the admin dialog. */
 export async function getUserQuota(userId: string): Promise<UserQuotaResponse> {
-  const row = await loadTarget(userId);
-  const quota = (
+  const row = (
     await getDb()
-      .select({ fileQuotaBytes: users.fileQuotaBytes })
+      .select({ id: users.id, fileQuotaBytes: users.fileQuotaBytes })
       .from(users)
-      .where(eq(users.id, row.id))
+      .where(eq(users.id, userId))
       .limit(1)
   )[0];
-  return { userId: row.id, quotaBytes: quota?.fileQuotaBytes ?? null };
+  if (!row) {
+    throw new AppError("NOT_FOUND", 404, "auth.userNotFound");
+  }
+  return { userId: row.id, quotaBytes: row.fileQuotaBytes };
 }
 
 /**

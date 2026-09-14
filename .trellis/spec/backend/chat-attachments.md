@@ -67,7 +67,7 @@ ensureProviderReference({ file, configId, apiFormat, filesApi }):
 
 // files/limits.ts
 maxFileBytes(): number          // FILE_UPLOAD_MAX_MB (1..100) or 20 MiB
-isS3DirectAccessEnabled(): boolean  // S3_DIRECT_ACCESS truthy AND S3_BUCKET set
+isS3DirectAccessEnabled(): boolean  // S3_DIRECT_ACCESS truthy; boot pairs it with S3 storage (fail-fast), so runtime need not re-check S3_BUCKET
 
 // files/quota.ts
 usageBytes(userId): Promise<number>            // SUM(size_bytes) over the actor's rows, coalesce 0

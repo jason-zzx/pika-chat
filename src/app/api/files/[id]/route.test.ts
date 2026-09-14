@@ -138,16 +138,4 @@ describe("GET /api/files/[id]", () => {
     expect(createPresignedGet).not.toHaveBeenCalled();
     expect(storageGet).not.toHaveBeenCalled();
   });
-
-  it("falls back to the relay when the storage backend cannot sign", async () => {
-    // Unreachable past the boot check (direct access requires S3), but the
-    // route degrades to the relay instead of 500ing if they ever disagree.
-    isS3DirectAccessEnabled.mockReturnValue(true);
-    getFileStorage.mockReturnValue({ get: storageGet });
-
-    const response = await GET(new Request("http://test/api/files/file-1"), context("file-1"));
-
-    expect(response.status).toBe(200);
-    expect(storageGet).toHaveBeenCalledWith("user-1/file-1");
-  });
 });

@@ -1,12 +1,14 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { uploadChatFile, uploadChatFileDirect, deleteChatFile, fetchFileLimits } =
+const { uploadChatFile, uploadChatFileDirect, deleteChatFile, getFileLimits } =
   vi.hoisted(() => ({
     uploadChatFile: vi.fn(),
     uploadChatFileDirect: vi.fn(),
     deleteChatFile: vi.fn(),
-    fetchFileLimits: vi.fn(),
+    getFileLimits: vi.fn(),
   }));
 
 vi.mock("@/lib/api/files", async (importOriginal) => {
@@ -16,11 +18,12 @@ vi.mock("@/lib/api/files", async (importOriginal) => {
     uploadChatFile,
     uploadChatFileDirect,
     deleteChatFile,
-    fetchFileLimits,
+    getFileLimits,
   };
 });
 
 import { DEFAULT_FILE_LIMITS } from "@/lib/api/files";
+import { fileKeys } from "@/hooks/use-file-limits";
 import {
   DEFAULT_MAX_FILE_BYTES,
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -47,6 +50,24 @@ function textFile(name = "notes.txt"): File {
   return new File(["hello"], name, { type: "text/plain" });
 }
 
+/** A fresh client per hook instance so the limits cache never leaks across cases. */
+function renderAttachments(key: string) {
+  const client = new QueryClient();
+  const view = renderHook(() => useComposerAttachments(key), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  return { ...view, client };
+}
+
+/** Waits until the limits query has landed in the cache. */
+async function waitForLimits(client: QueryClient): Promise<void> {
+  await waitFor(() =>
+    expect(client.getQueryData(fileKeys.limits())).toBeDefined(),
+  );
+}
+
 /** A File whose declared size is overridden (avoid allocating 20 MiB). */
 function sizedFile(name: string, size: number): File {
   const file = textFile(name);
@@ -64,14 +85,14 @@ function messageKeyOf(error: unknown): string | undefined {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  fetchFileLimits.mockResolvedValue(DEFAULT_FILE_LIMITS);
+  getFileLimits.mockResolvedValue(DEFAULT_FILE_LIMITS);
   useComposerStore.setState({ attachments: {}, drafts: {} });
 });
 
 describe("useComposerAttachments", () => {
   it("uploads a selected file and exposes the canonical url and extraction", async () => {
     uploadChatFile.mockResolvedValue(uploaded());
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
 
     act(() => {
       result.current.addFiles([textFile()]);
@@ -92,7 +113,7 @@ describe("useComposerAttachments", () => {
       error: { code: "VALIDATION_FAILED", messageKey: "file.tooLarge" },
     };
     uploadChatFile.mockRejectedValue(envelope);
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
 
     act(() => {
       result.current.addFiles([textFile()]);
@@ -116,7 +137,7 @@ describe("useComposerAttachments", () => {
   it("deletes the uploaded object when a ready chip is removed", async () => {
     uploadChatFile.mockResolvedValue(uploaded());
     deleteChatFile.mockResolvedValue(undefined);
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
     act(() => {
       result.current.addFiles([textFile()]);
     });
@@ -137,7 +158,7 @@ describe("useComposerAttachments", () => {
     deleteChatFile.mockRejectedValue({
       error: { code: "CONFLICT", messageKey: "file.inUse" },
     });
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
     act(() => {
       result.current.addFiles([textFile()]);
     });
@@ -154,7 +175,7 @@ describe("useComposerAttachments", () => {
   });
 
   it("rejects unsupported and oversized files client-side without uploading", async () => {
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
 
     act(() => {
       result.current.addFiles([
@@ -171,7 +192,7 @@ describe("useComposerAttachments", () => {
   });
 
   it("marks files beyond the per-message cap as too many", async () => {
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
     const files = Array.from(
       { length: MAX_ATTACHMENTS_PER_MESSAGE + 1 },
       (_unused, index) => textFile(`note-${index}.txt`),
@@ -197,7 +218,7 @@ describe("useComposerAttachments", () => {
   });
 
   it("does not let a rejected file consume an attachment slot", async () => {
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
     const files = [
       sizedFile("big.txt", DEFAULT_MAX_FILE_BYTES + 1),
       ...Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE }, (_unused, index) =>
@@ -226,13 +247,13 @@ describe("useComposerAttachments", () => {
   });
 
   it("uses the size limit reported by the server", async () => {
-    fetchFileLimits.mockResolvedValue({
+    getFileLimits.mockResolvedValue({
       ...DEFAULT_FILE_LIMITS,
       maxFileBytes: 1000,
     });
-    const { result } = renderHook(() => useComposerAttachments(KEY));
-    // Flush the mount fetch so the tightened limit is in effect.
-    await act(async () => {});
+    const { result, client } = renderAttachments(KEY);
+    // Wait for the limits query so the tightened limit is in effect.
+    await waitForLimits(client);
 
     act(() => {
       result.current.addFiles([sizedFile("big.txt", 1001)]);
@@ -245,14 +266,14 @@ describe("useComposerAttachments", () => {
   });
 
   it("uses the direct transport when the server advertises it", async () => {
-    fetchFileLimits.mockResolvedValue({
+    getFileLimits.mockResolvedValue({
       ...DEFAULT_FILE_LIMITS,
       directUpload: true,
     });
     uploadChatFileDirect.mockResolvedValue(uploaded());
-    const { result } = renderHook(() => useComposerAttachments(KEY));
-    // Flush the mount fetch so the direct flag is in effect before upload.
-    await act(async () => {});
+    const { result, client } = renderAttachments(KEY);
+    // Wait for the limits query so the direct flag is in effect before upload.
+    await waitForLimits(client);
 
     act(() => {
       result.current.addFiles([textFile()]);
@@ -267,7 +288,7 @@ describe("useComposerAttachments", () => {
 
   it("clears and restores staged attachments for send retries", async () => {
     uploadChatFile.mockResolvedValue(uploaded());
-    const { result } = renderHook(() => useComposerAttachments(KEY));
+    const { result } = renderAttachments(KEY);
     act(() => {
       result.current.addFiles([textFile()]);
     });

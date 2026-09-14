@@ -23,10 +23,11 @@ src/components/chat/AttachmentIcon.tsx            category icon (shared with car
 src/components/chat/Composer.tsx                  picker/paste + chip row
 src/components/chat/ChatView.tsx                  content-area drop zone (enter/leave counter + overlay)
 src/components/chat/MessageItem.tsx               user-message attachment cards
-src/lib/api/files.ts                              uploadChatFile / deleteChatFile / fetchFileLimits / uploadChatFileDirect / listChatFiles / getFileLimits
+src/lib/api/files.ts                              uploadChatFile / deleteChatFile / uploadChatFileDirect / listChatFiles / getFileLimits
+src/hooks/use-file-limits.ts                      fileKeys factory + useFileLimits (shared by composer and usage card)
 src/lib/files/media-types.ts                      classifyFile / SUPPORTED_FILE_ACCEPT / coarse list categories
 src/lib/files/format.ts                           formatBytes
-src/components/settings/files/                    management page: FilesScreen / UsageCard / CategoryFilter / FilesList / FilePreviewDialog / DeleteFileDialog / use-files.ts
+src/components/settings/files/                    management page: FilesScreen / UsageCard / CategoryFilter / FilesList / FilePreviewDialog / BatchDeleteDialog / use-files.ts
 ```
 
 ### 2. Signatures
@@ -57,8 +58,10 @@ sendMessage({ text, files })   // files: FileUIPart[] = { type:"file", url, medi
   `GET /api/files/limits` reports `directUpload: true`, the same helper instead
   runs presign → browser-to-S3 POST → complete; the chip state machine and the
   resulting message part are identical either way.
-- **The size limit is runtime config.** The composer fetches
-  `/api/files/limits` on mount, pre-checks against `maxFileBytes`, and labels
+- **The size limit is runtime config.** The composer reads
+  `GET /api/files/limits` through the shared `fileKeys.limits()` query cache
+  (`src/hooks/use-file-limits.ts`, same cache entry as the usage card),
+  pre-checks against `maxFileBytes`, and labels
   the `file.tooLarge` error with `formatBytes(maxFileBytes)`. If that fetch
   fails it falls back to `DEFAULT_FILE_LIMITS` (20 MiB, relay) — never a
   hardcoded label.
@@ -181,11 +184,16 @@ usable on touch-only clients.
 listChatFiles({ offset, limit, category }): Promise<FileListResponse>  // GET /api/files
 getFileLimits(): Promise<FileLimits>   // usedBytes / quotaBytes drive the usage card
 
+// src/hooks/use-file-limits.ts
+fileKeys = { all, list, limits }                  // query-key factory; category is part of the list key
+useFileLimits(): UseQueryResult                 // the usage card's and composer's only limits source
+
 // src/components/settings/files/use-files.ts
-useFileList(category): UseInfiniteQueryResult   // fileKeys factory; category is part of the key
-useFileLimits(): UseQueryResult                 // the usage card's only data source
-useDeleteFile(): UseMutationResult              // DELETE /api/files/[id], invalidates fileKeys.all
+useFileList(category): UseInfiniteQueryResult   // offset "load more" pages
 ```
+
+Row deletion is dialog-first through a single `BatchDeleteDialog` (base-ui
+Dialog); the single-row action is the N=1 case of the batch flow.
 
 ### 3. Contracts
 

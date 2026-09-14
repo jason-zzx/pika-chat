@@ -13,7 +13,6 @@ import type { ListedFile } from "@/lib/schemas/file";
 
 import BatchDeleteDialog from "./BatchDeleteDialog";
 import CategoryFilter from "./CategoryFilter";
-import DeleteFileDialog from "./DeleteFileDialog";
 import FilesList from "./FilesList";
 import FilePreviewDialog from "./FilePreviewDialog";
 import UsageCard from "./UsageCard";
@@ -35,13 +34,11 @@ export default function FilesScreen() {
 
   const files = list.data?.pages.flatMap((page) => page.files) ?? [];
   const totalCount = list.data?.pages[0]?.totalCount ?? 0;
-  const hasMore = files.length < totalCount;
 
-  // Selection is a client-side Set, pruned to what is actually loaded: a file
-  // that disappears from the list (deleted, or a 409 race refetch marking it
-  // in-use) drops out of the toolbar count on its own.
+  // Selection is a client-side Set; rows that disappear from the list
+  // (deleted, or a 409 race refetch marking them in-use) drop out of the
+  // toolbar count on their own.
   const selectedFiles = files.filter((file) => selectedIds.has(file.id));
-  const loadedSelectedIds = new Set(selectedFiles.map((file) => file.id));
 
   function onCategoryChange(next: FileListCategory | null) {
     setCategory(next);
@@ -136,14 +133,14 @@ export default function FilesScreen() {
             <SettingsCard className="overflow-hidden">
               <FilesList
                 files={files}
-                selectedIds={loadedSelectedIds}
+                selectedIds={selectedIds}
                 onToggleSelect={onToggleSelect}
                 onToggleAll={onToggleAll}
                 onPreview={setPreviewFile}
                 onDelete={setDeleteTarget}
               />
             </SettingsCard>
-            {hasMore ? (
+            {list.hasNextPage ? (
               <Button
                 type="button"
                 variant="outline"
@@ -172,8 +169,8 @@ export default function FilesScreen() {
         />
       ) : null}
       {deleteTarget ? (
-        <DeleteFileDialog
-          file={deleteTarget}
+        <BatchDeleteDialog
+          files={[deleteTarget]}
           onOpenChange={(open) => {
             if (!open) {
               setDeleteTarget(null);

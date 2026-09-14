@@ -210,11 +210,8 @@ export const VIDEO_FILE_EXTENSIONS: readonly string[] = Object.entries(
  * browser sends no usable media type. Kept as constants so the classifier and
  * the SQL category predicate read one list.
  */
-export const OFFICE_FILE_EXTENSIONS = ["pptx"] as const;
-export const EBOOK_FILE_EXTENSIONS = ["epub"] as const;
-
-const OFFICE_EXTENSION_SET = new Set<string>(OFFICE_FILE_EXTENSIONS);
-const EBOOK_EXTENSION_SET = new Set<string>(EBOOK_FILE_EXTENSIONS);
+export const OFFICE_FILE_EXTENSIONS: readonly string[] = ["pptx"];
+export const EBOOK_FILE_EXTENSIONS: readonly string[] = ["epub"];
 
 /** Canonical audio/video media type for a filename, or `null` when unknown. */
 export function avMediaTypeForExtension(filename: string): string | null {
@@ -294,10 +291,10 @@ export function classifyFile(input: {
   // that the extension has to carry the classification. Both formats are always
   // extracted and never handed to a model natively, so accepting them by name
   // cannot smuggle anything into a native path.
-  if (OFFICE_EXTENSION_SET.has(extension)) {
+  if (OFFICE_FILE_EXTENSIONS.includes(extension)) {
     return "office";
   }
-  if (EBOOK_EXTENSION_SET.has(extension)) {
+  if (EBOOK_FILE_EXTENSIONS.includes(extension)) {
     return "ebook";
   }
   // Same story for audio/video, only these *do* reach a model natively — so
@@ -352,6 +349,17 @@ export const FILE_LIST_CATEGORIES = [
 ] as const;
 
 export type FileListCategory = (typeof FILE_LIST_CATEGORIES)[number];
+
+/**
+ * `Settings.Files` label key per list category, shared by the filter tabs and
+ * the row badge so a category reads the same in both.
+ */
+export const FILE_LIST_CATEGORY_LABEL_KEYS = {
+  image: "categoryImage",
+  document: "categoryDocument",
+  audio: "categoryAudio",
+  video: "categoryVideo",
+} as const;
 
 /**
  * Every media type `classifyFile` recognizes *by type*. A stored row whose

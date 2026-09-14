@@ -66,7 +66,7 @@ export type ProviderDeleteOutcome =
 export type AbandonReason = "configMissing" | "formatChanged" | "credentials";
 function nextBackoffMs(attempts: number): number {
   const index = Math.min(attempts, RETRY_BACKOFF_MS.length - 1);
-  return RETRY_BACKOFF_MS[index] ?? HOUR_MS;
+  return RETRY_BACKOFF_MS[index]!;
 }
 
 /** The Anthropic file id inside a stored reference, or `null` if malformed. */
@@ -289,36 +289,30 @@ async function processRetryRow(
   };
   try {
     const outcome = await attemptDelete(row.providerConfigId, row.providerFileId);
-
-    if (outcome.kind === "resolved") {
-      await db
-        .delete(providerFileDeleteRetries)
-        .where(eq(providerFileDeleteRetries.id, row.id));
-      logger.info({ ...context, attempts: row.attempts }, "provider file deleted on retry");
-      return;
-    }
-    if (outcome.kind === "abandoned") {
-      await db
-        .delete(providerFileDeleteRetries)
-        .where(eq(providerFileDeleteRetries.id, row.id));
-      logger.warn(
-        { ...context, status: outcome.status, reason: outcome.reason },
-        "provider file delete abandoned on retry",
-      );
-      return;
-    }
-
     const attempts = row.attempts + 1;
-    if (attempts >= MAX_DELETE_ATTEMPTS) {
+    const terminal =
+      outcome.kind !== "retry" || attempts >= MAX_DELETE_ATTEMPTS;
+
+    if (terminal) {
       await db
         .delete(providerFileDeleteRetries)
         .where(eq(providerFileDeleteRetries.id, row.id));
-      logger.warn(
-        { ...context, attempts, lastStatus: outcome.status },
-        "provider file delete giving up after max attempts",
-      );
+      if (outcome.kind === "resolved") {
+        logger.info({ ...context, attempts: row.attempts }, "provider file deleted on retry");
+      } else if (outcome.kind === "abandoned") {
+        logger.warn(
+          { ...context, status: outcome.status, reason: outcome.reason },
+          "provider file delete abandoned on retry",
+        );
+      } else {
+        logger.warn(
+          { ...context, attempts, lastStatus: outcome.status },
+          "provider file delete giving up after max attempts",
+        );
+      }
       return;
     }
+
     await db
       .update(providerFileDeleteRetries)
       .set({

@@ -17,12 +17,9 @@ export function maxFileBytes(): number {
 
 /**
  * True when direct client↔S3 byte transfer (presigned POST uploads, 302
- * presigned GET downloads) is switched on *and* the storage backend can serve
- * it. `register()` refuses to boot a direct flag without S3, so in a running
- * server this reduces to the env switch; the extra S3 check keeps the
- * predicate honest if it is ever called outside that boot path.
+ * presigned GET downloads) is switched on. `register()` refuses to boot the
+ * flag without S3_BUCKET, so in a running server the flag alone is the truth.
  */
 export function isS3DirectAccessEnabled(): boolean {
-  const env = getEnv();
-  return env.S3_DIRECT_ACCESS !== undefined && env.S3_BUCKET !== undefined;
+  return getEnv().S3_DIRECT_ACCESS !== undefined;
 }

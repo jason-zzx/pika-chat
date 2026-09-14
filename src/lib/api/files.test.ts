@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_FILE_LIMITS, fetchFileLimits } from "./files";
 import {
-  completeChatFile,
   presignChatFile,
   uploadChatFileDirect,
   uploadToPresignedPost,
@@ -17,41 +15,6 @@ beforeEach(() => {
 afterEach(() => {
   fetchMock.mockReset();
   vi.unstubAllGlobals();
-});
-
-describe("fetchFileLimits", () => {
-  it("returns the limits reported by the server", async () => {
-    const limits = {
-      maxFileBytes: 50 * 1024 * 1024,
-      maxAttachmentsPerMessage: 5,
-      directUpload: true,
-      usedBytes: 1024,
-      quotaBytes: 5 * 1024 * 1024 * 1024,
-    };
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify(limits), { status: 200 }),
-    );
-
-    await expect(fetchFileLimits()).resolves.toEqual(limits);
-    expect(fetchMock).toHaveBeenCalledWith("/api/files/limits");
-  });
-
-  it("falls back to the defaults on a non-OK response", async () => {
-    fetchMock.mockResolvedValue(new Response("nope", { status: 500 }));
-    await expect(fetchFileLimits()).resolves.toEqual(DEFAULT_FILE_LIMITS);
-  });
-
-  it("falls back to the defaults on a malformed body", async () => {
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ nope: true }), { status: 200 }),
-    );
-    await expect(fetchFileLimits()).resolves.toEqual(DEFAULT_FILE_LIMITS);
-  });
-
-  it("falls back to the defaults when the request throws", async () => {
-    fetchMock.mockRejectedValue(new Error("offline"));
-    await expect(fetchFileLimits()).resolves.toEqual(DEFAULT_FILE_LIMITS);
-  });
 });
 
 const PRESIGNED = {
@@ -113,17 +76,6 @@ describe("presigned upload helpers", () => {
     ).rejects.toThrow(/403/);
   });
 
-  it("completes the upload and returns the canonical row", async () => {
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify(UPLOADED), { status: 200 }),
-    );
-
-    await expect(completeChatFile("file-1")).resolves.toEqual(UPLOADED);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/files/complete");
-    expect(JSON.parse(init.body as string)).toEqual({ fileId: "file-1" });
-  });
-
   it("runs presign → storage → complete in order", async () => {
     fetchMock
       .mockResolvedValueOnce(
@@ -137,10 +89,14 @@ describe("presigned upload helpers", () => {
     const file = new File(["hello"], "notes.txt", { type: "text/plain" });
     await expect(uploadChatFileDirect(file)).resolves.toEqual(UPLOADED);
 
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    const calls = fetchMock.mock.calls as [string, RequestInit][];
+    expect(calls.map(([url]) => url)).toEqual([
       "/api/files/presign",
       "https://s3.test/bucket",
       "/api/files/complete",
     ]);
+    expect(JSON.parse(calls[2]?.[1].body as string)).toEqual({
+      fileId: "file-1",
+    });
   });
 });

@@ -9,7 +9,11 @@ import SettingsBadge from "@/components/settings/SettingsBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatBytes } from "@/lib/files/format";
-import { fileListCategoryOf, FILE_URL_PREFIX } from "@/lib/files/media-types";
+import {
+  FILE_LIST_CATEGORY_LABEL_KEYS,
+  fileListCategoryOf,
+  FILE_URL_PREFIX,
+} from "@/lib/files/media-types";
 import type { ListedFile } from "@/lib/schemas/file";
 
 type FilesListProps = {
@@ -31,13 +35,6 @@ const TONE_SUCCESS = "success";
 
 // Intl format token, kept out of JSX so the i18next guard stays quiet.
 const DATE_STYLE = { dateStyle: "medium" } as const;
-
-const CATEGORY_LABEL_KEYS = {
-  image: "categoryImage",
-  document: "categoryDocument",
-  audio: "categoryAudio",
-  video: "categoryVideo",
-} as const;
 
 function FileRow({
   file,
@@ -86,7 +83,7 @@ function FileRow({
           <span>{format.dateTime(new Date(file.createdAt), DATE_STYLE)}</span>
           {category ? (
             <SettingsBadge dot={false}>
-              {t(CATEGORY_LABEL_KEYS[category])}
+              {t(FILE_LIST_CATEGORY_LABEL_KEYS[category])}
             </SettingsBadge>
           ) : null}
           {file.referenced ? (

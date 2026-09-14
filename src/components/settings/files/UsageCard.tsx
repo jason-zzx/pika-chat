@@ -5,10 +5,9 @@ import { useTranslations } from "next-intl";
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSection from "@/components/settings/SettingsSection";
+import { useFileLimits } from "@/hooks/use-file-limits";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { formatBytes } from "@/lib/files/format";
-
-import { useFileLimits } from "./use-files";
 
 /** Usage share at which the quota badge turns into a warning. */
 const QUOTA_WARNING_PERCENT = 90;

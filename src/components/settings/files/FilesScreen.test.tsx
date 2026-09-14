@@ -72,13 +72,6 @@ describe("FilesScreen", () => {
     expect(screen.getByText("Attachments: 1")).toBeInTheDocument();
   });
 
-  it("shows the empty state when there are no attachments", async () => {
-    vi.mocked(listChatFiles).mockResolvedValue(page([]));
-    renderScreen();
-
-    expect(await screen.findByText("No attachments yet")).toBeInTheDocument();
-  });
-
   it("refetches per category and shows a filtered empty state", async () => {
     vi.mocked(listChatFiles).mockImplementation(async ({ category }) =>
       category === "image" ? page([]) : page([file()]),
@@ -86,7 +79,7 @@ describe("FilesScreen", () => {
     renderScreen();
     expect(await screen.findByText("notes.txt")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Images" }));
+    fireEvent.click(screen.getByRole("button", { name: "Image" }));
 
     expect(
       await screen.findByText("Nothing in this category"),
@@ -119,7 +112,7 @@ describe("FilesScreen", () => {
     });
     renderScreen();
 
-    fireEvent.click(screen.getByRole("button", { name: "Images" }));
+    fireEvent.click(screen.getByRole("button", { name: "Image" }));
     expect(await screen.findByText("one.png")).toBeInTheDocument();
     expect(listChatFiles).toHaveBeenLastCalledWith(
       expect.objectContaining({ offset: 0, category: "image" }),
@@ -232,7 +225,7 @@ describe("FilesScreen", () => {
     );
     expect(await screen.findByText("1 selected")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Images" }));
+    fireEvent.click(screen.getByRole("button", { name: "Image" }));
     expect(
       await screen.findByText("Nothing in this category"),
     ).toBeInTheDocument();

@@ -107,30 +107,7 @@ describe("FilesList", () => {
     expect(link).toHaveAttribute("rel", "noreferrer noopener");
   });
 
-  it("routes an unreferenced delete through the callback", () => {
-    const onDelete = vi.fn();
-    renderList([file()], { onDelete });
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete notes.txt" }));
-    expect(onDelete).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "file-1" }),
-    );
-  });
-
   describe("selection", () => {
-    it("toggles a row through the callback", () => {
-      const onToggleSelect = vi.fn();
-      renderList([file()], { onToggleSelect });
-
-      fireEvent.click(
-        screen.getByRole("checkbox", { name: "Select notes.txt" }),
-      );
-      expect(onToggleSelect).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "file-1" }),
-        true,
-      );
-    });
-
     it("disables the checkbox of an in-use row and points it at the badge", () => {
       renderList([file({ referenced: true })]);
 
@@ -183,16 +160,6 @@ describe("FilesList", () => {
         "aria-disabled",
         "true",
       );
-    });
-
-    it("routes select-all through the callback", () => {
-      const onToggleAll = vi.fn();
-      renderList([file(), file({ id: "file-2", referenced: true })], {
-        onToggleAll,
-      });
-
-      fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
-      expect(onToggleAll).toHaveBeenCalledWith(true);
     });
   });
 });

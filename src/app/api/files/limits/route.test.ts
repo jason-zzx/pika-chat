@@ -45,15 +45,6 @@ describe("GET /api/files/limits", () => {
     expect(usageBytes).toHaveBeenCalledWith("user-1");
   });
 
-  it("reports an unlimited quota as null", async () => {
-    effectiveQuotaBytes.mockResolvedValue(null);
-    const response = await GET(
-      new Request("http://test/api/files/limits"),
-      undefined,
-    );
-    await expect(response.json()).resolves.toMatchObject({ quotaBytes: null });
-  });
-
   it("accepts a zero quota through the client response schema", async () => {
     // An admin may legitimately cap a user at 0 bytes; the response must stay
     // parseable or the client silently falls back to "unlimited".

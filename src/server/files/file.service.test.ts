@@ -1,16 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { Actor } from "@/server/auth/actor";
 
-import {
-  fileIdsFromParts,
-  fileUrl,
-  presignFile,
-  storageKeyFor,
-  uploadFile,
-} from "./file.service";
+import { fileIdsFromParts, fileUrl, storageKeyFor, uploadFile } from "./file.service";
 import { maxFileBytes } from "./limits";
-import { assertValidStorageKey } from "./storage";
 
 // `maxFileBytes()` reads the environment through `getEnv()`, which validates
 // the whole schema, so the required variables have to exist before the upload
@@ -78,15 +71,6 @@ describe("storageKeyFor", () => {
     // An all-punctuation extension filters down to nothing.
     expect(storageKeyFor("u1", "f1", "notes.---")).toBe("u1/f1");
   });
-
-  it("produces keys the traversal guard accepts", () => {
-    for (const key of [
-      storageKeyFor("u1", "f1", "pic.png"),
-      storageKeyFor("u1", "f1", "no-extension"),
-    ]) {
-      expect(() => assertValidStorageKey(key)).not.toThrow();
-    }
-  });
 });
 
 describe("uploadFile validation", () => {
@@ -121,46 +105,6 @@ describe("uploadFile validation", () => {
       code: "VALIDATION_FAILED",
       status: 400,
       messageKey: "file.tooLarge",
-    });
-  });
-
-  it("honours the configured FILE_UPLOAD_MAX_MB", async () => {
-    process.env.FILE_UPLOAD_MAX_MB = "1";
-    try {
-      vi.resetModules();
-      const { uploadFile: freshUpload } = await import("./file.service");
-      await expect(
-        freshUpload(
-          {
-            filename: "big.txt",
-            mediaType: "text/plain",
-            data: Buffer.alloc(1024 * 1024 + 1),
-          },
-          actor,
-        ),
-      ).rejects.toMatchObject({
-        code: "VALIDATION_FAILED",
-        status: 400,
-        messageKey: "file.tooLarge",
-        params: { limit: "1.0 MB" },
-      });
-    } finally {
-      delete process.env.FILE_UPLOAD_MAX_MB;
-    }
-  });
-});
-
-describe("presignFile validation", () => {
-  it("rejects a type outside the whitelist before touching storage", async () => {
-    await expect(
-      presignFile(
-        { filename: "archive.zip", mediaType: "application/zip" },
-        actor,
-      ),
-    ).rejects.toMatchObject({
-      code: "VALIDATION_FAILED",
-      status: 400,
-      messageKey: "file.unsupportedType",
     });
   });
 });

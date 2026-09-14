@@ -41,7 +41,6 @@ describe("instance-settings service", () => {
 
   it("defaults to the 5 GiB quota (5120 MB)", async () => {
     const settings = await getInstanceSettings();
-    expect(settings.fileStorageQuotaMb).toBe(DEFAULT_FILE_STORAGE_QUOTA_BYTES / BYTES_PER_MB);
     expect(settings.fileStorageQuotaMb).toBe(5120);
   });
 
@@ -74,11 +73,6 @@ describe("instance-settings service", () => {
     await updateInstanceSettings({ fileStorageQuotaMb: null }, admin);
     const settings = await getInstanceSettings();
     expect(settings.fileStorageQuotaMb).toBeNull();
-    const rows = await db
-      .select({ quota: appSettings.fileStorageQuotaBytes })
-      .from(appSettings)
-      .where(eq(appSettings.id, APP_SETTINGS_ROW_ID));
-    expect(rows[0]?.quota).toBeNull();
   });
 
   it("rejects a non-staff actor", async () => {

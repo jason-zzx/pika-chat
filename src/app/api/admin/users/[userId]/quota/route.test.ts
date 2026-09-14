@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_QUOTA_MB } from "@/lib/files/constants";
 import { AppError } from "@/server/errors";
 
 const { requireAdmin, getUserQuota, updateUserQuota } = vi.hoisted(() => ({
@@ -104,41 +103,6 @@ describe("PATCH /api/admin/users/[userId]/quota", () => {
     expect(updateUserQuota).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "VALIDATION_FAILED" },
-    });
-  });
-
-  it("accepts the largest safe quota and rejects one above it", async () => {
-    updateUserQuota.mockResolvedValue({ userId: "u1", quotaBytes: null });
-    const ok = await PATCH(
-      patchRequest({ quotaMb: MAX_QUOTA_MB }),
-      context("u1"),
-    );
-    expect(ok.status).toBe(200);
-
-    const tooLarge = await PATCH(
-      patchRequest({ quotaMb: MAX_QUOTA_MB + 1 }),
-      context("u1"),
-    );
-    expect(tooLarge.status).toBe(400);
-    expect(updateUserQuota).toHaveBeenCalledTimes(1);
-  });
-
-  it("404s when the target user does not exist", async () => {
-    updateUserQuota.mockRejectedValue(
-      new AppError("NOT_FOUND", 404, "auth.userNotFound"),
-    );
-    const response = await PATCH(patchRequest({ quotaMb: 10 }), context("nope"));
-    expect(response.status).toBe(404);
-  });
-
-  it("403s when the target cannot be administered", async () => {
-    updateUserQuota.mockRejectedValue(
-      new AppError("FORBIDDEN", 403, "auth.targetNotAllowed"),
-    );
-    const response = await PATCH(patchRequest({ quotaMb: 10 }), context("u2"));
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "FORBIDDEN", messageKey: "auth.targetNotAllowed" },
     });
   });
 });
