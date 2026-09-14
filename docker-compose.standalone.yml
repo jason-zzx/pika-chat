@@ -1,3 +1,5 @@
+name: pika-chat
+
 services:
   app:
     image: ${PIKA_IMAGE:-ghcr.io/jason-zzx/pika-chat:latest}
@@ -6,24 +8,26 @@ services:
     ports:
       - "${PORT:-3000}:3000"
     environment:
-      NODE_ENV: production
+      - NODE_ENV=production
       # Either provide a complete connection URI via DATABASE_URL, or supply discrete POSTGRES_* variables.
-      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-}@${POSTGRES_HOST}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-pika_chat}}
-      POSTGRES_HOST: ${POSTGRES_HOST:-}
-      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-      POSTGRES_DB: ${POSTGRES_DB:-pika_chat}
-      CREDENTIAL_ENCRYPTION_SECRET: ${CREDENTIAL_ENCRYPTION_SECRET:?set CREDENTIAL_ENCRYPTION_SECRET}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
-      FILE_STORAGE_DIR: /data/files
+      - DATABASE_URL=${DATABASE_URL:-postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-}@${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-pika_chat}}
+      - CREDENTIAL_ENCRYPTION_SECRET=${CREDENTIAL_ENCRYPTION_SECRET}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - FILE_STORAGE_DIR=${FILE_STORAGE_DIR:-/data/files}
+      - FILE_UPLOAD_MAX_MB=${FILE_UPLOAD_MAX_MB:-20}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
+      - POSTGRES_HOST
+      - POSTGRES_PORT
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
       # Optional S3-compatible attachment storage:
-      S3_BUCKET: ${S3_BUCKET:-}
-      S3_ENDPOINT: ${S3_ENDPOINT:-}
-      S3_REGION: ${S3_REGION:-}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
-      S3_DIRECT_ACCESS: ${S3_DIRECT_ACCESS:-}
+      - S3_BUCKET
+      - S3_ENDPOINT
+      - S3_REGION
+      - S3_ACCESS_KEY_ID
+      - S3_SECRET_ACCESS_KEY
+      - S3_DIRECT_ACCESS
     volumes:
       - files_prod_data:/data/files
 
