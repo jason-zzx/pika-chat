@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 24
-- **Last Active**: 2026-09-13
+- **Total Sessions**: 26
+- **Last Active**: 2026-09-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~670 | Active |
+| `journal-1.md` | ~774 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 26 | 2026-09-14 | 附件三期收口：ponytail 精简 + 使用中行锁形占位 + 父任务归档 | `593fc1f`, `44d99db` | `main` |
 | 24 | 2026-09-13 | 附件二期：pptx/epub 解析、S3 存储与 Files API 引用传输 | `4517aad`, `f5f20b6`, `e5a1d02`, `71d2be0` | `main` |
 | 22 | 2026-09-12 | 聊天附件上传与解析（一期）：全链路落地、dogfood 修复与 ponytail 瘦身 | `83509ef` | `main` |
 | 21 | 2026-09-12 | 供应商端点格式扩充：支持 Claude 与 Google | `4aa1690` | `feat/provider-api-format` |

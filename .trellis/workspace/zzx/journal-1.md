@@ -749,3 +749,26 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 
 [OK] **Completed**
 
+
+
+## Session 26: 附件三期收口：ponytail 精简 + 使用中行锁形占位 + 父任务归档
+<!-- trellis-session: v=2 fp=c74b36dd125e222d -->
+
+**Date**: 2026-09-14
+**Task**: 附件三期收口：ponytail 精简 + 使用中行锁形占位 + 父任务归档
+**Branch**: `main`
+
+### Summary
+
+三期 3 子任务全归档后做 ponytail-review（3 lane 并行评审，~50 发现采纳 27），净删 482 行：死代码（readFileForActor/DeleteFileDialog 并入批量框/fetchFileLimits）、不可达守卫、27 个重复测试；顺带修复 composer useEffect+fetch 违规改为共享 limits 查询缓存。随后将使用中行的禁用 checkbox 改为虚线锁形占位块。父任务 09-13-chat-attachments-phase3 归档，三期收口。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `593fc1f` | refactor(attachments): ponytail cleanup — dead code, shared limits query, test dedup |
+| `44d99db` | feat(files): dashed lock placeholder for in-use rows in batch selection |
+
+### Status
+
+[OK] **Completed**
