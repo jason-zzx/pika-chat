@@ -19,3 +19,30 @@ If you're using Codex or another agent-capable tool, additional project-scoped h
 Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
 
 <!-- TRELLIS:END -->
+
+---
+
+# Project Guidelines
+
+## Changelog & Release Notes Convention
+
+Whenever preparing a release or documenting notable changes, adhere to the following standards:
+
+1. **Bilingual Changelogs**:
+   - `CHANGELOG.md`: Primary English version.
+   - `CHANGELOG.zh-CN.md`: Simplified Chinese version.
+   Both files must be updated together when publishing new versions.
+
+2. **Automated Release Notes Integration**:
+   - The release workflow (`.github/workflows/release.yml`) uses `scripts/extract-changelog.mjs` to extract the corresponding version's notes from `CHANGELOG.md` and uses them directly as the GitHub Release body.
+   - Version headings must follow the format `## [X.Y.Z] - YYYY-MM-DD` (or `## X.Y.Z - YYYY-MM-DD`).
+
+3. **Standard Section Structure**:
+   - Under each version heading, use only the following permitted level-3 section headings:
+     - `Highlights`
+     - `Feats`
+     - `Fixes`
+     - `Dev`
+     - `Chore`
+   - Include only the sections that contain actual additions or modifications in the release (omit empty sections).
+

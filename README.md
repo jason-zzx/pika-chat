@@ -1,130 +1,284 @@
-# pika-chat
+<p align="center">
+  <img src="src/app/icon.svg" width="96" height="96" alt="Pika Chat logo" />
+</p>
 
-Self-hosted AI chat. Phase 1 is text chat with a responsive layout, provider
-and model configuration, assistants and topics, and basic user management.
-The UI ships in English and Simplified Chinese, switchable per browser under
-Settings → General.
+<h1 align="center">Pika Chat</h1>
 
-## Quick start
+<p align="center">
+  <strong>A modern, self-hosted, multimodal AI chat workspace built for speed, privacy, and control.</strong>
+</p>
 
-Requires Node 22+, pnpm 11.9, and Docker (or Podman with Compose). Images use
-fully qualified names (`docker.io/library/...`) so short-name-restricted
-runtimes do not prompt. The Postgres init-script bind mount uses `:Z` for
-SELinux.
+<p align="center">
+  <a href="README.md">English</a> •
+  <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/React-19-61dafb?logo=react" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8?logo=tailwindcss" alt="Tailwind CSS v4" />
+  <img src="https://img.shields.io/badge/Drizzle_ORM-PostgreSQL-c5f74f?logo=drizzle" alt="Drizzle ORM" />
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker" alt="Docker Ready" />
+</p>
+
+---
+
+**Pika Chat** is a privacy-conscious, self-hosted AI chat platform designed for both individual power users and teams. Connect your own LLM providers, search the live web with citations, upload and parse multimodal files, and organize workflows with assistants and topics — all in a clean, responsive interface that works just as smoothly on mobile touchscreens as it does on multi-monitor desktops.
+
+---
+
+## Highlights
+
+- **Zero-Maintenance Philosophy**: Ships with sensible defaults out of the box — local disk storage, auto-migrating database schemas, auto-creating S3 buckets, and automatic orphan file cleanup.
+- **Privacy & Security First**: Provider API keys encrypted with authenticated AES-256-GCM at rest; role-based access control, TOTP 2-Factor Authentication, and isolated storage quotas.
+- **Universal Multimodal Support**: Drag-and-drop images, documents (PDF, DOCX, XLSX, PPTX, EPUB, TXT, Markdown), audio, and video with instant text extraction and dynamic model conversion.
+- **High-Performance Architecture**: Next.js 16 App Router, React 19, Tailwind CSS v4, streaming responses with smooth scroll pinning, and optional direct S3 byte transfers.
+
+---
+
+## Key Features
+
+### 🤖 Multi-Provider & Model Orchestration
+- **Universal Endpoint Support**: Connect OpenAI, Anthropic (Claude), Google Gemini, Ollama, OpenRouter, DeepSeek, Groq, Mistral, Moonshot, or any OpenAI-compatible API gateway.
+- **Endpoint Auto-Discovery**: Fetch available models directly from your endpoint (`/v1/models`) with one click.
+- **Granular Model Settings**: Customize context window limits, reasoning effort (thinking tokens), input modalities, and custom vendor icons per model.
+- **Credential Encryption**: API keys are encrypted at rest with authenticated AES-256-GCM (`CREDENTIAL_ENCRYPTION_SECRET`). Keys are never exposed to clients or logged.
+- **Private & Shared Configurations**: Share vetted provider configs across all instance members, or keep custom keys personal.
+
+### 💬 Seamless Conversational Experience
+- **Non-Tail Regeneration**: Regenerate any prior assistant turn without truncating or modifying subsequent conversation turns. Branching message versions are tracked via `group_id` and server-persisted selection states.
+- **Rich Markdown & Code Rendering**: Powered by Streamdown with real-time KaTeX math formulas, interactive Mermaid diagrams, syntax-highlighted code blocks with one-click copying, and CJK-friendly typography.
+- **Smart Scroll Management**: Tail message reserve space prevents layout jumps during streaming, while gesture-based unpinning respects wheel and touch scrolls.
+- **Mobile-First UX**: Responsive split-column layout, tap-to-reveal message actions (no hover-only dependencies), and non-modal dropdowns designed for touch interactions.
+- **Assistants & Topics**: Create custom assistants with dedicated system instructions and default models. Pin topics, search conversation history, and export dialogues.
+
+### 📎 Multimodal Attachments & Document Parsing
+- **Wide Format Support**:
+  - **Documents**: PDF, Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`), EPUB, Plain Text, and Markdown.
+  - **Media**: JPEG, PNG, GIF, WebP, WAV, MP3, MPEG, MP4, WebM.
+- **Upload-Time Document Extraction**: Documents are parsed at upload time with page counts, word statistics, and C0 control byte sanitization, displayed as preview chips before sending.
+- **Dynamic Model Replay**: Automatically supplies native multimodal payloads to vision/audio models and falls back to parsed text when switching to text-only models across turns.
+- **Provider Files API Integration**: Native support for Gemini and Anthropic Files APIs with expiration tracking and lazy re-upload handling.
+
+### 🔍 Real-Time Web Search with Citations
+- **LLM Function Calling**: The model autonomously decides when external search is required.
+- **Multi-Provider Search**: Plug in Brave Search, Tavily, Exa, or Firecrawl with configurable fallback priority chains.
+- **Deep Page Scraping**: Uses `fetchPage` tool extraction to retrieve full web page contents for in-depth answers.
+- **Deterministic Citations**: Unique, turn-wide sequential citation tags (`[1]`, `[2]`) linked to verified web sources.
+
+### 🗄️ Pluggable Storage: Local Disk & S3-Compatible
+- **Zero-Config Local Storage**: Attachments default to local disk storage (`.data/files`) without any third-party infrastructure required.
+- **S3-Compatible Object Storage**: Point `S3_BUCKET` to AWS S3, MinIO, Cloudflare R2, or RustFS. The bucket is automatically bootstrapped on first access.
+- **Direct S3 Access (`S3_DIRECT_ACCESS=1`)**: Offload app server bandwidth — browsers upload directly to the bucket via presigned POST policies and download/preview via 302 presigned GET redirects.
+- **Bundled RustFS Compose**: One command deploys an all-in-one stack with self-hosted S3-compatible storage.
+
+### 🛡️ Authentication, RBAC & Storage Quotas
+- **Better Auth Engine**: Built-in credential authentication with email/password and TOTP Two-Factor Authentication (2FA).
+- **First-Run Setup Wizard**: Guided initial setup at `/setup` to bootstrap the first Super Admin safely without database fiddling.
+- **Role Hierarchy**: Strict permission gates for Super Admin, Admin, and Member roles.
+- **Storage Quotas**: Per-user storage limits and instance-wide global quotas (default 5 GiB) with automatic orphan cleanup sweeps.
+- **Instance Governance**: Toggle registration status (open/closed), ban malicious accounts, and reset user credentials from the admin dashboard.
+
+### 🌐 Internationalization (i18n)
+- Ships with complete **English** and **Simplified Chinese** (简体中文) localizations, switchable instantly per browser under **Settings → General**.
+
+---
+
+## Quick Start
+
+### Option 1: Production with Docker Compose (Recommended)
+
+Run PostgreSQL and Pika Chat in Docker with persistent storage and automated migrations on boot.
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-username/pika-chat.git
+   cd pika-chat
+   ```
+
+2. **Generate secrets**:
+   ```bash
+   # Generate authenticated encryption secret (AES-256-GCM)
+   openssl rand -base64 48
+
+   # Generate session signing secret
+   openssl rand -base64 48
+   ```
+
+3. **Launch production containers**:
+   ```bash
+   export CREDENTIAL_ENCRYPTION_SECRET="<your-generated-encryption-secret>"
+   export BETTER_AUTH_SECRET="<your-generated-auth-secret>"
+   export POSTGRES_PASSWORD="<choose-a-db-password>"
+
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
+
+4. **Initialize Super Admin**:
+   Open **`http://localhost:3000/setup`** in your browser to create the first administrator account.
+
+---
+
+### Option 2: Production with Bundled RustFS (All-in-One S3 Storage)
+
+To run high-performance S3-compatible attachment storage in a container alongside the app without external cloud storage:
 
 ```bash
-cp .env.example .env
-# Replace the two secret placeholders. Generate values with:
-#   openssl rand -base64 48
+export CREDENTIAL_ENCRYPTION_SECRET="<your-generated-encryption-secret>"
+export BETTER_AUTH_SECRET="<your-generated-auth-secret>"
+export S3_ACCESS_KEY_ID="<your-chosen-s3-key>"
+export S3_SECRET_ACCESS_KEY="<your-chosen-s3-secret>"
+export S3_BUCKET="pika-attachments" # optional, defaults to pika-attachments
 
-docker compose up -d
-pnpm install
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.rustfs.yml up -d --build
+```
+
+---
+
+### Option 3: Local Development
+
+#### Prerequisites
+- **Node.js**: >= 22
+- **pnpm**: 11.9+
+- **Docker** or **Podman** (for local PostgreSQL database)
+
+#### Step-by-Step
+
+1. **Clone and install dependencies**:
+   ```bash
+   git clone https://github.com/your-username/pika-chat.git
+   cd pika-chat
+   pnpm install
+   ```
+
+2. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   ```
+   Open `.env` and replace `CREDENTIAL_ENCRYPTION_SECRET` and `BETTER_AUTH_SECRET` with generated random strings:
+   ```bash
+   openssl rand -base64 48
+   ```
+
+3. **Start PostgreSQL database**:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Run database migrations**:
+   ```bash
+   pnpm db:migrate
+   ```
+
+5. **Start development server**:
+   ```bash
+   pnpm dev
+   ```
+
+6. Visit **`http://localhost:3000/setup`** to complete initial administrator initialization.
+
+---
+
+## Configuration Reference
+
+Configure Pika Chat through environment variables in your `.env` file or deployment container environment:
+
+| Variable | Required | Default | Description |
+|---|:---:|:---:|---|
+| `DATABASE_URL` | **Yes** | — | PostgreSQL connection URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat`). |
+| `CREDENTIAL_ENCRYPTION_SECRET` | **Yes** | — | Secret key (min 32 chars) used for AES-256-GCM encryption of provider API keys at rest. **Do not lose this**; losing it orphans stored credentials permanently. |
+| `BETTER_AUTH_SECRET` | **Yes** | — | Secret key (min 32 chars) used for signing Better Auth session tokens. |
+| `BETTER_AUTH_URL` | No | `http://localhost:3000` | Canonical public URL of your deployment. Required when deployed behind reverse proxies. |
+| `FILE_STORAGE_DIR` | No | `.data/files` | Local filesystem directory for storing uploaded chat attachments when S3 is not configured. |
+| `FILE_UPLOAD_MAX_MB` | No | `20` | Maximum size for a single file attachment in MiB (allowed integer range: `1`–`100`). Fails fast on invalid values. |
+| `S3_BUCKET` | No | — | Setting this switches attachment storage from local disk to S3-compatible object storage. Automatically bootstraps bucket if missing. |
+| `S3_ENDPOINT` | No | official AWS | Custom S3 endpoint URL (e.g. `http://minio:9000` or `https://<account>.r2.cloudflarestorage.com`). Automatically forces path-style addressing for non-AWS hosts. |
+| `S3_REGION` | No | `us-east-1` | S3 region identifier. |
+| `S3_ACCESS_KEY_ID` | If S3 set | — | S3 access key credential. |
+| `S3_SECRET_ACCESS_KEY` | If S3 set | — | S3 secret access key credential. |
+| `S3_DIRECT_ACCESS` | No | `false` | Set to `1` or `true` to enable direct browser S3 uploads (presigned POST) and downloads (presigned 302 GET), bypassing server transfer. Requires `S3_BUCKET`. |
+| `TEST_DATABASE_URL` | Dev only | — | Dedicated test database URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat_test`) for running Vitest integration tests. |
+
+---
+
+## Storage Architecture
+
+```
+                                  +-----------------------+
+                                  |  Local Disk Storage   |
+                                  |  (FILE_STORAGE_DIR)   |
+                                  +-----------^-----------+
+                                              |
++----------+      Upload / Download           | (default)
+|  Client  | <=========================> [ App Server ]
++----+-----+                                  |
+     |                                        | (if S3_BUCKET set)
+     | (if S3_DIRECT_ACCESS=1)                v
+     |                             +----------------------+
+     +---------------------------> | S3-Compatible Store  |
+        Direct Presigned POST/GET  | AWS S3 / MinIO /     |
+                                   | RustFS / R2          |
+                                   +----------------------+
+```
+
+- **Local Storage**: Files are saved with content-addressed naming under `FILE_STORAGE_DIR`. In Docker, persist this directory using a named volume or host bind mount.
+- **S3 Storage**: When `S3_BUCKET` is configured, file operations transparently target the S3 bucket. Buckets are auto-created on first access.
+- **Direct S3 Transfer**: With `S3_DIRECT_ACCESS=1`, browsers upload directly to S3 via short-lived presigned POST policies and download via 302 redirects to presigned GET URLs. Ensure your S3 bucket CORS configuration permits `POST` from the application domain:
+  ```json
+  [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["POST", "GET", "HEAD"],
+      "AllowedOrigins": ["https://your-chat-domain.com"],
+      "ExposeHeaders": ["ETag"]
+    }
+  ]
+  ```
+
+---
+
+## Tech Stack
+
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Standalone output)
+- **UI Library**: [React 19](https://react.dev/), [Base UI](https://base-ui.com/), [Tailwind CSS v4](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
+- **AI Integration**: [Vercel AI SDK](https://sdk.vercel.ai/) (`ai`, `@ai-sdk/openai-compatible`, `@ai-sdk/anthropic`, `@ai-sdk/google`)
+- **Database & ORM**: [PostgreSQL 17](https://www.postgresql.org/), [Drizzle ORM](https://orm.drizzle.team/), [postgres.js](https://github.com/porsager/postgres)
+- **Authentication**: [Better Auth](https://better-auth.com/) with TOTP Two-Factor Authentication
+- **Content & Markdown**: [Streamdown](https://github.com/streamdown/streamdown), KaTeX, Mermaid, `@streamdown/cjk`, `@streamdown/math`, `@streamdown/mermaid`
+- **Document Extractors**: `unpdf` (PDF), `mammoth` (DOCX), `xlsx` (Excel), `jszip` (EPUB/PPTX)
+- **Object Storage**: `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-post`, `@aws-sdk/s3-request-presigner`
+- **Internationalization**: [next-intl](https://next-intl.dev/)
+- **Testing**: [Vitest](https://vitest.dev/), React Testing Library, PostgreSQL integration test harness
+
+---
+
+## Development & Verification
+
+Before submitting code, ensure all quality gates pass:
+
+```bash
+# Code style and linting
+pnpm lint
+
+# TypeScript static type check
+pnpm typecheck
+
+# Full unit and integration test suite (requires local Postgres running)
+pnpm test
+```
+
+Database schema migrations:
+```bash
+# Generate new migration files from Drizzle schema changes
+pnpm db:generate
+
+# Apply migrations to database
 pnpm db:migrate
-pnpm dev
 ```
 
-Open http://localhost:3000. Health: http://localhost:3000/api/health
+---
 
-`pnpm lint`, `pnpm typecheck`, and `pnpm test` must pass before work is
-reported complete. Integration tests talk to `pika_chat_test` on the same
-Postgres instance; they fail if that database is unreachable (they never skip).
+## License
 
-Local development uses `pnpm dev`. The Docker image is built with
-`DOCKER_BUILD=1` so Next.js emits standalone output; that is the self-host
-path, and it applies pending migrations on boot.
-
-## Secrets
-
-`CREDENTIAL_ENCRYPTION_SECRET` encrypts provider API keys at rest. Losing it
-makes every stored credential permanently unrecoverable — it is not derivable
-from the database. Generate it once, back it up with the rest of the instance,
-and do not rotate it casually.
-
-`BETTER_AUTH_SECRET` signs session tokens. Rotating it invalidates every
-existing session; users will need to sign in again. That is inconvenient, not
-data loss.
-
-A fresh instance has registration closed. Visit `/setup` to create the first
-super admin, then provision other accounts from `/settings/users`.
-
-## Production compose
-
-```bash
-export CREDENTIAL_ENCRYPTION_SECRET=...
-export BETTER_AUTH_SECRET=...
-docker compose -f docker-compose.prod.yml up --build
-```
-
-Uploaded chat attachments are written to `FILE_STORAGE_DIR` (default
-`.data/files`). The production compose file mounts a `files_prod_data` named
-volume at `/data/files`; keep that volume (or a host bind mount) in any custom
-deployment — attachment bytes are not stored in the database and are lost if
-the directory is not persisted.
-
-A single attachment is capped at 20 MiB by default. Set `FILE_UPLOAD_MAX_MB`
-to a value between 1 and 100 to change it; a value outside that range makes
-the server refuse to start.
-
-## S3-compatible attachment storage
-
-Attachments default to local disk. Set `S3_BUCKET` to move them to any
-S3-compatible object store (AWS S3, MinIO, RustFS, R2); leave it unset and
-nothing changes. `S3_BUCKET` wins when both it and `FILE_STORAGE_DIR` are set.
-
-```bash
-S3_BUCKET=pika-attachments
-S3_ENDPOINT=http://minio:9000        # omit for the official AWS endpoint
-S3_REGION=us-east-1                  # optional, defaults to us-east-1
-S3_ACCESS_KEY_ID=...                 # required whenever S3_BUCKET is set
-S3_SECRET_ACCESS_KEY=...             # required whenever S3_BUCKET is set
-```
-
-Setting a custom `S3_ENDPOINT` automatically switches requests to path-style
-URLs, which MinIO/RustFS-style endpoints on a container network require; the
-official AWS endpoint keeps the virtual-hosted default.
-
-The bucket is created on first use if it does not exist, so there is nothing to
-provision by hand. Credentials are read from the environment only and are never
-logged. Removing the `S3_*` variables switches back to local disk; objects
-already written to the bucket are not copied back.
-
-### Direct S3 access
-
-By default the browser uploads to the app server, which relays the bytes to
-storage, and downloads/previews are relayed the same way. With S3 configured,
-set `S3_DIRECT_ACCESS=1` to let the browser talk to the bucket directly in
-both directions: uploads use a short-lived presigned POST policy, and
-downloads/previews get a 302 redirect to a presigned GET — the bytes never
-pass through the app process, and S3 serves Range requests natively.
-
-```bash
-S3_DIRECT_ACCESS=1    # requires S3_BUCKET; default off
-```
-
-Direct uploads require the bucket's CORS configuration to allow browser POSTs
-from the app's origin; the 302 downloads need no CORS setup because the
-browser simply follows a redirect. The size limit is still enforced on both
-ends (the signed policy and the server-side completion check), so a client
-cannot upload past `FILE_UPLOAD_MAX_MB`. Direct access requires S3: enabling
-the flag without `S3_BUCKET` makes the server refuse to start rather than
-silently falling back to the relay path, so every deployment of the same
-environment behaves alike.
-
-### Bundled RustFS deployment
-
-To run attachment storage in a container alongside the app, stack the override
-file on top of the production compose file. `docker-compose.prod.yml` itself is
-unchanged:
-
-```bash
-export CREDENTIAL_ENCRYPTION_SECRET=...
-export BETTER_AUTH_SECRET=...
-export S3_ACCESS_KEY_ID=...
-export S3_SECRET_ACCESS_KEY=...
-export S3_BUCKET=pika-attachments    # optional, this is the default
-docker compose -f docker-compose.prod.yml -f docker-compose.prod.rustfs.yml up --build
-```
-
-RustFS listens on `9000` inside the compose network only; its console (`9001`)
-is not published to the host. Add `ports: ["9001:9001"]` to the `rustfs`
-service in a further override if you want it reachable.
+This project is licensed under the MIT License.
