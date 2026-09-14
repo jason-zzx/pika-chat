@@ -668,3 +668,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 25: 附件三期之子任务 3：管理页（列表/预览/删除/批量）+ 存储 key 后缀 + 测试存储隔离
+<!-- trellis-session: v=2 fp=phase3-task3 -->
+
+**Date**: 2026-09-14
+**Task**: 09-13-attachment-management-page（父：09-13-chat-attachments-phase3）
+**Branch**: `main`
+
+### Summary
+
+落地 /settings/files 管理页并收口三期最后一个子任务。GET /api/files 列表端点（owner 限定、offset 分页 clamp、四分类筛选——谓词与 classifyFile 完全同源含扩展名兜底，42 行等价性测试按 id 比对锁定）；页面 = 用量区块（limits 端点，quotaBytes 0/null 分流）+ 分类筛选 + 加载更多 + 图片对话框预览 + 删除确认/409 兜底 + 批量选择（表头全选仅已加载未引用行、Promise.allSettled 逐条 DELETE 无服务端批量接口、汇总「已删除 X · 跳过 Y」）。check 抓到一个真实缺陷（mediaType-only 筛选漏掉 octet-stream 的 pptx/epub/txt 行，复检以 12 个自造边界输入在真实 DB 独立验证 12/12 一致）。追加三项：R5 批量选择、R6 storageKey 带原始扩展名（<userId>/<fileId>.<ext>，media_type 列仍是 Content-Type 真相）、R7 测试存储 hermetic 化——根因是集成测试只隔离了 TEST_DATABASE_URL 没隔离对象存储，导致数百个 fixture 写进用户真实 rustfs 桶（已清理 388 个残留对象，保留 2 个真实文件）；修法为共享 InMemoryFileStorage 挂集成 setup + afterEach 泄漏断言（泄漏即红）。1039 测试全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b100771` | feat(attachments): /settings/files management page with list, preview and batch delete |
+
+### Status
+
+[OK] **Completed**（子任务已归档；父任务待收口；浏览器手测项待用户过一遍）
