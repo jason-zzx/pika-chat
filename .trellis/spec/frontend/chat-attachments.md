@@ -227,8 +227,11 @@ Dialog); the single-row action is the N=1 case of the batch flow.
   Do not infer "unfinished upload" from the size: 0 is sendable.
 - **Batch selection**: a row checkbox plus a header select-all that covers
   only the loaded, unreferenced rows (indeterminate state included);
-  `referenced` rows are unselectable with `aria-describedby` at the in-use
-  badge, same contract as the disabled delete button. A toolbar shows when
+  `referenced` rows render a dashed lock box (aria-hidden) in place of the
+  checkbox — visually distinct from selectable rows, since a merely-dimmed
+  disabled checkbox reads as "unavailable" rather than "locked". The in-use
+  badge carries the meaning, and the row's disabled delete button keeps its
+  `aria-describedby` pointing at that badge. A toolbar shows when
   the selection is non-empty; confirming deletes with
   `Promise.allSettled(ids.map(deleteChatFile))` — deliberately **no server
   bulk endpoint**, so the per-file semantics (ownership, 409, provider-side

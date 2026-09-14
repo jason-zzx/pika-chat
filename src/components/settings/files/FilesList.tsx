@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLinkIcon, EyeIcon, Trash2Icon } from "lucide-react";
+import { ExternalLinkIcon, EyeIcon, LockIcon, Trash2Icon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { type ReactNode, useId } from "react";
 
@@ -60,14 +60,24 @@ function FileRow({
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       {/* In-use rows cannot be deleted, so they cannot be selected either —
-          the same rule the row's delete button follows. */}
-      <Checkbox
-        checked={selectedIds.has(file.id)}
-        disabled={file.referenced}
-        onCheckedChange={(checked) => onToggleSelect(file, checked)}
-        aria-label={t("selectFile", { filename: file.filename })}
-        aria-describedby={file.referenced ? inUseBadgeId : undefined}
-      />
+          the same rule the row's delete button follows. Instead of a merely
+          dimmed checkbox they get a dashed lock box, visually distinct from
+          selectable rows at a glance; decorative only, the adjacent in-use
+          badge carries the meaning. */}
+      {file.referenced ? (
+        <span
+          aria-hidden="true"
+          className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-dashed border-input bg-muted text-muted-foreground"
+        >
+          <LockIcon className="size-3" />
+        </span>
+      ) : (
+        <Checkbox
+          checked={selectedIds.has(file.id)}
+          onCheckedChange={(checked) => onToggleSelect(file, checked)}
+          aria-label={t("selectFile", { filename: file.filename })}
+        />
+      )}
       <AttachmentIcon
         mediaType={file.mediaType}
         filename={file.filename}

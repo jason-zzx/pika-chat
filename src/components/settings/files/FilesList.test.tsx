@@ -108,19 +108,15 @@ describe("FilesList", () => {
   });
 
   describe("selection", () => {
-    it("disables the checkbox of an in-use row and points it at the badge", () => {
+    it("replaces the checkbox of an in-use row with a lock placeholder", () => {
       renderList([file({ referenced: true })]);
 
-      const checkbox = screen.getByRole("checkbox", {
-        name: "Select notes.txt",
-      });
-      // Base UI renders a span with aria-disabled rather than a disabled input.
-      expect(checkbox).toHaveAttribute("aria-disabled", "true");
-      const describedBy = checkbox.getAttribute("aria-describedby");
-      expect(describedBy).toBeTruthy();
-      expect(document.getElementById(describedBy!)).toHaveTextContent(
-        "In use",
-      );
+      // No selectable control at all — the dashed lock box is aria-hidden and
+      // the in-use badge carries the meaning.
+      expect(
+        screen.queryByRole("checkbox", { name: "Select notes.txt" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText("In use")).toBeInTheDocument();
     });
 
     it("checks select-all only when every deletable loaded row is selected", () => {
