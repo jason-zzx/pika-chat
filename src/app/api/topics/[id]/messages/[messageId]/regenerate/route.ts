@@ -19,7 +19,6 @@ import { resolveAttachmentsForModel } from "@/server/ai/attachments";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
-import { providerErrorText } from "@/server/ai/provider-error";
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
 import {
   createReasoningTimer,
@@ -34,6 +33,7 @@ import {
   toolTurnStepSettings,
   withCitationDirective,
 } from "@/server/ai/search/tool";
+import { createStreamFailureTracker } from "@/server/ai/stream-failure";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
@@ -151,7 +151,6 @@ export const POST = withErrorHandling(async (request, context) => {
   );
 
   let accumulatedText = "";
-  let streamErrorMessage: string | null = null;
   // Captured before the model call so the persisted assistant createdAt
   // matches what a history reload will return.
   const streamStartedAt = new Date();
@@ -161,6 +160,9 @@ export const POST = withErrorHandling(async (request, context) => {
   let emittedReasoningPhaseCount = 0;
   // Assigned from the UI stream's execute closure, where the writer exists.
   let emitReasoningMetadata: (() => void) | null = null;
+  // Decides the turn outcome from what we observe, not from what the SDK
+  // declares — see stream-failure.ts.
+  const failure = createStreamFailureTracker(handle.describeError, t);
 
   const result = streamText({
     model: handle.model,
@@ -172,6 +174,8 @@ export const POST = withErrorHandling(async (request, context) => {
       ? withCitationDirective(topicContext.assistant.systemPrompt ?? undefined)
       : (topicContext.assistant.systemPrompt ?? undefined),
     abortSignal,
+    // One retry, not the SDK default of two: the backoff doubles otherwise.
+    maxRetries: 1,
     maxOutputTokens: resolvedMaxOutputTokens(selected),
     providerOptions:
       reasoningEffort === undefined
@@ -230,6 +234,10 @@ export const POST = withErrorHandling(async (request, context) => {
           // the row onEnd persists (see /api/chat; B6).
           sendStart: true,
           sendReasoning: true,
+          // Without this the client receives the SDK's own "An error occurred."
+          // and the provider detail never leaves the server, even though we
+          // computed it for the persisted row.
+          onError: (error: unknown) => failure.describe(error),
           messageMetadata: ({ part }) => {
             if (part.type !== "finish") {
               return undefined;
@@ -249,10 +257,7 @@ export const POST = withErrorHandling(async (request, context) => {
         }),
       );
     },
-    onError: (error: unknown) => {
-      streamErrorMessage = providerErrorText(handle.describeError(error), t);
-      return streamErrorMessage;
-    },
+    onError: (error: unknown) => failure.describe(error),
     onEnd: async ({ responseMessage, outcome, isAborted }) => {
       try {
         const withText = partsHaveText(responseMessage)
@@ -284,11 +289,13 @@ export const POST = withErrorHandling(async (request, context) => {
         let errorMessage: string | null = null;
         if (isAborted) {
           turnOutcome = "stopped";
-        } else if (outcome.status === "failed") {
+        } else if (failure.sawFailure || outcome.status === "failed") {
           turnOutcome = "failed";
           errorMessage =
-            streamErrorMessage ??
-            providerErrorText(handle.describeError(outcome.error), t);
+            failure.message ??
+            (outcome.status === "failed"
+              ? failure.describe(outcome.error)
+              : null);
         }
 
         await appendAssistantMessage(

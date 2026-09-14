@@ -105,7 +105,11 @@ export async function createChatModelHandle(
   const model = createLanguageModel(endpoint, pair.modelId, options);
   return {
     model,
-    describeError: (error: unknown) => describeProviderError(error, endpoint.apiKey),
+    describeError: (error: unknown) =>
+      describeProviderError(error, {
+        apiKey: endpoint.apiKey,
+        baseUrl: endpoint.baseUrl,
+      }),
     apiFormat: endpoint.apiFormat,
     providerConfigId: pair.providerConfigId,
     filesApi: createFilesApi(endpoint),

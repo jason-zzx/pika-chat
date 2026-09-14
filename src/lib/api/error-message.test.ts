@@ -1,7 +1,7 @@
 import { createTranslator } from "next-intl";
 import { describe, expect, it } from "vitest";
 
-import { apiErrorMessage, apiErrorMessageFromUnknown } from "@/lib/api/error-message";
+import { apiErrorMessage, apiErrorMessageFromUnknown, isApiErrorEnvelope } from "@/lib/api/error-message";
 
 import enMessages from "../../../messages/en.json";
 import zhMessages from "../../../messages/zh-CN.json";
@@ -137,5 +137,31 @@ describe("apiErrorMessageFromUnknown", () => {
     expect(
       apiErrorMessageFromUnknown(error, en, "actions.sendMessage"),
     ).toBe("Something went wrong. Please try again.");
+  });
+});
+
+// Distinguishes "the request failed before a stream opened" (our envelope) from
+// "the stream failed" (the sanitized provider detail). The composer banner is
+// for the former; the transcript owns the latter.
+describe("isApiErrorEnvelope", () => {
+  it("is true for our envelope, however it was thrown", () => {
+    const envelope = { error: { code: "NOT_FOUND", messageKey: "topic.notFound" } };
+    expect(isApiErrorEnvelope(envelope)).toBe(true);
+    expect(isApiErrorEnvelope(JSON.stringify(envelope))).toBe(true);
+    expect(isApiErrorEnvelope(new Error(JSON.stringify(envelope)))).toBe(true);
+  });
+
+  it("is false for a sanitized provider payload", () => {
+    // The shape `describeProviderError` persists for an upstream error.
+    const payload = JSON.stringify(
+      { message: "No available channel for model x", code: "model_not_found" },
+      null,
+      2,
+    );
+    expect(isApiErrorEnvelope(new Error(payload))).toBe(false);
+  });
+
+  it("is false for a network error", () => {
+    expect(isApiErrorEnvelope(new TypeError("fetch failed"))).toBe(false);
   });
 });

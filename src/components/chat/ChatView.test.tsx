@@ -75,23 +75,38 @@ const captured = vi.hoisted(() => ({
   setMessages: undefined as
     | Dispatch<SetStateAction<ChatUIMessage[]>>
     | undefined,
-  status: "ready" as "ready" | "submitted" | "streaming",
+  clearError: undefined as (() => void) | undefined,
+  status: "ready" as "ready" | "submitted" | "streaming" | "error",
+  error: undefined as Error | undefined,
+  initialMessages: undefined as ChatUIMessage[] | undefined,
 }));
 
 vi.mock("@ai-sdk/react", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
   return {
     useChat: (options: { onData?: (part: TopicDataPart) => void }) => {
-      const [messages, setMessages] = React.useState<ChatUIMessage[]>([]);
+      const [messages, setMessages] = React.useState<ChatUIMessage[]>(
+        captured.initialMessages ?? [],
+      );
+      const [error, setError] = React.useState<Error | undefined>(
+        captured.error,
+      );
       captured.onData = options.onData;
       captured.setMessages = setMessages;
+      // Mirrors the real hook: clearing is explicit, nothing else resets it.
+      // Created once — the real `clearError` is a stable method, and a fresh
+      // spy per render would hide the call from the assertion.
+      const clearErrorRef = React.useRef<(() => void) | null>(null);
+      clearErrorRef.current ??= vi.fn(() => setError(undefined));
+      captured.clearError = clearErrorRef.current;
       return {
         messages,
         status: captured.status,
-        error: undefined,
+        error,
         sendMessage: vi.fn(),
         stop: vi.fn().mockResolvedValue(undefined),
         setMessages,
+        clearError: clearErrorRef.current,
       };
     },
   };
@@ -140,6 +155,16 @@ function assistantVersion(
       versionCount: versionIds.length,
       versionIds,
     },
+  };
+}
+
+/** An assistant message mid-stream: no outcome stamped yet. */
+function assistantDraft(id: string, text: string): StoredMessage {
+  return {
+    id,
+    role: "assistant",
+    parts: [{ type: "text", text }],
+    metadata: { createdAt: new Date().toISOString() },
   };
 }
 
@@ -411,5 +436,88 @@ describe("ChatView attachment drop zone", () => {
     } finally {
       captured.status = "ready";
     }
+  });
+});
+
+describe("ChatView failure rendering", () => {
+  const STREAM_ERROR_TEXT = JSON.stringify(
+    {
+      message: "No available channel for model gpt-5.6-luna",
+      code: "model_not_found",
+    },
+    null,
+    2,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/";
+    captured.status = "ready";
+    captured.error = undefined;
+    captured.initialMessages = undefined;
+    vi.mocked(listTopicMessages).mockResolvedValue({ messages: [] });
+  });
+
+  it("shows the stream failure's reason at once, not the generic caption", () => {
+    captured.status = "error";
+    captured.error = new Error(STREAM_ERROR_TEXT);
+    captured.initialMessages = [
+      userMessage("u1", "question"),
+      assistantDraft("a1", ""),
+    ];
+
+    renderChatView({ assistantId: "a1" });
+
+    // The error text is the same string the server persisted, so the
+    // transcript never falls back to "the model failed to respond".
+    expect(screen.queryByText("The model failed to respond.")).toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain(
+      "No available channel for model gpt-5.6-luna",
+    );
+  });
+
+  it("releases the latched send error so it cannot flash back mid-request", async () => {
+    captured.status = "error";
+    captured.error = new Error(STREAM_ERROR_TEXT);
+    captured.initialMessages = [
+      userMessage("u1", "question"),
+      assistantDraft("a1", ""),
+    ];
+
+    renderChatView({ assistantId: "a1" });
+
+    await waitFor(() => expect(captured.clearError).toHaveBeenCalled());
+
+    // A regenerate swaps the failed message for an outcome-less placeholder.
+    // While the send error was still latched, that made the banner reappear
+    // for the whole request.
+    act(() => {
+      captured.setMessages?.([
+        userMessage("u1", "question"),
+        {
+          id: "regen-placeholder:a1",
+          role: "assistant",
+          parts: [],
+          metadata: {},
+        },
+      ]);
+    });
+
+    expect(screen.queryByText("Unable to send the message")).toBeNull();
+  });
+
+  it("keeps the banner for a pre-stream failure, which leaves no message behind", async () => {
+    captured.status = "error";
+    captured.error = new Error(
+      JSON.stringify({
+        error: { code: "NOT_FOUND", messageKey: "topic.notFound" },
+      }),
+    );
+    captured.initialMessages = [userMessage("u1", "question")];
+
+    renderChatView({ assistantId: "a1" });
+
+    expect(await screen.findByText("Topic not found")).toBeInTheDocument();
+    expect(captured.clearError).not.toHaveBeenCalled();
   });
 });

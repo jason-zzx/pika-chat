@@ -13,6 +13,7 @@ import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
 import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
 
 import AttachmentIcon from "./AttachmentIcon";
+import ErrorBlock from "./ErrorBlock";
 import Markdown from "./Markdown";
 import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
 import MessageActions from "./MessageActions";
@@ -476,9 +477,13 @@ export default function MessageItem({
         <p className="text-xs text-muted-foreground">{t("stopped")}</p>
       ) : null}
       {outcome === "failed" ? (
-        <p className="text-xs text-destructive" role="alert">
-          {metadata?.errorMessage ?? t("failedFallback")}
-        </p>
+        metadata?.errorMessage ? (
+          <ErrorBlock text={metadata.errorMessage} />
+        ) : (
+          <p className="text-xs text-destructive" role="alert">
+            {t("failedFallback")}
+          </p>
+        )
       ) : null}
       {modelId ? (
         <p className="text-xs text-muted-foreground">{modelId}</p>

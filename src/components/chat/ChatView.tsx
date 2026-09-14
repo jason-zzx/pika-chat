@@ -29,7 +29,11 @@ import {
   selectMessageVersion,
   stopChatStream,
 } from "@/lib/api/chat";
-import { apiErrorMessage, apiErrorMessageFromUnknown } from "@/lib/api/error-message";
+import {
+  apiErrorMessage,
+  apiErrorMessageFromUnknown,
+  isApiErrorEnvelope,
+} from "@/lib/api/error-message";
 import {
   assistantTopicHref,
   parseAssistantPath,
@@ -45,6 +49,7 @@ import {
 import { useComposerAttachments } from "./use-composer-attachments";
 import ChatMapDialog from "./ChatMapDialog";
 import Composer from "./Composer";
+import ErrorBlock from "./ErrorBlock";
 import MessageList, { type MessageListHandle } from "./MessageList";
 import {
   buildRegenPlaceholder,
@@ -68,14 +73,29 @@ import { chatKeys, useChatHistory } from "./use-chat-history";
 function markLastAssistant(
   current: ChatUIMessage[],
   outcome: "stopped" | "failed",
+  errorMessage?: string,
 ): ChatUIMessage[] {
   const last = current[current.length - 1];
-  if (!last || last.role !== "assistant" || last.metadata?.outcome === outcome) {
+  if (!last || last.role !== "assistant") {
+    return current;
+  }
+  if (
+    last.metadata?.outcome === outcome &&
+    (errorMessage === undefined ||
+      last.metadata.errorMessage === errorMessage)
+  ) {
     return current;
   }
   return current.map((message, index) =>
     index === current.length - 1
-      ? { ...message, metadata: { ...message.metadata, outcome } }
+      ? {
+          ...message,
+          metadata: {
+            ...message.metadata,
+            outcome,
+            ...(errorMessage === undefined ? {} : { errorMessage }),
+          },
+        }
       : message,
   );
 }
@@ -91,6 +111,23 @@ function markAssistantOutcome(
     message.metadata?.outcome !== outcome
       ? { ...message, metadata: { ...message.metadata, outcome } }
       : message,
+  );
+}
+
+/**
+ * Error surface above the composer, in the same container the transcript uses
+ * for a failed turn. Covers both pre-stream failures (the request never opened
+ * a stream, so there is no message to hang the error on) and failed actions.
+ */
+function ComposerError({ text }: { text: string }) {
+  return (
+    <div className="shrink-0 px-4 pb-2">
+      {/* Same centred column as the transcript and the composer, so a long
+          provider payload cannot run wider than the conversation above it. */}
+      <div className="mx-auto w-full max-w-[52.5rem]">
+        <ErrorBlock text={text} />
+      </div>
+    </div>
   );
 }
 
@@ -236,7 +273,15 @@ export default function ChatView({
       }),
   );
 
-  const { messages, status, error, sendMessage, stop, setMessages } =
+  const {
+    messages,
+    status,
+    error,
+    sendMessage,
+    stop,
+    setMessages,
+    clearError,
+  } =
     useChat<ChatUIMessage>({
       id: chatId,
       transport,
@@ -294,6 +339,15 @@ export default function ChatView({
         const topic = latestRef.current.topicId;
         void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
         if (topic) {
+          // A failed turn is stamped locally so the failure shows at once, but
+          // the reason lives in the persisted row. Clearing the seed guard
+          // lets the refetch below replace it, so the live view shows the same
+          // error a reload would instead of the generic fallback. The server
+          // persists in its own onEnd, which runs before the response stream
+          // closes — by the time this fires the row is already there.
+          if (event.isError) {
+            seededHistoryFor.current = null;
+          }
           void queryClient.invalidateQueries({
             queryKey: chatKeys.history(topic),
           });
@@ -427,12 +481,44 @@ export default function ChatView({
     setReasoningEffort,
   ]);
 
+  // A stream failure arrives as plain text — the sanitized provider detail the
+  // server also persisted — so the transcript can show the real reason at once.
+  // A pre-stream failure carries our JSON envelope instead, and belongs to the
+  // composer banner below; stamping its body onto the message would put raw
+  // envelope JSON in the transcript.
+  const streamErrorMessage =
+    error instanceof Error && !isApiErrorEnvelope(error)
+      ? error.message
+      : undefined;
+
   useEffect(() => {
     if (status !== "error") {
       return;
     }
-    setMessages((current) => markLastAssistant(current, "failed"));
-  }, [setMessages, status]);
+    setMessages((current) =>
+      markLastAssistant(current, "failed", streamErrorMessage),
+    );
+  }, [setMessages, status, streamErrorMessage]);
+
+  // The transcript is where a failed turn shows its reason. Once it is rendered
+  // there the latched send error has nothing left to say, and dropping it stops
+  // it resurfacing later — the latch is otherwise never cleared, and a
+  // regenerate swaps the failed message for an outcome-less placeholder, which
+  // used to make the stale error flash as a composer banner mid-request.
+  //
+  // A failed turn already carries its reason in the transcript, so repeating it
+  // above the composer is noise; this also gates the banner below. A pre-stream
+  // failure leaves no message behind, so its banner stays the only feedback.
+  const lastMessage = messages[messages.length - 1];
+  const failureShownInTranscript =
+    lastMessage?.role === "assistant" &&
+    lastMessage.metadata?.outcome === "failed";
+
+  useEffect(() => {
+    if (error !== undefined && failureShownInTranscript) {
+      clearError();
+    }
+  }, [error, failureShownInTranscript, clearError]);
 
   const inFlight =
     status === "submitted" || status === "streaming" || regen !== null;
@@ -985,21 +1071,13 @@ export default function ChatView({
           }
         />
       )}
-      {error ? (
-        <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">
-          {apiErrorMessageFromUnknown(error, tErrors, "actions.sendMessage")}
-        </p>
+      {error && !failureShownInTranscript ? (
+        <ComposerError
+          text={apiErrorMessageFromUnknown(error, tErrors, "actions.sendMessage")}
+        />
       ) : null}
-      {actionError ? (
-        <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">
-          {actionError}
-        </p>
-      ) : null}
-      {defaultModelError ? (
-        <p className="shrink-0 px-4 pb-2 text-sm text-destructive" role="alert">
-          {defaultModelError}
-        </p>
-      ) : null}
+      {actionError ? <ComposerError text={actionError} /> : null}
+      {defaultModelError ? <ComposerError text={defaultModelError} /> : null}
       {dragActive ? (
         // Decorative, transient feedback for pointer users; the labelled
         // attach button is the keyboard/screen-reader path.

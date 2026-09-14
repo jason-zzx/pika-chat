@@ -7,6 +7,7 @@ const {
   createChatModelHandle,
   resolveAttachmentsForModel,
   appendUserMessage,
+  appendAssistantMessage,
   listTopicMessages,
   findTopicContextForActor,
   touchTopicUpdatedAt,
@@ -19,6 +20,7 @@ const {
   createChatModelHandle: vi.fn(),
   resolveAttachmentsForModel: vi.fn(),
   appendUserMessage: vi.fn(),
+  appendAssistantMessage: vi.fn(),
   listTopicMessages: vi.fn(),
   findTopicContextForActor: vi.fn(),
   touchTopicUpdatedAt: vi.fn(),
@@ -36,7 +38,7 @@ vi.mock("@/server/ai/chat-model", () => ({ createChatModelHandle }));
 vi.mock("@/server/ai/attachments", () => ({ resolveAttachmentsForModel }));
 vi.mock("@/server/services/message.service", () => ({
   appendUserMessage,
-  appendAssistantMessage: vi.fn(),
+  appendAssistantMessage,
   listTopicMessages,
 }));
 vi.mock("@/server/services/topic.service", () => ({
@@ -68,11 +70,35 @@ vi.mock("@/server/ai/output-budget", () => ({
   resolvedMaxOutputTokens: vi.fn(() => 1000),
 }));
 vi.mock("@/server/ai/provider-error", () => ({
-  providerErrorText: vi.fn(() => "error"),
+  // Faithful passthrough so a test can assert the text the user actually sees.
+  providerErrorText: vi.fn(
+    (description: { kind: string; messageKey?: string; message?: string }) =>
+      description.kind === "verbatim"
+        ? description.message
+        : description.messageKey,
+  ),
 }));
+vi.mock("@/server/ai/model-messages", () => ({
+  replayModelMessages: vi.fn(async (messages: unknown) => messages),
+}));
+const streamTextOptions = vi.hoisted(() => ({
+  current: undefined as unknown,
+}));
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    streamText: (options: Parameters<typeof actual.streamText>[0]) => {
+      streamTextOptions.current = options;
+      return actual.streamText(options);
+    },
+  };
+});
 vi.mock("@/server/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+
+import { APICallError } from "ai";
 
 import { AppError } from "@/server/errors";
 
@@ -185,5 +211,110 @@ describe("POST /api/chat attachment routing", () => {
     expect(createTopicForChat).not.toHaveBeenCalled();
     expect(listTopicMessages).not.toHaveBeenCalled();
     expect(appendUserMessage).not.toHaveBeenCalled();
+  });
+});
+
+const PROVIDER_MESSAGE = "model_not_found: model does not exist";
+
+/** A model whose provider call fails after the stream has opened. */
+function failingModel(error: unknown) {
+  return {
+    specificationVersion: "v2",
+    provider: "test",
+    modelId: "model-1",
+    supportedUrls: {},
+    doStream: async () => ({
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "stream-start", warnings: [] });
+          controller.error(error);
+        },
+      }),
+    }),
+  };
+}
+
+describe("POST /api/chat provider failure", () => {
+  beforeEach(() => {
+    resolveAttachmentsForModel.mockResolvedValue([]);
+    resolveOwnedFileParts.mockResolvedValue([]);
+    createChatModelHandle.mockResolvedValue({
+      model: failingModel(
+        new APICallError({
+          message: "Bad Request",
+          url: "https://provider.test/v1/chat/completions",
+          requestBodyValues: {},
+          statusCode: 400,
+          responseBody: JSON.stringify({
+            error: { code: "model_not_found", message: "model does not exist" },
+          }),
+        }),
+      ),
+      describeError: () => ({
+        code: "PROVIDER_ERROR",
+        kind: "verbatim",
+        message: PROVIDER_MESSAGE,
+      }),
+      apiFormat: "openai-compatible",
+      providerConfigId: "cfg-1",
+      filesApi: null,
+    });
+  });
+
+  // Regression: the SDK reports a fatal stream error to onEnd as
+  // `{ status: "unknown" }`, so a turn keyed on `outcome.status === "failed"`
+  // was persisted as `completed` with no error message — the transcript then
+  // lost the reason on reload and the bubble rendered empty.
+  it("persists a failed turn with the provider error instead of a silent completed row", async () => {
+    const response = await POST(
+      chatRequest({
+        assistantId: "assistant-1",
+        topicId: "topic-1",
+        providerConfigId: "cfg-1",
+        modelId: "model-1",
+        message: {
+          id: "message-1",
+          role: "user",
+          parts: [{ type: "text", text: "hi" }],
+        },
+      }),
+    );
+
+    const body = await response.text();
+
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicId: "topic-1",
+        outcome: "failed",
+        errorMessage: PROVIDER_MESSAGE,
+      }),
+      ACTOR,
+    );
+    // The client gets our copy; the SDK's own fallback is never what a user
+    // sees, or the provider detail would be invisible until a reload.
+    expect(body).toContain(PROVIDER_MESSAGE);
+    expect(body).not.toContain("An error occurred.");
+  });
+
+  // The SDK default is two retries with a doubling backoff (2s then 4s), and
+  // every 408/409/429/5xx is retryable by default — so a deterministic failure
+  // used to stall ~6s before the user saw anything.
+  it("retries once so the wait is a single 2s pause", async () => {
+    const response = await POST(
+      chatRequest({
+        assistantId: "assistant-1",
+        topicId: "topic-1",
+        providerConfigId: "cfg-1",
+        modelId: "model-1",
+        message: {
+          id: "message-1",
+          role: "user",
+          parts: [{ type: "text", text: "hi" }],
+        },
+      }),
+    );
+    await response.text();
+
+    expect(streamTextOptions.current).toMatchObject({ maxRetries: 1 });
   });
 });

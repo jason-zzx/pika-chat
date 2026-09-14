@@ -97,9 +97,17 @@ but the *action* is not, such as a regular user attempting an admin operation.
 
 Provider API keys, encryption secrets, session tokens, password hashes, raw
 stack traces, and upstream provider error bodies must never reach a client
-response. Upstream provider failures are wrapped as `PROVIDER_ERROR` with a
-summarized, verbatim message — provider errors routinely echo back request
-payloads, which can contain the key or the user's message.
+response. An upstream provider failure is wrapped as `PROVIDER_ERROR` with a
+summarized message — provider errors routinely echo back request payloads,
+which can contain the key or the user's message.
+
+What *is* shown to the user is the upstream `error` field, and only that field:
+`describeProviderError` lifts `error` out of the body, scrubs every string in
+it (API key, `Authorization`/`Bearer`/`Basic` values, credential-named fields,
+the configured base URL and its host), and clamps the result. Narrowing to
+`error` rather than shipping the whole body is what keeps a gateway's request
+echo out: the echo lands elsewhere in the response. See
+`src/server/ai/provider-error.ts`.
 
 ---
 
@@ -121,6 +129,55 @@ locale at stream time. Upstream provider detail is passed through **verbatim**
 paraphrase. `describeProviderError` returns the discriminated description;
 `src/app/api/chat/route.ts` and the regenerate route resolve it for both the
 stream error event and the persisted `error_message`.
+
+### Do not trust `outcome.status`
+
+The AI SDK does not report every provider failure as
+`outcome.status === "failed"`. A fatal stream error — what a bad key, a
+missing model, or a dead endpoint produces — reaches `onEnd` as
+`{ status: "unknown" }`. Branching on `outcome.status` alone persisted those
+turns as `completed` with a null `error_message` and no text parts: the reason
+never left the server, and the transcript showed an empty bubble that survived
+reloads.
+
+So both streaming routes track the failure themselves, through the shared
+`createStreamFailureTracker` in `src/server/ai/stream-failure.ts`. Its
+`describe(error)` is wired into **two** hooks and records that the turn failed:
+
+- the `onError` passed to `toUIMessageStream` — **required**. Without it the
+  error chunk carries the SDK's own `"An error occurred."` to the client and
+  the text we computed for the row is never delivered, so live and reloaded
+  views disagree.
+- the `onError` on `createUIMessageStream`, which catches anything that escapes
+  the inner wrapper.
+
+The first resolution wins, so the text the row persists and the text the client
+receives are the same string by construction. `onEnd` then treats
+`failure.sawFailure || outcome.status === "failed"` as a failed turn. Anything
+that decides a turn's outcome from the stream must be tested against a model
+that fails after the stream has opened, not only against a happy path.
+
+### Retries, and why the error object is not always the provider's
+
+`APICallError`'s constructor defaults `isRetryable` from the status code
+(`408`, `409`, `429`, `5xx` → true). That default is what makes an upstream
+failure retryable — the `openai-compatible` provider passes no `isRetryable`
+of its own, so the status code alone decides. After the attempts are exhausted
+the retry wrapper **replaces** the error with a `RetryError`, whose
+`APICallError` only survives in `.lastError` / `.errors[]`.
+
+Consequences to keep in mind:
+
+- A 5xx is not shown as "the provider returned 503" — by the time it reaches
+  the routes it is an `AISDKError`, and `APICallError.isInstance` is false.
+- Both routes pass `maxRetries: 1`, not the SDK default of 2. With a doubling
+  backoff the default means 2s + 4s of dead time before a deterministic
+  failure is reported; one retry keeps a single 2s pause.
+- `describeProviderError` unwraps `RetryError.lastError` before describing.
+  Keep that step: without it every 408/409/429/5xx reports the generic
+  "unreachable" copy — a rate limit presented as a connectivity problem, with
+  the real body discarded. The regression test drives a real local endpoint
+  returning 503 and asserts the provider's own text survives.
 
 Use the AI SDK's error handling on the stream response so the failure reaches
 the client as a stream event rather than a silently truncated response. A

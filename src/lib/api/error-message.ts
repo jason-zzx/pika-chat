@@ -118,6 +118,17 @@ export function apiErrorCode(error: unknown): string | undefined {
 }
 
 /**
+ * True when the thrown error carries our JSON envelope, which means the
+ * request failed before a stream opened. A stream failure arrives as plain
+ * text instead — the sanitized provider detail — so the two are
+ * distinguishable, and callers that need "did a stream start?" can ask here
+ * rather than sniffing the shape themselves.
+ */
+export function isApiErrorEnvelope(error: unknown): boolean {
+  return parseApiErrorFromUnknown(error) !== undefined;
+}
+
+/**
  * Resolves a thrown API error to display text, including the raw response body
  * the AI SDK wraps in `Error.message`.
  *

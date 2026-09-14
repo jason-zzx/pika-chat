@@ -136,3 +136,83 @@ if (row.role !== "assistant") {
 // finish metadata still carries the value as the authoritative fallback.
 writer.write({ type: "message-metadata", messageMetadata: { reasoningMs } });
 ```
+
+## Scenario: a failed turn
+
+### 1. Scope / Trigger
+
+Any change to how a provider failure is recorded or shown. The failure reason
+must be identical live, after a reload, and after a regenerate — the transcript
+reads it back from the row, so the row is the only source of truth.
+
+### 2. Signatures
+
+- `outcome: "failed"` + `errorMessage` are written by the streaming routes'
+  `onEnd` through `appendAssistantMessage`; the column is
+  `chat_messages.error_message`, rebuilt by `metadataFromRow`.
+- `errorMessage` holds the **upstream `error` field**, scrubbed and formatted
+  (objects arrive as indented JSON). It is not our catalog copy unless the
+  provider body was empty. See `src/server/ai/provider-error.ts`.
+- `Chat.MessageItem` renders it through `ErrorBlock`, the shared error surface —
+  monospace, height-capped, internally scrolling, `role="alert"`.
+
+### 3. Contracts
+
+- There is no finish `messageMetadata` for a failed turn: the stream errors
+  fatally, so no finish part is emitted. That is why the failed case cannot
+  reuse the reasoning-duration trick above.
+- Live convergence therefore comes from **reseed**, not from stream metadata.
+  The client stamps the failure locally (`outcome` **and** the error text — the
+  stream carries the same sanitized string the server persists, so nothing
+  renders the generic fallback in between), then clears the `seededHistoryFor`
+  guard on the erroring `onFinish` so the refetch replaces it with the persisted
+  row. The server persists in its own `onEnd`, which runs before the response
+  stream closes, so the row is already there.
+- Two failure kinds must stay distinguishable on the client, and
+  `isApiErrorEnvelope` is the test: our JSON envelope means the request failed
+  **before a stream opened** (no message to attach it to → the composer banner
+  is its home), while plain text means the **stream failed** (the transcript
+  owns it). Stamping envelope JSON onto a message would put raw wire data in the
+  transcript; treating a stream failure as a banner would duplicate it.
+- `useChat`'s `error` is a latch: nothing clears it but a new send or an
+  explicit `clearError()`. A regenerate never touches `useChat`, so a failure
+  left latched resurfaces later — the regenerate placeholder carries no
+  `outcome`, which is enough to re-show the banner mid-request. Release the
+  latch as soon as the failure is rendered in the transcript.
+- Deciding the turn failed must not key on `outcome.status` — see
+  [error-handling.md](./error-handling.md#do-not-trust-outcomestatus).
+
+### 4. Validation & Error Matrix
+
+- `outcome: "failed"` with no `errorMessage` → `MessageItem` falls back to the
+  localized `failedFallback` caption. Reachable for legacy rows only; the
+  routes always set the text when they set the outcome.
+- Empty or missing provider body → a catalog key (`provider.requestFailed`,
+  `provider.credentialsRejected`, …) instead of upstream text.
+- Over-long payload → clamped at the boundary and scrolled in the container.
+
+### 5. Tests Required
+
+- Route (`/api/chat`, regenerate): a model that fails **after the stream has
+  opened** must persist `outcome: "failed"` with a non-null `errorMessage`, and
+  the response body must carry our text rather than the SDK's default.
+  A happy-path-only test does not cover this.
+- `provider-error`: whole-`error`-object extraction, key/auth/base-URL
+  scrubbing, raw-body fallback, clamping.
+- `ErrorBlock` / `MessageItem`: payload rendered whole, height capped.
+
+### 6. Wrong vs Correct
+
+The server half — never key a turn outcome on `outcome.status`, always pass
+`onError` to `toUIMessageStream` — is owned by
+[error-handling.md](./error-handling.md#do-not-trust-outcomestatus), and the
+shared tracker is `src/server/ai/stream-failure.ts`. The client half, which only
+this scenario covers:
+
+- **Wrong**: stamp `outcome: "failed"` without the reason, so the transcript
+  renders the generic fallback until the reseed lands. And leave the send error
+  latched — nothing clears it but a new send, so a regenerate (which never
+  touches `useChat`) makes it flash back as a composer banner.
+- **Correct**: stamp the outcome *and* the stream's error text, which is the
+  same string the server persisted, then release the latch once the transcript
+  owns the failure.

@@ -161,6 +161,32 @@ describe("MessageItem", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("model does not exist");
   });
 
+  it("renders a JSON provider payload in the error container", () => {
+    const payload = JSON.stringify(
+      {
+        message: "The model `foo` does not exist",
+        type: "invalid_request_error",
+        code: "model_not_found",
+      },
+      null,
+      2,
+    );
+
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("", {
+          outcome: "failed",
+          errorMessage: payload,
+        })}
+      />,
+    );
+
+    const alert = screen.getByRole("alert");
+    // The payload arrives already formatted, and the transcript must show it
+    // whole — this is the same text a reload reads back from the row.
+    expect(alert.querySelector("pre")?.textContent).toBe(payload);
+  });
+
   it("expands thinking while streaming and auto-collapses when text arrives", () => {
     const thinking: ChatUIMessage = {
       id: "assistant-1",
