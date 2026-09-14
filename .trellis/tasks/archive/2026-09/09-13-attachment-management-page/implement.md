@@ -28,6 +28,28 @@
 - [ ] 组件测试
 - 验证：`pnpm vitest run` 相关 + `pnpm tsc --noEmit` + `pnpm lint`
 
+## Step 3b：批量选择（R5）
+
+- [x] FilesList 行首 checkbox + 表头全选（未引用行；indeterminate 态）
+- [x] 批量工具条（已选 N · 删除/取消）+ 确认对话框 + Promise.allSettled 逐条删除 + 结果汇总
+- [x] 选择集生命周期（切分类/完成/取消清空）
+- [x] 组件测试：全选/单选/混合 409 汇总/工具条显隐
+- 验证：`pnpm vitest run src/components/settings/files`
+
+## Step 3c：storageKey 扩展名（R6）
+
+- [x] `storageKeyFor(userId, fileId, filename)` 单点 helper（ext 过滤 `[a-z0-9]`、≤10、空则无点）
+- [x] `uploadFile` / `presignFile` 收敛到该 helper
+- [x] 单测：各扩展名形态（正常/大写/特殊字符/无扩展/超长）
+- 验证：`pnpm vitest run src/server/files`
+
+## Step 3d：集成测试存储 hermetic 化（R7）
+
+- [x] 共享 in-memory FileStorage 假 + 集成 setup vi.mock（与 direct 测试同手法）
+- [x] afterEach 泄漏断言（假存储必须为空）
+- [x] 修正受影响的集成测试
+- 验证：`pnpm vitest run`（全量）+ 跑完后真实桶对象数不增
+
 ## Step 4：全量 gate
 
 - [ ] `pnpm vitest run` 全量 + `pnpm tsc --noEmit` + `pnpm lint`

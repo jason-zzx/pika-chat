@@ -85,6 +85,37 @@ export type FileListCategory = "image" | "document" | "audio" | "video";
 - SettingsNav 测试更新。
 - 手测：桌面 + 移动视口 tap 路径、图片预览、PDF 新标签、删除后用量刷新。
 
-## 8. 回滚
+## 8. 追加设计（2026-09-14，用户拍板）
+
+### 8.1 批量选择/删除
+
+```
+FilesScreen
+  └─ FilesList
+      ├─ 表头行：全选 checkbox（indeterminate 态）——只选「未引用且已加载」的行
+      ├─ 行首 checkbox（referenced 行 disabled + aria-describedby 指向 in-use badge）
+      └─ 选中 > 0 时浮出批量工具条：已选 N 项 · [删除] [取消]
+```
+
+- 选择集 `Set<fileId>` 留在 FilesScreen state；category 变化（query key 变化）、批量删除完成、手动取消时清空。
+- 删除：确认对话框（列数量；有 referenced 混入时提示「使用中将被跳过」——实际上 referenced 不可选，所以对话框文案为「将删除 N 个文件」）→ `Promise.allSettled(ids.map(deleteChatFile))` → 汇总：成功 X、409 跳过 Y（竞态兜底：加载后被引用）→ invalidate `fileKeys.all` 一次（列表 + 用量同刷）→ 清空选择集；跳过的行经重取自然回到列表并带 in-use 态。
+- 不新增后端接口：DELETE /api/files/[id] 语义逐个成立（供应商联动删除、409、归属校验全部复用），附件量级（百级）下客户端并发足够。
+- 全选语义 = 当前已加载页中所有未引用行（不含 referenced、不含后续「加载更多」的行——避免看不见的选中）。
+
+### 8.2 storageKey 带扩展名
+
+- 布局从 `<userId>/<fileId>` 变为 `<userId>/<fileId>.<ext>`。扩展名提取复用 `media-types.ts` 的 `fileExtension()`，再过 `[a-z0-9]` 过滤 + 长度封顶（≤10），无扩展名则不拼接。
+- 单点 helper（如 `storageKeyFor(userId, fileId, filename)`）放 `file.service.ts` 或 media-types 旁，`uploadFile`/`presignFile` 共用——两处现有调用点必须收敛到同一 helper，不许各写一份。
+- ext 只影响对象 key 的可读性：响应/下载一切照旧由行内 `media_type` 决定；`assertValidStorageKey` 的段守卫不变（`01a….png` 是合法段）。
+- 存量行零迁移：读路径永远以行内 `storage_key` 为准。
+
+### 8.3 集成测试存储 hermetic 化
+
+- 根因：`file.service.integration.test.ts`（0 处 vi.mock）与 `quota.integration.test.ts` 通过真实 `getFileStorage()` 向真实 S3 桶写 fixture——测试隔离了 TEST_DATABASE_URL 却没有隔离对象存储，桶内残留数百测试对象。
+- 修法：共享的 in-memory `FileStorage` 假实现（Map<string, Buffer>，put/get/delete 齐全 + `recordedKeys` 供断言），经集成测试公共 setup 对 `@/server/files/storage` 做 `vi.mock`（与 `file.service.direct.integration.test.ts` 既有手法一致，提取为共享 helper 而非第三份拷贝）。
+- 泄漏不变量：集成 setup 的 `afterEach` 断言假存储为空——任何 put 未被对应 delete 回收即测试失败，把昨天的桶污染变成不可能复发的测试失败。
+- byte round-trip 等用例经假存储同样成立（测的是 service 编排，不是 S3 本身；S3 行为已由手测与 storage.test.ts 覆盖）。
+
+## 9. 回滚
 
 - 纯增量（新页面 + 新端点 + 导航一项）；回滚 = revert，无 schema 变更。

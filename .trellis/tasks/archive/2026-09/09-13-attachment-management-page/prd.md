@@ -46,6 +46,26 @@
 
 - 管理页删除复用既有 `DELETE /api/files/[id]`，不做新语义；子任务1 落地的供应商侧联动删除在其内自动生效。
 
+### R5 批量选择（2026-09-14 追加，用户拍板）
+
+- 列表行首 checkbox（`ui/checkbox.tsx` 原语）+ 表头全选（选中当前已加载的全部**未引用**行）。
+- 选中态出现批量工具条：「已选 N 项 · 删除 / 取消」；`referenced: true` 行的 checkbox 禁用（与行内删除按钮同口径，禁用原因可见）。
+- 批量删除：确认对话框（含数量与「使用中将被跳过」提示）→ 客户端逐条 `deleteChatFile`（`Promise.allSettled`，复用既有端点，**不新增后端批量接口**）→ 结果汇总「已删除 X，跳过 Y（使用中）」，跳过行刷新为 referenced 并重置其选择态。
+- 选择集为 client state（`Set<fileId>`），切分类/删除成功/列表刷新时清空；「加载更多」后的新行不自动入选。
+- 移动端 tap 路径完整（memory #15），无 hover-only 交互。
+
+### R6 存储 key 带文件后缀（2026-09-14 追加，用户拍板）
+
+- storageKey 从 `<userId>/<fileId>` 改为 `<userId>/<fileId>.<ext>`，ext 取自原始文件名的扩展名（小写、`[a-z0-9]` 过滤、长度封顶；无扩展名则不加点）——便于在 S3/RustFS 控制台直接辨认与管理对象。
+- 改动点为 `uploadFile` 与 `presignFile` 两处创建路径（`completeFile` 读行内已有 storageKey，不动）；既有行不变（storage_key 列即真相，无迁移）。
+- 扩展名仅作可辨识性用途：下载/预览的 Content-Type 仍来自行的 media_type 列（不信任 key 后缀）；`assertValidStorageKey` 守卫保持不变（`fileId.ext` 不构成 `.`/`..` 段）。
+
+### R7 集成测试存储隔离（2026-09-14 追加，测试污染修复）
+
+- 现状：`file.service.integration.test.ts`（0 处 mock）与 `quota.integration.test.ts` 经 `getFileStorage()` 写入**真实 S3 桶**（测试只隔离了 TEST_DATABASE_URL，没隔离对象存储），已在用户桶内留下数百个测试 fixture 对象。
+- 要求：所有集成测试的存储必须 hermetic——共享的 in-memory 假 FileStorage（挂 vi.mock，与 direct 集成测试同法）或 env 作用域的隔离桶/临时本地目录；集成 setup 的 afterEach 断言假存储为空（每个 put 都有对应 delete 回收），把「泄漏」变成测试不变量。
+- 验收：全量测试跑完后真实桶对象数不增加（用户确认桶内残留清理后）。
+
 ## Acceptance Criteria
 
 - [ ] /settings/files 出现在设置导航且所有登录用户可访问；未登录跳转登录（settings layout 既有行为）。
@@ -56,13 +76,16 @@
 - [ ] pending 行（sizeBytes=0）不导致渲染异常。
 - [ ] 移动端：列表行 tap 展开操作、对话框可点外关闭。
 - [ ] 他人文件 id 不可通过列表/预览/删除触达（404 语义，既有 ownership 校验）。
-- [ ] 分类筛选：图片/文档/音频/视频各自只出现对应类型附件，「全部」显示所有；非法 category 参数 400；筛选后分页与 totalCount 正确。
+- [x] 分类筛选：图片/文档/音频/视频各自只出现对应类型附件，「全部」显示所有；非法 category 参数 400；筛选后分页与 totalCount 正确。
+- [ ] 批量选择：行 checkbox + 表头全选（仅未引用行可选）；工具条删除 → 确认 → 汇总结果；使用中行被跳过且状态刷新；选择集随分类切换清空。
+- [ ] 新上传文件的 S3 对象 key 带原始扩展名（`<userId>/<fileId>.<ext>`）；旧行不受影响。
+- [ ] 集成测试不向真实存储桶写入对象（hermetic 存储 + 泄漏断言）。
 - [ ] 既有测试全部通过。
 
 ## Out of Scope
 
 - 管理员跨用户文件视图、供应商侧对账 UI（父任务拍板砍掉）。
-- 批量选择/批量删除。
+- 服务端批量删除接口（客户端逐条调用即可，附件量级小）。
 - 配额配置 UI（子任务2）、composer 改动。
 - 文件重命名、文件夹/标签组织。
 
