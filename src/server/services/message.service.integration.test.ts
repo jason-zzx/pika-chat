@@ -129,7 +129,6 @@ async function appendAssistant(
       outcome: "completed",
       providerConfigId: "cfg-1",
       modelId: "gpt-4o",
-      createdAt: new Date(),
       ...(input.groupId ? { groupId: input.groupId } : {}),
     },
     actor,
