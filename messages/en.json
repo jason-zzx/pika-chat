@@ -266,11 +266,23 @@
   "Settings": {
     "General": {
       "title": "General",
-      "description": "Appearance for this browser.",
+      "description": "Appearance and language preferences.",
       "theme": "Theme",
       "language": "Language",
-      "themeDescription": "Choose how the app looks in this browser.",
-      "languageDescription": "Pick the language used across the interface."
+      "themeDescription": "Choose how the app looks across your devices.",
+      "languageDescription": "Pick the language used across the interface.",
+      "appearance": "Appearance",
+      "appearanceDescription": "Pick a color palette for the interface.",
+      "preset": "Color theme",
+      "presets": {
+        "default": "Default",
+        "paper": "Paper",
+        "graphite": "Graphite",
+        "ocean": "Ocean",
+        "forest": "Forest",
+        "rose": "Rose",
+        "violet": "Violet"
+      }
     },
     "Providers": {
       "title": "Providers",
@@ -622,7 +634,8 @@
       "loadStorageQuota": "Unable to load storage quota",
       "saveStorageQuota": "Unable to save storage quota",
       "loadFiles": "Unable to load files",
-      "deleteFile": "Unable to delete the file"
+      "deleteFile": "Unable to delete the file",
+      "updateTheme": "Unable to save theme preference"
     }
   },
   "Validation": {

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint/typecheck/test 质量门"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端变更质量门"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "双语文案完整性与 ESLint 回归守卫"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "API 错误契约一致性检查"}

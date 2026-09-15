@@ -1,14 +1,12 @@
 "use client";
 
 import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
 
-import { persistTheme } from "@/components/layout/use-theme-sync";
 import { Button } from "@/components/ui/button";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
-import { nextThemeMode, type ThemeMode } from "@/lib/theme";
+import { useUpdateThemePreference } from "@/hooks/use-update-theme-preference";
+import { nextThemeMode, type ThemeMode, type ThemePreference } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 const THEME_ICONS: Record<ThemeMode, typeof SunIcon> = {
@@ -18,33 +16,26 @@ const THEME_ICONS: Record<ThemeMode, typeof SunIcon> = {
 };
 
 type ThemeControlProps = {
-  initialMode: ThemeMode;
+  initialPreference: ThemePreference;
   className?: string;
   appearance?: "page" | "sidebar";
 };
 
 export default function ThemeControl({
-  initialMode,
+  initialPreference,
   className,
   appearance = "page",
 }: ThemeControlProps) {
-  const router = useRouter();
   const t = useTranslations("Layout");
-  const [mode, setMode] = useState<ThemeMode>(initialMode);
-  const [prevInitialMode, setPrevInitialMode] = useState(initialMode);
-  if (prevInitialMode !== initialMode) {
-    setPrevInitialMode(initialMode);
-    setMode(initialMode);
-  }
+  const { preference, updatePreference } =
+    useUpdateThemePreference(initialPreference);
+  const mode = preference.mode;
   const currentLabel = t(`theme.${mode}`);
   const nextLabel = t(`theme.${nextThemeMode(mode)}`);
   const Icon = THEME_ICONS[mode];
 
   function onCycle() {
-    const following = nextThemeMode(mode);
-    setMode(following);
-    persistTheme(following);
-    router.refresh();
+    updatePreference({ ...preference, mode: nextThemeMode(mode) });
   }
 
   if (appearance === "sidebar") {

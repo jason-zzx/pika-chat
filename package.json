@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "check:themes": "node scripts/check-theme-tokens.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.52",

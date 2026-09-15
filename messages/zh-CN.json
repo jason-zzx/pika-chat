@@ -266,11 +266,23 @@
   "Settings": {
     "General": {
       "title": "通用",
-      "description": "此浏览器的外观设置。",
+      "description": "外观与语言偏好。",
       "theme": "主题",
       "language": "语言",
-      "themeDescription": "选择此浏览器中的应用外观。",
-      "languageDescription": "选择界面使用的语言。"
+      "themeDescription": "选择应用外观，在你的所有设备上同步。",
+      "languageDescription": "选择界面使用的语言。",
+      "appearance": "外观",
+      "appearanceDescription": "选择界面的配色方案。",
+      "preset": "配色主题",
+      "presets": {
+        "default": "默认",
+        "paper": "暖纸",
+        "graphite": "石墨",
+        "ocean": "深海",
+        "forest": "森林",
+        "rose": "玫瑰",
+        "violet": "紫罗兰"
+      }
     },
     "Providers": {
       "title": "服务商",
@@ -622,7 +634,8 @@
       "loadStorageQuota": "无法加载存储配额",
       "saveStorageQuota": "无法保存存储配额",
       "loadFiles": "无法加载文件",
-      "deleteFile": "无法删除文件"
+      "deleteFile": "无法删除文件",
+      "updateTheme": "无法保存主题偏好"
     }
   },
   "Validation": {

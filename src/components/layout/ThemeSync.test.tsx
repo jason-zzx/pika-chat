@@ -44,25 +44,54 @@ describe("ThemeSync", () => {
   beforeEach(() => {
     document.cookie = `${THEME_COOKIE_NAME}=; max-age=0; path=/`;
     document.documentElement.classList.remove("dark");
+    delete document.documentElement.dataset.theme;
   });
 
   afterEach(() => {
     document.cookie = `${THEME_COOKIE_NAME}=; max-age=0; path=/`;
     document.documentElement.classList.remove("dark");
+    delete document.documentElement.dataset.theme;
   });
 
   it("follows a matchMedia change while mode is system", () => {
     const media = createMatchMedia(false);
     window.matchMedia = () => media as unknown as MediaQueryList;
 
-    render(<ThemeSync initialMode="system" />);
+    render(
+      <ThemeSync initialPreference={{ mode: "system", preset: "default" }} />,
+    );
 
     expect(document.documentElement.classList.contains("dark")).toBe(false);
-    expect(cookieValue()).toBe("system:light");
+    expect(cookieValue()).toBe("system:light:default");
 
     media.setMatches(true);
 
     expect(document.documentElement.classList.contains("dark")).toBe(true);
-    expect(cookieValue()).toBe("system:dark");
+    expect(cookieValue()).toBe("system:dark:default");
+  });
+
+  it("applies the preset to documentElement.dataset.theme", () => {
+    const media = createMatchMedia(false);
+    window.matchMedia = () => media as unknown as MediaQueryList;
+
+    render(
+      <ThemeSync initialPreference={{ mode: "light", preset: "ocean" }} />,
+    );
+
+    expect(document.documentElement.dataset.theme).toBe("ocean");
+    expect(cookieValue()).toBe("light:light:ocean");
+  });
+
+  it("removes data-theme for the default preset", () => {
+    const media = createMatchMedia(false);
+    window.matchMedia = () => media as unknown as MediaQueryList;
+    document.documentElement.dataset.theme = "paper";
+
+    render(
+      <ThemeSync initialPreference={{ mode: "dark", preset: "default" }} />,
+    );
+
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 });

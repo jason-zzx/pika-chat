@@ -57,6 +57,7 @@ Handlers it calls.
 | [Hook Guidelines](./hook-guidelines.md) | Query hooks, `useChat`, custom hook rules |
 | [i18n](./i18n.md) | Catalogs, locale cookie, server/client usage, switcher, error keys |
 | [State Management](./state-management.md) | The Zustand / TanStack Query boundary |
+| [Theming](./theming.md) | Token system, preset themes, DB-backed theme preference |
 | [Type Safety](./type-safety.md) | Shared Zod contracts, inference, forbidden escapes |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, tests, accessibility, performance |
 

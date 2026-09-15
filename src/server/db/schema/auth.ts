@@ -23,6 +23,11 @@ export const users = pgTable("users", {
   // Per-user attachment storage quota override; NULL means follow the
   // instance-wide default (`app_settings.file_storage_quota_bytes`).
   fileQuotaBytes: bigint("file_quota_bytes", { mode: "number" }),
+  // Theme preference (value domains guarded by zod at the API boundary, same
+  // style as `role`). `theme_mode`: light | dark | system; `theme_preset`:
+  // default | paper | graphite | ocean | forest | rose | violet.
+  themeMode: text("theme_mode").notNull().default("system"),
+  themePreset: text("theme_preset").notNull().default("default"),
   banned: boolean("banned").notNull().default(false),
   banReason: text("ban_reason"),
   banExpires: timestamptz("ban_expires"),

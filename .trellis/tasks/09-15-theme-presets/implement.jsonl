@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "server/client 边界与组合：ThemePresetControl、settings/general 外观区块的组件拆分"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "新增 Settings.General.appearance 与预设名文案，en/zh-CN 同变更与类型联动"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "主题偏好的乐观更新 + router.refresh 模式对齐"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "users 表加 theme_mode/theme_preset 列与 drizzle migration 规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "PATCH /api/account/preferences 的 AppError/zod 400 契约"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "user-preferences.service.ts 与 API 路由落位"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "ThemePresetControl、theme-presets 常量、hook 的目录落位"}

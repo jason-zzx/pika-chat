@@ -5,29 +5,39 @@ import { useEffect } from "react";
 import {
   themeDocumentCookie,
   type ResolvedTheme,
-  type ThemeMode,
+  type ThemePreference,
 } from "@/lib/theme";
 
-export function persistTheme(mode: ThemeMode) {
+export function persistTheme(preference: ThemePreference) {
   const resolved: ResolvedTheme =
-    mode === "system"
+    preference.mode === "system"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light"
-      : mode;
+      : preference.mode;
   document.documentElement.classList.toggle("dark", resolved === "dark");
-  document.cookie = themeDocumentCookie({ mode, resolved });
+  if (preference.preset === "default") {
+    delete document.documentElement.dataset.theme;
+  } else {
+    document.documentElement.dataset.theme = preference.preset;
+  }
+  document.cookie = themeDocumentCookie({
+    mode: preference.mode,
+    resolved,
+    preset: preference.preset,
+  });
 }
 
-export function useThemeSync(mode: ThemeMode) {
+export function useThemeSync(preference: ThemePreference) {
+  const { mode, preset } = preference;
   useEffect(() => {
-    persistTheme(mode);
+    persistTheme({ mode, preset });
     if (mode !== "system") {
       return;
     }
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const sync = () => persistTheme("system");
+    const sync = () => persistTheme({ mode: "system", preset });
     media.addEventListener("change", sync);
     return () => media.removeEventListener("change", sync);
-  }, [mode]);
+  }, [mode, preset]);
 }

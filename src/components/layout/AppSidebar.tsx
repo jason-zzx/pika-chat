@@ -11,15 +11,19 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { isStaffRole, type ActorRole } from "@/lib/auth-hierarchy";
-import type { ThemeMode } from "@/lib/theme";
+import type { ThemePreference } from "@/lib/theme";
 
 type AppSidebarProps = {
   name: string;
   role: ActorRole;
-  themeMode: ThemeMode;
+  themePreference: ThemePreference;
 };
 
-export default function AppSidebar({ name, role, themeMode }: AppSidebarProps) {
+export default function AppSidebar({
+  name,
+  role,
+  themePreference,
+}: AppSidebarProps) {
   const t = useTranslations("Layout");
 
   return (
@@ -30,7 +34,7 @@ export default function AppSidebar({ name, role, themeMode }: AppSidebarProps) {
           <SidebarMenuItem>
             <ThemeControl
               appearance="sidebar"
-              initialMode={themeMode}
+              initialPreference={themePreference}
               className="w-full"
             />
           </SidebarMenuItem>

@@ -1,4 +1,5 @@
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import LocaleControl from "@/components/layout/LocaleControl";
@@ -7,12 +8,18 @@ import PageHeader from "@/components/layout/PageHeader";
 import ThemeControl from "@/components/layout/ThemeControl";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsRow from "@/components/settings/SettingsRow";
-import { parseThemeCookie, THEME_COOKIE_NAME } from "@/lib/theme";
+import SettingsSection from "@/components/settings/SettingsSection";
+import ThemePresetControl from "@/components/settings/ThemePresetControl";
+import { resolveActor } from "@/server/auth/actor";
+import { getUserThemePreference } from "@/server/services/user-preferences.service";
 
 export default async function SettingsGeneralPage() {
-  const theme = parseThemeCookie(
-    (await cookies()).get(THEME_COOKIE_NAME)?.value,
-  );
+  const actor = await resolveActor(await headers());
+  if (!actor) {
+    redirect("/sign-in");
+  }
+  // The DB is the theme source of truth for signed-in users.
+  const themePreference = await getUserThemePreference(actor.userId);
   const t = await getTranslations("Settings.General");
 
   return (
@@ -23,7 +30,7 @@ export default async function SettingsGeneralPage() {
           <SettingsRow
             label={t("theme")}
             description={t("themeDescription")}
-            control={<ThemeControl initialMode={theme.mode} />}
+            control={<ThemeControl initialPreference={themePreference} />}
           />
           <SettingsRow
             label={t("language")}
@@ -32,6 +39,14 @@ export default async function SettingsGeneralPage() {
           />
         </div>
       </SettingsCard>
+      <SettingsSection
+        title={t("appearance")}
+        description={t("appearanceDescription")}
+      >
+        <SettingsCard className="p-5">
+          <ThemePresetControl initialPreference={themePreference} />
+        </SettingsCard>
+      </SettingsSection>
     </PageContainer>
   );
 }
