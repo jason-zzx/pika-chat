@@ -3,6 +3,7 @@
 import { useFormatter, useNow, useTranslations } from "next-intl";
 
 import { getMessageAge, parseTimestamp } from "@/lib/message-time";
+import { localTimeZone } from "@/lib/time-zone";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
@@ -24,7 +25,7 @@ export default function MessageTimestamp({ createdAt }: MessageTimestampProps) {
 
   // Browser-local zone: no global `timeZone` is configured (it would change
   // user-visible times); passing it explicitly avoids next-intl's warning.
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = localTimeZone();
   const label =
     age.kind === "justNow"
       ? t("justNow")

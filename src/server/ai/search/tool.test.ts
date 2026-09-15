@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CITATION_DIRECTIVE,
   buildSearchTools,
   createFetchPageTool,
   createSearchWebTool,
   createSourceNumbering,
-  withCitationDirective,
 } from "@/server/ai/search/tool";
 import type { SearchProviderCredential } from "@/server/services/search-provider.service";
 
@@ -273,20 +271,5 @@ describe("source numbering (R14)", () => {
       error: "fetch_failed",
       attemptedProviders: ["tavily", "exa"],
     });
-  });
-});
-
-describe("withCitationDirective", () => {
-  it("is the whole instructions when no base prompt exists", () => {
-    expect(withCitationDirective(undefined)).toBe(CITATION_DIRECTIVE);
-  });
-
-  it("appends the directive to an existing system prompt", () => {
-    const result = withCitationDirective("Be helpful.");
-    expect(result).toContain("Be helpful.");
-    expect(result).toContain(CITATION_DIRECTIVE);
-    expect(result.indexOf("Be helpful.")).toBeLessThan(
-      result.indexOf(CITATION_DIRECTIVE),
-    );
   });
 });

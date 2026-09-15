@@ -34,23 +34,6 @@ export const FORCED_STEP_DIRECTIVE =
   "You have finished researching. Now answer the user's question directly using the information you gathered. Do not call any tools and do not emit any tool-call markup.";
 
 /**
- * Citation instruction for tool-mode turns (R14): the model cites sources
- * inline as [n] using the `num` stamped on each served result. Appended to
- * the base instructions when tools are registered; the forced final step's
- * instructions override retains it (appendForcedStepDirective appends, it
- * never replaces), which matters because the forced step is where the
- * cited answer gets written.
- */
-export const CITATION_DIRECTIVE =
-  "When you use information from searchWeb or fetchPage tool results, cite the source inline as [n] where n is the result's num field. Only cite nums that appeared in this turn's tool outputs.";
-
-export function withCitationDirective(instructions: string | undefined): string {
-  return instructions === undefined
-    ? CITATION_DIRECTIVE
-    : `${instructions}\n\n${CITATION_DIRECTIVE}`;
-}
-
-/**
  * Per-request source numbering (R14): every served searchWeb result and the
  * fetchPage page get a `num` from one counter shared across both tools, so
  * nums are unique within the turn in execution order, starting at 1. Error

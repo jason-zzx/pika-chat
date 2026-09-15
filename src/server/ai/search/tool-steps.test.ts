@@ -9,10 +9,12 @@ import { z } from "zod";
 import { stripToolCallMarkupTransform } from "./markup-sanitizer";
 import {
   CITATION_DIRECTIVE,
+  buildChatInstructions,
+} from "@/server/ai/instructions";
+import {
   FORCED_STEP_DIRECTIVE,
   TOOL_TURN_STEP_LIMIT,
   toolTurnStepSettings,
-  withCitationDirective,
 } from "./tool";
 
 const USAGE = {
@@ -146,7 +148,10 @@ describe("toolTurnStepSettings", () => {
     const result = streamText({
       model,
       prompt: "What is pika chat?",
-      instructions: withCitationDirective("Be helpful."),
+      instructions: buildChatInstructions({
+        systemPrompt: "Be helpful.",
+        searchEnabled: true,
+      }),
       tools: { searchWeb },
       ...toolTurnStepSettings(),
     });

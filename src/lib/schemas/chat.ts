@@ -87,6 +87,8 @@ export const chatRequestSchema = z.object({
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),
   searchMode: searchModeSchema.optional(),
+  // Browser IANA zone; the server falls back to its own zone when unset.
+  timeZone: z.string().trim().min(1).max(64).optional(),
   message: chatRequestMessageSchema,
 });
 export const stopChatRequestSchema = z.object({
@@ -98,6 +100,7 @@ export const regenerateMessageRequestSchema = z.object({
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),
   searchMode: searchModeSchema.optional(),
+  timeZone: z.string().trim().min(1).max(64).optional(),
 });
 
 // Persisted shape of a tool invocation (searchWeb / fetchPage). Mirrors the

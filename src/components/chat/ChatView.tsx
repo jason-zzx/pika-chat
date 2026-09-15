@@ -39,6 +39,7 @@ import {
   parseAssistantPath,
 } from "@/lib/assistant-path";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
+import { localTimeZone } from "@/lib/time-zone";
 import {
   composerDraftKey,
   useComposerStore,
@@ -692,6 +693,7 @@ export default function ChatView({
         modelId: pick.modelId,
         ...(effort === undefined ? {} : { reasoningEffort: effort }),
         searchMode,
+        timeZone: localTimeZone(),
       });
     } catch (caught) {
       failStart(caught);
@@ -1007,6 +1009,7 @@ export default function ChatView({
       modelId: pickedModel.modelId,
       ...(effort === undefined ? {} : { reasoningEffort: effort }),
       searchMode,
+      timeZone: localTimeZone(),
     };
     const metadata = { createdAt: new Date().toISOString() };
     // The AI SDK's no-text overload omits the empty text part an attachment-only

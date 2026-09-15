@@ -52,7 +52,6 @@ vi.mock("@/server/ai/provider-error", () => ({
 vi.mock("@/server/ai/search/tool", () => ({
   buildSearchTools: vi.fn(),
   toolTurnStepSettings: vi.fn(() => ({})),
-  withCitationDirective: vi.fn((value: string | undefined) => value),
 }));
 vi.mock("@/server/ai/search/markup-sanitizer", () => ({
   stripMarkupFromTextParts: vi.fn((parts: unknown) => parts),

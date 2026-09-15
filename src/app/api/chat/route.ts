@@ -24,8 +24,8 @@ import {
 import {
   buildSearchTools,
   toolTurnStepSettings,
-  withCitationDirective,
 } from "@/server/ai/search/tool";
+import { buildChatInstructions } from "@/server/ai/instructions";
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
@@ -223,12 +223,12 @@ export const POST = withErrorHandling(async (request) => {
   const result = streamText({
     model: handle.model,
     messages: modelMessages,
-    // Tool-mode turns carry the citation directive (R14) so the model cites
-    // sources inline as [n]; the forced final step's instructions override
-    // retains it (appendForcedStepDirective appends, never replaces).
-    instructions: searchTools
-      ? withCitationDirective(systemPrompt ?? undefined)
-      : (systemPrompt ?? undefined),
+    // Current date + tool-mode directives (see ai/instructions.ts).
+    instructions: buildChatInstructions({
+      systemPrompt,
+      searchEnabled: searchTools !== null,
+      timeZone: input.timeZone,
+    }),
     abortSignal,
     // One retry, not the SDK default of two: the backoff doubles otherwise.
     maxRetries: 1,

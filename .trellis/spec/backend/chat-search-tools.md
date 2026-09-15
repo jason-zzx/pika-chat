@@ -43,6 +43,9 @@ parts → UI — change them together.
 - History replay: `replayModelMessages(messages)`
   (`src/server/ai/model-messages.ts`) — both streaming routes MUST use it
   instead of bare `convertToModelMessages` (see Contracts).
+- Instructions: `buildChatInstructions({ systemPrompt, searchEnabled,
+  timeZone?, now? })` (`src/server/ai/instructions.ts`) — the single
+  assembly point for both streaming routes (see Contracts).
 - Builtin: `withBuiltinWebSearch(format, base?)`
   (`src/server/ai/builtin-search.ts`) returns a `fetch` that injects the
   provider format's builtin-search marker into POST bodies (see Contracts);
@@ -122,13 +125,24 @@ parts → UI — change them together.
   `searchWeb` result and the `fetchPage` page is stamped with `num`
   (execution order, from 1, unique within the turn; error outputs carry
   no nums). `num` is OPTIONAL in the output zod schemas — pre-R14 rows
-  parse and simply yield no citations. When tools are registered, both
-  routes append `CITATION_DIRECTIVE` to `instructions` via
-  `withCitationDirective` ("cite inline as [n] using the result's num;
-  only this turn's nums"); the forced-step override appends (never
-  replaces), so the directive survives onto the answer step. The
-  assistant's `[n]` markers are model-generated best-effort — weak models
-  may skip citing; that is valid output.
+  parse and simply yield no citations.
+- **`instructions` come from `buildChatInstructions` only**
+  (`src/server/ai/instructions.ts`). Both streaming routes call it —
+  never assemble `instructions` inline in a route, or the sections drift.
+  Order: the assistant's system prompt → the current date (always) →
+  (tool mode only) `SEARCH_QUERY_GUIDANCE` → `CITATION_DIRECTIVE`.
+  The date is always injected so time-sensitive reasoning ("latest") is
+  anchored to today in every mode; it renders in the request's IANA
+  `timeZone` (the `timeZone` field on `chatRequestSchema` /
+  `regenerateMessageRequestSchema`), falling back to the server's zone when
+  absent or invalid — without it a model whose training cutoff predates
+  today dates its own search query and serves last year's answer.
+  `SEARCH_QUERY_GUIDANCE` forbids hardcoding a year in a query unless the
+  user named it; `CITATION_DIRECTIVE` requires inline `[n]` citations using
+  each result's `num`. The forced-step override appends (never replaces),
+  so both directives survive onto the answer step. The assistant's `[n]`
+  markers are model-generated best-effort — weak models may skip citing;
+  that is valid output.
 - **Builtin injection is per provider format**: the wrapper picks one
   `FORMAT_INJECTION` entry by the config's `api_format` (see
   [Provider Configs](./provider-configs.md)), matches on the lowercased request
@@ -232,6 +246,9 @@ parts → UI — change them together.
   attemptedProviders.
 - `model-messages.test.ts`: incomplete tool parts dropped on replay;
   `output-available` parts replay with results.
+- `instructions.test.ts`: date formatting honors an IANA zone and falls back
+  for an unknown zone; section composition/order with and without a system
+  prompt and with/without search enabled.
 - `chat-model.test.ts`: fetch wrapper attached only when
   `builtinSearch: true`.
 - `provider-factory.test.ts`: fetch wrapper attached per format only when
