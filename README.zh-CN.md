@@ -219,7 +219,8 @@ Pika Chat 通过根目录 `.env` 文件或容器环境进行配置：
 | `POSTGRES_DB` | 否 | `pika_chat` | 数据库名称。 |
 | `CREDENTIAL_ENCRYPTION_SECRET` | **是** | — | 用于对模型 API Key 执行 AES-256-GCM 落库加密的密钥（至少 32 字符）。**请务必妥善备份**，一旦丢失将永久无法解密已存凭据。 |
 | `BETTER_AUTH_SECRET` | **是** | — | 用于签名 Better Auth 会话令牌的加密密钥（至少 32 字符）。 |
-| `BETTER_AUTH_URL` | 否 | `http://localhost:3000` | 部署站点的公网访问 URL。在反向代理或自定义域名环境下建议显式配置。 |
+| `APP_URL` | 否 | `http://localhost:3000` | 部署站点的公网访问 URL。在反向代理或自定义域名环境下建议显式配置。 |
+| `APP_TRUSTED_ORIGINS` | 否 | — | 额外的受信任来源白名单（逗号分隔，如 `http://192.168.1.100:3000,https://chat.example.com`），用于多地址或局域网访问时的 CSRF 跨域信任。 |
 | `FILE_STORAGE_DIR` | 否 | `.data/files` | 本地存储模式下存放附件文件的磁盘物理路径。 |
 | `FILE_UPLOAD_MAX_MB` | 否 | `20` | 单个附件允许的最大体积（单位：MiB，有效整数范围：`1`–`100`）。设置超出范围将在启动时报错退出。 |
 | `S3_BUCKET` | 否 | — | 设置该项后，附件存储将自动切换为 S3 兼容对象存储。若指定的桶不存在，将在首次写入时自动创建。 |

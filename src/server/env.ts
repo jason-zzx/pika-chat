@@ -2,12 +2,19 @@ import "server-only";
 
 import { z } from "zod";
 
+const emptyToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((val) => (val === "" ? undefined : val), schema);
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   TEST_DATABASE_URL: z.string().min(1).optional(),
   CREDENTIAL_ENCRYPTION_SECRET: z.string().min(32),
   BETTER_AUTH_SECRET: z.string().min(32),
-  BETTER_AUTH_URL: z.url().optional(),
+  // Public canonical URL of this instance.
+  APP_URL: emptyToUndefined(z.url().optional()),
+  // Additional trusted origins for Better Auth CORS / CSRF checks (comma-separated).
+  // e.g. "http://localhost:3000,http://192.168.1.100:3000"
+  APP_TRUSTED_ORIGINS: emptyToUndefined(z.string().min(1).optional()),
   // Root directory for locally stored chat attachments. Defaults to
   // `.data/files` relative to the process working directory.
   FILE_STORAGE_DIR: z.string().min(1).optional(),
@@ -58,6 +65,25 @@ export function resolveDatabaseUrl(
     return `postgres://${user}${pass}@${host}:${port}/${db}`;
   }
   return undefined;
+}
+
+/**
+ * Resolves additional trusted origins from `APP_TRUSTED_ORIGINS`.
+ * Accepts comma-separated URLs or wildcard patterns (e.g. "http://192.168.1.100:3000,https://*.example.com").
+ * Returns an array of trimmed, non-empty origin strings without duplicates.
+ */
+export function resolveTrustedOrigins(
+  raw: Record<string, string | undefined> = process.env,
+): string[] {
+  const source = raw.APP_TRUSTED_ORIGINS;
+  if (!source || source.length === 0) {
+    return [];
+  }
+  const origins = source
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  return Array.from(new Set(origins));
 }
 
 export function getEnv(): Env {

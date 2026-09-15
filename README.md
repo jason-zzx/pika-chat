@@ -219,7 +219,8 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 | `POSTGRES_DB` | No | `pika_chat` | Database name. |
 | `CREDENTIAL_ENCRYPTION_SECRET` | **Yes** | — | Secret key (min 32 chars) used for AES-256-GCM encryption of provider API keys at rest. **Do not lose this**; losing it orphans stored credentials permanently. |
 | `BETTER_AUTH_SECRET` | **Yes** | — | Secret key (min 32 chars) used for signing Better Auth session tokens. |
-| `BETTER_AUTH_URL` | No | `http://localhost:3000` | Canonical public URL of your deployment. Required when deployed behind reverse proxies. |
+| `APP_URL` | No | `http://localhost:3000` | Canonical public URL of your deployment. Required when deployed behind reverse proxies. |
+| `APP_TRUSTED_ORIGINS` | No | — | Additional comma-separated trusted origins for CSRF checks and multi-address access (e.g. `http://192.168.1.100:3000,https://chat.example.com`). |
 | `FILE_STORAGE_DIR` | No | `.data/files` | Local filesystem directory for storing uploaded chat attachments when S3 is not configured. |
 | `FILE_UPLOAD_MAX_MB` | No | `20` | Maximum size for a single file attachment in MiB (allowed integer range: `1`–`100`). Fails fast on invalid values. |
 | `S3_BUCKET` | No | — | Setting this switches attachment storage from local disk to S3-compatible object storage. Automatically bootstraps bucket if missing. |

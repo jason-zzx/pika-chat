@@ -18,7 +18,7 @@ export function isTotpCode(code: string): boolean {
  * The challenge is bound to a signed cookie rather than to anything in the
  * sign-in response body, so this suffix is the only client-visible signal that
  * a second step is in flight. better-auth prefixes secure cookies with
- * `__Secure-` when `BETTER_AUTH_URL` is https, hence the suffix match rather
+ * `__Secure-` when `APP_URL` is https, hence the suffix match rather
  * than equality with `two_factor`.
  */
 export function isChallengeCookie(name: string): boolean {

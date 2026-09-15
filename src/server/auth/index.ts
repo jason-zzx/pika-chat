@@ -16,13 +16,23 @@ import {
   users,
   verifications,
 } from "@/server/db/schema";
-import { getEnv } from "@/server/env";
+import { getEnv, resolveTrustedOrigins } from "@/server/env";
 
 const env = getEnv();
+const appUrl = env.APP_URL ?? "http://localhost:3000";
+const configuredTrustedOrigins = resolveTrustedOrigins(process.env);
+
+const trustedOrigins = Array.from(
+  new Set([
+    "http://localhost:3000",
+    new URL(appUrl).origin,
+    ...configuredTrustedOrigins,
+  ]),
+);
 
 export const auth = betterAuth({
   appName: "Pika chat",
-  baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: appUrl,
   secret: env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(getDb(), {
     provider: "pg",
@@ -60,13 +70,11 @@ export const auth = betterAuth({
     database: {
       generateId: () => newId(),
     },
+    trustedProxyHeaders: true,
   },
   disabledPaths: ["/sign-up/email"],
   telemetry: {
     enabled: false,
   },
-  trustedOrigins: [
-    "http://localhost:3000",
-    "http://192.168.99.203:3000"
-  ],
+  trustedOrigins,
 });

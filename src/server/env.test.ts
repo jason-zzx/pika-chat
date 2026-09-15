@@ -16,6 +16,8 @@ const MANAGED = [
   "S3_DIRECT_ACCESS",
   "S3_BUCKET",
   "NEXT_RUNTIME",
+  "APP_URL",
+  "APP_TRUSTED_ORIGINS",
 ] as const;
 
 let saved: Record<string, string | undefined> = {};
@@ -145,5 +147,58 @@ describe("resolveDatabaseUrl", () => {
   it("returns undefined when no database variables exist", async () => {
     const { resolveDatabaseUrl } = await loadEnvModule();
     expect(resolveDatabaseUrl({})).toBeUndefined();
+  });
+});
+
+describe("resolveTrustedOrigins", () => {
+  it("parses and trims origins from APP_TRUSTED_ORIGINS", async () => {
+    const { resolveTrustedOrigins } = await loadEnvModule();
+    expect(
+      resolveTrustedOrigins({
+        APP_TRUSTED_ORIGINS:
+          "http://localhost:3000, http://192.168.1.100:3000 , https://chat.example.com",
+      }),
+    ).toEqual([
+      "http://localhost:3000",
+      "http://192.168.1.100:3000",
+      "https://chat.example.com",
+    ]);
+  });
+
+  it("returns an empty array when unset or empty", async () => {
+    const { resolveTrustedOrigins } = await loadEnvModule();
+    expect(resolveTrustedOrigins({})).toEqual([]);
+    expect(
+      resolveTrustedOrigins({
+        APP_TRUSTED_ORIGINS: " , , ",
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("APP_URL in getEnv", () => {
+  it("is undefined when unset", async () => {
+    const { getEnv } = await loadEnvModule();
+    expect(getEnv().APP_URL).toBeUndefined();
+  });
+
+  it("accepts valid URL for APP_URL", async () => {
+    process.env.APP_URL = "https://chat.example.com";
+    const { getEnv } = await loadEnvModule();
+    expect(getEnv().APP_URL).toBe("https://chat.example.com");
+  });
+
+  it("treats empty string as undefined", async () => {
+    process.env.APP_URL = "";
+    process.env.APP_TRUSTED_ORIGINS = "";
+    const { getEnv } = await loadEnvModule();
+    expect(getEnv().APP_URL).toBeUndefined();
+    expect(getEnv().APP_TRUSTED_ORIGINS).toBeUndefined();
+  });
+
+  it("rejects invalid URL strings", async () => {
+    process.env.APP_URL = "not-a-valid-url";
+    const { getEnv } = await loadEnvModule();
+    expect(() => getEnv()).toThrow(/APP_URL/);
   });
 });
