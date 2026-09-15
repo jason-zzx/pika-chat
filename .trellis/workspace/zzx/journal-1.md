@@ -772,3 +772,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 27: 主题系统：预设主题 + DB 持久化
+<!-- trellis-session: v=2 fp=f7bdab7d009f5752 -->
+
+**Date**: 2026-09-15
+**Task**: 主题系统：预设主题 + DB 持久化
+**Branch**: `main`
+
+### Summary
+
+从'主题色 vs 配色方案'探讨收敛为 6 套完整预设主题方案。实现：打磨中性默认主题；paper/graphite/ocean/forest/rose/violet 六预设 × 明暗共 12 套静态 token 块（html data-theme 切换，default 不写属性）；check-theme-tokens 脚本保证 token 覆盖完整；主题偏好持久化到 users 表（DB 为登录用户真源，cookie 降级为匿名页 + system 模式 resolved 提示，格式升级三段兼容旧两段）；PATCH /api/account/preferences + useUpdateThemePreference 乐观更新 hook（引入 shadcn toast 做失败反馈）；settings/general 外观区块色板选择器。trellis-check 修 3 处（lib/api 约定、脚本名单同源、bare catch）；ponytail-review 削减约 60 行（response schema、部分补丁 refine、重复解析器、无效 try/catch 等）。新增 spec frontend/theming.md。剩余人工步骤：db:migrate + 视觉/持久化走查。1077 tests 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f4a7d5a` | feat(theme): add preset themes with DB-backed preference persistence |
+
+### Status
+
+[OK] **Completed**
