@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-09-15
+
+### Highlights
+
+- **Reverse Proxy & Multi-Origin Deployment Readiness**: Replaced internal `BETTER_AUTH_URL` with standard `APP_URL`, added `APP_TRUSTED_ORIGINS` for multi-address access, and enabled reverse proxy header trust, resolving 403 `INVALID_ORIGIN` issues on 2FA enrollment.
+- **Flexible Docker Compose Deployment**: Restructured Compose stacks into standalone, full, and dev modes with discrete PostgreSQL variables support and parameterized configuration.
+
+### Feats
+
+- **Standardized Application URL & Multi-Origin Trust**:
+  - Replaced `BETTER_AUTH_URL` with `APP_URL` across environment schemas, compose templates, and documentation.
+  - Added `APP_TRUSTED_ORIGINS` to support comma-separated trusted origins for LAN, reverse proxy, and multi-domain setups.
+  - Enabled `advanced.trustedProxyHeaders: true` in Better Auth to correctly infer protocol and host behind reverse proxies (Nginx, Caddy, Traefik).
+  - Removed hardcoded local LAN IP from Better Auth trusted origins.
+- **Discrete PostgreSQL Configuration**: Supported discrete connection variables (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) with automatic URL encoding alongside `DATABASE_URL`.
+
+### Fixes
+
+- **Resolved 403 `INVALID_ORIGIN` on Two-Factor Authentication**: Eliminated origin mismatches when enrolling or managing 2FA behind reverse proxies or on remote/LAN IP deployments.
+- **Compose Parameterization**: Added project namespaces and parameterized Compose variables to prevent container name collisions.
+- **Flaky Seed Message Timestamps**: Fixed clock skew test flake in seed turns by leveraging PostgreSQL `defaultNow()`.
+
+### Dev
+
+- **CI & Release Workflows**: Added automated GitHub Actions test and release workflows with multi-arch Docker image builds.
+- **Node 24 Upgrade**: Upgraded CI runners and build actions to Node 24 and fixed Dockerfile buildx warnings.
+
 ## [0.1.0] - 2026-09-14
 
 ### Highlights

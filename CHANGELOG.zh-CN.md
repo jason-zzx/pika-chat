@@ -5,6 +5,33 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [0.1.1] - 2026-09-15
+
+### Highlights
+
+- **反向代理与多地址访问支持**：采用通用环境变量 `APP_URL` 替代底层 `BETTER_AUTH_URL`，新增 `APP_TRUSTED_ORIGINS` 支持多域名与局域网跨域信任，并启用代理标头信任，彻底解决两步验证 403 `INVALID_ORIGIN` 报错。
+- **Docker Compose 编排体系优化**：拆分提供全栈一体化、独立应用与本地开发三套 Compose 方案，支持分立式 PostgreSQL 环境变量配置与容器参数化。
+
+### Feats
+
+- **规范化应用基准 URL 与多 Origin 信任**：
+  - 全工程采用 `APP_URL` 作为站点公网基准访问地址，屏蔽底层认证框架实现细节。
+  - 增加 `APP_TRUSTED_ORIGINS` 环境变量，支持以逗号分隔配置多个受信任来源（局域网 IP、自定义端口、备用域名等）。
+  - 在 Better Auth 中开启 `advanced.trustedProxyHeaders: true`，自适应识别 Nginx、Caddy、Traefik 等反向代理转发的 `X-Forwarded-Host` 和 `X-Forwarded-Proto`。
+  - 彻底清除历史遗留的局域网 IP 硬编码。
+- **支持分立式 PostgreSQL 环境变量**：除完整 `DATABASE_URL` 外，新增支持通过 `POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB` 分立变量连接数据库，自动完成密码特殊字符 URL 编码。
+
+### Fixes
+
+- **解决两步验证 403 `INVALID_ORIGIN` 报错**：修复远程服务器部署或反向代理环境下开启 TOTP 2FA 时，因请求 Origin 与默认 localhost 白名单不匹配被拦截的问题。
+- **Compose 容器命名冲突与参数化**：为 Compose 服务增加项目命名前缀规范，参数化端口与数据库连接配置。
+- **消除测试时钟偏差偶发失败**：在消息测试种子轮次中使用数据库 `defaultNow()` 替代应用层时间戳，彻底消除系统时钟抖动引发的测试不稳定。
+
+### Dev
+
+- **CI 与自动化发布工作流**：引入自动化 GitHub Actions 测试与跨架构镜像构建发布流水线。
+- **升级至 Node 24**：升级 CI Actions 运行时环境至 Node 24，并修复 Dockerfile buildx 构建警告。
+
 ## [0.1.0] - 2026-09-14
 
 ### Highlights
