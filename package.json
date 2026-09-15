@@ -1,6 +1,7 @@
 {
   "name": "pika-chat",
   "version": "0.1.1",
+  "license": "MIT",
   "private": true,
   "engines": {
     "node": ">=22"
