@@ -26,7 +26,7 @@ points at the single schema file.
 | Table name | `snake_case`, plural — `chat_messages` |
 | Column name | `snake_case` — `created_at` |
 | Drizzle export | `camelCase`, plural — `chatMessages` |
-| Primary key | `text` id, application-generated UUIDv7 |
+| Primary key | `text` id, application-generated UUIDv7 (`newId()`); URL-exposed entities use prefixed short ids instead — see below |
 | Timestamps | `timestamp with time zone`, not naive |
 | Every table | `created_at`, and `updated_at` where mutable |
 | Enums | PostgreSQL enum via `pgEnum`, not free-text |
@@ -42,6 +42,15 @@ UUIDv7 over serial: ids appear in URLs and will later cross an API boundary to
 a mobile client, where sequential integers leak volume and invite enumeration.
 UUIDv7 over UUIDv4: it keeps index locality, which matters for the message
 table's append-heavy pattern.
+
+Short prefixed ids over UUIDv7 for URL segments: assistants and topics are the
+ids users see in the address bar, so they are minted as `agt_` / `tpc_` + 12
+base62 chars (~71 bits) by `newAssistantId()` / `newTopicId()` in
+`src/lib/id.ts`, inserted through `insertWithShortId`
+(`src/server/db/short-id-insert.ts`) which re-mints on a primary-key collision.
+Rows created before this convention keep their UUIDv7 ids — id columns are
+`text` and nothing validates the format. Everything else (messages, files,
+auth tables) stays on UUIDv7.
 
 `timestamptz` over `timestamp`: self-hosted instances run in every timezone and
 the container's TZ is not something we control.

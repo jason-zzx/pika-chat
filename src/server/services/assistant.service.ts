@@ -9,11 +9,12 @@ import {
   type CreateAssistantInput,
   type UpdateAssistantInput,
 } from "@/lib/schemas/assistant";
-import { newId } from "@/lib/id";
+import { newAssistantId } from "@/lib/id";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { assistants, topicColumns, topics } from "@/server/db/schema";
+import { insertWithShortId } from "@/server/db/short-id-insert";
 import { isUniqueViolation } from "@/server/db/unique-violation";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
@@ -192,17 +193,21 @@ export async function listAssistantTree(
   }
 
   const db = getDb();
-  await db
-    .insert(assistants)
-    .values({
-      id: newId(),
-      ownerId: actor.userId,
-      name: defaultName,
-      icon: DEFAULT_ASSISTANT_ICON,
-    })
-    .onConflictDoNothing({
-      target: [assistants.ownerId, assistants.name],
-    });
+  await insertWithShortId({
+    mint: newAssistantId,
+    insert: (id) =>
+      db
+        .insert(assistants)
+        .values({
+          id,
+          ownerId: actor.userId,
+          name: defaultName,
+          icon: DEFAULT_ASSISTANT_ICON,
+        })
+        .onConflictDoNothing({
+          target: [assistants.ownerId, assistants.name],
+        }),
+  });
 
   return { assistants: groupTree(await selectTree(actor)) };
 }
@@ -217,24 +222,29 @@ export async function createAssistant(
   };
   await assertModelAvailable(pair, actor);
 
-  const id = newId();
   const db = getDb();
+  let createdId: string;
   try {
-    const inserted = await db
-      .insert(assistants)
-      .values({
-        id,
-        ownerId: actor.userId,
-        name: input.name,
-        icon: input.icon,
-        systemPrompt: input.systemPrompt ?? null,
-        defaultProviderConfigId: pair.defaultProviderConfigId,
-        defaultModelId: pair.defaultModelId,
-      })
-      .returning({ id: assistants.id });
-    if (!inserted[0]) {
-      throw new AppError("INTERNAL", 500, "assistant.createFailed");
-    }
+    ({ id: createdId } = await insertWithShortId({
+      mint: newAssistantId,
+      insert: async (id) => {
+        const inserted = await db
+          .insert(assistants)
+          .values({
+            id,
+            ownerId: actor.userId,
+            name: input.name,
+            icon: input.icon,
+            systemPrompt: input.systemPrompt ?? null,
+            defaultProviderConfigId: pair.defaultProviderConfigId,
+            defaultModelId: pair.defaultModelId,
+          })
+          .returning({ id: assistants.id });
+        if (!inserted[0]) {
+          throw new AppError("INTERNAL", 500, "assistant.createFailed");
+        }
+      },
+    }));
   } catch (error) {
     if (isUniqueViolation(error)) {
       conflictOnName();
@@ -242,8 +252,11 @@ export async function createAssistant(
     throw error;
   }
 
-  logger.info({ userId: actor.userId, assistantId: id }, "assistant created");
-  return loadAssistant(id, actor);
+  logger.info(
+    { userId: actor.userId, assistantId: createdId },
+    "assistant created",
+  );
+  return loadAssistant(createdId, actor);
 }
 
 export async function updateAssistant(

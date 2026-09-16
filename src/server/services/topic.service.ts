@@ -7,10 +7,11 @@ import {
   type SetTopicFavoriteInput,
   type Topic,
 } from "@/lib/schemas/topic";
-import { newId } from "@/lib/id";
+import { newTopicId } from "@/lib/id";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { assistants, chatMessages, topicColumns, topics } from "@/server/db/schema";
+import { insertWithShortId } from "@/server/db/short-id-insert";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import {
@@ -36,14 +37,18 @@ export async function createTopicForChat(
 ): Promise<Topic> {
   const assistant = await requireOwnedAssistant(input.assistantId, actor);
   const db = getDb();
-  const inserted = await db
-    .insert(topics)
-    .values({
-      id: newId(),
-      assistantId: assistant.id,
-      title: defaultTitle,
-    })
-    .returning(topicColumns);
+  const { result: inserted } = await insertWithShortId({
+    mint: newTopicId,
+    insert: (id) =>
+      db
+        .insert(topics)
+        .values({
+          id,
+          assistantId: assistant.id,
+          title: defaultTitle,
+        })
+        .returning(topicColumns),
+  });
   const row = inserted[0];
   if (!row) {
     throw new AppError("INTERNAL", 500, "topic.createFailed");
