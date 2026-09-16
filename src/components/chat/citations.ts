@@ -81,8 +81,21 @@ export function collectCitationSources(
 
 // --- remark transform: `[n]` text tokens → `<sup>[n]</sup>` markers ---
 
-/** Citation markers in answer text: `[n]` where n is a source num. */
-const CITATION_MARKER_PATTERN = /\[(\d+)\]/g;
+/**
+ * Citation markers in answer text: `[n]` where n is a source num, plus the
+ * grouped form models write when one claim rests on several sources —
+ * `[3, 5]`, with ASCII, fullwidth, or ideographic commas and any spacing.
+ * The two regexes below share this one source string, so the remark plugin
+ * and the CitationSup renderer can never disagree about what a marker is.
+ */
+const CITATION_MARKER_SOURCE = String.raw`\[\d+(?:\s*[,，、]\s*\d+)*\]`;
+
+/** Scans answer text for markers (the remark plugin's global form). */
+export const CITATION_MARKER_PATTERN = new RegExp(CITATION_MARKER_SOURCE, "g");
+
+/** Matches a `sup` whose entire text is one marker group (the renderer's
+ * anchored form). */
+export const CITATION_TEXT_PATTERN = new RegExp(`^${CITATION_MARKER_SOURCE}$`);
 
 /**
  * Minimal mdast shape — the project carries no mdast type dependency, and

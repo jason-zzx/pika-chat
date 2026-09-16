@@ -1,16 +1,26 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useContext, useState, type ComponentProps, type ReactNode } from "react";
+import {
+  Fragment,
+  useContext,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import type { Components, ExtraProps } from "streamdown";
 
 import ExternalLinkDialog from "./ExternalLinkDialog";
-import { CitationSourcesContext, type CitationSource } from "./citations";
+import {
+  CITATION_TEXT_PATTERN,
+  CitationSourcesContext,
+  type CitationSource,
+} from "./citations";
 
 type SupProps = ComponentProps<"sup"> & ExtraProps;
 
-/** The exact marker text the remark plugin wraps: `[n]`. */
-const CITATION_TEXT_PATTERN = /^\[(\d+)\]$/;
+/** Num tokens inside a matched group body (`"3, 5"` → `[3, 5]`). */
+const CITATION_NUM_PATTERN = /\d+/g;
 
 /** Flattens rendered children to plain text; undefined when the children are
  * not pure text (e.g. a raw-HTML sup with nested elements). */
@@ -29,11 +39,12 @@ function textOf(children: ReactNode): string | undefined {
 
 /**
  * Renders `<sup>` elements. Two of three cases are citation markers the
- * remark plugin (`remarkCitations`) produced from `[n]` text tokens:
- * resolvable markers render as numbered chips, unresolvable ones (out of
- * range, stale num, model noise) fall back to the literal `[n]` text the
- * model wrote. A genuine `<sup>` (raw HTML in the source) keeps default
- * rendering.
+ * remark plugin (`remarkCitations`) produced from `[n]` / `[n, m]` text
+ * tokens: resolvable nums render as numbered chips, unresolvable ones (out of
+ * range, stale num, model noise) fall back to the literal text the model
+ * wrote. A group renders its chips back to back — no separator text, so
+ * `[3, 5]` is two chips and nothing else. A genuine `<sup>` (raw HTML in the
+ * source) keeps default rendering.
  */
 export default function CitationSup(props: SupProps) {
   const { children, ...rest } = props;
@@ -42,17 +53,26 @@ export default function CitationSup(props: SupProps) {
   delete rest.node;
   const sources = useContext(CitationSourcesContext);
   const text = textOf(children);
-  const match =
-    text === undefined ? null : CITATION_TEXT_PATTERN.exec(text);
-  if (match === null) {
+  if (text === undefined || !CITATION_TEXT_PATTERN.test(text)) {
     return <sup {...rest}>{children}</sup>;
   }
-  const num = Number(match[1]);
-  const source = sources.find((candidate) => candidate.num === num);
-  if (source === undefined) {
-    return <>{children}</>;
-  }
-  return <CitationChip source={source} />;
+  const nums = (text.match(CITATION_NUM_PATTERN) ?? []).map(Number);
+  const resolved = nums.map((num) =>
+    sources.find((candidate) => candidate.num === num),
+  );
+  return (
+    <>
+      {nums.map((num, index) => {
+        const source = resolved[index];
+        const key = `${num}-${index}`;
+        return source === undefined ? (
+          <Fragment key={key}>{`[${num}]`}</Fragment>
+        ) : (
+          <CitationChip key={key} source={source} />
+        );
+      })}
+    </>
+  );
 }
 
 /** Superscript numbered pill (ChatGPT-style); taps open the external-link

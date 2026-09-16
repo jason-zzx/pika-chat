@@ -40,9 +40,7 @@ afterEach(() => {
 
 describe("CitationSup", () => {
   it("renders a resolvable marker as a numbered chip that opens the link dialog", async () => {
-    const openSpy = vi
-      .spyOn(window, "open")
-      .mockImplementation(() => null);
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
     renderSup("[2]");
 
     const chip = screen.getByRole("button", {
@@ -71,6 +69,27 @@ describe("CitationSup", () => {
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByText("[9]")).toBeInTheDocument();
+  });
+
+  it("splits a resolvable [n, m] group into one chip per source", () => {
+    const { container } = renderSup("[1, 2]");
+
+    const chips = screen.getAllByRole("button", { name: /^Source \d+: / });
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveAccessibleName("Source 1: pika-chat on GitHub");
+    expect(chips[1]).toHaveAccessibleName("Source 2: Release notes");
+    // Chips sit back to back: no comma or other separator text between them.
+    expect(container.textContent).toBe("12");
+    expect(screen.queryByText("[1, 2]")).not.toBeInTheDocument();
+  });
+
+  it("keeps only the unresolvable num literal inside a mixed group", () => {
+    const { container } = renderSup("[2, 9]");
+
+    expect(
+      screen.getByRole("button", { name: "Source 2: Release notes" }),
+    ).toBeInTheDocument();
+    expect(container.textContent).toBe("2[9]");
   });
 
   it("renders markers as literal text without a sources context", () => {

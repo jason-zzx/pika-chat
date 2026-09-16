@@ -63,6 +63,17 @@ describe("Markdown citations (real Streamdown pipeline)", () => {
     expect(fence?.querySelector("sup, button")).toBeNull();
   });
 
+  it("renders a multi-source group [n, m] as one chip per source", async () => {
+    renderWithIntl(<Markdown text="Both [1, 2] agree." citations={sources} />);
+
+    const chips = await screen.findAllByRole("button", {
+      name: /^Source \d+: /,
+    });
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveAccessibleName("Source 1: pika-chat on GitHub");
+    expect(chips[1]).toHaveAccessibleName("Source 2: Release notes");
+  });
+
   it("keeps the no-citations path plain: no chips, no sup markers", async () => {
     const { container } = renderWithIntl(<Markdown text="plain [1] text" />);
 

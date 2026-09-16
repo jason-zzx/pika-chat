@@ -207,7 +207,14 @@ Contracts that are easy to break (from `09-07-chat-renderer-syntax-plugins`):
   code/inline-code/html carry text in `value` and link/image subtrees are
   explicitly skipped — a whole-string regex would corrupt `a[1]`). Chips
   are `<sup>` buttons (`CitationSup`) opening `ExternalLinkDialog`;
-  unresolvable markers render literally. Three non-obvious contracts:
+  unresolvable markers render literally. A marker may name several nums in
+  one bracket (`[3, 5]` — ASCII/fullwidth/ideographic comma, optional
+  spacing): the whole group is one `sup` node and `CitationSup` emits one
+  chip per resolvable num, back to back with no separator text between them,
+  while unresolvable nums stay as their literal `[n]`. Plugin and renderer
+  build their regexes from the single `CITATION_MARKER_SOURCE` in
+  `citations.ts`, so they cannot disagree about what a marker is. Three
+  non-obvious contracts:
   the remark plugin and components override are module-level constants
   (memo identity); sources travel via React context so late-arriving
   source maps propagate across Streamdown's memo boundary; and the

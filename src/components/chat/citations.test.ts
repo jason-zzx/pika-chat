@@ -31,6 +31,48 @@ describe("transformCitationMarkers", () => {
     ]);
   });
 
+  it("keeps a multi-source group [n, m] as one sup marker", () => {
+    const tree: MdastNode = {
+      type: "root",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", value: "both [3, 5] agree" }],
+        },
+      ],
+    };
+
+    transformCitationMarkers(tree);
+
+    expect(tree.children?.[0]?.children).toEqual([
+      { type: "text", value: "both " },
+      { type: "text", value: "[3, 5]", data: { hName: "sup" } },
+      { type: "text", value: " agree" },
+    ]);
+  });
+
+  it("accepts tight, ideographic-comma, and fullwidth-comma groups", () => {
+    const tree: MdastNode = {
+      type: "root",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", value: "[1,2] [3、4] [5，6]" }],
+        },
+      ],
+    };
+
+    transformCitationMarkers(tree);
+
+    expect(tree.children?.[0]?.children).toEqual([
+      { type: "text", value: "[1,2]", data: { hName: "sup" } },
+      { type: "text", value: " " },
+      { type: "text", value: "[3、4]", data: { hName: "sup" } },
+      { type: "text", value: " " },
+      { type: "text", value: "[5，6]", data: { hName: "sup" } },
+    ]);
+  });
+
   it("handles adjacent markers and bracketless text", () => {
     const tree: MdastNode = {
       type: "root",
