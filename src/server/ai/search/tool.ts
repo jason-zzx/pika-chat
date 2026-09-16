@@ -111,7 +111,7 @@ export function createSearchWebTool(
   const { numbering } = options;
   return tool({
     description:
-      "Search the web for current information. Use when the answer depends on recent events, facts, or sources you may not know. Returns titles, links, and content snippets." +
+      "Search the web for current information. Use when the answer depends on recent events, facts, or sources you may not know. Returns titles, links, and content snippets. Some results carry a publishedDate — for time-sensitive questions, weigh how recent a source is." +
       (options.hasFetchPage
         ? " To read one specific page in depth, use the fetchPage tool with its URL."
         : ""),

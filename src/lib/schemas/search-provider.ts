@@ -55,6 +55,11 @@ export const searchWebResultSchema = z.object({
    * outputs persisted before R14 still parse — they simply have no
    * resolvable citations. */
   num: z.number().int().positive().optional(),
+  /** Published date as the provider reports it (exa: ISO datetime; tavily:
+   * date string, news topic only; firecrawl/brave have no date field and
+   * simply omit). Optional so persisted outputs predate the passthrough
+   * still parse. */
+  publishedDate: z.string().optional(),
 });
 export type SearchWebResult = z.infer<typeof searchWebResultSchema>;
 

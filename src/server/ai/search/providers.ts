@@ -97,13 +97,16 @@ function parseWith<T>(
 }
 
 // Provider response shapes, verified against current docs. Optional text
-// fields degrade to "" so a single sparse result cannot fail the search.
+// fields degrade to "" so a single sparse result cannot fail the search;
+// date fields (tavily published_date, exa publishedDate) pass through when
+// present, null/garbage degrades to omitted.
 const tavilyResponseSchema = z.object({
   results: z.array(
     z.object({
       title: z.string().catch(""),
       url: z.string(),
       content: z.string().catch(""),
+      published_date: z.string().nullish().catch(undefined),
     }),
   ),
 });
@@ -114,6 +117,7 @@ const exaResponseSchema = z.object({
       title: z.string().catch(""),
       url: z.string(),
       text: z.string().catch(""),
+      publishedDate: z.string().nullish().catch(undefined),
     }),
   ),
 });
@@ -168,7 +172,12 @@ async function searchTavily(
     },
   );
   return parseWith(credential.provider, tavilyResponseSchema, payload).results.map(
-    (item) => ({ title: item.title, url: item.url, snippet: item.content }),
+    (item) => ({
+      title: item.title,
+      url: item.url,
+      snippet: item.content,
+      ...(item.published_date ? { publishedDate: item.published_date } : {}),
+    }),
   );
 }
 
@@ -193,7 +202,12 @@ async function searchExa(
     },
   );
   return parseWith(credential.provider, exaResponseSchema, payload).results.map(
-    (item) => ({ title: item.title, url: item.url, snippet: item.text }),
+    (item) => ({
+      title: item.title,
+      url: item.url,
+      snippet: item.text,
+      ...(item.publishedDate ? { publishedDate: item.publishedDate } : {}),
+    }),
   );
 }
 

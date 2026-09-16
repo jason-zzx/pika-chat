@@ -33,11 +33,18 @@ const successOutput: SearchWebToolOutput = {
       title: "pika-chat on GitHub",
       url: "https://github.com/example/pika-chat",
       snippet: "repo",
+      publishedDate: "2026-09-12",
     },
     {
       title: "Docs",
       url: "https://pika.example.com/docs",
       snippet: "docs",
+    },
+    {
+      title: "Undated garbage",
+      url: "https://pika.example.com/old",
+      snippet: "old",
+      publishedDate: "not-a-date",
     },
   ],
 };
@@ -84,9 +91,15 @@ describe("SearchToolCall", () => {
     );
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveTextContent("github.com");
+    // The provider-reported date renders next to the host.
+    expect(link).toHaveTextContent("Sep 12, 2026");
     expect(
       screen.getByRole("link", { name: /Docs/ }),
     ).toHaveTextContent("pika.example.com");
+    // An unparseable publishedDate hides instead of rendering garbage.
+    expect(
+      screen.getByRole("link", { name: /Undated garbage/ }),
+    ).not.toHaveTextContent("·");
   });
 
   it("shows the failure summary when every provider failed", () => {

@@ -45,7 +45,12 @@ describe("tavily adapter", () => {
     const calls = stubFetch(() =>
       jsonResponse({
         results: [
-          { title: "Result A", url: "https://a.example", content: "Snippet A" },
+          {
+            title: "Result A",
+            url: "https://a.example",
+            content: "Snippet A",
+            published_date: "2026-09-10",
+          },
           { title: "Result B", url: "https://b.example", content: "Snippet B" },
         ],
       }),
@@ -54,7 +59,12 @@ describe("tavily adapter", () => {
     const results = await search("pika chat");
 
     expect(results).toEqual([
-      { title: "Result A", url: "https://a.example", snippet: "Snippet A" },
+      {
+        title: "Result A",
+        url: "https://a.example",
+        snippet: "Snippet A",
+        publishedDate: "2026-09-10",
+      },
       { title: "Result B", url: "https://b.example", snippet: "Snippet B" },
     ]);
     const call = calls[0];
@@ -74,15 +84,36 @@ describe("exa adapter", () => {
   it("posts to /search with an x-api-key header and maps text to snippet", async () => {
     const calls = stubFetch(() =>
       jsonResponse({
-        results: [{ title: "Exa", url: "https://exa.example", text: "Exa text" }],
+        results: [
+          {
+            title: "Exa",
+            url: "https://exa.example",
+            text: "Exa text",
+            publishedDate: "2026-09-14T08:00:00.000Z",
+          },
+          {
+            title: "Undated",
+            url: "https://exa.example/old",
+            text: "no date",
+            publishedDate: null,
+          },
+        ],
       }),
     );
     const search = createSearchAdapter(credential({ provider: "exa", apiKey: "exa-key" }));
     const results = await search("query");
 
     expect(results).toEqual([
-      { title: "Exa", url: "https://exa.example", snippet: "Exa text" },
+      {
+        title: "Exa",
+        url: "https://exa.example",
+        snippet: "Exa text",
+        publishedDate: "2026-09-14T08:00:00.000Z",
+      },
+      { title: "Undated", url: "https://exa.example/old", snippet: "no date" },
     ]);
+    // A null publishedDate is omitted rather than passed through as null.
+    expect(results[1]).not.toHaveProperty("publishedDate");
     const call = calls[0];
     expect(call?.url).toBe("https://api.exa.ai/search");
     expect(new Headers(call?.init?.headers).get("x-api-key")).toBe("exa-key");

@@ -126,6 +126,14 @@ parts → UI — change them together.
   (execution order, from 1, unique within the turn; error outputs carry
   no nums). `num` is OPTIONAL in the output zod schemas — pre-R14 rows
   parse and simply yield no citations.
+- **Result dates are passed through, never synthesized** (`publishedDate`
+  on `SearchWebResult`, OPTIONAL like `num` so older rows still parse):
+  exa reports ISO `publishedDate`, tavily reports `published_date` on the
+  news topic only, firecrawl and brave have no date field and omit.
+  Null/garbage values degrade to omitted instead of failing the parse; the
+  tool description tells the model to weigh source recency for
+  time-sensitive questions; the tool card shows the date next to the host.
+  No provider-side freshness filtering — the model reasons over the dates.
 - **`instructions` come from `buildChatInstructions` only**
   (`src/server/ai/instructions.ts`). Both streaming routes call it —
   never assemble `instructions` inline in a route, or the sections drift.
@@ -240,7 +248,8 @@ parts → UI — change them together.
 
 - Service: CRUD/reorder/isolation integration tests; raw key never in any
   HTTP response.
-- Adapters: fixture-response parsing per provider; non-2xx/timeout throws;
+- Adapters: fixture-response parsing per provider (including `publishedDate`
+  passthrough for tavily/exa and null-date omission); non-2xx/timeout throws;
   error strings exclude upstream bodies.
 - Chain: fallback order, empty-results-not-fallback, all-fail error carries
   attemptedProviders.
@@ -257,7 +266,8 @@ parts → UI — change them together.
   caller-registered tools; google covers both `:generateContent` and
   `:streamGenerateContent`; cross-format and non-object bodies pass through.
 - `SearchToolCall` tests: live running spins/expands; persisted incomplete
-  part in stopped/failed message renders collapsed non-spinning.
+  part in stopped/failed message renders collapsed non-spinning; result
+  `publishedDate` renders next to the host and unparseable values hide.
 
 ### 7. Wrong vs Correct
 

@@ -46,7 +46,14 @@ describe("createSearchWebTool", () => {
   it("returns the serving provider and results on success", async () => {
     stubFetch(() =>
       jsonResponse({
-        results: [{ title: "A", url: "https://a.example", content: "snippet" }],
+        results: [
+          {
+            title: "A",
+            url: "https://a.example",
+            content: "snippet",
+            published_date: "2026-09-10",
+          },
+        ],
       }),
     );
     const searchWeb = searchTool(credentials);
@@ -60,7 +67,13 @@ describe("createSearchWebTool", () => {
       provider: "tavily",
       query: "pika",
       results: [
-        { title: "A", url: "https://a.example", snippet: "snippet", num: 1 },
+        {
+          title: "A",
+          url: "https://a.example",
+          snippet: "snippet",
+          publishedDate: "2026-09-10",
+          num: 1,
+        },
       ],
     });
   });

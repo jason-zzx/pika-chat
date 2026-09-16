@@ -1,7 +1,7 @@
 "use client";
 
 import type { ToolUIPart } from "ai";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { searchProviderLabel } from "@/components/search/provider-meta";
@@ -9,6 +9,7 @@ import {
   searchWebToolOutputSchema,
   type SearchWebToolOutput,
 } from "@/lib/schemas/search-provider";
+import { localTimeZone } from "@/lib/time-zone";
 
 import ToolCallShell from "./ToolCallShell";
 import {
@@ -26,6 +27,32 @@ const partialInputSchema = z.object({ query: z.string().optional() });
 function queryOf(input: unknown): string | undefined {
   const parsed = partialInputSchema.safeParse(input);
   return parsed.success ? parsed.data.query : undefined;
+}
+
+/**
+ * Short display date for a provider-reported publishedDate. Date-only
+ * strings parse as local calendar days; unparseable values hide.
+ */
+function formatPublishedDate(
+  raw: string | undefined,
+  format: ReturnType<typeof useFormatter>,
+): string | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  // A datetime string without an offset parses in the local zone, so a
+  // date-only value ("2025-02-09") stays the same calendar day everywhere.
+  const date = new Date(raw.length === 10 ? `${raw}T00:00:00` : raw);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  return format.dateTime(date, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    // Browser-local zone (same contract as MessageTimestamp).
+    timeZone: localTimeZone(),
+  });
 }
 
 type SearchToolCallProps = {
@@ -91,6 +118,7 @@ function SearchToolBody({
   errorText: string | undefined;
 }) {
   const t = useTranslations("Chat.Tools");
+  const format = useFormatter();
   if (running) {
     return <p className="text-muted-foreground">{t("searchBodyRunning")}</p>;
   }
@@ -136,6 +164,7 @@ function SearchToolBody({
           {output.results.map((result) => {
             const host = hostnameOf(result.url);
             const letterSource = host.length > 0 ? host : result.title;
+            const published = formatPublishedDate(result.publishedDate, format);
             return (
               <li key={result.url}>
                 <a
@@ -154,6 +183,7 @@ function SearchToolBody({
                     <span className="block truncate">{result.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {host}
+                      {published ? ` · ${published}` : ""}
                     </span>
                   </span>
                 </a>
