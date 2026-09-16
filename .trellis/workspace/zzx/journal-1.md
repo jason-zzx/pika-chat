@@ -794,3 +794,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 28: 服务商启用/禁用 + 发现模型搜索
+<!-- trellis-session: v=2 fp=manual -->
+
+**Date**: 2026-09-15
+**Task**: 服务商启用/禁用 + 发现模型搜索
+**Branch**: `main`
+
+### Summary
+
+无任务轻量改动。服务商启用/禁用：provider_configs 新增 enabled 列（0020，默认 true 覆盖存量），可用性只经 resolveAvailableModels 一处门控（picker/chat/regenerate/助手默认全覆盖），listProviderConfigs 仍返回禁用项以便重新启用；详情头部 base-ui Switch（新建 ui/switch.tsx）乐观切换+失败回滚，列表项禁用态 opacity-60 + danger「已禁用」替代模型计数。发现模型弹窗：搜索框子串过滤；已添加模型渲染勾选+锁定（不进 selected，彻底避免 409）。spec 双端文档同步。ponytail-review 削减约 12 行。1088 tests 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `163f18d` | feat(providers): add enable/disable switch and searchable model discovery |
+
+### Status
+
+[OK] **Completed**
