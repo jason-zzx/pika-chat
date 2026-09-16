@@ -10,6 +10,7 @@ import EmptyState from "@/components/common/EmptyState";
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import SettingsCard from "@/components/settings/SettingsCard";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -159,6 +160,7 @@ export default function ProviderConfigsScreen({
                         <ProviderListItem
                           name={config.name}
                           models={config.models}
+                          enabled={config.enabled}
                           active={detail?.id === config.id}
                           onSelect={() => handleSelect(config.id)}
                         />
@@ -251,11 +253,13 @@ export default function ProviderConfigsScreen({
 function ProviderListItem({
   name,
   models,
+  enabled = true,
   active,
   onSelect,
 }: {
   name: string;
   models: ProviderModel[];
+  enabled?: boolean;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -271,6 +275,7 @@ function ProviderListItem({
         active
           ? "bg-accent font-medium text-accent-foreground"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        !enabled && "opacity-60",
       )}
     >
       <ModelVendorIcon
@@ -278,9 +283,15 @@ function ProviderListItem({
         vendorKey={firstModel?.vendorKey ?? null}
       />
       <span className="min-w-0 flex-1 truncate">{name}</span>
-      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-        {t("modelCount", { count: models.length })}
-      </span>
+      {enabled ? (
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {t("modelCount", { count: models.length })}
+        </span>
+      ) : (
+        <span className="shrink-0 text-xs font-medium text-destructive">
+          {t("disabled")}
+        </span>
+      )}
     </button>
   );
 }
@@ -308,6 +319,15 @@ function OwnProviderDetail({
   const [editingModel, setEditingModel] = useState<ProviderModel | null>(
     null,
   );
+  // Optimistic toggle: snap the switch immediately, resync from the server
+  // value after invalidation (adjust-state-during-render pattern), revert on
+  // failure.
+  const [enabled, setEnabled] = useState(config.enabled);
+  const [syncedEnabled, setSyncedEnabled] = useState(config.enabled);
+  if (config.enabled !== syncedEnabled) {
+    setSyncedEnabled(config.enabled);
+    setEnabled(config.enabled);
+  }
   const visibilityLabel =
     config.visibility === "shared"
       ? t("visibilityShared")
@@ -335,7 +355,25 @@ function OwnProviderDetail({
               : t("noKeyHint")}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Switch
+            checked={enabled}
+            disabled={updateConfig.isPending}
+            aria-label={t("toggleEnabled")}
+            onCheckedChange={(next) => {
+              const previous = enabled;
+              setEnabled(next);
+              onError(null);
+              void updateConfig
+                .mutateAsync({ id: config.id, input: { enabled: next } })
+                .catch((caught) => {
+                  setEnabled(previous);
+                  onError(
+                    apiErrorMessage(caught, tErrors, "actions.saveProvider"),
+                  );
+                });
+            }}
+          />
           <Button
             type="button"
             variant="outline"
@@ -470,6 +508,7 @@ function OwnProviderDetail({
       <DiscoverModelsDialog
         configId={config.id}
         configName={config.name}
+        existingModelIds={config.models.map((model) => model.modelId)}
         open={discoverOpen}
         onOpenChange={setDiscoverOpen}
       />

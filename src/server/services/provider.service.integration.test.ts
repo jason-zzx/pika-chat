@@ -301,6 +301,48 @@ describe("provider.service", () => {
     ]);
   });
 
+  it("hides a disabled config's models from available models until re-enabled", async () => {
+    const { superActor, userActor } = await seedActors();
+    const shared = await createProviderConfig(
+      {
+        name: "toggleable",
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-toggle",
+        visibility: "shared",
+      },
+      superActor,
+    );
+    expect(shared.enabled).toBe(true);
+    await addProviderModel(shared.id, { modelId: "gpt-4o" }, superActor);
+
+    const disabled = await updateProviderConfig(
+      shared.id,
+      { enabled: false },
+      superActor,
+    );
+    expect(disabled.enabled).toBe(false);
+
+    // The settings list still shows the config (with its models) so it can be
+    // re-enabled, while model resolution hides it from both owner and shared
+    // viewers — chat gates on the same list.
+    const listed = await listProviderConfigs(superActor);
+    expect(listed.own[0]?.enabled).toBe(false);
+    expect(listed.own[0]?.models.map((model) => model.modelId)).toEqual([
+      "gpt-4o",
+    ]);
+    expect(await resolveAvailableModels(superActor)).toEqual([]);
+    expect(await resolveAvailableModels(userActor)).toEqual([]);
+
+    const reEnabled = await updateProviderConfig(
+      shared.id,
+      { enabled: true },
+      superActor,
+    );
+    expect(reEnabled.enabled).toBe(true);
+    const restored = await resolveAvailableModels(userActor);
+    expect(restored.map((model) => model.modelId)).toEqual(["gpt-4o"]);
+  });
+
   it("returns a last-four mask and never decrypts on list", async () => {
     const { userActor } = await seedActors();
     const decrypt = vi.spyOn(crypto, "decryptSecret");

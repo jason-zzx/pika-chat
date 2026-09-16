@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 import type { AvailableModel } from "@/lib/schemas/provider";
 import {
@@ -30,9 +30,14 @@ export async function resolveAvailableModels(
     )
     .innerJoin(users, eq(users.id, providerConfigs.ownerId))
     .where(
-      or(
-        eq(providerConfigs.ownerId, actor.userId),
-        eq(providerConfigs.visibility, "shared"),
+      and(
+        // A disabled config hides its models everywhere — pickers here, and
+        // createChatModelHandle rejects the pair since it gates on this list.
+        eq(providerConfigs.enabled, true),
+        or(
+          eq(providerConfigs.ownerId, actor.userId),
+          eq(providerConfigs.visibility, "shared"),
+        ),
       ),
     );
 

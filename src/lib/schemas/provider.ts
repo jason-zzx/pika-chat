@@ -75,6 +75,7 @@ export const ownProviderConfigSchema = z.object({
   baseUrl: z.string(),
   apiFormat: providerApiFormatSchema,
   visibility: providerVisibilitySchema,
+  enabled: z.boolean(),
   apiKeyLastFour: z.string().nullable(),
   models: z.array(providerModelSchema),
 });
@@ -109,6 +110,7 @@ export const updateProviderConfigSchema = z.object({
   apiKey: z.string().min(1).nullable().optional(),
   apiFormat: providerApiFormatSchema.optional(),
   visibility: providerVisibilitySchema.optional(),
+  enabled: z.boolean().optional(),
 });
 export type UpdateProviderConfigInput = z.infer<typeof updateProviderConfigSchema>;
 

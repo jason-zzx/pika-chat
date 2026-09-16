@@ -137,6 +137,19 @@ the footer is a plain button row on the same surface as the content.
   input (consistent with the chat `ModelPicker`), `BrainIcon` = reasoning,
   per-modality icons for audio/video/pdf. Reuse `ModalityIcon` /
   `ModelCapabilityIcons` instead of inventing new capability glyphs.
+- **Enable/disable switch** (`ownProviderConfigSchema.enabled`): the detail
+  header carries a `Switch` (`src/components/ui/switch.tsx`, base-ui) that
+  toggles optimistically — snap immediately, resync from the server value
+  with the adjust-state-during-render pattern (a `setState`-in-`useEffect`
+  violates `react-hooks/set-state-in-effect`), revert on error. A disabled
+  own provider renders at `opacity-60` in the list and swaps the
+  `{count} models` caption for a `text-destructive` "Disabled" label.
+- **Discover models dialog** (`DiscoverModelsDialog`) receives
+  `existingModelIds` from the detail card: after discovery, already-added
+  models start checked and locked (`disabled`, "Added" suffix) so the list
+  shows served-vs-added state and re-adding can never hit the 409 conflict;
+  the submit count excludes them. A search input filters served ids by
+  case-insensitive substring.
 
 ---
 

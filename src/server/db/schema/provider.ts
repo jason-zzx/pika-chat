@@ -45,6 +45,9 @@ export const providerConfigs = pgTable(
     encryptedApiKey: text("encrypted_api_key"),
     apiKeyLastFour: text("api_key_last_four"),
     visibility: providerVisibility("visibility").notNull().default("private"),
+    // Disabled configs keep their rows but vanish from resolveAvailableModels,
+    // which also gates createChatModelHandle — so chat rejects them too.
+    enabled: boolean("enabled").notNull().default(true),
     // Negative cache: set when the endpoint answered the Files API with a
     // permanent error (no such endpoint, unsupported file type). Cleared
     // whenever baseUrl / api key / apiFormat change.

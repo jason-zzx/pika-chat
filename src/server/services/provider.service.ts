@@ -76,7 +76,13 @@ function assertApiKeyAvailable(
 function toOwnConfig(
   row: Pick<
     ConfigRow,
-    "id" | "name" | "baseUrl" | "apiFormat" | "visibility" | "apiKeyLastFour"
+    | "id"
+    | "name"
+    | "baseUrl"
+    | "apiFormat"
+    | "visibility"
+    | "enabled"
+    | "apiKeyLastFour"
   >,
   models: ProviderModel[],
 ): OwnProviderConfig {
@@ -86,6 +92,7 @@ function toOwnConfig(
     baseUrl: row.baseUrl,
     apiFormat: row.apiFormat,
     visibility: row.visibility,
+    enabled: row.enabled,
     apiKeyLastFour: row.apiKeyLastFour,
     models,
   };
@@ -134,6 +141,7 @@ async function loadOwnConfig(
         baseUrl: providerConfigs.baseUrl,
         apiFormat: providerConfigs.apiFormat,
         visibility: providerConfigs.visibility,
+        enabled: providerConfigs.enabled,
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       },
       model: providerModelColumns,
@@ -172,6 +180,7 @@ export async function listProviderConfigs(
         baseUrl: providerConfigs.baseUrl,
         apiFormat: providerConfigs.apiFormat,
         visibility: providerConfigs.visibility,
+        enabled: providerConfigs.enabled,
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       },
       ownerName: users.username,
@@ -266,6 +275,7 @@ export async function createProviderConfig(
         baseUrl: providerConfigs.baseUrl,
         apiFormat: providerConfigs.apiFormat,
         visibility: providerConfigs.visibility,
+        enabled: providerConfigs.enabled,
         apiKeyLastFour: providerConfigs.apiKeyLastFour,
       });
     const row = inserted[0];
@@ -314,11 +324,15 @@ export async function updateProviderConfig(
     apiKeyLastFour?: string | null;
     filesApiUnsupportedAt?: Date | null;
     visibility: "private" | "shared";
+    enabled?: boolean;
     updatedAt: Date;
   } = {
     visibility,
     updatedAt: new Date(),
   };
+  if (input.enabled !== undefined) {
+    patch.enabled = input.enabled;
+  }
   if (input.name !== undefined) {
     patch.name = input.name;
   }

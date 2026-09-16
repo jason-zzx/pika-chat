@@ -3,6 +3,39 @@
 Contracts for `src/server/services/provider.service.ts` and
 `src/lib/schemas/provider.ts`.
 
+## Enable / disable (`enabled`)
+
+A provider config can be switched off without deleting it.
+
+### Storage
+
+`provider_configs.enabled` is `boolean NOT NULL DEFAULT true` (migration
+`0020_next_triton.sql`); the DDL default onboards existing rows as enabled.
+
+### Contracts
+
+- `ownProviderConfigSchema` carries `enabled`;
+  `updateProviderConfigSchema` accepts `enabled: z.boolean().optional()`.
+  `sharedProviderConfigSchema` does not expose it (read-only view).
+- **Availability gates solely through `resolveAvailableModels()`**, which
+  filters `eq(providerConfigs.enabled, true)` alongside the own/shared
+  visibility `or`. Model pickers, `POST /api/chat`, regenerate, and assistant
+  default-model resolution all consume that list (`createChatModelHandle`
+  rejects a disabled pair with `model.notAvailable`), so one filter covers
+  every path. Do not add per-route enabled checks.
+- Disabling an owner-disabled **shared** config hides it from shared viewers
+  too — "off" means off for the whole instance.
+- `listProviderConfigs` deliberately keeps returning disabled configs **with
+  their models** so the settings UI can re-enable them; only model
+  availability is gated.
+
+### Tests
+
+`provider.service.integration.test.ts` covers the round trip: disable →
+settings list still shows the config with `enabled: false` and its models,
+`resolveAvailableModels` empty for both owner and a shared viewer →
+re-enable → model resolvable again.
+
 ## API format (`api_format`)
 
 Landed with `09-12-provider-api-format-ext`. A provider config speaks exactly
