@@ -160,6 +160,13 @@
       "loadFailedDescription": "刷新页面重试。",
       "stillSaving": "消息仍在保存中，请稍后重试。"
     },
+    "Compression": {
+      "compress": "压缩上下文",
+      "compressing": "正在压缩上下文",
+      "marker": "早期对话已压缩",
+      "showSummary": "显示总结",
+      "hideSummary": "隐藏总结"
+    },
     "MessageItem": {
       "you": "你",
       "assistant": "助手",
@@ -178,6 +185,7 @@
       "copied": "已复制",
       "copyFailed": "复制失败",
       "copyMessage": "复制消息",
+      "translate": "翻译",
       "regenerate": "重新生成",
       "regenerateResponse": "重新生成回复",
       "delete": "删除",
@@ -249,6 +257,11 @@
       "justNow": "刚刚",
       "minutes": "{count, plural, other {# 分钟前}}",
       "hours": "{count, plural, other {# 小时前}}"
+    },
+    "Translation": {
+      "translating": "正在翻译为{language}",
+      "collapse": "隐藏{language}译文",
+      "expand": "显示{language}译文"
     },
     "newTopic": "新话题"
   },
@@ -543,12 +556,17 @@
     },
     "topic": {
       "notFound": "话题不存在",
-      "createFailed": "创建话题失败"
+      "createFailed": "创建话题失败",
+      "nothingToCompress": "没有可压缩的历史消息"
     },
     "message": {
       "notFound": "消息不存在",
       "storeFailed": "保存消息失败",
-      "emptyVersionGroup": "版本组为空"
+      "emptyVersionGroup": "版本组为空",
+      "compressedLocked": "已压缩的早期历史不可修改"
+    },
+    "translation": {
+      "emptyText": "没有可翻译的文本"
     },
     "assistant": {
       "notFound": "助手不存在",
@@ -607,6 +625,7 @@
       "regenerate": "无法重新生成回复",
       "deleteMessage": "无法删除该消息",
       "switchVersions": "无法切换版本",
+      "translate": "无法翻译消息",
       "reorderProviders": "无法调整服务商顺序",
       "loadSearchProviders": "无法加载搜索服务商",
       "saveSearchProvider": "无法保存服务商",
@@ -640,7 +659,8 @@
       "saveStorageQuota": "无法保存存储配额",
       "loadFiles": "无法加载文件",
       "deleteFile": "无法删除文件",
-      "updateTheme": "无法保存主题偏好"
+      "updateTheme": "无法保存主题偏好",
+      "compress": "无法压缩上下文"
     }
   },
   "Validation": {

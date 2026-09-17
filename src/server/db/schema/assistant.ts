@@ -36,6 +36,11 @@ export const topics = pgTable(
       .references(() => assistants.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     isFavorite: boolean("is_favorite").notNull().default(false),
+    // Rolling history-compression state (会话历史压缩): the summary covers
+    // every message up to and including summaryUpToMessageId. All nullable —
+    // a topic without them behaves exactly as before.
+    summaryText: text("summary_text"),
+    summaryUpToMessageId: text("summary_up_to_message_id"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },

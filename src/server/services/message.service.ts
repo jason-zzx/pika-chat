@@ -11,7 +11,7 @@ import {
 } from "@/lib/schemas/chat";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { chatMessages } from "@/server/db/schema";
+import { chatMessages, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import {
   deleteFilesIfUnreferenced,
@@ -60,11 +60,14 @@ export function metadataFromRow(row: {
   providerConfigId: ChatMessageRow["providerConfigId"];
   modelId: ChatMessageRow["modelId"];
   reasoningMs: ChatMessageRow["reasoningMs"];
+  translations: ChatMessageRow["translations"];
   createdAt: ChatMessageRow["createdAt"];
   parts?: unknown;
 }): ChatMetadata | undefined {
+  // Translations are per-row (per version), exposed for both roles.
+  const translations = row.translations ?? undefined;
   if (row.role !== "assistant") {
-    return { createdAt: row.createdAt.toISOString() };
+    return { createdAt: row.createdAt.toISOString(), translations };
   }
   return {
     outcome: row.outcome ?? undefined,
@@ -74,6 +77,7 @@ export function metadataFromRow(row: {
     createdAt: row.createdAt.toISOString(),
     reasoningMs: row.reasoningMs ?? undefined,
     reasoningDurations: reasoningDurationsFromParts(row.parts),
+    translations,
   };
 }
 
@@ -168,6 +172,46 @@ async function listTopicRows(topicId: string): Promise<ChatMessageRow[]> {
     .from(chatMessages)
     .where(eq(chatMessages.topicId, topicId))
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+}
+
+/**
+ * History-compression lock (PRD R10): messages inside the compressed zone are
+ * immutable. Ownership is already established by the caller (`requireOwnedTopic`),
+ * so this reads the boundary straight from `topics` — intentionally not via
+ * compression.service, which imports this module and would create a cycle.
+ *
+ * Group semantics mirror the compression boundary: a target in the boundary's
+ * own version group, or in any earlier group, is locked. An unresolvable
+ * boundary id locks nothing — the same fallback `messagesAfterBoundary` uses.
+ */
+async function assertTargetNotCompressed(
+  topicId: string,
+  targetId: string,
+  knownGroups?: ChatMessageRow[][],
+): Promise<void> {
+  const db = getDb();
+  const boundaryRows = await db
+    .select({ summaryUpToMessageId: topics.summaryUpToMessageId })
+    .from(topics)
+    .where(eq(topics.id, topicId))
+    .limit(1);
+  const boundaryId = boundaryRows[0]?.summaryUpToMessageId ?? null;
+  if (!boundaryId) {
+    return;
+  }
+  const groups = knownGroups ?? groupRows(await listTopicRows(topicId));
+  const boundaryIndex = groups.findIndex((group) =>
+    group.some((row) => row.id === boundaryId),
+  );
+  if (boundaryIndex < 0) {
+    return;
+  }
+  const targetIndex = groups.findIndex((group) =>
+    group.some((row) => row.id === targetId),
+  );
+  if (targetIndex >= 0 && targetIndex <= boundaryIndex) {
+    throw new AppError("CONFLICT", 409, "message.compressedLocked");
+  }
 }
 
 /**
@@ -303,6 +347,8 @@ export async function deleteMessage(
       // Missing and foreign messages are indistinguishable to the caller.
       throw new AppError("NOT_FOUND", 404, "message.notFound");
     }
+    // PRD R10: the compressed zone is immutable; check before deleting.
+    await assertTargetNotCompressed(input.topicId, target.id);
     releasedFileIds = fileIdsFromParts(target.parts);
     await tx.delete(chatMessages).where(eq(chatMessages.id, target.id));
     const remaining = await tx
@@ -398,13 +444,20 @@ export async function resolveRegenerateTarget(
     throw new AppError("NOT_FOUND", 404, "message.notFound");
   }
   const groups = groupRows(rows);
+  // PRD R10: regenerating inside the compressed zone would produce an answer
+  // whose context the summary no longer reflects; reject it.
+  await assertTargetNotCompressed(input.topicId, target.id, groups);
   const targetGroupIndex = groups.findIndex((group) =>
     group.some((row) => row.id === target.id),
   );
   const selectedView = (upToExclusive: number): ChatUIMessage[] =>
-    groups
-      .slice(0, upToExclusive)
-      .map((group) => rowToChatUIMessage(selectedRowOf(group)));
+    groups.slice(0, upToExclusive).map((group) => {
+      const selected = selectedRowOf(group);
+      // Version metadata travels with the history so the compression
+      // boundary can be matched by group rather than by the boundary row's
+      // own (possibly deselected) id — same shape listTopicMessages returns.
+      return rowToChatUIMessage(selected, versionInfoOf(group, selected));
+    });
 
   if (target.role === "assistant") {
     return {

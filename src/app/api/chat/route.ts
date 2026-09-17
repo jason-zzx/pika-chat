@@ -15,7 +15,7 @@ import {
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
 import { getTranslations } from "next-intl/server";
-import { createChatModelHandle } from "@/server/ai/chat-model";
+import { requireModelForActor } from "@/server/ai/require-model";
 import { resolveAttachmentsForModel } from "@/server/ai/attachments";
 import {
   stripMarkupFromTextParts,
@@ -33,7 +33,6 @@ import {
   createReasoningTimer,
   withReasoningDurations,
 } from "@/server/ai/reasoning-timer";
-import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { createStreamFailureTracker } from "@/server/ai/stream-failure";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
@@ -47,6 +46,13 @@ import {
   appendUserMessage,
   listTopicMessages,
 } from "@/server/services/message.service";
+import {
+  compressTopicHistory,
+  exceedsCompressionThreshold,
+  getTopicSummaryState,
+  boundaryFromSummaryState,
+  messagesAfterBoundary,
+} from "@/server/services/compression.service";
 import { resolveSearchProviderCredentials } from "@/server/services/search-provider.service";
 import {
   createTopicForChat,
@@ -83,19 +89,14 @@ export const POST = withErrorHandling(async (request) => {
   const input = chatRequestSchema.parse(await request.json());
 
   // Before any topic row exists: an unusable model must not leave a draft behind.
-  const available = await resolveAvailableModels(actor);
-  const selected = available.find(
-    (model) =>
-      model.configId === input.providerConfigId &&
-      model.modelId === input.modelId,
+  const { selected, handle } = await requireModelForActor(
+    {
+      providerConfigId: input.providerConfigId,
+      modelId: input.modelId,
+    },
+    actor,
+    { builtinSearch: input.searchMode === "builtin" },
   );
-  if (!selected) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      400,
-      "model.notAvailable",
-    );
-  }
   const reasoningEffort = resolvedReasoningEffort(
     selected,
     input.reasoningEffort,
@@ -118,15 +119,6 @@ export const POST = withErrorHandling(async (request) => {
     parts: [...normalizedFileParts, ...normalizedTextParts],
   });
 
-  const handle = await createChatModelHandle(
-    {
-      providerConfigId: input.providerConfigId,
-      modelId: input.modelId,
-    },
-    actor,
-    { builtinSearch: input.searchMode === "builtin" },
-  );
-
   // Tool mode: resolve the caller's search credentials once per request. With
   // none configured the turn degrades gracefully to a tool-less run.
   const searchMode = input.searchMode ?? "off";
@@ -146,6 +138,11 @@ export const POST = withErrorHandling(async (request) => {
   let topicId = input.topicId;
   let systemPrompt: string | null = null;
   let history: ChatUIMessage[] = [];
+  // Rolling summary of the compressed early history, when the topic has one.
+  let historySummary: string | null = null;
+  // What the model actually sees: the summary plus the messages after the
+  // compression boundary (the full history when nothing was compressed).
+  let modelHistory: ChatUIMessage[] = [];
 
   if (topicId) {
     const context = await findTopicContextForActor(topicId, actor);
@@ -154,6 +151,43 @@ export const POST = withErrorHandling(async (request) => {
     }
     systemPrompt = context.assistant.systemPrompt;
     history = await listTopicMessages({ topicId }, actor);
+
+    const summaryState = await getTopicSummaryState(topicId, actor);
+    const summaryBoundary = boundaryFromSummaryState(summaryState);
+    // The persisted summary stays in play no matter what happens below: a
+    // failed re-compression must not discard an existing summary (F2).
+    historySummary = summaryState?.summaryText ?? null;
+    modelHistory = messagesAfterBoundary(history, summaryBoundary);
+    if (
+      // `modelHistory` empty means the summary already covers every message;
+      // there is nothing new to fold in.
+      modelHistory.length > 0 &&
+      exceedsCompressionThreshold(
+        [...modelHistory, userMessage],
+        selected.contextTokens,
+      )
+    ) {
+      // Auto-compression (PRD R1): fold the history into the rolling summary
+      // before this call. A summary failure must not block the turn (AC6);
+      // the persisted summary and post-boundary history computed above stay
+      // in effect, so only a never-compressed topic continues in full.
+      try {
+        const compressed = await compressTopicHistory({ topicId, handle }, actor);
+        historySummary = compressed.summaryText;
+        modelHistory = messagesAfterBoundary(history, {
+          id: compressed.summaryUpToMessageId,
+          groupId: compressed.summaryUpToGroupId,
+        });
+      } catch (caught) {
+        logger.warn(
+          {
+            topicId,
+            errorName: caught instanceof Error ? caught.name : undefined,
+          },
+          "history compression failed; continuing with the persisted summary",
+        );
+      }
+    }
   }
 
   // Route attachments *before* any topic row exists. An unroutable attachment
@@ -164,7 +198,7 @@ export const POST = withErrorHandling(async (request) => {
   // topic. The persisted parts keep their file references (the UI renders
   // attachment cards from them); only the model payload is rewritten.
   const routedMessages = await resolveAttachmentsForModel(
-    [...history, userMessage],
+    [...modelHistory, userMessage],
     {
       inputModalities: selected.inputModalities,
       apiFormat: handle.apiFormat,
@@ -228,6 +262,7 @@ export const POST = withErrorHandling(async (request) => {
       systemPrompt,
       searchEnabled: searchTools !== null,
       timeZone: input.timeZone,
+      historySummary,
     }),
     abortSignal,
     // One retry, not the SDK default of two: the backoff doubles otherwise.

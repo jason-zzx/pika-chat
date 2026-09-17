@@ -42,6 +42,9 @@ export const chatMessages = pgTable(
     ),
     modelId: text("model_id"),
     reasoningMs: integer("reasoning_ms"),
+    // Per-version translations keyed by BCP-47 target language code
+    // ({ "zh-CN": "…" }); null until the first translation of the row.
+    translations: jsonb("translations").$type<Record<string, string>>(),
     // Version group: rows sharing a groupId are versions of the same answer
     // slot; a standalone message forms a single-version group (groupId = id).
     groupId: text("group_id").notNull(),

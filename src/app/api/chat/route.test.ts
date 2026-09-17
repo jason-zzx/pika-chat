@@ -13,6 +13,8 @@ const {
   touchTopicUpdatedAt,
   resolveSearchProviderCredentials,
   createTopicForChat,
+  getTopicSummaryState,
+  compressTopicHistory,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
   resolveAvailableModels: vi.fn(),
@@ -26,6 +28,8 @@ const {
   touchTopicUpdatedAt: vi.fn(),
   resolveSearchProviderCredentials: vi.fn(),
   createTopicForChat: vi.fn(),
+  getTopicSummaryState: vi.fn(),
+  compressTopicHistory: vi.fn(),
 }));
 
 vi.mock("next-intl/server", () => ({
@@ -49,6 +53,13 @@ vi.mock("@/server/services/topic.service", () => ({
 vi.mock("@/server/services/search-provider.service", () => ({
   resolveSearchProviderCredentials,
 }));
+// Keep the real token-estimation and boundary logic; stub only the two
+// database-touching functions.
+vi.mock("@/server/services/compression.service", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/server/services/compression.service")>();
+  return { ...actual, getTopicSummaryState, compressTopicHistory };
+});
 vi.mock("@/server/ai/search/tool", () => ({
   buildSearchTools: vi.fn(),
   toolTurnStepSettings: vi.fn(() => ({})),
@@ -98,6 +109,7 @@ vi.mock("@/server/logger", () => ({
 }));
 
 import { APICallError } from "ai";
+import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
 
 import { AppError } from "@/server/errors";
 
@@ -143,6 +155,7 @@ beforeEach(() => {
   listTopicMessages.mockResolvedValue([]);
   resolveSearchProviderCredentials.mockResolvedValue([]);
   resolveAttachmentsForModel.mockReset();
+  getTopicSummaryState.mockResolvedValue(null);
 });
 
 describe("POST /api/chat attachment routing", () => {
@@ -315,5 +328,204 @@ describe("POST /api/chat provider failure", () => {
     await response.text();
 
     expect(streamTextOptions.current).toMatchObject({ maxRetries: 1 });
+  });
+});
+
+const STREAM_USAGE = {
+  inputTokens: {
+    total: 1,
+    noCache: 1,
+    cacheRead: undefined,
+    cacheWrite: undefined,
+  },
+  outputTokens: { total: 1, text: 1, reasoning: undefined },
+};
+
+/** A model that streams a one-word answer and finishes cleanly. */
+function okModel() {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: convertArrayToReadableStream([
+        { type: "text-start", id: "t1" },
+        { type: "text-delta", id: "t1", delta: "ok" },
+        { type: "text-end", id: "t1" },
+        {
+          type: "finish",
+          finishReason: { unified: "stop", raw: undefined },
+          usage: STREAM_USAGE,
+        },
+      ]),
+    }),
+  });
+}
+
+const LONG_TEXT = "a".repeat(4000);
+const LONG_HISTORY = [
+  { id: "old-1", role: "user", parts: [{ type: "text", text: LONG_TEXT }] },
+  { id: "old-2", role: "assistant", parts: [{ type: "text", text: LONG_TEXT }] },
+];
+
+function sendTurn() {
+  return POST(
+    chatRequest({
+      assistantId: "assistant-1",
+      topicId: "topic-1",
+      providerConfigId: "cfg-1",
+      modelId: "model-1",
+      message: {
+        id: "message-1",
+        role: "user",
+        parts: [{ type: "text", text: "hi" }],
+      },
+    }),
+  );
+}
+
+describe("POST /api/chat history compression", () => {
+  beforeEach(() => {
+    resolveOwnedFileParts.mockResolvedValue([]);
+    resolveAttachmentsForModel.mockImplementation(
+      async (messages: unknown) => messages,
+    );
+    // ~4000 estimated tokens of history against a 1000-token window trips
+    // the 80% threshold.
+    resolveAvailableModels.mockResolvedValue([
+      {
+        configId: "cfg-1",
+        modelId: "model-1",
+        inputModalities: ["text"],
+        reasoning: false,
+        reasoningOptions: [],
+        contextTokens: 1000,
+      },
+    ]);
+    listTopicMessages.mockResolvedValue(LONG_HISTORY);
+    createChatModelHandle.mockResolvedValue({
+      model: okModel(),
+      describeError: () => ({ kind: "key", key: "generic" }),
+      apiFormat: "openai-compatible",
+      providerConfigId: "cfg-1",
+      filesApi: null,
+    });
+  });
+
+  it("auto-compresses over the threshold: the summary rides the instructions and only post-boundary messages reach the model", async () => {
+    compressTopicHistory.mockResolvedValue({
+      summaryText: "early chat summary",
+      summaryUpToMessageId: "old-2",
+      summaryUpToGroupId: "old-2",
+      compressedCount: 2,
+    });
+
+    const response = await sendTurn();
+    await response.text();
+
+    expect(compressTopicHistory).toHaveBeenCalledWith(
+      { topicId: "topic-1", handle: expect.anything() },
+      ACTOR,
+    );
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).toContain("early chat summary");
+    // The boundary covered every history row, so the model payload is the
+    // new user message alone.
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "message-1", role: "user" })],
+      expect.anything(),
+    );
+  });
+
+  it("continues with the full uncompressed history when summary generation fails", async () => {
+    compressTopicHistory.mockRejectedValue(new Error("provider down"));
+
+    const response = await sendTurn();
+    await response.text();
+
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).not.toContain("compressed");
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: "old-1" }),
+        expect.objectContaining({ id: "old-2" }),
+        expect.objectContaining({ id: "message-1" }),
+      ],
+      expect.anything(),
+    );
+  });
+
+  it("reuses the persisted summary without re-compressing under the threshold", async () => {
+    resolveAvailableModels.mockResolvedValue([
+      {
+        configId: "cfg-1",
+        modelId: "model-1",
+        inputModalities: ["text"],
+        reasoning: false,
+        reasoningOptions: [],
+        contextTokens: 256000,
+      },
+    ]);
+    getTopicSummaryState.mockResolvedValue({
+      summaryText: "old summary",
+      summaryUpToMessageId: "old-2",
+      summaryUpToGroupId: "old-2",
+    });
+
+    const response = await sendTurn();
+    await response.text();
+
+    expect(compressTopicHistory).not.toHaveBeenCalled();
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).toContain("old summary");
+    // Everything up to the boundary is summarized away; the model only gets
+    // the new user message.
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "message-1", role: "user" })],
+      expect.anything(),
+    );
+  });
+
+  it("keeps the persisted summary when there is nothing new to fold in", async () => {
+    // Tiny window: the threshold is exceeded, but the boundary already covers
+    // every history row, so no compression request should be made.
+    getTopicSummaryState.mockResolvedValue({
+      summaryText: "old summary",
+      summaryUpToMessageId: "old-2",
+      summaryUpToGroupId: "old-2",
+    });
+
+    const response = await sendTurn();
+    await response.text();
+
+    expect(compressTopicHistory).not.toHaveBeenCalled();
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).toContain("old summary");
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "message-1", role: "user" })],
+      expect.anything(),
+    );
+  });
+
+  it("retains the persisted summary and post-boundary history when re-compression fails", async () => {
+    getTopicSummaryState.mockResolvedValue({
+      summaryText: "old summary",
+      summaryUpToMessageId: "old-1",
+      summaryUpToGroupId: "old-1",
+    });
+    compressTopicHistory.mockRejectedValue(new Error("provider down"));
+
+    const response = await sendTurn();
+    await response.text();
+
+    expect(compressTopicHistory).toHaveBeenCalled();
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).toContain("old summary");
+    // The persisted boundary still clips old-1; the failure must not revert to
+    // the full history (which the summary already covers) nor drop the summary.
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: "old-2" }),
+        expect.objectContaining({ id: "message-1" }),
+      ],
+      expect.anything(),
+    );
   });
 });

@@ -6,6 +6,7 @@ import {
   searchModeSchema,
   searchWebToolOutputSchema,
 } from "@/lib/schemas/search-provider";
+import { TRANSLATE_TARGET_LANGUAGE_CODES } from "@/lib/translate/languages";
 
 export const chatMessageOutcomeSchema = z.enum([
   "completed",
@@ -35,6 +36,8 @@ export const chatMetadataSchema = z.object({
   versionCount: z.number().int().positive().optional(),
   // All version ids in the group, oldest first.
   versionIds: z.array(z.string()).optional(),
+  // Per-version translations keyed by BCP-47 target language code.
+  translations: z.record(z.string(), z.string()).optional(),
 });
 export type ChatMetadata = z.infer<typeof chatMetadataSchema>;
 
@@ -101,6 +104,20 @@ export const regenerateMessageRequestSchema = z.object({
   reasoningEffort: z.string().trim().min(1).optional(),
   searchMode: searchModeSchema.optional(),
   timeZone: z.string().trim().min(1).max(64).optional(),
+});
+
+export const translateMessageRequestSchema = z.object({
+  messageId: z.string().min(1),
+  targetLang: z.enum(TRANSLATE_TARGET_LANGUAGE_CODES),
+  providerConfigId: z.string().min(1),
+  modelId: z.string().min(1),
+});
+export type TranslateMessageRequest = z.infer<
+  typeof translateMessageRequestSchema
+>;
+
+export const translateMessageResponseSchema = z.object({
+  translation: z.string(),
 });
 
 // Persisted shape of a tool invocation (searchWeb / fetchPage). Mirrors the
@@ -192,3 +209,11 @@ export const chatMessagesResponseSchema = z.object({
   messages: z.array(chatUIMessageSchema),
 });
 export type ChatMessagesResponse = z.infer<typeof chatMessagesResponseSchema>;
+
+/**
+ * UI-side message-list shape (`chatKeys.history`): the parsed wire messages
+ * widened to the `ChatUIMessage` role union. `listTopicMessages` widens once at
+ * the API boundary, which is what lets cache writers map entries without a
+ * cast — see the translation spec's cache-merge contract.
+ */
+export type ChatHistoryData = { messages: ChatUIMessage[] };

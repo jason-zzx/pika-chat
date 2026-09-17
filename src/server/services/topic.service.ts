@@ -6,6 +6,7 @@ import {
   type RenameTopicInput,
   type SetTopicFavoriteInput,
   type Topic,
+  type TopicDetail,
 } from "@/lib/schemas/topic";
 import { newTopicId } from "@/lib/id";
 import type { Actor } from "@/server/auth/actor";
@@ -140,6 +141,31 @@ export async function findTopicForActor(
     .select(topicColumns)
     .from(topics)
     .innerJoin(assistants, eq(assistants.id, topics.assistantId))
+    .where(and(eq(topics.id, id), eq(assistants.ownerId, actor.userId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** The shared projection plus the compression boundary. The summary columns
+ * are deliberately not in `topicColumns` — only this detail read needs
+ * them, so list endpoints keep their existing shape. */
+export async function findTopicDetailForActor(
+  id: string,
+  actor: Actor,
+): Promise<TopicDetail | null> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      ...topicColumns,
+      summaryUpToMessageId: topics.summaryUpToMessageId,
+      // The boundary's version group (null when the row no longer resolves),
+      // so the client marker and lock survive a version switch.
+      summaryUpToGroupId: chatMessages.groupId,
+      summaryText: topics.summaryText,
+    })
+    .from(topics)
+    .innerJoin(assistants, eq(assistants.id, topics.assistantId))
+    .leftJoin(chatMessages, eq(chatMessages.id, topics.summaryUpToMessageId))
     .where(and(eq(topics.id, id), eq(assistants.ownerId, actor.userId)))
     .limit(1);
   return rows[0] ?? null;

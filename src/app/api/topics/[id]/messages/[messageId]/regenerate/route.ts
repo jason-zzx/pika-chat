@@ -14,9 +14,8 @@ import {
   type ChatMessageOutcome,
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
-import { createChatModelHandle } from "@/server/ai/chat-model";
+import { requireModelForActor } from "@/server/ai/require-model";
 import { resolveAttachmentsForModel } from "@/server/ai/attachments";
-import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
@@ -39,6 +38,11 @@ import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import { getTranslations } from "next-intl/server";
+import {
+  boundaryFromSummaryState,
+  getTopicSummaryState,
+  messagesAfterBoundary,
+} from "@/server/services/compression.service";
 import {
   appendAssistantMessage,
   resolveRegenerateTarget,
@@ -71,31 +75,17 @@ export const POST = withErrorHandling(async (request, context) => {
   const messageId = await requireParam(context, "messageId", "message.notFound");
   const input = regenerateMessageRequestSchema.parse(await request.json());
 
-  const available = await resolveAvailableModels(actor);
-  const selected = available.find(
-    (model) =>
-      model.configId === input.providerConfigId &&
-      model.modelId === input.modelId,
-  );
-  if (!selected) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      400,
-      "model.notAvailable",
-    );
-  }
-  const reasoningEffort = resolvedReasoningEffort(
-    selected,
-    input.reasoningEffort,
-  );
-
-  const handle = await createChatModelHandle(
+  const { selected, handle } = await requireModelForActor(
     {
       providerConfigId: input.providerConfigId,
       modelId: input.modelId,
     },
     actor,
     { builtinSearch: input.searchMode === "builtin" },
+  );
+  const reasoningEffort = resolvedReasoningEffort(
+    selected,
+    input.reasoningEffort,
   );
 
   // Tool mode: resolve the caller's search credentials once per request. With
@@ -123,11 +113,20 @@ export const POST = withErrorHandling(async (request, context) => {
     { topicId, messageId },
     actor,
   );
+  // Align with /api/chat: reuse the topic's persisted summary — clip the
+  // history to the compression boundary and carry the summary into the
+  // instructions. No new compression is triggered here (AC1b).
+  const summaryState = await getTopicSummaryState(topicId, actor);
+  const historySummary = summaryState?.summaryText ?? null;
+  const modelHistory = messagesAfterBoundary(
+    history,
+    boundaryFromSummaryState(summaryState),
+  );
   // Regeneration runs on the composer's current model, so historical
   // attachments are re-routed here: switching to a text-only model degrades a
   // PDF to its cached extraction, switching to a vision model inlines images.
   const modelMessages = await replayModelMessages(
-    await resolveAttachmentsForModel(history, {
+    await resolveAttachmentsForModel(modelHistory, {
       inputModalities: selected.inputModalities,
       apiFormat: handle.apiFormat,
       providerConfigId: handle.providerConfigId,
@@ -172,6 +171,7 @@ export const POST = withErrorHandling(async (request, context) => {
       systemPrompt: topicContext.assistant.systemPrompt,
       searchEnabled: searchTools !== null,
       timeZone: input.timeZone,
+      historySummary,
     }),
     abortSignal,
     // One retry, not the SDK default of two: the backoff doubles otherwise.

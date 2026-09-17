@@ -42,6 +42,7 @@ function row(overrides: Partial<ChatMessageRow>): ChatMessageRow {
     providerConfigId: null,
     modelId: null,
     reasoningMs: null,
+    translations: null,
     groupId: "msg-1",
     isSelected: true,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -268,6 +269,7 @@ describe("rowToChatUIMessage", () => {
         providerConfigId: null,
         modelId: null,
         reasoningMs: null,
+        translations: null,
         createdAt: new Date("2026-01-01T12:34:56.000Z"),
       }),
     ).toEqual({ createdAt: "2026-01-01T12:34:56.000Z" });

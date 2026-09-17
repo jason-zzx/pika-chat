@@ -1,4 +1,4 @@
-import { MockLanguageModelV3 } from "ai/test";
+import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
 import { APICallError } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,7 @@ const {
   findTopicContextForActor,
   touchTopicUpdatedAt,
   resolveSearchProviderCredentials,
+  getTopicSummaryState,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
   resolveAvailableModels: vi.fn(),
@@ -22,6 +23,7 @@ const {
   findTopicContextForActor: vi.fn(),
   touchTopicUpdatedAt: vi.fn(),
   resolveSearchProviderCredentials: vi.fn(),
+  getTopicSummaryState: vi.fn(),
 }));
 
 vi.mock("next-intl/server", () => ({
@@ -76,6 +78,25 @@ vi.mock("@/server/services/topic.service", () => ({
 vi.mock("@/server/services/search-provider.service", () => ({
   resolveSearchProviderCredentials,
 }));
+// Keep the real boundary-clip logic; stub only the database read.
+vi.mock("@/server/services/compression.service", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/server/services/compression.service")>();
+  return { ...actual, getTopicSummaryState };
+});
+const streamTextOptions = vi.hoisted(() => ({
+  current: undefined as unknown,
+}));
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    streamText: (options: Parameters<typeof actual.streamText>[0]) => {
+      streamTextOptions.current = options;
+      return actual.streamText(options);
+    },
+  };
+});
 vi.mock("@/server/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -115,6 +136,7 @@ function failingModel(error: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   requireActor.mockResolvedValue(ACTOR);
+  getTopicSummaryState.mockResolvedValue(null);
   resolveAvailableModels.mockResolvedValue([
     {
       configId: "cfg-1",
@@ -182,5 +204,136 @@ describe("POST regenerate provider failure", () => {
     );
     expect(body).toContain(PROVIDER_MESSAGE);
     expect(body).not.toContain("An error occurred.");
+  });
+});
+
+const STREAM_USAGE = {
+  inputTokens: {
+    total: 1,
+    noCache: 1,
+    cacheRead: undefined,
+    cacheWrite: undefined,
+  },
+  outputTokens: { total: 1, text: 1, reasoning: undefined },
+};
+
+/** A model that streams a one-word answer and finishes cleanly. */
+function okModel() {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: convertArrayToReadableStream([
+        { type: "text-start", id: "t1" },
+        { type: "text-delta", id: "t1", delta: "ok" },
+        { type: "text-end", id: "t1" },
+        {
+          type: "finish",
+          finishReason: { unified: "stop", raw: undefined },
+          usage: STREAM_USAGE,
+        },
+      ]),
+    }),
+  });
+}
+
+// AC1b: regenerating inside a compressed topic must see the same trimmed
+// context the chat route would — summary in the instructions, only
+// post-boundary messages in the payload — without triggering compression.
+describe("POST regenerate with a compressed topic", () => {
+  const HISTORY = [
+    { id: "h-1", role: "user", parts: [{ type: "text", text: "old turn" }] },
+    {
+      id: "h-2",
+      role: "assistant",
+      parts: [{ type: "text", text: "old answer" }],
+    },
+    { id: "h-3", role: "user", parts: [{ type: "text", text: "new turn" }] },
+  ];
+
+  beforeEach(() => {
+    resolveAttachmentsForModel.mockImplementation(
+      async (messages: unknown) => messages,
+    );
+    resolveRegenerateTarget.mockResolvedValue({
+      targetGroupId: "group-1",
+      history: HISTORY,
+    });
+    createChatModelHandle.mockResolvedValue({
+      model: okModel(),
+      describeError: () => ({ kind: "key", key: "generic" }),
+      apiFormat: "openai-compatible",
+      providerConfigId: "cfg-1",
+      filesApi: null,
+    });
+  });
+
+  it("carries the persisted summary in the instructions and only sends post-boundary messages", async () => {
+    getTopicSummaryState.mockResolvedValue({
+      summaryText: "early chat summary",
+      summaryUpToMessageId: "h-1",
+      summaryUpToGroupId: "h-1",
+    });
+
+    const response = await POST(regenerateRequest(), CONTEXT);
+    await response.text();
+
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).toContain("early chat summary");
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: "h-2" }),
+        expect.objectContaining({ id: "h-3" }),
+      ],
+      expect.anything(),
+    );
+  });
+
+  it("clips by boundary group after the boundary group's selected version switched", async () => {
+    getTopicSummaryState.mockResolvedValue({
+      summaryText: "early chat summary",
+      summaryUpToMessageId: "h-1",
+      summaryUpToGroupId: "group-h1",
+    });
+    // The persisted boundary row h-1 is no longer the selected one; its group
+    // now selects h-1b, so id-only matching would revert to the full history.
+    resolveRegenerateTarget.mockResolvedValue({
+      targetGroupId: "group-1",
+      history: [
+        {
+          id: "h-1b",
+          role: "assistant",
+          parts: [{ type: "text", text: "old answer v2" }],
+          metadata: { groupId: "group-h1" },
+        },
+        { id: "h-3", role: "user", parts: [{ type: "text", text: "new turn" }] },
+      ],
+    });
+
+    const response = await POST(regenerateRequest(), CONTEXT);
+    await response.text();
+
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).toContain("early chat summary");
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "h-3" })],
+      expect.anything(),
+    );
+  });
+
+  it("keeps the full history and no summary when the topic was never compressed", async () => {
+    const response = await POST(regenerateRequest(), CONTEXT);
+    await response.text();
+
+    const options = streamTextOptions.current as { instructions: string };
+    expect(options.instructions).not.toContain(
+      "Summary of the earlier conversation",
+    );
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: "h-1" }),
+        expect.objectContaining({ id: "h-2" }),
+        expect.objectContaining({ id: "h-3" }),
+      ],
+      expect.anything(),
+    );
   });
 });

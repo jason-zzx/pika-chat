@@ -52,23 +52,39 @@ function currentDateLine(now: Date, timeZone?: string): string {
  *   1. the assistant's custom system prompt, when set
  *   2. the current date — always, so time-sensitive reasoning ("latest")
  *      is anchored to today in every mode, not just tool mode (A)
- *   3. query-construction guidance + the citation directive, only when the
+ *   3. the rolling history summary, when earlier messages were compressed
+ *      out of the message list (会话历史压缩)
+ *   4. query-construction guidance + the citation directive, only when the
  *      turn registers search tools (B)
  */
 export function buildChatInstructions(input: {
   systemPrompt?: string | null;
   searchEnabled?: boolean;
   timeZone?: string;
+  /** Rolling summary of the compressed early history; replaces those
+   * messages in the model's view. */
+  historySummary?: string | null;
   now?: Date;
 }): string {
-  const { systemPrompt, searchEnabled = false, timeZone, now = new Date() } =
-    input;
+  const {
+    systemPrompt,
+    searchEnabled = false,
+    timeZone,
+    historySummary,
+    now = new Date(),
+  } = input;
   const sections: string[] = [];
   const trimmed = systemPrompt?.trim();
   if (trimmed) {
     sections.push(trimmed);
   }
   sections.push(currentDateLine(now, timeZone));
+  const summary = historySummary?.trim();
+  if (summary) {
+    sections.push(
+      `Summary of the earlier conversation (compressed to fit the context window):\n${summary}`,
+    );
+  }
   if (searchEnabled) {
     sections.push(SEARCH_QUERY_GUIDANCE, CITATION_DIRECTIVE);
   }

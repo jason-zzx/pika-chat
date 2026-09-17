@@ -82,4 +82,31 @@ describe("buildChatInstructions", () => {
     expect(result).toContain(SEARCH_QUERY_GUIDANCE);
     expect(result).toContain(CITATION_DIRECTIVE);
   });
+
+  it("injects the history summary after the date line and before search directives", () => {
+    const result = buildChatInstructions({
+      systemPrompt: "Be helpful.",
+      searchEnabled: true,
+      historySummary: "The user decided to ship on Friday.",
+      now,
+      timeZone: UTC,
+    });
+    expect(result).toContain("The user decided to ship on Friday.");
+    expect(result.indexOf("Current date:")).toBeLessThan(
+      result.indexOf("The user decided to ship on Friday."),
+    );
+    expect(result.indexOf("The user decided to ship on Friday.")).toBeLessThan(
+      result.indexOf(SEARCH_QUERY_GUIDANCE),
+    );
+  });
+
+  it("omits the summary section for null or blank summaries", () => {
+    const without = buildChatInstructions({ now, timeZone: UTC });
+    expect(
+      buildChatInstructions({ historySummary: null, now, timeZone: UTC }),
+    ).toBe(without);
+    expect(
+      buildChatInstructions({ historySummary: "   ", now, timeZone: UTC }),
+    ).toBe(without);
+  });
 });

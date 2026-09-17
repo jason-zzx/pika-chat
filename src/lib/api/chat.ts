@@ -2,7 +2,9 @@ import { parseEmpty, parseJson } from "@/lib/api/parse";
 import {
   chatMessagesResponseSchema,
   regenerateMessageRequestSchema,
-  type ChatMessagesResponse,
+  translateMessageRequestSchema,
+  translateMessageResponseSchema,
+  type ChatHistoryData,
 } from "@/lib/schemas/chat";
 import type { z } from "zod";
 
@@ -10,9 +12,15 @@ function messageUrl(topicId: string, messageId: string): string {
   return `/api/topics/${encodeURIComponent(topicId)}/messages/${encodeURIComponent(messageId)}`;
 }
 
+/**
+ * Parsed through `chatMessagesResponseSchema` (the narrowed wire shape) but
+ * declared as `ChatUIMessage[]`: the UI works with the wider role union, and
+ * the wider type is what callers write back into the query cache. Widening
+ * here, once, keeps every other message-list site free of casts.
+ */
 export async function listTopicMessages(
   topicId: string,
-): Promise<ChatMessagesResponse> {
+): Promise<ChatHistoryData> {
   const response = await fetch(
     `/api/topics/${encodeURIComponent(topicId)}/messages`,
   );
@@ -46,6 +54,27 @@ export async function selectMessageVersion(
     method: "POST",
   });
   await parseEmpty(response);
+}
+
+export type TranslateMessageRequest = z.infer<
+  typeof translateMessageRequestSchema
+>;
+
+/**
+ * Translates one message version (PRD 消息翻译). The server persists the
+ * result on the message row and answers cache hits without a model call.
+ */
+export async function translateMessage(
+  input: TranslateMessageRequest,
+): Promise<{ translation: string }> {
+  const response = await fetch("/api/translate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJson(response, (data) =>
+    translateMessageResponseSchema.parse(data),
+  );
 }
 
 export type RegenerateMessageRequest = z.infer<

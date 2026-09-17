@@ -173,6 +173,29 @@ async function seedTurn(
   });
 }
 
+/** Persists the rolling-compression state directly; the lock reads it from
+ * `topics` exactly as the compression service writes it. */
+async function setCompressionBoundary(
+  topicId: string,
+  boundaryMessageId: string,
+): Promise<void> {
+  await db
+    .update(topics)
+    .set({
+      summaryText: "rolling summary",
+      summaryUpToMessageId: boundaryMessageId,
+    })
+    .where(eq(topics.id, topicId));
+}
+
+async function storedMessageIds(topicId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .where(eq(chatMessages.topicId, topicId));
+  return rows.map((row) => row.id).sort();
+}
+
 describe("message.service versions", () => {
   beforeEach(async () => {
     await resetState();
@@ -373,6 +396,101 @@ describe("message.service versions", () => {
 
     expect(target.targetGroupId).toBeNull();
     expect(target.history.map((message) => message.id)).toEqual(["m1"]);
+  });
+
+  it("locks delete inside the compressed zone, boundary inclusive", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+    await seedTurn(topicId, actor, { user: "m3", assistant: "m4" });
+    await setCompressionBoundary(topicId, "m2");
+
+    // Boundary message itself and everything before it are immutable.
+    await expect(
+      deleteMessage({ topicId, messageId: "m2" }, actor),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      status: 409,
+      messageKey: "message.compressedLocked",
+    });
+    await expect(
+      deleteMessage({ topicId, messageId: "m1" }, actor),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    // Nothing was removed.
+    expect(await storedMessageIds(topicId)).toEqual(["m1", "m2", "m3", "m4"]);
+  });
+
+  it("locks every version of the boundary's own group", async () => {
+    const { actor, topicId } = await setupTopic();
+    await appendUserMessage({ topicId, message: userMessage("m1", "q") }, actor);
+    await appendAssistant(topicId, actor, { id: "m2", text: "first" });
+    await appendAssistant(topicId, actor, {
+      id: "m3",
+      text: "second",
+      groupId: "m2",
+    });
+    // Boundary points at the selected row; the sibling version is covered too.
+    await setCompressionBoundary(topicId, "m3");
+
+    await expect(
+      deleteMessage({ topicId, messageId: "m2" }, actor),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      resolveRegenerateTarget({ topicId, messageId: "m2" }, actor),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await storedMessageIds(topicId)).toEqual(["m1", "m2", "m3"]);
+  });
+
+  it("locks regenerate inside the compressed zone", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+    await seedTurn(topicId, actor, { user: "m3", assistant: "m4" });
+    await setCompressionBoundary(topicId, "m2");
+
+    await expect(
+      resolveRegenerateTarget({ topicId, messageId: "m1" }, actor),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      status: 409,
+      messageKey: "message.compressedLocked",
+    });
+    await expect(
+      resolveRegenerateTarget({ topicId, messageId: "m2" }, actor),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("leaves messages after the boundary fully mutable", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+    await seedTurn(topicId, actor, { user: "m3", assistant: "m4" });
+    await setCompressionBoundary(topicId, "m2");
+
+    const target = await resolveRegenerateTarget(
+      { topicId, messageId: "m3" },
+      actor,
+    );
+    expect(target.targetGroupId).toBe("m4");
+
+    await expect(
+      deleteMessage({ topicId, messageId: "m4" }, actor),
+    ).resolves.toEqual({ deleted: true, groupEmpty: true });
+    expect(await storedMessageIds(topicId)).toEqual(["m1", "m2", "m3"]);
+  });
+
+  it("does not lock an uncompressed topic or an unresolvable boundary", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+
+    // No summary at all: existing behaviour is unchanged.
+    await expect(
+      deleteMessage({ topicId, messageId: "m2" }, actor),
+    ).resolves.toEqual({ deleted: true, groupEmpty: true });
+
+    // A stale boundary id that no longer resolves locks nothing.
+    await setCompressionBoundary(topicId, "gone");
+    await expect(
+      resolveRegenerateTarget({ topicId, messageId: "m1" }, actor),
+    ).resolves.toMatchObject({ targetGroupId: null });
   });
 
   it("builds history from the selected version only", async () => {
