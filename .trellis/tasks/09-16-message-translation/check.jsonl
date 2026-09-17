@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "译文绑定具体消息版本，版本切换语义"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "translations 进入消息 metadata 的 schema 与透出约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "MessageActions 菜单与 MessageItem 译文块的组件约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "lint/typecheck/test 质量门"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量门与组件测试约定"}

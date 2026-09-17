@@ -70,6 +70,8 @@ review blocker, not a style nit.
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
 | [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit |
 | [Chat Message Versions](./chat-message-versions.md) | Regenerate-as-versions contract: group_id/is_selected, selected-version view, regenerate/select/delete endpoints, reseed rule |
+| [Chat History Compression](./chat-history-compression.md) | Rolling summary + inclusive boundary on `topics`, token heuristic + 80% threshold, `historySummary` injection, both streaming routes must trim, failure degrades |
+| [Chat Message Translation](./chat-message-translation.md) | Per-message-version `translations` jsonb map, cache-first `/api/translate`, key-merge persistence, shared language list |
 | [Chat Attachments](./chat-attachments.md) | File upload/download/delete endpoints, `files` table, local-disk `FileStorage`, extraction cache, capability routing (`inputModalities`) and the `Errors.file.*` matrix |
 | [Chat Search Tools](./chat-search-tools.md) | Search provider settings, searchWeb tool + fallback chain, searchMode wiring, builtin fetch injection, tool-part persistence/replay/rendering |
 | [Provider Configs](./provider-configs.md) | Endpoint `apiFormat` (openai-compatible / claude / google), the api-key requirement rule, per-format provider construction + discovery, `addProviderModel` optional metadata overrides vs catalog fill, `metadataSource` marking, `vendorKey` null-vs-undefined |

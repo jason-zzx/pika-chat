@@ -236,6 +236,74 @@ Contracts that are easy to break (from `09-07-chat-renderer-syntax-plugins`):
   without the key segment an already-rendered text block would never
   reparse and its markers would stay literal. The no-citations path keeps
   `key={undefined}` (never remounts) and byte-identical props.
+- **Persisted translation blocks** (`MessageItem`'s `TranslationBlock`,
+  landed in `09-16-message-translation`) render markdown for the same
+  reason, and their `key` must include the language code
+  (`translation-${lang}`): Streamdown's memo ignores prop changes, so a
+  same-row language switch would otherwise keep the previous language's AST.
+  Only the target language's text is passed in; the block is absent when
+  `metadata.translations` is empty. They must also receive the message's
+  `citations` map, or `[n]` markers in the translation render as literal
+  bracket text (a shipped bug from the first cut — see
+  [../backend/chat-message-translation.md](../backend/chat-message-translation.md)).
+  The block is collapsible (real `<button>` header, `aria-expanded` +
+  `aria-controls`, `grid-rows-[1fr]/[0fr]` body, default expanded, one state
+  per language) and sits above a shimmering `role="status"` pending block
+  while a translation is in flight.
+
+---
+
+## Message-list insertions (compression divider)
+
+The history-compression divider (`MessageList`, landed in
+`09-16-history-compression`) renders **after** the boundary message, as a
+`Fragment` sibling of `MessageItem` — the render loop's `key` is
+`metadata.groupId ?? message.id` (versions must not remount), so the divider
+cannot be a wrapper element without changing that keying. It is pure
+presentation: it takes no part in the pin/reserve/`ResizeObserver` scroll
+logic (`chat-scroll-behavior.md`) and must stay that way — a divider that
+performs layout effects would fight the scroll bookkeeping. Absent or
+unmatched boundary → no divider.
+
+**Match by version GROUP, never by row id.** The server sends
+`summaryUpToGroupId` alongside the persisted `summaryUpToMessageId` (the id is
+whatever row was selected when the topic was compressed). One predicate
+(`matchesCompressionBoundary`, `metadata.groupId ?? id` vs the group id with a
+raw-id fallback for boundary rows written before the group was exposed) drives
+**both** the divider and the compressed-zone lock, so they cannot disagree with
+each other or with the server's clipping. Matching by id alone made the divider
+and the lock vanish as soon as the user switched the boundary group's version,
+while the server still rejected edits — a visible-入口-but-always-409 state.
+
+**Collapsible summary (R9)**: when the topic detail carries `summaryText`, the
+divider becomes a real `<button>` (`aria-expanded` + `aria-controls={useId()}`,
+chevron) that reveals the summary through `Markdown`. Default **collapsed**; no
+persisted summary → the original non-interactive divider. Still pure
+presentational — do not wire it into scroll state.
+
+The collapse mechanics themselves are **not** re-implemented per block:
+`CollapseBlock` (`src/components/chat/CollapseBlock.tsx`) owns the real button,
+the `aria-expanded`/`aria-controls` pair, the chevron rotation, the
+`grid-rows-[1fr]/[0fr]` + inner `min-h-0 overflow-hidden` animation, the
+`motion-reduce` opt-out, and the collapsed `aria-hidden` + `inert`. Consumers
+pass `label`, `ariaLabel`, `defaultOpen` and their body — today the translation
+block (open by default) and this summary panel (closed by default).
+`ToolCallShell` still hand-rolls the same mechanics; migrating it is a separate,
+behavior-preserving change. The shimmer text style likewise lives once, in
+`src/components/chat/shimmer.ts`, shared by the thinking row, the translation
+placeholder, and the compression-in-flight row — callers own their font size
+and weight.
+
+**Compressed-zone lock (R10)**: messages at or before the boundary group lose
+their delete and regenerate entries (hidden, not disabled — the server returns
+`CONFLICT` 409 `message.compressedLocked` as the backstop). Copy, translate,
+and version switching stay available.
+
+The manual-compression in-flight row (`compressingHistory`) uses the same
+divider visual language at the **end** of the list, with
+the existing `animate-thinking-shimmer` text and `role="status"`. It is also
+pure presentation, and is only driven by the Composer path — auto-compression
+happens server-side and has no client state.
 
 ---
 

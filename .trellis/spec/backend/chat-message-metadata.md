@@ -24,8 +24,10 @@ them together or the live and reloaded views disagree.
   drizzle migration (`pnpm db:generate` / `pnpm db:migrate`). `createdAt` is
   the exception: column already exists (`timestamptz notNull defaultNow()`).
 - Service: `metadataFromRow(row)` rebuilds `ChatMetadata` from columns —
-  **per role**: user rows get `{ createdAt }` only, assistant rows get the
-  full set. `appendAssistantMessage` takes persistable fields (e.g.
+  **per role**: user rows get `{ createdAt, translations? }`, assistant rows
+  get the full set. (`translations` is a per-version language→text map added
+  for lazy translation — see
+  [chat-message-translation.md](./chat-message-translation.md).) `appendAssistantMessage` takes persistable fields (e.g.
   `reasoningMs`, `createdAt?: Date`) and spreads them into `.values(...)`
   (`...(input.createdAt ? { createdAt: input.createdAt } : {})` so omitted
   fields fall back to column defaults).
@@ -127,9 +129,13 @@ messageMetadata: ({ part }) =>
 #### Correct
 
 ```ts
-// Per-role metadata; both roles carry createdAt.
+// Per-role metadata; both roles carry createdAt (assistant rows also carry
+translations, provider/model usage fields, etc.).
 if (row.role !== "assistant") {
-  return { createdAt: row.createdAt.toISOString() };
+  return {
+    createdAt: row.createdAt.toISOString(),
+    ...(row.translations ? { translations: row.translations } : {}),
+  };
 }
 
 // Early emit once from the execute closure, driven by onChunk observations;

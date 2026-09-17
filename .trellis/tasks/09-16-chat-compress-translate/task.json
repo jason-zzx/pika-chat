@@ -1,0 +1,29 @@
+{
+  "id": "chat-compress-translate",
+  "name": "chat-compress-translate",
+  "title": "聊天历史压缩与消息翻译",
+  "description": "聊天系统两项增强：(1) 会话历史压缩（长对话上下文压缩）；(2) 消息翻译（消息下方操作区翻译图标，从常用语言菜单选择目标语言）。父任务，负责需求源、任务划分与集成验收。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "zzx",
+  "assignee": "zzx",
+  "createdAt": "2026-09-16",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-16-history-compression",
+    "09-16-message-translation"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "服务端新增 service / API 路由的目录与分层约定"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Drizzle schema 变更与迁移生成约定（topics/chat_messages 新增 nullable 列）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError 错误码与 withErrorHandling 路由错误处理约定"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "新增 Chat.* 文案的中英双语键约定"}

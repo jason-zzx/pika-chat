@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "压缩必须基于已选版本历史（group_id/is_selected 语义）"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "instructions 组装与 metadata 流式语义，buildChatInstructions 扩展点"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "MessageList 插入压缩标记不得破坏既有滚动/跟随行为"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "lint/typecheck/test 质量门"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量门与组件测试约定"}
