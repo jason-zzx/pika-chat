@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-17
+
+### Highlights
+
+- **Context History Compression**: Automatically compress long chat dialogues into rolling summaries when exceeding 80% of the model context budget, with manual compression in Composer, collapsible summary views, and compressed-zone safety locks.
+- **On-Demand Message Translation**: One-shot AI translation for any question or answer into 8 target languages with per-version persistent JSONB caching, native language labels, and preserved citation source mapping.
+- **Curated Theme Presets & Preference Persistence**: 6 new theme presets (Paper, Graphite, Ocean, Forest, Rose, Violet) with light and dark palettes, SSR `<html data-theme>` injection to eliminate hydration flash, and database-backed persistence in user account preferences.
+- **Provider Enable/Disable & Model Search**: Instant toggle to enable or disable provider configurations across the instance, along with real-time substring search and selection locks in the model discovery dialog.
+- **Compact URL Identifiers**: Replaced 36-character UUIDv7 strings with compact `agt_` / `tpc_` Base62 IDs for cleaner address bar navigation while preserving backward compatibility.
+
+### Feats
+
+- **Chat History Compression**:
+  - Auto-triggering: Automatically summarizes early selected-version history and injects it into system instructions when estimated tokens exceed 80% of the model's context window.
+  - Manual trigger: Added a "Compress context" icon button (`ListCollapseIcon`) in the Composer with in-flight shimmering progress status in the message list.
+  - Collapsible summary marker: Rendered an interactive boundary divider in the message list that smoothly expands to reveal the persisted Markdown summary body (collapsed by default).
+  - Version-group boundary tracking: Anchored compression boundaries to version groups (`summary_up_to_group_id`), ensuring branch version switching never duplicates history or drops the marker.
+  - Compressed region safety lock: Protected summarized turns by hiding delete and regenerate actions, backed by server-side 409 Conflict (`message.compressedLocked`) enforcement.
+  - Regenerate alignment: Reuses the persisted summary on non-tail message regenerations without triggering redundant summarization calls.
+- **On-Demand Message Translation**:
+  - 8 target languages: Native support for Simplified Chinese, English, Japanese, Korean, French, German, Spanish, and Russian.
+  - Per-version persistent caching: Stored translations in `chat_messages.translations` (JSONB, per-language key merge) for instant reload and zero redundant model calls.
+  - Collapsible translation cards: Rendered collapsible translation blocks beneath messages, forwarding citation source maps so `[n]` references resolve to interactive source chips.
+  - Responsive state feedback: Added thinking-shimmer placeholder feedback while translation is in flight.
+- **Preset Themes & Appearance Persistence**:
+  - Added 6 curated preset themes with dedicated light/dark CSS token blocks (`data-theme`).
+  - Polished default neutral theme with enhanced border warmth and smoothed dark surface gradients.
+  - Persisted user theme mode and preset in `users.theme_mode` and `users.theme_preset`, server-rendered on each request.
+  - Added visual swatch-card preset picker to `/settings/general` and updated sidebar quick toggle.
+  - Enforced full token coverage via `scripts/check-theme-tokens.mjs` (`pnpm check:themes`).
+- **Provider & Model Governance**:
+  - Added `provider_configs.enabled` toggle; disabled providers are automatically hidden from model pickers and blocked at service authorization boundaries.
+  - Added instant substring filtering and selection locking for already-configured models in `DiscoverModelsDialog`.
+- **Prefixed Short IDs**:
+  - Minted assistants as `agt_` and topics as `tpc_` followed by 12 Base62 characters (~71 bits) using `insertWithShortId` with unique-collision retry protection.
+- **Search Freshness & Date Anchoring**:
+  - Passed provider-reported publication dates (`publishedDate` from Exa/Tavily) into model context and displayed them on search tool cards.
+
+### Fixes
+
+- **Multi-Source Citation Grouping**: Corrected remark parsing and renderer logic so grouped citations (e.g. `[3, 5]`, `[1、2]`, `[2，4]`) render as discrete clickable chips rather than unparsed literal brackets.
+- **Date-Anchored Model Instructions**: Injected client IANA timezone and current calendar date into system instructions via `buildChatInstructions`, eliminating knowledge cutoff drift on time-sensitive queries.
+- **Composer Accessibility**: Uniformly equipped all Composer action icon buttons with aligned `aria-label` and `title` attributes.
+
+### Dev
+
+- **Shared UI Primitives**: Extracted `CollapseBlock` for reusable accessible accordion containers and `shimmer.ts` for unified text shimmer gradient animations.
+- **Centralized Model Availability Gate**: Replaced duplicated resolution checks with `requireModelForActor` across chat, regenerate, and compression routes.
+- **Database Migrations**: Committed migrations `0021_good_luke_cage.sql` (`chat_messages.translations`) and `0022_aberrant_mercury.sql` (`topics.summary_text`, `topics.summary_up_to_message_id`).
+
+### Chore
+
+- Added official MIT license (`LICENSE`).
+
 ## [0.1.1] - 2026-09-15
 
 ### Highlights
