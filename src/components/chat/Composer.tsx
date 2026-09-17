@@ -3,6 +3,7 @@
 import {
   ArrowUpIcon,
   BrainIcon,
+  ListCollapseIcon,
   MapIcon,
   Maximize2Icon,
   Minimize2Icon,
@@ -66,6 +67,10 @@ type ComposerProps = {
   onOpenChatMap: () => void;
   /** No messages yet — there is nothing to jump to. */
   chatMapDisabled?: boolean;
+  /** Manual history compression (PRD R2). Disabled on drafts (no topic yet)
+   * and while a turn is streaming. */
+  onCompress?: () => void;
+  compressDisabled?: boolean;
   /** Attachments staged for the active draft (upload-on-selection). */
   attachments?: StagedAttachment[];
   onAddFiles?: (files: File[]) => void;
@@ -90,12 +95,15 @@ export default function Composer({
   onReasoningEffortChange,
   onOpenChatMap,
   chatMapDisabled = false,
+  onCompress,
+  compressDisabled = false,
   attachments = [],
   onAddFiles,
   onRemoveAttachment,
   onRetryAttachment,
 }: ComposerProps) {
   const t = useTranslations("Chat.Composer");
+  const tCompression = useTranslations("Chat.Compression");
   const tFiles = useTranslations("Files");
   const models = useAvailableModels();
   const selected = findAvailableModel(models.data, model);
@@ -232,6 +240,7 @@ export default function Composer({
                     // bg-background).
                     className="bg-transparent"
                     aria-label={tFiles("attach")}
+                    title={tFiles("attach")}
                     disabled={inFlight || attachmentCapReached}
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -262,6 +271,19 @@ export default function Composer({
               ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              {onCompress ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={tCompression("compress")}
+                  title={tCompression("compress")}
+                  disabled={compressDisabled}
+                  onClick={onCompress}
+                >
+                  <ListCollapseIcon aria-hidden="true" />
+                </Button>
+              ) : null}
               <Button
                 // Composer root is a <form>: without an explicit type this
                 // would submit the draft.
@@ -269,6 +291,7 @@ export default function Composer({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t("chatMap")}
+                title={t("chatMap")}
                 disabled={chatMapDisabled}
                 onClick={onOpenChatMap}
               >
@@ -280,6 +303,7 @@ export default function Composer({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={expanded ? t("collapse") : t("expand")}
+                  title={expanded ? t("collapse") : t("expand")}
                   onClick={() => setExpanded((current) => !current)}
                 >
                   {expanded ? (
@@ -296,6 +320,7 @@ export default function Composer({
                   size="icon-sm"
                   className="rounded-full"
                   aria-label={t("stop")}
+                  title={t("stop")}
                   onClick={onStop}
                 >
                   <SquareIcon aria-hidden="true" />
@@ -306,6 +331,7 @@ export default function Composer({
                   size="icon-sm"
                   className="rounded-full"
                   aria-label={t("send")}
+                  title={t("send")}
                   disabled={!canSend}
                 >
                   <ArrowUpIcon aria-hidden="true" />

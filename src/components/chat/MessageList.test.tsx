@@ -624,3 +624,258 @@ describe("MessageList regenerate placeholder shimmer (B5/R7)", () => {
     expect(screen.getByText("later answer")).toBeInTheDocument();
   });
 });
+
+describe("MessageList history compression marker (PRD R3/AC4)", () => {
+  it("renders compression marker after the boundary message", () => {
+    const messages: ChatUIMessage[] = [
+      {
+        id: "u1",
+        role: "user",
+        parts: [{ type: "text", text: "first question" }],
+      },
+      assistantMessage("a1", "first answer", "g1"),
+      {
+        id: "u2",
+        role: "user",
+        parts: [{ type: "text", text: "second question" }],
+      },
+      assistantMessage("a2", "second answer", "g2"),
+    ];
+
+    const { rerender } = renderWithIntl(
+      <MessageList
+        messages={messages}
+        streaming={false}
+        compression={{ upToMessageId: "a1" }}
+      />,
+    );
+
+    expect(
+      screen.getByText("Earlier conversation compressed"),
+    ).toBeInTheDocument();
+
+    // When summaryUpToMessageId is null or unmatched, no marker is rendered
+    rerender(
+      wrapWithIntl(
+        <MessageList
+          messages={messages}
+          streaming={false}
+          compression={{ upToMessageId: null }}
+        />,
+      ),
+    );
+    expect(
+      screen.queryByText("Earlier conversation compressed"),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("MessageList compression summary panel (PRD R9/AC10)", () => {
+  const messages: ChatUIMessage[] = [
+    userMessage("u1", "first question"),
+    assistantMessage("a1", "first answer", "g1"),
+    userMessage("u2", "second question"),
+    assistantMessage("a2", "second answer", "g2"),
+  ];
+
+  it("is collapsed by default and toggles the persisted summary text", () => {
+    renderWithIntl(
+      <MessageList
+        messages={messages}
+        streaming={false}
+        compression={{
+          upToMessageId: "a1",
+          summaryText: "The user asked a first question.",
+        }}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Show the summary" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const panel = document.getElementById(
+      toggle.getAttribute("aria-controls") ?? "",
+    );
+    expect(panel).toHaveAttribute("aria-hidden", "true");
+    expect(
+      screen.getByText("The user asked a first question."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    const opened = screen.getByRole("button", { name: "Hide the summary" });
+    expect(opened).toHaveAttribute("aria-expanded", "true");
+    expect(panel).toHaveAttribute("aria-hidden", "false");
+
+    fireEvent.click(opened);
+    expect(
+      screen.getByRole("button", { name: "Show the summary" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps the marker non-interactive when no summary is persisted", () => {
+    renderWithIntl(
+      <MessageList
+        messages={messages}
+        streaming={false}
+        compression={{ upToMessageId: "a1" }}
+      />,
+    );
+
+    expect(
+      screen.getByText("Earlier conversation compressed"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /summary/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("MessageList compression lock (PRD R10/AC11)", () => {
+  it("hides delete and regenerate entries at or before the boundary", () => {
+    renderWithIntl(
+      <MessageList
+        messages={[
+          userMessage("u1", "first question"),
+          assistantMessage("a1", "first answer", "g1"),
+          userMessage("u2", "second question"),
+          assistantMessage("a2", "second answer", "g2"),
+        ]}
+        streaming={false}
+        compression={{ upToMessageId: "a1" }}
+        onRegenerate={vi.fn()}
+        onDelete={vi.fn()}
+        onDeleteRegenerate={vi.fn()}
+      />,
+    );
+
+    // The two pre-boundary messages (u1, a1) lose the standalone regenerate
+    // entry; the two after it keep it.
+    expect(
+      screen.getAllByRole("button", { name: "Regenerate response" }),
+    ).toHaveLength(2);
+  });
+
+  it("keeps every entry when no boundary is persisted", () => {
+    renderWithIntl(
+      <MessageList
+        messages={[
+          userMessage("u1", "first question"),
+          assistantMessage("a1", "first answer", "g1"),
+        ]}
+        streaming={false}
+        onRegenerate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getAllByRole("button", { name: "Regenerate response" }),
+    ).toHaveLength(2);
+  });
+
+  it("keeps the lock and marker when the boundary id is a sibling version of the boundary group", () => {
+    renderWithIntl(
+      <MessageList
+        messages={[
+          userMessage("u1", "first question"),
+          // The persisted boundary row was a1, but that group now selects a1b.
+          assistantMessage("a1b", "first answer", "g1"),
+          userMessage("u2", "second question"),
+          assistantMessage("a2", "second answer", "g2"),
+        ]}
+        streaming={false}
+        compression={{
+          upToMessageId: "a1",
+          upToGroupId: "g1",
+          summaryText: "Compressed early turns.",
+        }}
+        onRegenerate={vi.fn()}
+        onDelete={vi.fn()}
+        onDeleteRegenerate={vi.fn()}
+      />,
+    );
+
+    // Group matching keeps the pre-boundary entries hidden and still renders
+    // the summary marker after the boundary group.
+    expect(
+      screen.getAllByRole("button", { name: "Regenerate response" }),
+    ).toHaveLength(2);
+    expect(screen.getByText("Compressed early turns.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Earlier conversation compressed"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("MessageList compression progress (PRD R7/AC8)", () => {
+  it("shows a status divider at the end of the list while compression is in flight", () => {
+    renderWithIntl(
+      <MessageList
+        messages={[
+          userMessage("u1", "question"),
+          assistantMessage("a1", "answer", "g1"),
+        ]}
+        streaming={false}
+        compression={{ upToMessageId: null, inProgress: true }}
+      />,
+    );
+
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Compressing context");
+    // Same shimmer treatment as the thinking / translation indicators.
+    expect(status.querySelector(".animate-thinking-shimmer")).not.toBeNull();
+    // It renders after every message, i.e. at the end of the content column.
+    const articles = screen.getAllByRole("article");
+    expect(status.previousElementSibling).toBe(articles[articles.length - 1]);
+  });
+
+  it("renders no indicator when compression is not in flight", () => {
+    renderWithIntl(
+      <MessageList
+        messages={[
+          userMessage("u1", "question"),
+          assistantMessage("a1", "answer", "g1"),
+        ]}
+        streaming={false}
+      />,
+    );
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});
+
+describe("MessageList translation progress (R5)", () => {
+  it("shows the progress placeholder on the matching message only", () => {
+    renderWithIntl(
+      <MessageList
+        messages={[
+          userMessage("u1", "question one"),
+          assistantMessage("a1", "answer one", "group-1"),
+        ]}
+        streaming={false}
+        translating={{ messageId: "a1", targetLang: "ja" }}
+      />,
+    );
+
+    const statuses = screen.getAllByRole("status");
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toHaveTextContent("Translating to 日本語");
+    // The other message renders no placeholder.
+    expect(
+      screen.getByRole("article", { name: "You" }).querySelector(
+        "[role='status']",
+      ),
+    ).toBeNull();
+  });
+
+  it("renders no placeholder when nothing is in flight", () => {
+    renderWithIntl(
+      <MessageList
+        messages={[assistantMessage("a1", "answer one", "group-1")]}
+        streaming={false}
+      />,
+    );
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});

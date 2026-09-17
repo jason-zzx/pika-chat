@@ -28,18 +28,24 @@ import {
   regenerateTopicMessage,
   selectMessageVersion,
   stopChatStream,
+  translateMessage,
 } from "@/lib/api/chat";
 import {
   apiErrorMessage,
   apiErrorMessageFromUnknown,
   isApiErrorEnvelope,
 } from "@/lib/api/error-message";
+import { compressTopic } from "@/lib/api/topic";
 import {
   assistantTopicHref,
   parseAssistantPath,
 } from "@/lib/assistant-path";
-import type { ChatUIMessage } from "@/lib/schemas/chat";
+import type {
+  ChatHistoryData,
+  ChatUIMessage,
+} from "@/lib/schemas/chat";
 import { localTimeZone } from "@/lib/time-zone";
+import type { TranslateTargetLanguageCode } from "@/lib/translate/languages";
 import {
   composerDraftKey,
   useComposerStore,
@@ -69,7 +75,12 @@ import {
 import { reasoningEffortRequestValue } from "./reasoning-effort";
 import { resolveComposerModel } from "./resolve-composer-model";
 import { shouldRequestTopicTitle } from "./should-request-topic-title";
-import { chatKeys, useChatHistory } from "./use-chat-history";
+import {
+  chatKeys,
+  topicKeys,
+  useChatHistory,
+  useTopicDetail,
+} from "./use-chat-history";
 
 function markLastAssistant(
   current: ChatUIMessage[],
@@ -167,6 +178,7 @@ export default function ChatView({
   const activeTopicId = topicId ?? createdTopicId;
   const pathname = usePathname();
   const history = useChatHistory(activeTopicId);
+  const topicDetail = useTopicDetail(activeTopicId);
   const chatId = topicId ?? "draft";
   const [streamId, setStreamId] = useState<string | null>(null);
   const [regen, setRegen] = useState<{
@@ -174,6 +186,15 @@ export default function ChatView({
     streamingId: string;
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // In-flight translation (R5): shows a placeholder at the target message's
+  // translation slot until the one-shot request resolves.
+  const [translating, setTranslating] = useState<{
+    messageId: string;
+    targetLang: TranslateTargetLanguageCode;
+  } | null>(null);
+  // Manual history compression (PRD R2): in-flight flag disables the button
+  // against double taps.
+  const [compressing, setCompressing] = useState(false);
   // Bumped on every send so MessageList scrolls the new message to the top
   // of the viewport and pins follow-output auto-scroll for the reply.
   const [sendSignal, setSendSignal] = useState(0);
@@ -351,6 +372,11 @@ export default function ChatView({
           }
           void queryClient.invalidateQueries({
             queryKey: chatKeys.history(topic),
+          });
+          // The send may have auto-compressed the history server-side (PRD
+          // R1); refresh the detail so the marker reflects the new boundary.
+          void queryClient.invalidateQueries({
+            queryKey: topicKeys.detail(topic),
           });
         }
       },
@@ -817,6 +843,87 @@ export default function ChatView({
     reseedHistory(activeTopicId);
   }
 
+  /**
+   * PRD 消息翻译： one-shot server translation with the composer's current
+   * model. The result merges into the live message list and the React Query
+   * history cache in place — no list refetch (the server already persisted
+   * it on the message row; a later reseed reads it back).
+   */
+  async function handleTranslate(
+    message: ChatUIMessage,
+    targetLang: TranslateTargetLanguageCode,
+  ) {
+    if (!canActOnMessages || !pickedModel || !activeTopicId) {
+      return;
+    }
+    // Already translated — the server cache is the backstop for the window
+    // between the request and the local merge below.
+    if (message.metadata?.translations?.[targetLang] !== undefined) {
+      return;
+    }
+    setActionError(null);
+    const topic = activeTopicId;
+    const pick = pickedModel;
+    const serverId = await ensureServerMessageId(message, topic);
+    if (!serverId) {
+      return;
+    }
+    // Cleared only when it still describes this request: a second translation
+    // started meanwhile must keep its own placeholder. React batches this
+    // with the merge below, so there is no gap between placeholder and text.
+    const clearTranslating = () =>
+      setTranslating((current) =>
+        current?.messageId === serverId && current.targetLang === targetLang
+          ? null
+          : current,
+      );
+    setTranslating({ messageId: serverId, targetLang });
+    let translation: string;
+    try {
+      ({ translation } = await translateMessage({
+        messageId: serverId,
+        targetLang,
+        providerConfigId: pick.configId,
+        modelId: pick.modelId,
+      }));
+    } catch (caught) {
+      setActionError(apiErrorMessage(caught, tErrors, "actions.translate"));
+      return;
+    } finally {
+      clearTranslating();
+    }
+    const mergeTranslation = (
+      entry: ChatUIMessage,
+      id: string,
+    ): ChatUIMessage =>
+      entry.id === id
+        ? {
+            ...entry,
+            metadata: {
+              ...entry.metadata,
+              translations: {
+                ...entry.metadata?.translations,
+                [targetLang]: translation,
+              },
+            },
+          }
+        : entry;
+    setMessages((current) =>
+      current.map((entry) => mergeTranslation(entry, message.id)),
+    );
+    queryClient.setQueryData<ChatHistoryData | undefined>(
+      chatKeys.history(topic),
+      (data) =>
+        data
+          ? {
+              messages: data.messages.map((entry) =>
+                mergeTranslation(entry, serverId),
+              ),
+            }
+          : data,
+    );
+  }
+
   async function handleSelectVersion(
     message: ChatUIMessage,
     versionId: string,
@@ -904,6 +1011,36 @@ export default function ChatView({
     // The delete is already applied; if regeneration fails to start, the
     // error is surfaced without rolling the delete back.
     await runRegeneration(topic, target, targetIndex, pick, plan);
+  }
+
+  async function handleCompress() {
+    if (
+      !canActOnMessages ||
+      !pickedModel ||
+      !activeTopicId ||
+      compressing
+    ) {
+      return;
+    }
+    setActionError(null);
+    setCompressing(true);
+    try {
+      await compressTopic(activeTopicId, {
+        providerConfigId: pickedModel.configId,
+        modelId: pickedModel.modelId,
+      });
+      // The boundary moved: refresh the detail query so the compression marker
+      // renders after the new boundary message. History itself is untouched.
+      // Awaited on purpose — clearing the in-flight shimmer first would leave a
+      // visible gap where the divider has not arrived yet.
+      await queryClient.invalidateQueries({
+        queryKey: topicKeys.detail(activeTopicId),
+      });
+    } catch (caught) {
+      setActionError(apiErrorMessage(caught, tErrors, "actions.compress"));
+    } finally {
+      setCompressing(false);
+    }
   }
 
   function isFileDrag(event: DragEvent<HTMLElement>): boolean {
@@ -1072,6 +1209,18 @@ export default function ChatView({
           onSelectVersion={(message, versionId) =>
             void handleSelectVersion(message, versionId)
           }
+          onTranslate={
+            pickedModel
+              ? (message, targetLang) => void handleTranslate(message, targetLang)
+              : undefined
+          }
+          translating={translating}
+          compression={{
+            upToMessageId: topicDetail.data?.summaryUpToMessageId ?? null,
+            upToGroupId: topicDetail.data?.summaryUpToGroupId ?? null,
+            summaryText: topicDetail.data?.summaryText ?? null,
+            inProgress: compressing,
+          }}
         />
       )}
       {error && !failureShownInTranscript ? (
@@ -1116,6 +1265,15 @@ export default function ChatView({
         onReasoningEffortChange={setReasoningEffort}
         onOpenChatMap={() => setChatMapOpen(true)}
         chatMapDisabled={messages.length === 0}
+        onCompress={() => void handleCompress()}
+        compressDisabled={
+          !activeTopicId ||
+          !pickedModel ||
+          inFlight ||
+          compressing ||
+          // Nothing to fold in: an empty topic would only 400 server-side.
+          messages.length === 0
+        }
         attachments={attachments}
         onAddFiles={addFiles}
         onRemoveAttachment={removeAttachment}

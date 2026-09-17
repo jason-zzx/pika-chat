@@ -43,7 +43,10 @@ export default function AssistantPicker({
       }}
       disabled={disabled || tree.isPending}
     >
-      <ComposerSelectTrigger label={t("assistant")} title={selected?.name}>
+      <ComposerSelectTrigger
+        label={t("assistant")}
+        title={selected?.name ?? t("assistant")}
+      >
         <SelectValue
           className="justify-center text-center"
           placeholder={<BotIcon aria-hidden="true" className="size-4" />}

@@ -325,4 +325,87 @@ describe("MessageActions", () => {
       vi.useRealTimers();
     }
   });
+
+  it("hides the translate entry when onTranslate is not provided", () => {
+    renderWithIntl(<MessageActions text="hello" messageRole="assistant" />);
+
+    expect(
+      screen.queryByRole("button", { name: "Translate" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(["user", "assistant"] as const)(
+    "lists the eight target languages for %s messages and translates on pick",
+    async (messageRole) => {
+      const onTranslate = vi.fn();
+      renderWithIntl(
+        <MessageActions
+          text="hello"
+          messageRole={messageRole}
+          onTranslate={onTranslate}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Translate" }));
+
+      const items = await screen.findAllByRole("menuitem");
+      expect(items).toHaveLength(8);
+      for (const name of [
+        "简体中文",
+        "English",
+        "日本語",
+        "한국어",
+        "Français",
+        "Deutsch",
+        "Español",
+        "Русский",
+      ]) {
+        expect(
+          screen.getByRole("menuitem", { name }),
+        ).toBeInTheDocument();
+      }
+
+      fireEvent.click(screen.getByRole("menuitem", { name: "Français" }));
+      expect(onTranslate).toHaveBeenCalledWith("fr");
+    },
+  );
+
+  it("marks already-translated languages in the menu", async () => {
+    renderWithIntl(
+      <MessageActions
+        text="hello"
+        messageRole="assistant"
+        onTranslate={vi.fn()}
+        translatedLangs={["en"]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Translate" }));
+
+    const translated = await screen.findByRole("menuitem", { name: "English" });
+    expect(translated.querySelector("svg")).not.toHaveClass("invisible");
+    expect(
+      screen.getByRole("menuitem", { name: "Deutsch" }).querySelector("svg"),
+    ).toHaveClass("invisible");
+  });
+
+  it("reports translate menu open state like the more menu (B2)", async () => {
+    const onMenuOpenChange = vi.fn();
+    renderWithIntl(
+      <MessageActions
+        text="hello"
+        messageRole="user"
+        onTranslate={vi.fn()}
+        onMenuOpenChange={onMenuOpenChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Translate" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "English" }),
+    ).toBeInTheDocument();
+    expect(onMenuOpenChange.mock.calls.some(([open]) => open === true)).toBe(
+      true,
+    );
+  });
 });

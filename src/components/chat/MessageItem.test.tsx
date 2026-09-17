@@ -347,6 +347,39 @@ describe("MessageItem version and action wiring", () => {
       screen.queryByRole("menuitem", { name: "Delete and regenerate" }),
     ).not.toBeInTheDocument();
   });
+
+  it("withholds delete and regenerate entries inside the compressed region", async () => {
+    const message = assistantMessage("Answer");
+    renderWithIntl(
+      <MessageItem
+        message={message}
+        compressedLocked
+        onRegenerate={vi.fn()}
+        onDelete={vi.fn()}
+        onDeleteRegenerate={vi.fn()}
+      />,
+    );
+
+    // No standalone regenerate entry.
+    expect(
+      screen.queryByRole("button", { name: "Regenerate response" }),
+    ).not.toBeInTheDocument();
+    // The menu stays available for copy / translate, but not for the locked
+    // operations.
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Copy" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Regenerate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Delete and regenerate" }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("MessageItem thinking shimmer", () => {
@@ -1232,5 +1265,192 @@ describe("MessageItem attachments", () => {
     }
     fireEvent.click(audio);
     expect(onReveal).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessageItem translations", () => {
+  it("renders persisted translation blocks with native language tags (assistant)", () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Hello **world**", {
+          translations: { "zh-CN": "你好**世界**", ja: "こんにちは" },
+        })}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    expect(article).toHaveTextContent("简体中文");
+    expect(article).toHaveTextContent("你好**世界**");
+    expect(article).toHaveTextContent("日本語");
+    expect(article).toHaveTextContent("こんにちは");
+  });
+
+  it("renders translation blocks for user messages", () => {
+    renderWithIntl(
+      <MessageItem
+        message={userMessage("你好", {
+          translations: { en: "Hello" },
+        })}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "You" });
+    expect(article).toHaveTextContent("English");
+    expect(article).toHaveTextContent("Hello");
+  });
+
+  it("renders no translation block when translations are absent or empty", () => {
+    const { rerender } = renderWithIntl(
+      <MessageItem message={assistantMessage("Hello")} />,
+    );
+    expect(screen.queryByText("English")).not.toBeInTheDocument();
+
+    rerender(
+      wrapWithIntl(
+        <MessageItem
+          message={assistantMessage("Hello", { translations: {} })}
+        />,
+      ),
+    );
+    expect(screen.queryByText("English")).not.toBeInTheDocument();
+  });
+
+  it("passes the translate action through with the message and language", async () => {
+    const onTranslate = vi.fn();
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Hello")}
+        onTranslate={onTranslate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Translate" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "日本語" }),
+    );
+    expect(onTranslate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "assistant-1" }),
+      "ja",
+    );
+  });
+
+  it("collapses and re-expands a translation block, hiding its body (R6)", () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Hello", {
+          translations: { "zh-CN": "你好**世界**" },
+        })}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", {
+      name: "Hide the 简体中文 translation",
+    });
+    // Expanded by default: language tag and body both visible.
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("简体中文")).toBeInTheDocument();
+    expect(screen.getByText("你好**世界**")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const content = document.getElementById(
+      toggle.getAttribute("aria-controls") ?? "",
+    );
+    // Collapsed: the body container is grid-rows-[0fr] and taken out of the
+    // a11y tree; the language tag stays in the header.
+    expect(content).toHaveClass("grid-rows-[0fr]");
+    expect(content).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("简体中文")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(content).toHaveClass("grid-rows-[1fr]");
+  });
+
+  it("keeps each language's collapse state independent (R6)", () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Hello", {
+          translations: { "zh-CN": "你好", ja: "こんにちは" },
+        })}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Hide the 简体中文 translation" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Show the 简体中文 translation" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    // The other language is untouched.
+    expect(
+      screen.getByRole("button", { name: "Hide the 日本語 translation" }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
+describe("MessageItem translation progress", () => {
+  it("shows the shimmering pending placeholder while a translation is in flight (R5)", () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Hello")}
+        translatingTargetLang="ja"
+      />,
+    );
+
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Translating to 日本語");
+    const shimmer = status.querySelector("span");
+    expect(shimmer).toHaveClass("animate-thinking-shimmer");
+    expect(shimmer).toHaveClass("motion-reduce:animate-none");
+  });
+
+  it("renders the pending placeholder for user messages too (R5)", () => {
+    renderWithIntl(
+      <MessageItem message={userMessage("你好")} translatingTargetLang="en" />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Translating to English",
+    );
+  });
+
+  it("keeps the pending placeholder alongside existing translations (R5)", () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Hello", {
+          translations: { "zh-CN": "你好" },
+        })}
+        translatingTargetLang="ja"
+      />,
+    );
+
+    expect(screen.getByText("简体中文")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Translating to 日本語",
+    );
+  });
+
+  it("drops the placeholder once the translation lands (R5)", () => {
+    const { rerender } = renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Hello")}
+        translatingTargetLang="ja"
+      />,
+    );
+    expect(screen.getByRole("status")).toBeInTheDocument();
+
+    rerender(
+      wrapWithIntl(
+        <MessageItem
+          message={assistantMessage("Hello", {
+            translations: { ja: "こんにちは" },
+          })}
+        />,
+      ),
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByText("こんにちは")).toBeInTheDocument();
   });
 });

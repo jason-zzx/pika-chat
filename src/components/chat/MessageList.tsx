@@ -3,6 +3,7 @@
 import { ArrowDownIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -15,8 +16,12 @@ import {
 
 import { Button } from "@/components/ui/button";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
+import type { TranslateTargetLanguageCode } from "@/lib/translate/languages";
 
+import CollapseBlock from "./CollapseBlock";
+import Markdown from "./Markdown";
 import MessageItem from "./MessageItem";
+import { SHIMMER_TEXT_CLASS } from "./shimmer";
 
 /** Distance to the bottom (px) that still counts as "at the bottom". Shares
  * the existing re-pin threshold in `handleScroll` so the pin and the
@@ -28,6 +33,60 @@ const JUMP_OFFSET = 16;
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+const COMPRESSION_TOGGLE_CLASS =
+  "flex w-full items-center gap-3 rounded-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+const COMPRESSION_CHEVRON_CLASS = "size-3.5";
+const COMPRESSION_CONTENT_CLASS =
+  "mt-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm";
+
+/**
+ * Compression boundary marker (PRD R3/R9). With no persisted summary it is a
+ * plain divider; with one it becomes a real toggle button (`aria-expanded` +
+ * `aria-controls`) revealing the summary text inside the same grid-rows
+ * collapse container the translation / tool-call blocks use — touch and
+ * keyboard both reach it (constraint #15). Purely presentational: it takes no
+ * part in the scroll/pin/reserve logic.
+ */
+function CompressionSummary({ summaryText }: { summaryText?: string | null }) {
+  const t = useTranslations("Chat.Compression");
+  const hasSummary =
+    summaryText !== undefined && summaryText !== null && summaryText.length > 0;
+
+  if (!hasSummary) {
+    return (
+      <div className="flex items-center gap-3">
+        <div aria-hidden="true" className="h-px flex-1 bg-border" />
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {t("marker")}
+        </span>
+        <div aria-hidden="true" className="h-px flex-1 bg-border" />
+      </div>
+    );
+  }
+
+  return (
+    <CollapseBlock
+      className="w-full"
+      buttonClassName={COMPRESSION_TOGGLE_CLASS}
+      chevronClassName={COMPRESSION_CHEVRON_CLASS}
+      ariaLabel={(open) => (open ? t("hideSummary") : t("showSummary"))}
+      label={({ chevron }) => (
+        <>
+          <div aria-hidden="true" className="h-px flex-1 bg-border" />
+          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+            {t("marker")}
+            {chevron}
+          </span>
+          <div aria-hidden="true" className="h-px flex-1 bg-border" />
+        </>
+      )}
+      contentClassName={COMPRESSION_CONTENT_CLASS}
+    >
+      <Markdown text={summaryText ?? ""} />
+    </CollapseBlock>
+  );
 }
 
 /** Scrolls the container to `top`, clamped to the scrollable range. */
@@ -42,6 +101,24 @@ function scrollToPosition(container: HTMLDivElement, top: number) {
 export type MessageListHandle = {
   scrollToBottom: () => void;
   scrollToMessage: (key: string) => void;
+};
+
+/** History-compression view state (PRD R3/R7/R9/R10). */
+export type MessageListCompression = {
+  /** Selected-version row id of the boundary message; null when the topic has
+   * never been compressed. */
+  upToMessageId: string | null;
+  /** Version group of the boundary row. Matching by group keeps the marker
+   * and lock stable when the boundary group's selected version is switched
+   * (falls back to `upToMessageId` for pre-grouping data). */
+  upToGroupId?: string | null;
+  /** Persisted summary of the compressed region (PRD R9), rendered inside
+   * the boundary marker's collapsible panel. */
+  summaryText?: string | null;
+  /** Manual compression in flight (PRD R7): a shimmering "compressing
+   * context" divider renders at the end of the list until the request
+   * resolves. */
+  inProgress?: boolean;
 };
 
 type MessageListProps = {
@@ -60,6 +137,23 @@ type MessageListProps = {
   onDelete?: (message: ChatUIMessage) => void;
   onDeleteRegenerate?: (message: ChatUIMessage) => void;
   onSelectVersion?: (message: ChatUIMessage, versionId: string) => void;
+  /** Translate a message version into the chosen target language. */
+  onTranslate?: (
+    message: ChatUIMessage,
+    targetLang: TranslateTargetLanguageCode,
+  ) => void;
+  /** In-flight translation (R5): the message being translated and its target
+   * language, so the matching item can show a progress placeholder. */
+  translating?: {
+    messageId: string;
+    targetLang: TranslateTargetLanguageCode;
+  } | null;
+  /** History-compression boundary: an "earlier conversation
+   * compressed" marker renders right after this message (PRD R3/R9). With a
+   * persisted `summaryText` the marker is a toggle revealing the summary;
+   * without one it stays a static divider. Purely presentational — it takes
+   * no part in scroll/pin logic. */
+  compression?: MessageListCompression | null;
   /** Imperative scroll handle (chat map jumps, scroll-to-latest). */
   ref?: Ref<MessageListHandle>;
 };
@@ -75,9 +169,17 @@ export default function MessageList({
   onDelete,
   onDeleteRegenerate,
   onSelectVersion,
+  onTranslate,
+  translating,
+  compression,
   ref,
 }: MessageListProps) {
   const t = useTranslations("Chat.MessageList");
+  const tCompression = useTranslations("Chat.Compression");
+  const summaryUpToMessageId = compression?.upToMessageId ?? null;
+  const summaryUpToGroupId = compression?.upToGroupId ?? null;
+  const summaryText = compression?.summaryText ?? null;
+  const compressingHistory = compression?.inProgress ?? false;
   // Single-active tap reveal (R9/B7): at most one message shows its meta /
   // actions / version switcher rows from tapping. Tapping a message reveals
   // it and it stays revealed until a different message is tapped; tapping the
@@ -412,6 +514,22 @@ export default function MessageList({
     [scrollToBottom, scrollToMessage],
   );
 
+  // Compression lock (PRD R10): every message at or before the persisted
+  // boundary belongs to the summarized region, so its delete/regenerate
+  // entries are withheld (hidden, not disabled). The server rejects those
+  // operations with 409 as the backstop. Matching is by version group when
+  // the server supplied one (so switching the boundary group's selected
+  // version keeps the lock and marker in place), falling back to the raw
+  // boundary row id otherwise — the same order the server's clip uses. An
+  // unmatched boundary locks nothing.
+  const matchesCompressionBoundary = (message: ChatUIMessage): boolean =>
+    summaryUpToGroupId !== null
+      ? (message.metadata?.groupId ?? message.id) === summaryUpToGroupId
+      : message.id === summaryUpToMessageId;
+  const compressedThroughIndex = messages.findIndex(
+    matchesCompressionBoundary,
+  );
+
   if (messages.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -445,44 +563,70 @@ export default function MessageList({
             // they fall back to id.
             const itemKey = message.metadata?.groupId ?? message.id;
             return (
-              <MessageItem
-                key={itemKey}
-                message={message}
-                streaming={
-                  streaming &&
-                  (streamingMessageId !== undefined
-                    ? message.id === streamingMessageId
-                    : index === messages.length - 1 &&
-                      message.role === "assistant")
-                }
-                revealed={revealedKey === itemKey}
-                onReveal={() => setRevealedKey(itemKey)}
-                assistantName={assistantName}
-                assistantIcon={assistantIcon}
-                onRegenerate={onRegenerate}
-                onDelete={onDelete}
-                onDeleteRegenerate={onDeleteRegenerate}
-                onSelectVersion={onSelectVersion}
-                articleRef={
-                  index === lastUserIndex
-                    ? lastUserElRef
-                    : tailReserve !== null &&
-                        index === messages.length - 1 &&
-                        message.role === "assistant"
-                      ? lastAssistantElRef
+              <Fragment key={itemKey}>
+                <MessageItem
+                  message={message}
+                  streaming={
+                    streaming &&
+                    (streamingMessageId !== undefined
+                      ? message.id === streamingMessageId
+                      : index === messages.length - 1 &&
+                        message.role === "assistant")
+                  }
+                  revealed={revealedKey === itemKey}
+                  onReveal={() => setRevealedKey(itemKey)}
+                  assistantName={assistantName}
+                  assistantIcon={assistantIcon}
+                  onRegenerate={onRegenerate}
+                  onDelete={onDelete}
+                  onDeleteRegenerate={onDeleteRegenerate}
+                  onSelectVersion={onSelectVersion}
+                  onTranslate={onTranslate}
+                  translatingTargetLang={
+                    translating?.messageId === message.id
+                      ? translating.targetLang
+                      : null
+                  }
+                  articleRef={
+                    index === lastUserIndex
+                      ? lastUserElRef
+                      : tailReserve !== null &&
+                          index === messages.length - 1 &&
+                          message.role === "assistant"
+                        ? lastAssistantElRef
+                        : undefined
+                  }
+                  minHeight={
+                    tailReserve !== null &&
+                    index === messages.length - 1 &&
+                    message.role === "assistant"
+                      ? tailReserve
                       : undefined
-                }
-                minHeight={
-                  tailReserve !== null &&
-                  index === messages.length - 1 &&
-                  message.role === "assistant"
-                    ? tailReserve
-                    : undefined
-                }
-                itemKey={itemKey}
-              />
+                  }
+                  itemKey={itemKey}
+                  compressedLocked={index <= compressedThroughIndex}
+                />
+                {matchesCompressionBoundary(message) ? (
+                  <CompressionSummary summaryText={summaryText} />
+                ) : null}
+              </Fragment>
             );
           })}
+          {compressingHistory ? (
+            // Same divider language as the persisted compression marker, but
+            // the label shimmers while the request is in flight. role="status"
+            // announces it to assistive tech (AC8) — the feedback is not
+            // hover-gated.
+            <div role="status" className="flex items-center gap-3">
+              <div aria-hidden="true" className="h-px flex-1 bg-border" />
+              <span
+                className={`shrink-0 text-xs font-medium ${SHIMMER_TEXT_CLASS}`}
+              >
+                {tCompression("compressing")}
+              </span>
+              <div aria-hidden="true" className="h-px flex-1 bg-border" />
+            </div>
+          ) : null}
           {tailReserve !== null && lastMessage?.role === "user" ? (
             <div aria-hidden="true" style={{ height: tailReserve }} />
           ) : null}

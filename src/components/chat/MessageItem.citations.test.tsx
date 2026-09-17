@@ -97,6 +97,50 @@ describe("MessageItem citation wiring (R14)", () => {
     expect(markdownCalls[0]?.citations).toBeUndefined();
     expect(screen.getByText("just text")).toBeInTheDocument();
   });
+
+  it("passes the turn's sources to translation blocks (R7)", () => {
+    markdownCalls.length = 0;
+    const message: ChatUIMessage = {
+      id: "assistant-1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-searchWeb",
+          toolCallId: "call-1",
+          state: "output-available",
+          input: { query: "pika chat" },
+          output: {
+            provider: "tavily",
+            query: "pika chat",
+            results: [
+              {
+                title: "pika-chat on GitHub",
+                url: "https://github.com/example/pika-chat",
+                snippet: "repo",
+                num: 1,
+              },
+            ],
+          },
+        },
+        { type: "text", text: "The answer [1]." },
+      ],
+      metadata: { translations: { "zh-CN": "答案 [1]。" } },
+    };
+
+    renderWithIntl(<MessageItem message={message} />);
+
+    const translationCall = markdownCalls.find(
+      (call) => call.text === "答案 [1]。",
+    );
+    expect(translationCall?.citations).toEqual([
+      {
+        num: 1,
+        title: "pika-chat on GitHub",
+        url: "https://github.com/example/pika-chat",
+        provider: "tavily",
+      },
+    ]);
+  });
 });
 
 function assistantTextOnly(): ChatUIMessage {

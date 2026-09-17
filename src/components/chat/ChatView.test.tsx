@@ -1,13 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Dispatch, SetStateAction } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { listTopicMessages, deleteTopicMessage } from "@/lib/api/chat";
+import {
+  listTopicMessages,
+  deleteTopicMessage,
+  translateMessage,
+} from "@/lib/api/chat";
+import { defaultModelMetadata } from "@/lib/schemas/provider";
 import type {
   ChatMessagesResponse,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
+import { useComposerStore } from "@/stores/composer-store";
 import {
   renderWithIntl,
   wrapWithIntl,
@@ -34,12 +40,22 @@ vi.mock("./markdown-plugins", () => ({
 }));
 
 const composerProps = vi.hoisted(() => ({
-  latest: undefined as { showAssistantPicker?: boolean } | undefined,
+  latest: undefined as
+    | {
+        showAssistantPicker?: boolean;
+        onCompress?: () => void;
+        compressDisabled?: boolean;
+      }
+    | undefined,
 }));
 
 // Keep the test focused on the history/reseed plumbing.
 vi.mock("./Composer", () => ({
-  default: (props: { showAssistantPicker?: boolean }) => {
+  default: (props: {
+    showAssistantPicker?: boolean;
+    onCompress?: () => void;
+    compressDisabled?: boolean;
+  }) => {
     composerProps.latest = props;
     return null;
   },
@@ -53,8 +69,12 @@ vi.mock("@/components/assistant/use-assistants", () => ({
   useSetAssistantDefaultModel: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+const availableModelsMock = vi.hoisted(() => ({
+  data: [] as unknown[],
+}));
+
 vi.mock("@/components/provider/use-available-models", () => ({
-  useAvailableModels: () => ({ data: [] }),
+  useAvailableModels: () => ({ data: availableModelsMock.data }),
 }));
 
 vi.mock("@/lib/api/chat", () => ({
@@ -63,7 +83,24 @@ vi.mock("@/lib/api/chat", () => ({
   deleteTopicMessage: vi.fn(),
   selectMessageVersion: vi.fn(),
   regenerateTopicMessage: vi.fn(),
+  translateMessage: vi.fn(),
 }));
+
+const topicApiMocks = vi.hoisted(() => ({
+  compressTopic: vi.fn(),
+  getTopic: vi.fn(),
+}));
+
+// `getTopic` is stubbed so the compression boundary the detail query returns
+// can drive the list marker; the rest of the topic API stays real.
+vi.mock("@/lib/api/topic", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/topic")>();
+  return {
+    ...actual,
+    compressTopic: topicApiMocks.compressTopic,
+    getTopic: topicApiMocks.getTopic,
+  };
+});
 
 type TopicDataPart = {
   type: string;
@@ -168,7 +205,7 @@ function assistantDraft(id: string, text: string): StoredMessage {
   };
 }
 
-function renderChatView(props?: { assistantId?: string }) {
+function renderChatView(props?: { assistantId?: string; topicId?: string }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -519,5 +556,255 @@ describe("ChatView failure rendering", () => {
 
     expect(await screen.findByText("Topic not found")).toBeInTheDocument();
     expect(captured.clearError).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChatView translation progress (R5)", () => {
+  const testModel = {
+    configId: "c1",
+    configName: "Test provider",
+    modelId: "m1",
+    provenance: "own" as const,
+    ownerName: null,
+    ...defaultModelMetadata(),
+  };
+
+  /** Assistant message carrying the model pair that seeds the composer pick,
+   * so the translate action is available without touching the Composer. */
+  function seededAssistant(id: string, text: string): StoredMessage {
+    return {
+      id,
+      role: "assistant",
+      parts: [{ type: "text", text }],
+      metadata: {
+        groupId: "g1",
+        createdAt: new Date().toISOString(),
+        versionIndex: 1,
+        versionCount: 1,
+        versionIds: [id],
+        providerConfigId: "c1",
+        modelId: "m1",
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    availableModelsMock.data = [testModel];
+  });
+
+  afterEach(() => {
+    captured.initialMessages = undefined;
+    availableModelsMock.data = [];
+    useComposerStore.setState({ pickedModel: null });
+  });
+
+  it("shows the pending placeholder from menu pick until the translation lands", async () => {
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        seededAssistant("srv-a1", "answer"),
+      ],
+    });
+    let resolveTranslation:
+      | ((value: { translation: string }) => void)
+      | undefined;
+    vi.mocked(translateMessage).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveTranslation = resolve;
+        }),
+    );
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+    });
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+
+    const article = await screen.findByRole("article", { name: "Assistant" });
+    fireEvent.click(within(article).getByRole("button", { name: "Translate" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "日本語" }));
+
+    // The placeholder appears as soon as the request is in flight.
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Translating to 日本語",
+      );
+    });
+    expect(translateMessage).toHaveBeenCalledWith({
+      messageId: "srv-a1",
+      targetLang: "ja",
+      providerConfigId: "c1",
+      modelId: "m1",
+    });
+
+    await act(async () => {
+      resolveTranslation?.({ translation: "こんにちは" });
+    });
+
+    // Placeholder replaced by the persisted block, no refetch needed.
+    await waitFor(() => {
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("こんにちは")).toBeInTheDocument();
+  });
+
+  it("clears the placeholder when the translation request fails", async () => {
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        seededAssistant("srv-a1", "answer"),
+      ],
+    });
+    vi.mocked(translateMessage).mockRejectedValue(
+      new Error(
+        JSON.stringify({
+          error: { code: "PROVIDER_ERROR", messageKey: "actions.translate" },
+        }),
+      ),
+    );
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+    });
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+
+    const article = await screen.findByRole("article", { name: "Assistant" });
+    fireEvent.click(within(article).getByRole("button", { name: "Translate" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "日本語" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+    expect(
+      await screen.findByText("Unable to translate the message"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("ChatView compression progress (PRD R7/AC8)", () => {
+  const testModel = {
+    configId: "c1",
+    configName: "Test provider",
+    modelId: "m1",
+    provenance: "own" as const,
+    ownerName: null,
+    ...defaultModelMetadata(),
+  };
+
+  function assistantWithModel(id: string, text: string): StoredMessage {
+    return {
+      id,
+      role: "assistant",
+      parts: [{ type: "text", text }],
+      metadata: {
+        groupId: "g1",
+        createdAt: new Date().toISOString(),
+        providerConfigId: "c1",
+        modelId: "m1",
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    availableModelsMock.data = [testModel];
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+    });
+    topicApiMocks.getTopic.mockResolvedValue({
+      id: "t1",
+      title: "Topic",
+      isFavorite: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      summaryUpToMessageId: null,
+    });
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        assistantWithModel("srv-a1", "answer"),
+      ],
+    });
+  });
+
+  afterEach(() => {
+    captured.initialMessages = undefined;
+    availableModelsMock.data = [];
+    useComposerStore.setState({ pickedModel: null });
+  });
+
+  it("shows the in-flight indicator until the request resolves, then drops it", async () => {
+    let resolveCompress:
+      | ((value: { summaryUpToMessageId: string; compressedCount: number }) => void)
+      | undefined;
+    topicApiMocks.compressTopic.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCompress = resolve;
+        }),
+    );
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "Assistant" });
+
+    // The composer is stubbed; drive the manual-compress action directly.
+    act(() => composerProps.latest?.onCompress?.());
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Compressing context",
+      );
+    });
+    expect(topicApiMocks.compressTopic).toHaveBeenCalledWith("t1", {
+      providerConfigId: "c1",
+      modelId: "m1",
+    });
+
+    await act(async () => {
+      // The boundary the server would now report: the detail query is
+      // invalidated after compression, so the marker lands on the list.
+      topicApiMocks.getTopic.mockResolvedValue({
+        id: "t1",
+        title: "Topic",
+        isFavorite: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        summaryUpToMessageId: "srv-a1",
+      });
+      resolveCompress?.({ summaryUpToMessageId: "srv-a1", compressedCount: 2 });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+    // The in-flight indicator is replaced by the real compression marker.
+    expect(
+      await screen.findByText("Earlier conversation compressed"),
+    ).toBeInTheDocument();
+  });
+
+  it("clears the indicator and surfaces the localized error on failure", async () => {
+    topicApiMocks.compressTopic.mockRejectedValue(
+      new Error(
+        JSON.stringify({
+          error: { code: "PROVIDER_ERROR", messageKey: "actions.compress" },
+        }),
+      ),
+    );
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "Assistant" });
+
+    act(() => composerProps.latest?.onCompress?.());
+
+    await waitFor(() => {
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+    expect(
+      await screen.findByText("Unable to compress the conversation"),
+    ).toBeInTheDocument();
   });
 });

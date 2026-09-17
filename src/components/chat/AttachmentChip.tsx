@@ -118,6 +118,7 @@ export default function AttachmentChip({
           variant="ghost"
           size="icon-xs"
           aria-label={t("retry")}
+          title={t("retry")}
           disabled={disabled}
           onClick={onRetry}
         >
@@ -129,6 +130,7 @@ export default function AttachmentChip({
         variant="ghost"
         size="icon-xs"
         aria-label={t("remove", { filename: attachment.filename })}
+        title={t("remove", { filename: attachment.filename })}
         disabled={disabled}
         onClick={onRemove}
       >

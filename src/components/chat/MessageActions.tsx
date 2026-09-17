@@ -5,6 +5,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
+  LanguagesIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
 } from "lucide-react";
@@ -19,6 +20,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { ChatMetadata } from "@/lib/schemas/chat";
+import {
+  TRANSLATE_TARGET_LANGUAGES,
+  type TranslateTargetLanguageCode,
+} from "@/lib/translate/languages";
 
 const COPY_RESET_MS = 2_000;
 
@@ -46,6 +51,12 @@ type MessageActionsProps = {
   /** Menu open state, lifted so the parent can keep the actions row visible
    * while the portaled menu has focus (B2). */
   onMenuOpenChange?: (open: boolean) => void;
+  /** Translate the message into the chosen target language (user and
+   * assistant messages alike). Undefined hides the translate entry. */
+  onTranslate?: (targetLang: TranslateTargetLanguageCode) => void;
+  /** Languages this message version is already translated into (cached
+   * server-side); those menu items show a check mark. */
+  translatedLangs?: readonly string[];
   /** True while the transient copy feedback (check icon) is showing, so the
    * parent can keep the row visible for the whole feedback window (B4). */
   onCopyFeedbackChange?: (active: boolean) => void;
@@ -63,6 +74,8 @@ export default function MessageActions({
   onDelete,
   onDeleteRegenerate,
   onMenuOpenChange,
+  onTranslate,
+  translatedLangs,
   onCopyFeedbackChange,
 }: MessageActionsProps) {
   const t = useTranslations("Chat.Actions");
@@ -180,6 +193,46 @@ export default function MessageActions({
             <CopyIcon aria-hidden="true" className="size-3.5" />
           )}
         </button>
+        {onTranslate ? (
+          <DropdownMenu onOpenChange={onMenuOpenChange}>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={t("translate")}
+                  title={t("translate")}
+                  className={ACTION_BUTTON_CLASS}
+                />
+              }
+            >
+              <LanguagesIcon aria-hidden="true" className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-auto">
+              {TRANSLATE_TARGET_LANGUAGES.map((language) => {
+                const translated = translatedLangs?.includes(language.code);
+                return (
+                  <DropdownMenuItem
+                    key={language.code}
+                    className="whitespace-nowrap"
+                    onClick={() => onTranslate(language.code)}
+                  >
+                    {/* Fixed-width slot keeps the labels aligned whether or
+                        not the language is already translated. */}
+                    <CheckIcon
+                      aria-hidden="true"
+                      className={
+                        translated
+                          ? "size-3.5 text-muted-foreground"
+                          : "invisible size-3.5"
+                      }
+                    />
+                    {language.nativeName}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
         <DropdownMenu onOpenChange={onMenuOpenChange}>
           <DropdownMenuTrigger
             render={

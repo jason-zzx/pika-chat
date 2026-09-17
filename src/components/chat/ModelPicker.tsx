@@ -78,8 +78,10 @@ export default function ModelPicker({
         disabled={pickerDisabled}
         aria-label={iconOnly ? triggerLabel : undefined}
         title={
-          iconOnly && selected
-            ? `${selected.modelId} · ${selected.configName}`
+          iconOnly
+            ? selected
+              ? `${selected.modelId} · ${selected.configName}`
+              : triggerLabel
             : undefined
         }
         render={

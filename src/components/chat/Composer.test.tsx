@@ -35,6 +35,8 @@ function renderComposer(options?: {
   reasoningEffort?: string | null;
   chatMapDisabled?: boolean;
   attachments?: StagedAttachment[];
+  onCompress?: () => void;
+  compressDisabled?: boolean;
 }) {
   vi.mocked(listAvailableModels).mockResolvedValue(options?.models ?? []);
   const client = new QueryClient({
@@ -63,6 +65,8 @@ function renderComposer(options?: {
         onReasoningEffortChange={onReasoningEffortChange}
         onOpenChatMap={onOpenChatMap}
         chatMapDisabled={options?.chatMapDisabled}
+        onCompress={options?.onCompress}
+        compressDisabled={options?.compressDisabled}
         attachments={options?.attachments}
         onAddFiles={onAddFiles}
         onRemoveAttachment={onRemoveAttachment}
@@ -513,4 +517,62 @@ describe("Composer attachments", () => {
       screen.getByRole("button", { name: "Attach files" }),
     ).toBeDisabled();
   });
+
+  it("renders compression button and triggers onCompress", () => {
+    const onCompress = vi.fn();
+    renderComposer({ onCompress });
+
+    const btn = screen.getByRole("button", { name: "Compress context" });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    expect(onCompress).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables compression button when compressDisabled is true", () => {
+    renderComposer({ onCompress: vi.fn(), compressDisabled: true });
+    expect(
+      screen.getByRole("button", { name: "Compress context" }),
+    ).toBeDisabled();
+  });
+
+  it("gives every icon-only control both an accessible name and a title", () => {
+    renderComposer({ onCompress: vi.fn() });
+
+    const form = screen.getByRole("button", { name: "Send" }).closest("form");
+    expect(form).toBeInstanceOf(HTMLElement);
+    if (!(form instanceof HTMLElement)) {
+      return;
+    }
+    const iconButtons = within(form)
+      .getAllByRole("button")
+      .filter((button) => (button.textContent ?? "").trim().length === 0);
+    expect(iconButtons.length).toBeGreaterThan(0);
+    for (const button of iconButtons) {
+      expect(button.getAttribute("aria-label")).toBeTruthy();
+      expect(button.getAttribute("title")).toBeTruthy();
+    }
+  });
+
+  it("gives the attachment chip's icon-only controls both an accessible name and a title", () => {
+    renderComposer({
+      attachments: [
+        stagedAttachment({
+          status: "error",
+          error: {
+            error: {
+              code: "VALIDATION_FAILED",
+              messageKey: "file.tooLarge",
+              params: { limit: "20 MB" },
+            },
+          },
+        }),
+      ],
+    });
+
+    const retry = screen.getByRole("button", { name: "Retry upload" });
+    expect(retry).toHaveAttribute("title", "Retry upload");
+    const remove = screen.getByRole("button", { name: "Remove notes.txt" });
+    expect(remove).toHaveAttribute("title", "Remove notes.txt");
+  });
 });
+

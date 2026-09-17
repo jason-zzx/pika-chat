@@ -11,8 +11,14 @@ import { classifyFile } from "@/lib/files/media-types";
 import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
 import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
+import {
+  translateLanguageNativeName,
+  type TranslateTargetLanguageCode,
+} from "@/lib/translate/languages";
+import { cn } from "@/lib/utils";
 
 import AttachmentIcon from "./AttachmentIcon";
+import CollapseBlock from "./CollapseBlock";
 import ErrorBlock from "./ErrorBlock";
 import Markdown from "./Markdown";
 import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
@@ -20,7 +26,8 @@ import MessageActions from "./MessageActions";
 import MessageTimestamp from "./MessageTimestamp";
 import ReasoningBlock from "./ReasoningBlock";
 import SearchToolCall, { type SearchWebToolPart } from "./SearchToolCall";
-import { collectCitationSources } from "./citations";
+import { SHIMMER_TEXT_CLASS } from "./shimmer";
+import { collectCitationSources, type CitationSource } from "./citations";
 
 type ContentBlock =
   | {
@@ -223,6 +230,86 @@ function buildContentBlocks(parts: ChatUIMessage["parts"]): ContentBlock[] {
   return blocks;
 }
 
+/**
+ * Persisted translation of the message body (PRD 消息翻译): muted card with
+ * the target language's native name as the tag and a collapse toggle (R6).
+ * Same chevron + grid-rows mechanics as `ToolCallShell` (no `ui/collapsible`
+ * primitive); each language owns its own open state. The Markdown remount key
+ * carries the language code — Streamdown's memoization does not track prop
+ * changes, so each language gets its own parse (constraint #40). `citations`
+ * is forwarded so `[n]` markers inside a translation resolve to the turn's
+ * source chips exactly as they do in the body (R7).
+ */
+const TRANSLATION_TOGGLE_CLASS =
+  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+const TRANSLATION_CHEVRON_CLASS = "size-4";
+const TRANSLATION_CONTENT_CLASS = "px-3 pb-2";
+
+function TranslationBlock({
+  lang,
+  text,
+  citations,
+}: {
+  lang: string;
+  text: string;
+  citations?: readonly CitationSource[];
+}) {
+  const t = useTranslations("Chat.Translation");
+  const label = translateLanguageNativeName(lang);
+  return (
+    <CollapseBlock
+      defaultOpen
+      className="w-full rounded-lg border border-border bg-muted/50 text-sm"
+      buttonClassName={TRANSLATION_TOGGLE_CLASS}
+      chevronClassName={TRANSLATION_CHEVRON_CLASS}
+      ariaLabel={(open) =>
+        open
+          ? t("collapse", { language: label })
+          : t("expand", { language: label })
+      }
+      label={({ chevron }) => (
+        <>
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+            {label}
+          </span>
+          {chevron}
+        </>
+      )}
+      contentClassName={TRANSLATION_CONTENT_CLASS}
+    >
+      <Markdown
+        key={`translation-${lang}`}
+        text={text}
+        citations={citations}
+      />
+    </CollapseBlock>
+  );
+}
+
+/**
+ * In-flight translation placeholder (R5): shimmering "Translating to {lang}"
+ * where the finished translation will land. `role="status"` announces it to
+ * assistive tech; the same shimmer classes as the body's "Thinking…"
+ * indicator keep the two consistent.
+ */
+function TranslationPendingBlock({
+  lang,
+}: {
+  lang: TranslateTargetLanguageCode;
+}) {
+  const t = useTranslations("Chat.Translation");
+  return (
+    <div
+      role="status"
+      className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm"
+    >
+      <span className={cn("inline-block font-medium", SHIMMER_TEXT_CLASS)}>
+        {t("translating", { language: translateLanguageNativeName(lang) })}
+      </span>
+    </div>
+  );
+}
+
 type MessageItemProps = {
   message: ChatUIMessage;
   streaming?: boolean;
@@ -237,6 +324,14 @@ type MessageItemProps = {
   onDelete?: (message: ChatUIMessage) => void;
   onDeleteRegenerate?: (message: ChatUIMessage) => void;
   onSelectVersion?: (message: ChatUIMessage, versionId: string) => void;
+  /** Translate this message version into the chosen target language. */
+  onTranslate?: (
+    message: ChatUIMessage,
+    targetLang: TranslateTargetLanguageCode,
+  ) => void;
+  /** Target language of an in-flight translation for this message (R5); an
+   * in-progress placeholder renders where the finished block will land. */
+  translatingTargetLang?: TranslateTargetLanguageCode | null;
   /** Ref attached to the root article element (used by the list to locate
    * the latest user message for scroll positioning). */
   articleRef?: Ref<HTMLElement>;
@@ -245,6 +340,11 @@ type MessageItemProps = {
    * message stays pinned to the viewport top while the reply grows inside
    * the reserved area). */
   minHeight?: number;
+  /** True for messages inside the persisted compression boundary (PRD R10):
+   * their delete / regenerate entries are withheld entirely (hidden, not
+   * disabled). Copy, translate, and version switching stay available, and
+   * the server returns 409 if the operation is invoked anyway. */
+  compressedLocked?: boolean;
   /** Scroll anchor for this row, rendered as `data-message-key`. Handed down
    * the version-group key (`groupId ?? id`) by the list, which already uses it
    * as the React key — the item must not derive it itself. */
@@ -262,8 +362,11 @@ export default function MessageItem({
   onDelete,
   onDeleteRegenerate,
   onSelectVersion,
+  onTranslate,
+  translatingTargetLang,
   articleRef,
   minHeight,
+  compressedLocked = false,
   itemKey,
 }: MessageItemProps) {
   const t = useTranslations("Chat.MessageItem");
@@ -317,6 +420,9 @@ export default function MessageItem({
     versionIds !== undefined
       ? { versionIndex, versionCount, versionIds }
       : undefined;
+  // Per-version persisted translations (PRD 消息翻译 R4), shown below the
+  // message body in insertion order.
+  const translationEntries = Object.entries(metadata?.translations ?? {});
 
   function handleArticleClick(event: ReactMouseEvent<HTMLElement>) {
     // Buttons and links inside the message (actions, reasoning toggle,
@@ -347,15 +453,25 @@ export default function MessageItem({
           ? (versionId) => onSelectVersion(message, versionId)
           : undefined
       }
-      onRegenerate={onRegenerate ? () => onRegenerate(message) : undefined}
-      onDelete={onDelete ? () => onDelete(message) : undefined}
+      onRegenerate={
+        onRegenerate && !compressedLocked
+          ? () => onRegenerate(message)
+          : undefined
+      }
+      onDelete={
+        onDelete && !compressedLocked ? () => onDelete(message) : undefined
+      }
       onDeleteRegenerate={
-        !isUser && onDeleteRegenerate
+        !isUser && onDeleteRegenerate && !compressedLocked
           ? () => onDeleteRegenerate(message)
           : undefined
       }
       onMenuOpenChange={setMenuOpen}
       onCopyFeedbackChange={setCopyFeedback}
+      onTranslate={
+        onTranslate ? (lang) => onTranslate(message, lang) : undefined
+      }
+      translatedLangs={translationEntries.map(([lang]) => lang)}
     />
   );
 
@@ -384,6 +500,21 @@ export default function MessageItem({
                 {part.text}
               </p>
             ))}
+          </div>
+        ) : null}
+        {translationEntries.length > 0 || translatingTargetLang ? (
+          <div className="flex w-full max-w-[min(100%,42rem)] flex-col gap-2">
+            {translationEntries.map(([lang, translatedText]) => (
+              <TranslationBlock
+                key={lang}
+                lang={lang}
+                text={translatedText}
+                citations={citations}
+              />
+            ))}
+            {translatingTargetLang ? (
+              <TranslationPendingBlock lang={translatingTargetLang} />
+            ) : null}
           </div>
         ) : null}
         {actions}
@@ -457,7 +588,7 @@ export default function MessageItem({
       })}
       {showThinkingShimmer ? (
         <div className="w-full text-sm">
-          <span className="inline-block animate-thinking-shimmer bg-linear-to-r from-muted-foreground/40 via-foreground to-muted-foreground/40 bg-[length:200%_100%] bg-clip-text font-medium text-transparent motion-reduce:animate-none">
+          <span className={cn("inline-block font-medium", SHIMMER_TEXT_CLASS)}>
             {t("thinkingShimmer")}
           </span>
         </div>
@@ -487,6 +618,21 @@ export default function MessageItem({
       ) : null}
       {modelId ? (
         <p className="text-xs text-muted-foreground">{modelId}</p>
+      ) : null}
+      {translationEntries.length > 0 || translatingTargetLang ? (
+        <div className="flex w-full flex-col gap-2">
+          {translationEntries.map(([lang, translatedText]) => (
+            <TranslationBlock
+              key={lang}
+              lang={lang}
+              text={translatedText}
+              citations={citations}
+            />
+          ))}
+          {translatingTargetLang ? (
+            <TranslationPendingBlock lang={translatingTargetLang} />
+          ) : null}
+        </div>
       ) : null}
       {actions}
     </article>
