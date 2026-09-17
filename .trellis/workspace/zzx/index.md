@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 27
-- **Last Active**: 2026-09-15
+- **Total Sessions**: 29
+- **Last Active**: 2026-09-17
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~796 | Active |
+| `journal-1.md` | ~853 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 29 | 2026-09-17 | 会话历史压缩与消息翻译 | `0d34fdb`, `608844b`, `195b8ab` | `main` |
 | 27 | 2026-09-15 | 主题系统：预设主题 + DB 持久化 | `f4a7d5a` | `main` |
 | 26 | 2026-09-14 | 附件三期收口：ponytail 精简 + 使用中行锁形占位 + 父任务归档 | `593fc1f`, `44d99db` | `main` |
 | 24 | 2026-09-13 | 附件二期：pptx/epub 解析、S3 存储与 Files API 引用传输 | `4517aad`, `f5f20b6`, `e5a1d02`, `71d2be0` | `main` |

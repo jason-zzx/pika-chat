@@ -816,3 +816,38 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 29: 会话历史压缩与消息翻译
+<!-- trellis-session: v=2 fp=0bef1f0b876a8e47 -->
+
+**Date**: 2026-09-17
+**Task**: 会话历史压缩与消息翻译
+**Branch**: `main`
+
+### Summary
+
+为长对话实现会话历史压缩与滚动摘要能力，并在消息操作区新增提问与回复的 8 语言按需翻译
+
+### Main Changes
+
+- 新增 translation.service：按消息版本进行一次性模型翻译，jsonb 缓存与持久化，MessageActions 增加 8 语言翻译菜单与 MessageItem 可折叠译文展示
+- 新增 compression.service：在对话历史超过模型 contextTokens 80% 时自动生成滚动摘要并持久化边界；Composer 提供手动压缩按钮与状态提示
+- MessageList 渲染可折叠压缩摘要分隔条并锁定压缩区内的删除与重新生成操作；抽离 CollapseBlock 与 shimmer 共享原语
+- 统一模型可用性门校验（requireModelForActor），生成并校验迁移 0021 与 0022
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d34fdb` | feat(chat): add history compression and message translation services |
+| `608844b` | feat(chat): wire compression and translation into the chat UI |
+| `195b8ab` | docs(trellis): record compression and translation specs and task plans |
+
+### Testing
+
+- [OK] 全量测试验证：pnpm lint、pnpm typecheck 与 pnpm test（142 测试套件、1201 个用例全部通过，覆盖边界 group 映射、翻译引用映射与归属隔离）
+
+### Status
+
+[OK] **Completed**
