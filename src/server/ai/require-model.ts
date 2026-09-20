@@ -20,7 +20,9 @@ export type SelectedChatModel = {
  * resolves it against the models the caller may actually use and builds the
  * handle, throwing `model.notAvailable` otherwise. Shared by /api/chat, the
  * regenerate route, and manual compression so the three agree on what "usable
- * model" means (PRD R6 — the summary model is the session's own model).
+ * model" means. The compression summary model is the caller's `compression`
+ * model preference when set, else the session's own model (PRD R6) — this
+ * gate validates whichever pair was chosen.
  */
 export async function requireModelForActor(
   pair: { providerConfigId: string; modelId: string },

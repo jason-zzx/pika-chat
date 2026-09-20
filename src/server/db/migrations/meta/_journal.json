@@ -162,6 +162,13 @@
       "when": 1789625956368,
       "tag": "0022_aberrant_mercury",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789877494276,
+      "tag": "0023_petite_liz_osborn",
+      "breakpoints": true
     }
   ]
 }

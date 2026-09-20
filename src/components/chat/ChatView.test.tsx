@@ -77,6 +77,17 @@ vi.mock("@/components/provider/use-available-models", () => ({
   useAvailableModels: () => ({ data: availableModelsMock.data }),
 }));
 
+const modelPreferencesMock = vi.hoisted(() => ({
+  data: undefined as { chat?: { providerConfigId: string; modelId: string } | null } | undefined,
+}));
+
+vi.mock("@/hooks/use-model-preferences", () => ({
+  useModelPreferences: () => ({
+    data: modelPreferencesMock.data,
+    isPending: false,
+  }),
+}));
+
 vi.mock("@/lib/api/chat", () => ({
   listTopicMessages: vi.fn(),
   stopChatStream: vi.fn(),

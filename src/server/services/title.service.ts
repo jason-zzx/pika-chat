@@ -4,6 +4,7 @@ import { generateText } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { DEFAULT_TOPIC_TITLES, isDefaultTopicTitle } from "@/i18n/defaults";
+import { pairOrNull } from "@/lib/schemas/model-preferences";
 import type { Topic } from "@/lib/schemas/topic";
 import { createChatModelHandle } from "@/server/ai/chat-model";
 import type { Actor } from "@/server/auth/actor";
@@ -15,6 +16,7 @@ import {
   listTopicMessages,
   textFromMessage,
 } from "@/server/services/message.service";
+import { resolveModelPreference } from "@/server/services/model-preferences.service";
 import { findTopicForActor } from "@/server/services/topic.service";
 
 export const TITLE_MAX_LENGTH = 60;
@@ -52,8 +54,8 @@ export function fallbackTitleFromMessage(
 export async function titleTopicFromFirstMessage(
   input: {
     topicId: string;
-    providerConfigId: string;
-    modelId: string;
+    providerConfigId?: string;
+    modelId?: string;
   },
   actor: Actor,
 ): Promise<Topic> {
@@ -74,28 +76,29 @@ export async function titleTopicFromFirstMessage(
 
   let generated: string | null = null;
   if (text.trim().length > 0) {
-    try {
-      const handle = await createChatModelHandle(
-        {
-          providerConfigId: input.providerConfigId,
-          modelId: input.modelId,
-        },
-        actor,
-      );
-      const result = await generateText({
-        model: handle.model,
-        instructions:
-          "Write a short conversation title from the user's message. Reply with the title only, no quotes, at most 8 words.",
-        prompt: text,
-        maxOutputTokens: 40,
-        abortSignal: AbortSignal.timeout(15_000),
-      });
-      generated = sanitizeGeneratedTitle(result.text);
-    } catch {
-      logger.warn(
-        { topicId: input.topicId },
-        "topic title generation failed",
-      );
+    // The user's title-model preference wins unconditionally; the
+    // client-supplied pair (the first message's model) is the fallback, and
+    // with neither the topic just gets the truncated-text title.
+    const pair =
+      (await resolveModelPreference(actor, "title")) ?? pairOrNull(input);
+    if (pair) {
+      try {
+        const handle = await createChatModelHandle(pair, actor);
+        const result = await generateText({
+          model: handle.model,
+          instructions:
+            "Write a short conversation title from the user's message. Reply with the title only, no quotes, at most 8 words.",
+          prompt: text,
+          maxOutputTokens: 40,
+          abortSignal: AbortSignal.timeout(15_000),
+        });
+        generated = sanitizeGeneratedTitle(result.text);
+      } catch {
+        logger.warn(
+          { topicId: input.topicId },
+          "topic title generation failed",
+        );
+      }
     }
   }
 

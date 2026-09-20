@@ -71,6 +71,15 @@ streaming routes also need `contextTokens` / `inputModalities` from the matched
 catalog entry. Never re-inline that gate: three copies is how one of them ends
 up skipping the availability check.
 
+Which pair goes in: the caller's `compression` model preference when set and
+still usable (`resolveModelPreference(actor, "compression")`, see
+[model-preferences.md](./model-preferences.md)), else the session's own model
+— for the manual endpoint the request-body pair is the fallback instead.
+**The threshold decision never follows the preference**: when-to-compress is
+evaluated against the SESSION model's `contextTokens`, only the summary
+generation may run on a different model. The regenerate route never triggers
+compression, so it needs no preference injection.
+
 Endpoints: `POST /api/topics/[id]/compress` (manual) →
 `{ summaryUpToMessageId, summaryUpToGroupId, compressedCount }`;
 `GET /api/topics/[id]` exposes `summaryUpToMessageId`, `summaryUpToGroupId`, and

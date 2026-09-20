@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import ModelPicker from "@/components/chat/ModelPicker";
 import { pairFromIds, sameModelPick } from "@/components/chat/model-pick";
 import { useAvailableModels } from "@/components/provider/use-available-models";
+import { useModelPreferences } from "@/hooks/use-model-preferences";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +48,7 @@ export default function AssistantEditorDialog({
   const tErrors = useTranslations("Errors");
   const isEdit = assistant !== null;
   const models = useAvailableModels();
+  const modelPreferences = useModelPreferences();
   const create = useCreateAssistant();
   const update = useUpdateAssistant();
   const pair = pairFromIds(
@@ -57,8 +59,21 @@ export default function AssistantEditorDialog({
     !pair ||
     !models.data ||
     models.data.some((model) => sameModelPick(model, pair));
+  // Create mode only: prefill from the user's `chat` default-model
+  // preference (skipped when the preferred model is no longer available).
+  const preferencePair = !isEdit
+    ? pairFromIds(
+        modelPreferences.data?.chat?.providerConfigId,
+        modelPreferences.data?.chat?.modelId,
+      )
+    : null;
   const derivedPick =
-    pair && storedIsAvailable ? pair : null;
+    pair && storedIsAvailable
+      ? pair
+      : preferencePair &&
+          models.data?.some((model) => sameModelPick(model, preferencePair))
+        ? preferencePair
+        : null;
 
   const [name, setName] = useState(assistant?.name ?? "");
   const [icon, setIcon] = useState(assistant?.icon ?? DEFAULT_ASSISTANT_ICON);

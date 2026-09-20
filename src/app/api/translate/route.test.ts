@@ -47,6 +47,14 @@ describe("POST /api/translate", () => {
     expect(translateMessage).toHaveBeenCalledWith(VALID_BODY, ACTOR);
   });
 
+  it("accepts a request without a model pair (the server resolves the preference)", async () => {
+    const noPair = { messageId: "m-1", targetLang: "en" };
+    const response = await POST(translateRequest(noPair));
+
+    expect(response.status).toBe(200);
+    expect(translateMessage).toHaveBeenCalledWith(noPair, ACTOR);
+  });
+
   it("rejects an unlisted target language with VALIDATION_FAILED", async () => {
     const response = await POST(
       translateRequest({ ...VALID_BODY, targetLang: "pt" }),

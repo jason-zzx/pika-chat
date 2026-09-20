@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "users 表新增 jsonb 列与 drizzle 迁移生成约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "新 API 路由的 AppError/withErrorHandling 错误形状约定"}
+{"file": ".trellis/spec/backend/chat-history-compression.md", "reason": "压缩模型语义从会话模型改为偏好优先,自动压缩在两条流式路由的接入点"}
+{"file": ".trellis/spec/backend/chat-message-translation.md", "reason": "翻译模型来源改为偏好优先,translations 缓存行为不变"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新 service 与路由文件的目录分层约定"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "偏好数据的 TanStack Query hook 归属(server state 不进 Zustand)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "设置页 server/client 分层与 ModelPicker 复用"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "SettingsNav 与 Settings.Models.* 中英双语文案约定"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "共享 zod schema 作为请求/响应类型来源"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "偏好从 DB 列到四场景消费的跨层数据流"}

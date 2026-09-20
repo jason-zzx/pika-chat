@@ -12,6 +12,7 @@ describe("resolveComposerModel", () => {
       resolveComposerModel({
         topicLastAssistantPair: gpt,
         assistantDefaultPair: llama,
+        userDefaultPair: stale,
         available: [llama, gpt],
       }),
     ).toEqual(gpt);
@@ -22,6 +23,7 @@ describe("resolveComposerModel", () => {
       resolveComposerModel({
         topicLastAssistantPair: null,
         assistantDefaultPair: llama,
+        userDefaultPair: gpt,
         available: [llama, gpt],
       }),
     ).toEqual(llama);
@@ -32,16 +34,51 @@ describe("resolveComposerModel", () => {
       resolveComposerModel({
         topicLastAssistantPair: stale,
         assistantDefaultPair: llama,
+        userDefaultPair: gpt,
         available: [llama],
       }),
     ).toEqual(llama);
   });
 
-  it("returns null when both pairs are missing or stale", () => {
+  it("uses the user default when history and assistant default are missing", () => {
+    expect(
+      resolveComposerModel({
+        topicLastAssistantPair: null,
+        assistantDefaultPair: null,
+        userDefaultPair: gpt,
+        available: [llama, gpt],
+      }),
+    ).toEqual(gpt);
+  });
+
+  it("drops a stale assistant default and lands on the user default", () => {
+    expect(
+      resolveComposerModel({
+        topicLastAssistantPair: null,
+        assistantDefaultPair: stale,
+        userDefaultPair: gpt,
+        available: [llama, gpt],
+      }),
+    ).toEqual(gpt);
+  });
+
+  it("drops a stale user default", () => {
+    expect(
+      resolveComposerModel({
+        topicLastAssistantPair: null,
+        assistantDefaultPair: null,
+        userDefaultPair: stale,
+        available: [llama],
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null when every pair is missing or stale", () => {
     expect(
       resolveComposerModel({
         topicLastAssistantPair: stale,
         assistantDefaultPair: stale,
+        userDefaultPair: stale,
         available: [llama],
       }),
     ).toBeNull();
@@ -49,6 +86,7 @@ describe("resolveComposerModel", () => {
       resolveComposerModel({
         topicLastAssistantPair: null,
         assistantDefaultPair: null,
+        userDefaultPair: null,
         available: [llama],
       }),
     ).toBeNull();

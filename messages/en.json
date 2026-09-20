@@ -17,7 +17,8 @@
       "files": "Files",
       "providers": "Providers",
       "search": "Search",
-      "users": "Users"
+      "users": "Users",
+      "models": "Default models"
     },
     "userMenu": {
       "accountMenu": "Account menu for {name}",
@@ -296,6 +297,19 @@
         "rose": "Rose",
         "violet": "Violet"
       }
+    },
+    "Models": {
+      "title": "Default models",
+      "description": "Choose the model used by default for chat, title generation, context compression, and translation.",
+      "chat": "Default chat model",
+      "chatDescription": "Used for new conversations when the assistant has no default model.",
+      "titleGeneration": "Title generation model",
+      "titleGenerationDescription": "Used to name new topics. Falls back to the conversation's model when unset.",
+      "compression": "Context compression model",
+      "compressionDescription": "Used to summarize earlier history in long conversations. Falls back to the conversation's model when unset.",
+      "translation": "Translation model",
+      "translationDescription": "Used to translate messages. Falls back to the conversation's model when unset.",
+      "resetAll": "Reset all"
     },
     "Providers": {
       "title": "Providers",

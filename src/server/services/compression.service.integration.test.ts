@@ -47,6 +47,7 @@ import {
   listTopicMessages,
   resolveRegenerateTarget,
 } from "@/server/services/message.service";
+import { updateModelPreferences } from "@/server/services/model-preferences.service";
 import { createTopicForChat } from "@/server/services/topic.service";
 
 import {
@@ -394,6 +395,38 @@ describe("POST /api/topics/[id]/compress", () => {
       summaryUpToMessageId: "m4",
       summaryUpToGroupId: "m4",
       summaryText: "rolling summary",
+    });
+  });
+
+  it("uses the compression model preference when no pair is sent", async () => {
+    const { cookie, actor } = await seedActors();
+    const topicId = await setupTopic(actor);
+    await updateModelPreferences({ compression: MODEL_INPUT }, actor);
+
+    const response = await compressTopicRoute(
+      jsonRequest(`/api/topics/${topicId}/compress`, { cookie, body: {} }),
+      routeContext(topicId),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      summaryUpToMessageId: "m4",
+      compressedCount: 4,
+    });
+  });
+
+  it("400s when no pair is sent and no preference is set", async () => {
+    const { cookie, actor } = await seedActors();
+    const topicId = await setupTopic(actor);
+
+    const response = await compressTopicRoute(
+      jsonRequest(`/api/topics/${topicId}/compress`, { cookie, body: {} }),
+      routeContext(topicId),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "VALIDATION_FAILED", messageKey: "model.notAvailable" },
     });
   });
 

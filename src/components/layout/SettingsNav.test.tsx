@@ -35,6 +35,9 @@ describe("SettingsNav", () => {
       "href",
       "/settings/general",
     );
+    expect(
+      screen.getByRole("link", { name: "Default models" }),
+    ).toHaveAttribute("href", "/settings/models");
     expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute(
       "href",
       "/settings/account",

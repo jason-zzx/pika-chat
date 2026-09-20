@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "服务端完成前的 lint/typecheck/test 与 forbidden patterns 检查清单"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端完成前的 lint/测试/可访问性/断点检查清单"}
+{"file": ".trellis/spec/backend/chat-history-compression.md", "reason": "验收时核对压缩偏好语义修订是否已同步进 spec"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "迁移随 schema 一并提交、空库可应用"}

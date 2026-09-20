@@ -9,17 +9,33 @@ import {
   titleTopicFromFirstMessage,
 } from "./title.service";
 
-const { createChatModelHandle, findTopicForActor, generateText } = vi.hoisted(
-  () => ({
-    createChatModelHandle: vi.fn(),
-    findTopicForActor: vi.fn(),
-    generateText: vi.fn(),
-  }),
-);
+const {
+  createChatModelHandle,
+  findTopicForActor,
+  generateText,
+  listTopicMessages,
+  resolveModelPreference,
+} = vi.hoisted(() => ({
+  createChatModelHandle: vi.fn(),
+  findTopicForActor: vi.fn(),
+  generateText: vi.fn(),
+  listTopicMessages: vi.fn(),
+  resolveModelPreference: vi.fn(),
+}));
 
 vi.mock("@/server/ai/chat-model", () => ({
   createChatModelHandle,
 }));
+
+vi.mock("@/server/services/model-preferences.service", () => ({
+  resolveModelPreference,
+}));
+
+vi.mock("@/server/services/message.service", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/server/services/message.service")>();
+  return { ...actual, listTopicMessages };
+});
 
 vi.mock("@/server/services/topic.service", async (importOriginal) => {
   const actual =
@@ -67,6 +83,9 @@ describe("titleTopicFromFirstMessage", () => {
     findTopicForActor.mockReset();
     generateText.mockReset();
     createChatModelHandle.mockReset();
+    listTopicMessages.mockReset();
+    resolveModelPreference.mockReset();
+    resolveModelPreference.mockResolvedValue(null);
   });
 
   it("returns an already-named topic without calling the model", async () => {
@@ -106,5 +125,77 @@ describe("titleTopicFromFirstMessage", () => {
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
     expect(generateText).not.toHaveBeenCalled();
+  });
+
+  const untitled = {
+    id: "topic-2",
+    title: "New topic",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+  const userMessage = {
+    id: "m1",
+    role: "user",
+    parts: [{ type: "text", text: "Tell me about onsen towns" }],
+  };
+
+  it("prefers the user's title-model preference over the client pair", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+    resolveModelPreference.mockResolvedValue({
+      providerConfigId: "cfg-pref",
+      modelId: "pref-model",
+    });
+    createChatModelHandle.mockResolvedValue({ model: "handle" });
+    generateText.mockResolvedValue({ text: "Onsen towns" });
+
+    await titleTopicFromFirstMessage(
+      {
+        topicId: untitled.id,
+        providerConfigId: "cfg-client",
+        modelId: "client-model",
+      },
+      actor,
+    );
+
+    expect(createChatModelHandle).toHaveBeenCalledWith(
+      { providerConfigId: "cfg-pref", modelId: "pref-model" },
+      actor,
+    );
+  });
+
+  it("falls back to the client pair when no preference is set", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+    createChatModelHandle.mockResolvedValue({ model: "handle" });
+    generateText.mockResolvedValue({ text: "Onsen towns" });
+
+    await titleTopicFromFirstMessage(
+      {
+        topicId: untitled.id,
+        providerConfigId: "cfg-client",
+        modelId: "client-model",
+      },
+      actor,
+    );
+
+    expect(createChatModelHandle).toHaveBeenCalledWith(
+      { providerConfigId: "cfg-client", modelId: "client-model" },
+      actor,
+    );
+  });
+
+  it("uses the truncated-text title when no pair is available at all", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+
+    const result = await titleTopicFromFirstMessage(
+      { topicId: untitled.id },
+      actor,
+    );
+
+    expect(generateText).not.toHaveBeenCalled();
+    expect(createChatModelHandle).not.toHaveBeenCalled();
+    expect(result).toEqual(untitled);
   });
 });

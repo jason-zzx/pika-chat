@@ -23,7 +23,7 @@ translateLanguageNativeName(code: string): string
 
 // src/lib/schemas/chat.ts
 chatMetadataSchema.translations?: Record<string, string>   // key = BCP-47 code
-translateMessageRequestSchema: { messageId, targetLang, providerConfigId, modelId }
+translateMessageRequestSchema: { messageId, targetLang, providerConfigId?, modelId? }  // pair optional: server prefers the `translation` preference
 translateMessageResponseSchema: { translation: string }
 
 // src/server/services/translation.service.ts
@@ -43,9 +43,12 @@ message **version row** (versions are independent, per
   not drop the first. Never replace the whole object.
 - The client also pre-checks the cache (`ChatView.handleTranslate`) so a repeat
   tap costs no request; the server check is the authority.
-- The translation model is one-shot `generateText` with the session's model
-  (same pattern as title generation), not a chat turn — so it does **not**
-  assemble instructions through `buildChatInstructions`. The prompt demands
+- The translation model is one-shot `generateText` with the caller's
+  `translation` model preference when set (`resolveModelPreference`, see
+  [model-preferences.md](./model-preferences.md)), else the client-supplied
+  pair in the request body (same pattern as title generation); with neither
+  the request 400s `model.notAvailable`. It is not a chat turn — so it does
+  **not** assemble instructions through `buildChatInstructions`. The prompt demands
   output-only translation, markdown/code-block preservation, and a verbatim
   return when the source is already in the target language.
 - `listTopicMessages` → `metadataFromRow` exposes `translations` for **both**

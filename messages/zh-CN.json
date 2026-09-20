@@ -17,7 +17,8 @@
       "files": "文件",
       "providers": "服务商",
       "search": "搜索",
-      "users": "用户"
+      "users": "用户",
+      "models": "默认模型"
     },
     "userMenu": {
       "accountMenu": "{name} 的账户菜单",
@@ -296,6 +297,19 @@
         "rose": "玫瑰",
         "violet": "紫罗兰"
       }
+    },
+    "Models": {
+      "title": "默认模型",
+      "description": "为聊天、标题生成、上下文压缩和翻译分别设置默认模型。",
+      "chat": "默认聊天模型",
+      "chatDescription": "当助手未设置默认模型时，新会话使用该模型。",
+      "titleGeneration": "标题生成模型",
+      "titleGenerationDescription": "用于生成新话题的标题。未设置时回退为会话所用模型。",
+      "compression": "上下文压缩模型",
+      "compressionDescription": "用于在长对话中生成历史摘要。未设置时回退为会话所用模型。",
+      "translation": "翻译模型",
+      "translationDescription": "用于翻译消息。未设置时回退为会话所用模型。",
+      "resetAll": "全部重置"
     },
     "Providers": {
       "title": "服务商",

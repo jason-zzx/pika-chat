@@ -3,6 +3,7 @@ import "server-only";
 import { generateText } from "ai";
 import { and, eq, sql } from "drizzle-orm";
 
+import { pairOrNull } from "@/lib/schemas/model-preferences";
 import {
   translateLanguageNativeName,
   type TranslateTargetLanguageCode,
@@ -13,6 +14,7 @@ import { getDb } from "@/server/db/client";
 import { assistants, chatMessages, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import { uiPartsFromJson } from "@/server/services/message.service";
+import { resolveModelPreference } from "@/server/services/model-preferences.service";
 
 const TRANSLATE_TIMEOUT_MS = 60_000;
 
@@ -44,8 +46,8 @@ export async function translateMessage(
   input: {
     messageId: string;
     targetLang: TranslateTargetLanguageCode;
-    providerConfigId: string;
-    modelId: string;
+    providerConfigId?: string;
+    modelId?: string;
   },
   actor: Actor,
 ): Promise<{ translation: string }> {
@@ -87,12 +89,17 @@ export async function translateMessage(
     throw new AppError("VALIDATION_FAILED", 400, "translation.emptyText");
   }
 
+  // The user's translation-model preference wins unconditionally; the
+  // client-supplied pair is the fallback, and with neither the request is a
+  // 400 (unlike title generation there is no text-only fallback here).
+  const pair =
+    (await resolveModelPreference(actor, "translation")) ?? pairOrNull(input);
+  if (!pair) {
+    throw new AppError("VALIDATION_FAILED", 400, "model.notAvailable");
+  }
   // Resolves the pair against the caller's own ∪ shared configs before any
   // credential is decrypted — the model-availability gate.
-  const handle = await createChatModelHandle(
-    { providerConfigId: input.providerConfigId, modelId: input.modelId },
-    actor,
-  );
+  const handle = await createChatModelHandle(pair, actor);
   let translation: string;
   try {
     const result = await generateText({

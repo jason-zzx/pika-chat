@@ -53,6 +53,7 @@ import {
   boundaryFromSummaryState,
   messagesAfterBoundary,
 } from "@/server/services/compression.service";
+import { resolveModelPreference } from "@/server/services/model-preferences.service";
 import { resolveSearchProviderCredentials } from "@/server/services/search-provider.service";
 import {
   createTopicForChat,
@@ -172,7 +173,21 @@ export const POST = withErrorHandling(async (request) => {
       // the persisted summary and post-boundary history computed above stay
       // in effect, so only a never-compressed topic continues in full.
       try {
-        const compressed = await compressTopicHistory({ topicId, handle }, actor);
+        // The summary model is the caller's `compression` preference when set
+        // (R6), else the session's own model. The threshold above always uses
+        // the session model's context window — when to compress belongs to
+        // the session model, only the summary generation may change hands.
+        const preferencePair = await resolveModelPreference(
+          actor,
+          "compression",
+        );
+        const compressionHandle = preferencePair
+          ? (await requireModelForActor(preferencePair, actor)).handle
+          : handle;
+        const compressed = await compressTopicHistory(
+          { topicId, handle: compressionHandle },
+          actor,
+        );
         historySummary = compressed.summaryText;
         modelHistory = messagesAfterBoundary(history, {
           id: compressed.summaryUpToMessageId,

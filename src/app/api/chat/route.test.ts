@@ -15,6 +15,7 @@ const {
   createTopicForChat,
   getTopicSummaryState,
   compressTopicHistory,
+  resolveModelPreference,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
   resolveAvailableModels: vi.fn(),
@@ -30,6 +31,7 @@ const {
   createTopicForChat: vi.fn(),
   getTopicSummaryState: vi.fn(),
   compressTopicHistory: vi.fn(),
+  resolveModelPreference: vi.fn(),
 }));
 
 vi.mock("next-intl/server", () => ({
@@ -52,6 +54,9 @@ vi.mock("@/server/services/topic.service", () => ({
 }));
 vi.mock("@/server/services/search-provider.service", () => ({
   resolveSearchProviderCredentials,
+}));
+vi.mock("@/server/services/model-preferences.service", () => ({
+  resolveModelPreference,
 }));
 // Keep the real token-estimation and boundary logic; stub only the two
 // database-touching functions.
@@ -156,6 +161,7 @@ beforeEach(() => {
   resolveSearchProviderCredentials.mockResolvedValue([]);
   resolveAttachmentsForModel.mockReset();
   getTopicSummaryState.mockResolvedValue(null);
+  resolveModelPreference.mockResolvedValue(null);
 });
 
 describe("POST /api/chat attachment routing", () => {
@@ -431,6 +437,45 @@ describe("POST /api/chat history compression", () => {
     expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
       [expect.objectContaining({ id: "message-1", role: "user" })],
       expect.anything(),
+    );
+  });
+
+  it("auto-compresses with the compression model preference when set (threshold still uses the session model)", async () => {
+    resolveModelPreference.mockResolvedValue({
+      providerConfigId: "cfg-1",
+      modelId: "model-1",
+    });
+    const sessionHandle = {
+      model: okModel(),
+      describeError: () => ({ kind: "key", key: "generic" }),
+      apiFormat: "openai-compatible",
+      providerConfigId: "cfg-1",
+      filesApi: null,
+    };
+    const preferenceHandle = {
+      model: {},
+      describeError: () => ({ kind: "key", key: "generic" }),
+      apiFormat: "openai-compatible",
+      providerConfigId: "cfg-1",
+      filesApi: null,
+    };
+    createChatModelHandle
+      .mockResolvedValueOnce(sessionHandle)
+      .mockResolvedValueOnce(preferenceHandle);
+    compressTopicHistory.mockResolvedValue({
+      summaryText: "early chat summary",
+      summaryUpToMessageId: "old-2",
+      summaryUpToGroupId: "old-2",
+      compressedCount: 2,
+    });
+
+    const response = await sendTurn();
+    await response.text();
+
+    expect(resolveModelPreference).toHaveBeenCalledWith(ACTOR, "compression");
+    expect(compressTopicHistory).toHaveBeenCalledWith(
+      { topicId: "topic-1", handle: preferenceHandle },
+      ACTOR,
     );
   });
 

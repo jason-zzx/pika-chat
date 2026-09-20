@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   uniqueIndex,
@@ -28,6 +29,10 @@ export const users = pgTable("users", {
   // default | paper | graphite | ocean | forest | rose | violet.
   themeMode: text("theme_mode").notNull().default("system"),
   themePreset: text("theme_preset").notNull().default("default"),
+  // Per-user default model picks ({chat?, title?, compression?, translation?}
+  // slots, each {providerConfigId, modelId}). NULL = no preferences; value
+  // domain guarded by zod on read/write, same style as the theme columns.
+  modelPreferences: jsonb("model_preferences"),
   banned: boolean("banned").notNull().default(false),
   banReason: text("ban_reason"),
   banExpires: timestamptz("ban_expires"),

@@ -43,6 +43,7 @@ import {
   appendUserMessage,
   listTopicMessages,
 } from "@/server/services/message.service";
+import { updateModelPreferences } from "@/server/services/model-preferences.service";
 import { createTopicForChat } from "@/server/services/topic.service";
 
 import {
@@ -231,6 +232,39 @@ describe("translateMessage", () => {
     expect(result).toEqual({ translation: "Hello world" });
     const call = generateText.mock.calls[0]?.[0] as { prompt: string };
     expect(call.prompt).toBe("Bonjour le monde");
+  });
+
+  it("prefers the user's translation-model preference over the client pair", async () => {
+    const { actor } = await setupTopicWithMessage();
+    await db.insert(providerModels).values({
+      id: "pm-pref",
+      providerConfigId: "cfg-1",
+      modelId: "pref-model",
+    });
+    await updateModelPreferences(
+      { translation: { providerConfigId: "cfg-1", modelId: "pref-model" } },
+      actor,
+    );
+
+    await translateMessage({ messageId: "m2", targetLang: "zh-CN" }, actor);
+
+    expect(createChatModelHandle).toHaveBeenCalledWith(
+      { providerConfigId: "cfg-1", modelId: "pref-model" },
+      actor,
+    );
+  });
+
+  it("400s when no pair is sent and no preference is set", async () => {
+    const { actor } = await setupTopicWithMessage();
+
+    await expect(
+      translateMessage({ messageId: "m2", targetLang: "zh-CN" }, actor),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      status: 400,
+      messageKey: "model.notAvailable",
+    });
+    expect(generateText).not.toHaveBeenCalled();
   });
 
   it("returns a cached translation without calling the model again", async () => {

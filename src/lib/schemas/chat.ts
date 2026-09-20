@@ -109,8 +109,9 @@ export const regenerateMessageRequestSchema = z.object({
 export const translateMessageRequestSchema = z.object({
   messageId: z.string().min(1),
   targetLang: z.enum(TRANSLATE_TARGET_LANGUAGE_CODES),
-  providerConfigId: z.string().min(1),
-  modelId: z.string().min(1),
+  // Optional: the server prefers the caller's `translation` model preference.
+  providerConfigId: z.string().min(1).optional(),
+  modelId: z.string().min(1).optional(),
 });
 export type TranslateMessageRequest = z.infer<
   typeof translateMessageRequestSchema

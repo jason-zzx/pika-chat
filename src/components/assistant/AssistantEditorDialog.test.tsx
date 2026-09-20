@@ -4,6 +4,7 @@ import { type InputHTMLAttributes, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAssistant } from "@/lib/api/assistant";
+import { getModelPreferences } from "@/lib/api/account";
 import { listAvailableModels } from "@/lib/api/provider";
 import type { Assistant } from "@/lib/schemas/assistant";
 import { defaultModelMetadata } from "@/lib/schemas/provider";
@@ -13,6 +14,10 @@ import AssistantEditorDialog from "./AssistantEditorDialog";
 
 vi.mock("@/lib/api/provider", () => ({
   listAvailableModels: vi.fn(),
+}));
+
+vi.mock("@/lib/api/account", () => ({
+  getModelPreferences: vi.fn(),
 }));
 
 vi.mock("@/lib/api/assistant", () => ({
@@ -67,6 +72,7 @@ function renderEditor(assistant: Assistant | null, locale?: "zh-CN") {
 describe("AssistantEditorDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getModelPreferences).mockResolvedValue({});
   });
 
   it("shows provenance on model options and can save with no model", async () => {
@@ -133,6 +139,60 @@ describe("AssistantEditorDialog", () => {
         defaultModelId: null,
       });
     });
+  });
+
+  it("prefills the default model from the chat preference in create mode", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([
+      {
+        configId: "cfg-own",
+        configName: "my-keys",
+        modelId: "local-llama",
+        provenance: "own",
+        ownerName: null,
+        ...defaultModelMetadata(),
+      },
+      {
+        configId: "cfg-shared",
+        configName: "instance-openai",
+        modelId: "gpt-4o",
+        provenance: "shared",
+        ownerName: "operator",
+        ...defaultModelMetadata(),
+      },
+    ]);
+    vi.mocked(getModelPreferences).mockResolvedValue({
+      chat: { providerConfigId: "cfg-shared", modelId: "gpt-4o" },
+    });
+
+    renderEditor(null);
+
+    await vi.waitFor(() => {
+      expect(screen.getByLabelText("Default model")).toHaveTextContent(
+        "gpt-4o",
+      );
+    });
+  });
+
+  it("does not prefill when the preferred model is no longer available", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([
+      {
+        configId: "cfg-own",
+        configName: "my-keys",
+        modelId: "local-llama",
+        provenance: "own",
+        ownerName: null,
+        ...defaultModelMetadata(),
+      },
+    ]);
+    vi.mocked(getModelPreferences).mockResolvedValue({
+      chat: { providerConfigId: "gone", modelId: "gpt-4o" },
+    });
+
+    renderEditor(null);
+
+    expect(await screen.findByLabelText("Default model")).toHaveTextContent(
+      "Select a model",
+    );
   });
 
   it("shows an unavailable notice and nothing preselected for a stale model", async () => {

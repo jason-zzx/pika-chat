@@ -22,6 +22,7 @@ import {
 import EmptyState from "@/components/common/EmptyState";
 import InsetHeader from "@/components/layout/InsetHeader";
 import { useAvailableModels } from "@/components/provider/use-available-models";
+import { useModelPreferences } from "@/hooks/use-model-preferences";
 import {
   deleteTopicMessage,
   listTopicMessages as fetchTopicMessages,
@@ -165,6 +166,7 @@ export default function ChatView({
   const tErrors = useTranslations("Errors");
   const tree = useAssistantTree();
   const models = useAvailableModels();
+  const modelPreferences = useModelPreferences();
   const setAssistantDefault = useSetAssistantDefaultModel();
   const generateTitle = useGenerateTopicTitle();
   const generateTitleMutateRef = useRef(generateTitle.mutate);
@@ -436,6 +438,9 @@ export default function ChatView({
     if (models.data === undefined) {
       return;
     }
+    if (modelPreferences.isPending) {
+      return;
+    }
     if (!resolvedAssistant && tree.isPending) {
       return;
     }
@@ -466,11 +471,16 @@ export default function ChatView({
           assistantDefaultProviderConfigId,
           assistantDefaultModelId,
         );
+    const fromUserDefault = pairFromIds(
+      modelPreferences.data?.chat?.providerConfigId,
+      modelPreferences.data?.chat?.modelId,
+    );
     seededModel.current = key;
     setPickedModel(
       resolveComposerModel({
         topicLastAssistantPair: fromHistory,
         assistantDefaultPair: fromAssistant,
+        userDefaultPair: fromUserDefault,
         available: models.data,
       }),
     );
@@ -479,6 +489,8 @@ export default function ChatView({
     assistantDefaultProviderConfigId,
     history.data?.messages,
     history.isPending,
+    modelPreferences.data,
+    modelPreferences.isPending,
     models.data,
     resolvedAssistant,
     resolvedAssistantId,
