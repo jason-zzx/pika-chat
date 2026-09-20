@@ -851,3 +851,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 30: 用户级默认模型偏好（聊天/标题/压缩/翻译）
+<!-- trellis-session: v=2 fp=4a8169da86e89d33 -->
+
+**Date**: 2026-09-20
+**Task**: 用户级默认模型偏好（聊天/标题/压缩/翻译）
+**Branch**: `main`
+
+### Summary
+
+新增 users.model_preferences jsonb 存储与 GET/PATCH /api/account/model-preferences（保存时校验可用性，使用时失效静默回退）。标题/翻译/手动压缩的请求模型对改为可选回退，自动压缩在 chat 路由注入偏好 handle（阈值仍按会话模型）；前端 resolveComposerModel 加用户默认第三级、新建助手预填、独立设置页 /settings/models（单项清除 + 全部重置，改即存）。新增 backend/model-preferences.md spec，compression/translation spec 语义修订。check 通过（lint/typecheck/1036 单测），ponytail-review 收紧 -39 行。遗留：集成测试 12 条需本地 Postgres（pnpm db:migrate 应用 0023 后 pnpm test）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `721a63c` | feat(settings): user-level default model preferences |
+
+### Status
+
+[OK] **Completed**
