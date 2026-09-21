@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/backend/provider-configs.md", "reason": "apiFormat 三分抽象、Record 穷举键模式、provider 响应 schema 必须 .nullish()、provider-error 映射约定——image 适配器照此实现"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "file.service 落库/配额/file part 契约——生成图片复用此管线，禁止删除顺序、配额断言调用点等坑都在此"}
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "regenerate 版本组机制——生图消息重生成必须遵守"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError/错误码/i18n 错误键约定"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新文件放置位置约定（src/server/ai/image/、src/lib/）"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "测试与质量门槛"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "assistant 消息 metadata 形态（providerConfigId/modelId/outcome）"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "前端附件渲染/composer 契约——assistant 图片 part 内联渲染复用点"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "composer 参数弹层组件规范"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "image.* 新键 en+zh-CN 同步要求"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "composer 状态（生图模式切换）放置约定"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "前后端共享类型从 src/lib 出"}

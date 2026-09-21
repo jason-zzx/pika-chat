@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/provider-configs.md", "reason": "核对 image 适配器遵守穷举键/.nullish()/错误映射三要点"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "核对生成图落库顺序（先 storage 后行）、配额断言、file part url 形态"}
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "核对 regenerate 新版本/selected 切换语义未被破坏"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "质量门槛核对"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "错误码与 i18n 键核对"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "新增键双语同步核对"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "assistant 图片渲染与既有附件 UI 一致性核对"}
