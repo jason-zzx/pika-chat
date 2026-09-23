@@ -873,3 +873,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 31: In-chat image generation
+<!-- trellis-session: v=2 fp=26eaebaab12d7253 -->
+
+**Date**: 2026-09-23
+**Task**: In-chat image generation
+**Branch**: `feat/image-generation`
+
+### Summary
+
+聊天内生图：独立 image service 按 apiFormat 适配 openai-compatible /images/generations 与 google generateContent（claude 早拒），/api/chat 与 regenerate 旁路流式管线并复用 UI message stream 回传完整 assistant 消息；静态能力表覆盖 gpt-image 1/2/2.5、dall-e、gemini、seedream、qwen、wan 各家族参数档位与 freeform 约束（含步进/比例/像素边界），生成图经 file.service 落库（跳过单文件上限、保留配额）并复用附件卡片渲染；composer image 模式（参数弹层、按 draft 的会话参数、发送前 sanitize、模型选择器生图徽标、自定义尺寸规则 tooltip），regenerate 继承当前 composer 参数；title 服务对生图模型短路为截断标题；修复 describeProviderError 吞 AppError、assistant 附件回流污染上下文、Gemini thought 泄漏、4K 图撞 20MiB 上限、批量失败孤儿文件等问题；ponytail-review 收敛（normalize 折回、isSizeAllowed 共享谓词、jsonHeaders 内联）。全量测试/类型/lint 通过，41c7e9a 提交于 feat/image-generation。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `41c7e9a` | feat(chat): in-chat image generation for image-output models |
+
+### Status
+
+[OK] **Completed**
