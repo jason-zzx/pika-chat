@@ -895,3 +895,20 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+## 2026-09-23 · 09-23-message-clock-skew
+
+**Branch**: `main`
+
+### Summary
+
+消息顺序倒置根因：user 行 created_at 走 DB defaultNow()（Docker Postgres 时钟），assistant 行用应用侧 streamStartedAt/generatedAt（Node 时钟）；WSL2 时钟漂移（实测 ~366ms 反向偏差）打破"回答晚于提问"不变量。修复：appendUserMessage 加可选 createdAt，/api/chat 流式与图片两个调用点传应用时钟的 turn 开始时间，同 topic 时间戳统一单一时钟；spec 补"单时钟规则"；新增集成测试覆盖传入 createdAt 落库。ponytail-review 后内联 turnStartedAt、测试改用 new Date(0)；历史数据不修（非目标）。
+
+### Git Commits
+
+| Hash | Message |
+| `227f56d` | fix(chat): unify message createdAt on the app clock |
+
+### Status
+
+[OK] **Completed** (archived)
