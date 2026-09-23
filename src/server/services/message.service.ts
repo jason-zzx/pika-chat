@@ -234,7 +234,7 @@ export async function listTopicMessages(
 }
 
 export async function appendUserMessage(
-  input: { topicId: string; message: ChatUIMessage },
+  input: { topicId: string; message: ChatUIMessage; createdAt?: Date },
   actor: Actor,
 ): Promise<ChatUIMessage> {
   await requireOwnedTopic(input.topicId, actor);
@@ -255,6 +255,11 @@ export async function appendUserMessage(
       parts,
       // User messages are always single-version groups keyed by their own id.
       groupId: id,
+      // Caller passes the app-side turn-start time so every row in a topic
+      // shares one clock; the DB default would mix in the Postgres clock,
+      // whose drift (e.g. Docker/WSL2) can invert list ordering against the
+      // app-timestamped assistant rows.
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     })
     .returning();
   const row = inserted[0];

@@ -132,7 +132,13 @@ async function imageGenerationResponse({
     parts: input.message.parts,
   });
   const prompt = textFromMessage(userMessage);
-  await appendUserMessage({ topicId, message: userMessage }, actor);
+  // Turn-start time from the app clock: the assistant row uses generatedAt
+  // (same clock), so the user row must too or a drifting DB clock can invert
+  // the list ordering.
+  await appendUserMessage(
+    { topicId, message: userMessage, createdAt: new Date() },
+    actor,
+  );
   await touchTopicUpdatedAt(topicId, actor);
 
   return createImageGenerationResponse({
@@ -316,8 +322,9 @@ export const POST = withErrorHandling(async (request) => {
     systemPrompt = context?.assistant.systemPrompt ?? null;
   }
 
+  // Same reasoning as the image path: one app-side clock per topic.
   const storedUser = await appendUserMessage(
-    { topicId, message: userMessage },
+    { topicId, message: userMessage, createdAt: new Date() },
     actor,
   );
   await touchTopicUpdatedAt(topicId, actor);

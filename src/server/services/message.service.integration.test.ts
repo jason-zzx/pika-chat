@@ -228,6 +228,20 @@ describe("message.service versions", () => {
     expect(messages[0]?.metadata?.groupId).toBeUndefined();
   });
 
+  it("persists a caller-provided user createdAt (single app clock)", async () => {
+    const { actor, topicId } = await setupTopic();
+    const turnStartedAt = new Date(0);
+    await appendUserMessage(
+      { topicId, message: userMessage("m1", "q"), createdAt: turnStartedAt },
+      actor,
+    );
+
+    const messages = await listTopicMessages({ topicId }, actor);
+    expect(messages[0]?.metadata?.createdAt).toBe(
+      turnStartedAt.toISOString(),
+    );
+  });
+
   it("appends a selected version and exposes group metadata", async () => {
     const { actor, topicId } = await setupTopic();
     await appendUserMessage({ topicId, message: userMessage("m1", "q") }, actor);

@@ -70,10 +70,17 @@ them together or the live and reloaded views disagree.
   history load so live and reloaded views converge.
 - Optimistic user message: `sendMessage({ text, metadata: { createdAt: new
   Date().toISOString() } })` (`CreateUIMessage` carries metadata). The server
-  persists its own `defaultNow()` value for the user row; sub-second skew vs
-  the client stamp is accepted and disappears on reload. For assistant
-  messages there is no skew: the route persists `createdAt: streamStartedAt`
-  (captured before `streamText`), matching the finish metadata.
+  persists its own app-clock `turnStartedAt` (captured before
+  `appendUserMessage`, passed via its optional `createdAt`) for the user row;
+  sub-second skew vs the client stamp is accepted and disappears on reload.
+  **Single-clock rule**: every `chat_messages.created_at` in a topic must
+  come from the Node app clock — never let user rows fall back to the DB
+  `defaultNow()`, because assistant rows are app-timestamped
+  (`streamStartedAt` / image `generatedAt`) and a drifting DB clock
+  (Docker/WSL2) can invert the `createdAt, id` list ordering
+  (09-23-message-clock-skew). For assistant messages there is no skew: the
+  route persists `createdAt: streamStartedAt` (captured before
+  `streamText`), matching the finish metadata.
 - Timestamps/durations are metadata, **not** message parts — never stuff them
   into `parts` (per-item zod union would need new variants).
 

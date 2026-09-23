@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "listTopicMessages ordering by createdAt,id and version grouping semantics affected by the fix"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "createdAt metadata contract for user/assistant messages (stream-start time, replay consistency)"}
