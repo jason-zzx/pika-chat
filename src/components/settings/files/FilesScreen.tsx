@@ -4,17 +4,21 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
+import ImagePreviewDialog from "@/components/common/ImagePreviewDialog";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSection from "@/components/settings/SettingsSection";
 import { Button } from "@/components/ui/button";
 import { apiErrorMessage } from "@/lib/api/error-message";
-import type { FileListCategory } from "@/lib/files/media-types";
+import {
+  FILE_URL_PREFIX,
+  fileListCategoryOf,
+  type FileListCategory,
+} from "@/lib/files/media-types";
 import type { ListedFile } from "@/lib/schemas/file";
 
 import BatchDeleteDialog from "./BatchDeleteDialog";
 import CategoryFilter from "./CategoryFilter";
 import FilesList from "./FilesList";
-import FilePreviewDialog from "./FilePreviewDialog";
 import UsageCard from "./UsageCard";
 import { useFileList } from "./use-files";
 
@@ -24,7 +28,9 @@ export default function FilesScreen() {
   const tCommon = useTranslations("Common");
   const tErrors = useTranslations("Errors");
   const [category, setCategory] = useState<FileListCategory | null>(null);
-  const [previewFile, setPreviewFile] = useState<ListedFile | null>(null);
+  /** Index into `imageFiles` — prev/next navigation needs a position, not a
+   * bare file. */
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ListedFile | null>(null);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -34,6 +40,14 @@ export default function FilesScreen() {
 
   const files = list.data?.pages.flatMap((page) => page.files) ?? [];
   const totalCount = list.data?.pages[0]?.totalCount ?? 0;
+
+  // Navigation stays within the loaded pages; the ends are disabled and the
+  // list's own "load more" is the way to reach further images.
+  const imageFiles = files.filter(
+    (file) => fileListCategoryOf(file) === "image",
+  );
+  const previewFile =
+    previewIndex !== null ? imageFiles[previewIndex] : undefined;
 
   // Selection is a client-side Set; rows that disappear from the list
   // (deleted, or a 409 race refetch marking them in-use) drop out of the
@@ -136,7 +150,12 @@ export default function FilesScreen() {
                 selectedIds={selectedIds}
                 onToggleSelect={onToggleSelect}
                 onToggleAll={onToggleAll}
-                onPreview={setPreviewFile}
+                onPreview={(file) => {
+                  const index = imageFiles.findIndex(
+                    (image) => image.id === file.id,
+                  );
+                  setPreviewIndex(index === -1 ? null : index);
+                }}
                 onDelete={setDeleteTarget}
               />
             </SettingsCard>
@@ -159,13 +178,30 @@ export default function FilesScreen() {
       </SettingsSection>
 
       {previewFile ? (
-        <FilePreviewDialog
-          file={previewFile}
+        // key remounts per image so zoom state never leaks across prev/next.
+        <ImagePreviewDialog
+          key={previewFile.id}
+          src={`${FILE_URL_PREFIX}${previewFile.id}`}
+          filename={previewFile.filename}
           onOpenChange={(open) => {
             if (!open) {
-              setPreviewFile(null);
+              setPreviewIndex(null);
             }
           }}
+          onPrev={() =>
+            setPreviewIndex((index) =>
+              index !== null && index > 0 ? index - 1 : index,
+            )
+          }
+          onNext={() =>
+            setPreviewIndex((index) =>
+              index !== null && index < imageFiles.length - 1
+                ? index + 1
+                : index,
+            )
+          }
+          prevDisabled={previewIndex === 0}
+          nextDisabled={previewIndex === imageFiles.length - 1}
         />
       ) : null}
       {deleteTarget ? (
