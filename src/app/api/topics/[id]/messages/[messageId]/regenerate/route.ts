@@ -16,6 +16,10 @@ import {
 } from "@/lib/schemas/chat";
 import { requireModelForActor } from "@/server/ai/require-model";
 import { resolveAttachmentsForModel } from "@/server/ai/attachments";
+import {
+  assertImageGenerationSupported,
+  createImageGenerationResponse,
+} from "@/server/ai/image/turn";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
 import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
@@ -46,6 +50,7 @@ import {
 import {
   appendAssistantMessage,
   resolveRegenerateTarget,
+  textFromMessage,
 } from "@/server/services/message.service";
 import { resolveSearchProviderCredentials } from "@/server/services/search-provider.service";
 import {
@@ -83,6 +88,41 @@ export const POST = withErrorHandling(async (request, context) => {
     actor,
     { builtinSearch: input.searchMode === "builtin" },
   );
+
+  const topicContext = await findTopicContextForActor(topicId, actor);
+  if (!topicContext) {
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
+  }
+
+  const { targetGroupId, history } = await resolveRegenerateTarget(
+    { topicId, messageId },
+    actor,
+  );
+
+  // Image-generation bypass (same contract as /api/chat): an image-output
+  // model regenerates with one non-streaming call — no history, compression,
+  // tools, or attachment routing — and the new answer joins the target
+  // version group. The prompt is the text of the last user message in the
+  // target history; the stream id travels in the response header as usual.
+  if (selected.outputModalities.includes("image")) {
+    assertImageGenerationSupported(handle.apiFormat, input.modelId, input.image);
+    const promptMessage = [...history]
+      .reverse()
+      .find((message) => message.role === "user");
+    return createImageGenerationResponse({
+      actor,
+      handle,
+      t,
+      providerConfigId: input.providerConfigId,
+      modelId: input.modelId,
+      image: input.image,
+      prompt: promptMessage ? textFromMessage(promptMessage) : "",
+      topicId,
+      groupId: targetGroupId ?? undefined,
+      announceTopic: false,
+    });
+  }
+
   const reasoningEffort = resolvedReasoningEffort(
     selected,
     input.reasoningEffort,
@@ -104,15 +144,6 @@ export const POST = withErrorHandling(async (request, context) => {
     }
   }
 
-  const topicContext = await findTopicContextForActor(topicId, actor);
-  if (!topicContext) {
-    throw new AppError("NOT_FOUND", 404, "topic.notFound");
-  }
-
-  const { targetGroupId, history } = await resolveRegenerateTarget(
-    { topicId, messageId },
-    actor,
-  );
   // Align with /api/chat: reuse the topic's persisted summary — clip the
   // history to the compression boundary and carry the summary into the
   // instructions. No new compression is triggered here (AC1b).

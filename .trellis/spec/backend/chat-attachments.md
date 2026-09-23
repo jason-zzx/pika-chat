@@ -59,6 +59,8 @@ resolveAttachmentsForModel(
     filesApi: FilesApiProvider | null, // null for openai-compatible: always inline
   },
 ): Promise<ChatUIMessage[]>          // pure: returns new arrays, persisted parts untouched
+                                       // assistant-role file parts (generated images) are
+                                       // dropped outright — see image-generation.md
 
 // ai/provider-files.ts
 ensureProviderReference({ file, configId, apiFormat, filesApi }):
@@ -269,6 +271,17 @@ allowing browser POSTs) and a 302 to a presigned GET for download/preview
 | audio / video | either gate fails | `file.mediaUnsupported` |
 
 Wrapped text is `<attachment filename="…" truncated="true|false">\n…\n</attachment>`.
+
+**Assistant-role file parts never re-enter the payload.** Only user messages
+are scanned; a file part on an assistant message (a generated image — model
+output, not input) is dropped outright, and an assistant message left with no
+parts at all is removed from the payload too. The no-attachment fast path
+checks for assistant file parts as well, so they are dropped even when no user
+attachment needs routing. Routing them would kill every later turn of a
+mixed-model topic: a text-only model 400s with `file.imageRequiresVision`, the
+google adapter throws on an assistant-role image it cannot serialize, and an
+empty assistant turn is rejected by the provider. See
+[image-generation.md](./image-generation.md). User-role behavior is unchanged.
 
 Native parts on a reference keep `url: /api/files/<id>` (the UI card still
 renders) and add `providerReference`; the SDK prefers the reference over the

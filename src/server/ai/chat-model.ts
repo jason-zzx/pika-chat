@@ -30,6 +30,11 @@ export type ChatModelHandle = {
    * one. `null` here is what keeps `openai-compatible` on the inline path.
    */
   filesApi: FilesApiProvider | null;
+  /**
+   * Endpoint the model was built from. The image-generation bypass speaks
+   * to it directly (no chat `model` is involved), so it rides the handle.
+   */
+  endpoint: ProviderEndpoint;
 };
 
 async function loadConfigRow(providerConfigId: string) {
@@ -113,5 +118,6 @@ export async function createChatModelHandle(
     apiFormat: endpoint.apiFormat,
     providerConfigId: pair.providerConfigId,
     filesApi: createFilesApi(endpoint),
+    endpoint,
   };
 }

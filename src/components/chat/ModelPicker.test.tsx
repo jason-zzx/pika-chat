@@ -124,6 +124,39 @@ describe("ModelPicker", () => {
     expect(onChange).toHaveBeenCalledWith(null);
   });
 
+  it("marks image-output models with an image-generation icon", async () => {
+    vi.mocked(listAvailableModels).mockResolvedValue([
+      {
+        configId: "cfg-own",
+        configName: "my-keys",
+        modelId: "gpt-image-1",
+        provenance: "own",
+        ownerName: null,
+        ...defaultModelMetadata({ outputModalities: ["image", "text"] }),
+      },
+      {
+        configId: "cfg-own",
+        configName: "my-keys",
+        modelId: "plain-chat",
+        provenance: "own",
+        ownerName: null,
+        ...defaultModelMetadata(),
+      },
+    ]);
+
+    renderPicker();
+    const trigger = await screen.findByRole("button", {
+      name: "Select a model",
+    });
+    await vi.waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+
+    const imageRow = await screen.findByRole("button", { name: /gpt-image-1/ });
+    expect(imageRow).toHaveAccessibleName(/Image generation/);
+    const plainRow = screen.getByRole("button", { name: /plain-chat/ });
+    expect(plainRow).not.toHaveAccessibleName(/Image generation/);
+  });
+
   it("falls back to the anonymous owner label for a shared config without an owner name", async () => {
     vi.mocked(listAvailableModels).mockResolvedValue([
       {

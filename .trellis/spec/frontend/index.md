@@ -53,7 +53,7 @@ Handlers it calls.
 | [Directory Structure](./directory-structure.md) | Where components, hooks, and stores go |
 | [Component Guidelines](./component-guidelines.md) | Server/client boundary, composition, responsive layout, cursor affordance |
 | [Chat Scroll Behavior](./chat-scroll-behavior.md) | Message-list pin/reserve auto-scroll contracts |
-| [Chat Attachments](./chat-attachments.md) | Composer staging/upload state machine, chip warnings, attachment cards, the `FileUIPart` send contract |
+| [Chat Attachments](./chat-attachments.md) | Composer staging/upload state machine, chip warnings, attachment cards, the `FileUIPart` send contract, composer image-generation mode |
 | [Hook Guidelines](./hook-guidelines.md) | Query hooks, `useChat`, custom hook rules |
 | [i18n](./i18n.md) | Catalogs, locale cookie, server/client usage, switcher, error keys |
 | [State Management](./state-management.md) | The Zustand / TanStack Query boundary |

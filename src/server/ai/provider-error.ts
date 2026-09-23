@@ -9,6 +9,7 @@ import type {
   ErrorsTranslator,
 } from "@/lib/api/error-contract";
 import { logger } from "@/server/logger";
+import { AppError } from "@/server/errors";
 
 /**
  * Hard ceiling on stored error text. The transcript renders it inside a
@@ -234,6 +235,19 @@ export function describeProviderError(
   );
 
   if (!APICallError.isInstance(failure)) {
+    // Our own typed errors (e.g. `provider.unexpectedResponse` from the image
+    // adapters when a gateway answers 200 with an unparseable body) carry
+    // their catalog key through verbatim — folding them into "unreachable"
+    // misreports a successful-but-malformed upstream answer as a network
+    // failure.
+    if (failure instanceof AppError) {
+      return {
+        code: failure.code,
+        kind: "key",
+        messageKey: failure.messageKey,
+        ...(failure.params ? { params: failure.params } : {}),
+      };
+    }
     if (isTimeoutError(failure)) {
       return {
         code: "PROVIDER_ERROR",

@@ -1054,6 +1054,35 @@ describe("MessageItem thinking duration", () => {
 });
 
 describe("MessageItem attachments", () => {
+  it("renders a generated image inline on an assistant message", () => {
+    // Declared as a variable so the stored-only `sizeBytes` field is carried
+    // structurally (excess-property checks skip non-fresh objects).
+    const parts = [
+      {
+        type: "file" as const,
+        url: "/api/files/gen-1",
+        mediaType: "image/png",
+        filename: "generated.png",
+        sizeBytes: 2048,
+      },
+      { type: "text" as const, text: "here you go" },
+    ];
+    renderWithIntl(
+      <MessageItem
+        message={{ id: "assistant-1", role: "assistant", parts }}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "Assistant" });
+    const image = screen.getByRole("img", { name: "generated.png" });
+    expect(article).toContainElement(image);
+    expect(image).toHaveAttribute("src", "/api/files/gen-1");
+    // Same rendering contract as user attachments: frame on the img itself.
+    expect(image.className).toContain("rounded-lg");
+    expect(image.className).toContain("border");
+    expect(screen.getByText("here you go")).toBeInTheDocument();
+  });
+
   it("renders a file card linking to the canonical attachment url", () => {
     renderWithIntl(
       <MessageItem

@@ -11,6 +11,7 @@ import {
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 import {
   useComposerStore,
+  type ComposerImageParams,
   type StagedAttachment,
 } from "@/stores/composer-store";
 
@@ -32,11 +33,13 @@ function renderComposer(options?: {
   canSend?: boolean;
   draft?: string;
   models?: AvailableModel[];
+  model?: { configId: string; modelId: string };
   reasoningEffort?: string | null;
   chatMapDisabled?: boolean;
   attachments?: StagedAttachment[];
   onCompress?: () => void;
   compressDisabled?: boolean;
+  imageParams?: ComposerImageParams;
 }) {
   vi.mocked(listAvailableModels).mockResolvedValue(options?.models ?? []);
   const client = new QueryClient({
@@ -49,12 +52,13 @@ function renderComposer(options?: {
   const onAddFiles = vi.fn();
   const onRemoveAttachment = vi.fn();
   const onRetryAttachment = vi.fn();
+  const onImageParamsChange = vi.fn();
   renderWithIntl(
     <QueryClientProvider client={client}>
       <Composer
         draft={options?.draft ?? "hello"}
         onDraftChange={() => undefined}
-        model={{ configId: "cfg", modelId: "local-llama" }}
+        model={options?.model ?? { configId: "cfg", modelId: "local-llama" }}
         onModelChange={() => undefined}
         showAssistantPicker={false}
         inFlight={options?.inFlight ?? false}
@@ -71,6 +75,8 @@ function renderComposer(options?: {
         onAddFiles={onAddFiles}
         onRemoveAttachment={onRemoveAttachment}
         onRetryAttachment={onRetryAttachment}
+        imageParams={options?.imageParams}
+        onImageParamsChange={onImageParamsChange}
       />
     </QueryClientProvider>,
   );
@@ -82,6 +88,7 @@ function renderComposer(options?: {
     onAddFiles,
     onRemoveAttachment,
     onRetryAttachment,
+    onImageParamsChange,
   };
 }
 
@@ -382,6 +389,201 @@ describe("Composer", () => {
         Object.defineProperty(HTMLElement.prototype, "clientHeight", client);
       }
     }
+  });
+});
+
+describe("Composer image mode", () => {
+  function imageModel(overrides: Partial<AvailableModel> = {}): AvailableModel {
+    return {
+      configId: "cfg",
+      configName: "my-keys",
+      modelId: "gpt-image-1",
+      provenance: "own",
+      ownerName: null,
+      ...defaultModelMetadata({
+        outputModalities: ["image", "text"],
+        // Deliberately reasoning-capable: image mode must hide it anyway.
+        reasoning: true,
+        reasoningOptions: ["low", "high"],
+      }),
+      ...overrides,
+    };
+  }
+
+  it("hides attachments, search, and reasoning, and shows the image settings entry", async () => {
+    const { onAddFiles } = renderComposer({
+      model: { configId: "cfg", modelId: "gpt-image-1" },
+      models: [imageModel()],
+      attachments: [stagedAttachment()],
+      reasoningEffort: "low",
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "gpt-image-1" })).toBeEnabled(),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Image settings" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Attach files" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Web search mode/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "Reasoning effort" }),
+    ).not.toBeInTheDocument();
+    // Staged chips are hidden, not dropped: switching back restores them.
+    expect(screen.queryByText("notes.txt")).not.toBeInTheDocument();
+
+    // Paste no longer stages files in image mode.
+    const textarea = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.paste(textarea, {
+      clipboardData: { files: [new File(["x"], "pasted.png", { type: "image/png" })] },
+    });
+    expect(onAddFiles).not.toHaveBeenCalled();
+  });
+
+  it("keeps the regular controls and no image settings for a chat model", async () => {
+    renderComposer({
+      models: [
+        {
+          configId: "cfg",
+          configName: "my-keys",
+          modelId: "local-llama",
+          provenance: "own",
+          ownerName: null,
+          ...defaultModelMetadata(),
+        },
+      ],
+      attachments: [stagedAttachment()],
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "local-llama" })).toBeEnabled(),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Image settings" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attach files" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("notes.txt")).toBeInTheDocument();
+  });
+
+  it("offers size, count, and quality controls per the capability table", async () => {
+    const { onImageParamsChange } = renderComposer({
+      model: { configId: "cfg", modelId: "gpt-image-1" },
+      models: [imageModel()],
+      imageParams: {},
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "gpt-image-1" })).toBeEnabled(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Image settings" }));
+
+    // gpt-image: three size tiers, nMax 10, four quality tiers, no custom
+    // size (not freeform), no Gemini resolution tiers.
+    expect(
+      await screen.findByRole("button", { name: "1024x1024" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "1536x1024" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Count")).toBeInTheDocument();
+    expect(screen.getByText("Quality")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "high" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Custom size")).not.toBeInTheDocument();
+    expect(screen.queryByText("Resolution")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "1536x1024" }));
+    expect(onImageParamsChange).toHaveBeenCalledWith({ size: "1536x1024" });
+
+    // Count stepper: starts at 1, minus disabled, plus increments.
+    const decrease = screen.getByRole("button", { name: "Decrease count" });
+    expect(decrease).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Increase count" }));
+    expect(onImageParamsChange).toHaveBeenCalledWith({ n: 2 });
+
+    fireEvent.click(screen.getByRole("button", { name: "high" }));
+    expect(onImageParamsChange).toHaveBeenCalledWith({ quality: "high" });
+  });
+
+  it("shows Gemini resolution tiers for aspect-ratio models", async () => {
+    renderComposer({
+      model: { configId: "cfg", modelId: "gemini-3-pro-image" },
+      models: [imageModel({ modelId: "gemini-3-pro-image" })],
+      imageParams: { imageSize: "2K" },
+    });
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "gemini-3-pro-image" }),
+      ).toBeEnabled(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Image settings" }));
+
+    expect(await screen.findByText("Resolution")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "2K" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "16:9" })).toBeInTheDocument();
+    expect(screen.queryByText("Quality")).not.toBeInTheDocument();
+  });
+
+  it("accepts a valid custom size for freeform models and flags an invalid one", async () => {
+    const { onImageParamsChange } = renderComposer({
+      model: { configId: "cfg", modelId: "seedream-4" },
+      models: [imageModel({ modelId: "seedream-4" })],
+      imageParams: {},
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "seedream-4" })).toBeEnabled(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Image settings" }));
+    const custom = await screen.findByLabelText("Custom size");
+
+    fireEvent.change(custom, { target: { value: "abc" } });
+    expect(
+      screen.getByText("Use the format WxH, e.g. 1024x768"),
+    ).toBeInTheDocument();
+    expect(onImageParamsChange).not.toHaveBeenCalled();
+
+    fireEvent.change(custom, { target: { value: "500x500" } });
+    expect(onImageParamsChange).toHaveBeenCalledWith({ size: "500x500" });
+    expect(
+      screen.queryByText("Use the format WxH, e.g. 1024x768"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("flags a custom size violating a constrained freeform model's limits", async () => {
+    const { onImageParamsChange } = renderComposer({
+      model: { configId: "cfg", modelId: "gpt-image-2" },
+      models: [imageModel({ modelId: "gpt-image-2" })],
+      imageParams: {},
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "gpt-image-2" })).toBeEnabled(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Image settings" }));
+    const custom = await screen.findByLabelText("Custom size");
+
+    // Well-formed WxH but 1537 is not divisible by 16: flagged, never sent.
+    fireEvent.change(custom, { target: { value: "1537x864" } });
+    expect(
+      screen.getByText("Use the format WxH, e.g. 1024x768"),
+    ).toBeInTheDocument();
+    expect(onImageParamsChange).not.toHaveBeenCalled();
+
+    fireEvent.change(custom, { target: { value: "1536x864" } });
+    expect(onImageParamsChange).toHaveBeenCalledWith({ size: "1536x864" });
+    expect(
+      screen.queryByText("Use the format WxH, e.g. 1024x768"),
+    ).not.toBeInTheDocument();
   });
 });
 

@@ -162,6 +162,85 @@ describe("resolveAttachmentsForModel", () => {
     expect(getFilesByIds).not.toHaveBeenCalled();
   });
 
+  describe("assistant-role file parts (generated images)", () => {
+    function assistantMessage(parts: ChatUIMessage["parts"]): ChatUIMessage {
+      return { id: "a1", role: "assistant", parts };
+    }
+
+    function generatedImagePart(id = "gen-1"): ChatFilePart {
+      return {
+        type: "file",
+        url: `/api/files/${id}`,
+        mediaType: "image/png",
+        filename: "generated.png",
+        sizeBytes: 123,
+      };
+    }
+
+    it("drops them for a text-only model instead of 400ing every later turn", async () => {
+      // A mixed-model topic: the image was generated earlier, the composer is
+      // now on a non-vision chat model. Routing the persisted assistant image
+      // part would throw file.imageRequiresVision on every send.
+      const messages = [
+        userMessage([{ type: "text", text: "draw a cat" }]),
+        assistantMessage([generatedImagePart(), { type: "text", text: "done" }]),
+        userMessage([{ type: "text", text: "now describe it" }]),
+      ];
+      const before = JSON.stringify(messages);
+
+      const routed = await resolveAttachmentsForModel(messages, TEXT_ONLY);
+
+      expect(routed).toHaveLength(3);
+      expect(routed[1]?.parts).toEqual([{ type: "text", text: "done" }]);
+      // The generated row is never even looked up, and the input (persisted)
+      // parts are not mutated.
+      expect(getFilesByIds).not.toHaveBeenCalled();
+      expect(JSON.stringify(messages)).toBe(before);
+    });
+
+    it("drops them for a google vision model without touching the Files API", async () => {
+      // The google adapter cannot serialize an assistant-role image part and
+      // throws UnsupportedFunctionalityError on every replayed turn.
+      const messages = [
+        assistantMessage([generatedImagePart()]),
+        userMessage([{ type: "text", text: "next" }]),
+      ];
+
+      const routed = await resolveAttachmentsForModel(messages, MEDIA_CAPABLE);
+
+      // The image-only assistant turn collapses entirely: an empty assistant
+      // message must not reach the provider either.
+      expect(routed).toEqual([messages[1]]);
+      expect(ensureProviderReference).not.toHaveBeenCalled();
+      expect(storageGet).not.toHaveBeenCalled();
+    });
+
+    it("still routes user attachments in the same history", async () => {
+      const file = makeFile({
+        id: "img-1",
+        filename: "cat.png",
+        mediaType: "image/png",
+        storageKey: `${actor}/img-1`,
+        extractedText: null,
+        extractionStatus: "none",
+      });
+      getFilesByIds.mockResolvedValue(new Map([["img-1", file]]));
+      storageGet.mockResolvedValue(Buffer.from("abc"));
+      const messages = [
+        assistantMessage([generatedImagePart()]),
+        userMessage([filePart(file)]),
+      ];
+
+      const routed = await resolveAttachmentsForModel(messages, ALL_MODALITIES);
+
+      expect(routed).toHaveLength(1);
+      expect(routed[0]?.parts[0]).toMatchObject({
+        type: "file",
+        url: expect.stringContaining("data:image/png;base64,"),
+      });
+    });
+  });
+
   it("inlines an image as a data URL when the model has vision", async () => {
     const file = makeFile({
       id: "img-1",

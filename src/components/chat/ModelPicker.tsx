@@ -1,6 +1,6 @@
 "use client";
 
-import { BrainIcon, ChevronDownIcon, EyeIcon } from "lucide-react";
+import { BrainIcon, ChevronDownIcon, EyeIcon, ImageIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -190,8 +190,13 @@ export default function ModelPicker({
                     const isSelected = sameModelPick(value, pick);
                     const contextLabel = formatContextTokens(model.contextTokens);
                     const hasVision = modelHasVision(model.inputModalities);
+                    const generatesImages =
+                      model.outputModalities.includes("image");
                     const hasCues =
-                      contextLabel !== null || hasVision || model.reasoning;
+                      contextLabel !== null ||
+                      hasVision ||
+                      model.reasoning ||
+                      generatesImages;
                     return (
                       <button
                         key={`${model.configId}::${model.modelId}`}
@@ -236,6 +241,20 @@ export default function ModelPicker({
                                   className="size-3.5"
                                 />
                                 <span className="sr-only">{t("reasoning")}</span>
+                              </span>
+                            ) : null}
+                            {generatesImages ? (
+                              <span
+                                title={t("imageGeneration")}
+                                className="flex items-center"
+                              >
+                                <ImageIcon
+                                  aria-hidden="true"
+                                  className="size-3.5"
+                                />
+                                <span className="sr-only">
+                                  {t("imageGeneration")}
+                                </span>
                               </span>
                             ) : null}
                           </span>

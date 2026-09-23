@@ -13,6 +13,9 @@ const {
   touchTopicUpdatedAt,
   resolveSearchProviderCredentials,
   getTopicSummaryState,
+  generateImageForEndpoint,
+  uploadFile,
+  deleteFile,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
   resolveAvailableModels: vi.fn(),
@@ -24,6 +27,9 @@ const {
   touchTopicUpdatedAt: vi.fn(),
   resolveSearchProviderCredentials: vi.fn(),
   getTopicSummaryState: vi.fn(),
+  generateImageForEndpoint: vi.fn(),
+  uploadFile: vi.fn(),
+  deleteFile: vi.fn(),
 }));
 
 vi.mock("next-intl/server", () => ({
@@ -32,6 +38,7 @@ vi.mock("next-intl/server", () => ({
 vi.mock("@/server/auth/actor", () => ({ requireActor }));
 vi.mock("@/server/ai/model-resolution", () => ({ resolveAvailableModels }));
 vi.mock("@/server/ai/chat-model", () => ({ createChatModelHandle }));
+vi.mock("@/server/ai/image/generate", () => ({ generateImageForEndpoint }));
 vi.mock("@/server/ai/attachments", () => ({ resolveAttachmentsForModel }));
 vi.mock("@/server/ai/model-messages", () => ({
   replayModelMessages: vi.fn(async (messages: unknown) => messages),
@@ -70,7 +77,16 @@ vi.mock("@/server/ai/reasoning-timer", () => ({
 vi.mock("@/server/services/message.service", () => ({
   appendAssistantMessage,
   resolveRegenerateTarget,
+  // Faithful stand-in: the image bypass derives the prompt from it.
+  textFromMessage: (message: {
+    parts: Array<{ type: string; text?: string }>;
+  }) =>
+    message.parts
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join(""),
 }));
+vi.mock("@/server/files/file.service", () => ({ uploadFile, deleteFile }));
 vi.mock("@/server/services/topic.service", () => ({
   findTopicContextForActor,
   touchTopicUpdatedAt,
@@ -108,13 +124,17 @@ const PROVIDER_MESSAGE = "insufficient_quota: you exceeded your current quota";
 
 const CONTEXT = { params: Promise.resolve({ id: "topic-1", messageId: "m-1" }) };
 
-function regenerateRequest(): Request {
+function regenerateRequest(body: Record<string, unknown> = {}): Request {
   return new Request(
     "http://localhost/api/topics/topic-1/messages/m-1/regenerate",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ providerConfigId: "cfg-1", modelId: "model-1" }),
+      body: JSON.stringify({
+        providerConfigId: "cfg-1",
+        modelId: "model-1",
+        ...body,
+      }),
     },
   );
 }
@@ -142,6 +162,7 @@ beforeEach(() => {
       configId: "cfg-1",
       modelId: "model-1",
       inputModalities: ["text"],
+      outputModalities: ["text"],
       reasoning: false,
       reasoningOptions: [],
     },
@@ -335,5 +356,182 @@ describe("POST regenerate with a compressed topic", () => {
       ],
       expect.anything(),
     );
+  });
+});
+
+const IMAGE_MODEL = {
+  configId: "cfg-1",
+  modelId: "gpt-image-1",
+  inputModalities: ["text"],
+  outputModalities: ["image", "text"],
+  reasoning: false,
+  reasoningOptions: [],
+};
+
+function imageHandle(overrides: Record<string, unknown> = {}) {
+  return {
+    model: {},
+    describeError: () => ({ kind: "key", key: "generic" }),
+    apiFormat: "openai-compatible",
+    providerConfigId: "cfg-1",
+    filesApi: null,
+    endpoint: {
+      apiFormat: "openai-compatible",
+      baseUrl: "https://api.test/v1",
+      apiKey: "test-key",
+    },
+    ...overrides,
+  };
+}
+
+// The prompt is the last user message of the target history; the assistant
+// answer being regenerated carries the previously generated image.
+const IMAGE_HISTORY = [
+  { id: "u-1", role: "user", parts: [{ type: "text", text: "draw a cat" }] },
+  {
+    id: "a-1",
+    role: "assistant",
+    parts: [
+      { type: "file", url: "/api/files/old-1", mediaType: "image/png" },
+    ],
+  },
+];
+
+describe("POST regenerate image generation bypass", () => {
+  beforeEach(() => {
+    resolveAvailableModels.mockResolvedValue([IMAGE_MODEL]);
+    createChatModelHandle.mockResolvedValue(imageHandle());
+    resolveRegenerateTarget.mockResolvedValue({
+      targetGroupId: "group-1",
+      history: IMAGE_HISTORY,
+    });
+    generateImageForEndpoint.mockResolvedValue({
+      images: [{ bytes: Buffer.from("png-bytes"), mediaType: "image/png" }],
+    });
+    uploadFile.mockImplementation(
+      async (input: { mediaType: string; data: Buffer }) => ({
+        id: "img-1",
+        url: "/api/files/img-1",
+        filename: "generated.png",
+        mediaType: input.mediaType,
+        sizeBytes: input.data.byteLength,
+        extraction: { status: "none", truncated: false },
+      }),
+    );
+  });
+
+  it("generates a new version into the target group without touching the text pipeline", async () => {
+    const response = await POST(
+      regenerateRequest({ modelId: "gpt-image-1", image: { size: "1024x1024" } }),
+      CONTEXT,
+    );
+    const body = await response.text();
+
+    // None of the streaming-path machinery runs.
+    expect(resolveAttachmentsForModel).not.toHaveBeenCalled();
+    expect(getTopicSummaryState).not.toHaveBeenCalled();
+
+    // Prompt comes from the last user message of the target history.
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ baseUrl: "https://api.test/v1" }),
+      "gpt-image-1",
+      { prompt: "draw a cat", n: 1, size: "1024x1024" },
+      expect.any(AbortSignal),
+    );
+
+    // The new version joins the target group.
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicId: "topic-1",
+        outcome: "completed",
+        groupId: "group-1",
+        providerConfigId: "cfg-1",
+        modelId: "gpt-image-1",
+        message: expect.objectContaining({
+          role: "assistant",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/img-1",
+              mediaType: "image/png",
+              filename: "generated.png",
+              sizeBytes: 9,
+            },
+          ],
+        }),
+      }),
+      ACTOR,
+    );
+
+    // Regenerate framing: stream id in the header, no data-topic chunk.
+    expect(response.headers.get("x-pika-stream-id")).toBeTruthy();
+    expect(body).not.toContain("data-topic");
+  });
+
+  it("rejects an image model on the claude format before any persistence", async () => {
+    createChatModelHandle.mockResolvedValue(
+      imageHandle({
+        apiFormat: "claude",
+        endpoint: {
+          apiFormat: "claude",
+          baseUrl: "https://api.test/v1",
+          apiKey: "test-key",
+        },
+      }),
+    );
+
+    const response = await POST(
+      regenerateRequest({ modelId: "gpt-image-1" }),
+      CONTEXT,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "model.imageUnsupported" },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+    expect(appendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("rejects a size outside the model's tiers, naming the parameter", async () => {
+    const response = await POST(
+      regenerateRequest({ modelId: "gpt-image-1", image: { size: "999x999" } }),
+      CONTEXT,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "image.invalidParams", params: { param: "size" } },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+    expect(appendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("persists a failed version with the error text when generation fails", async () => {
+    createChatModelHandle.mockResolvedValue(
+      imageHandle({
+        describeError: () => ({ kind: "verbatim", message: "provider boom" }),
+      }),
+    );
+    generateImageForEndpoint.mockRejectedValue(new Error("provider boom"));
+
+    const response = await POST(
+      regenerateRequest({ modelId: "gpt-image-1" }),
+      CONTEXT,
+    );
+    const body = await response.text();
+
+    expect(body).toContain("provider boom");
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicId: "topic-1",
+        outcome: "failed",
+        errorMessage: "provider boom",
+        groupId: "group-1",
+        message: expect.objectContaining({ role: "assistant", parts: [] }),
+      }),
+      ACTOR,
+    );
+    expect(uploadFile).not.toHaveBeenCalled();
   });
 });
