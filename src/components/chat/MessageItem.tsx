@@ -7,6 +7,7 @@ import {
   type Ref,
 } from "react";
 
+import ImagePreviewDialog from "@/components/common/ImagePreviewDialog";
 import { classifyFile } from "@/lib/files/media-types";
 import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
@@ -55,12 +56,12 @@ const EXTERNAL_LINK_REL = "noreferrer noopener";
 type AttachmentCardProps = { part: FilePart };
 
 /**
- * Shrink the image link to the image's *rendered* width once loaded. The
- * anchor's fit-content uses the image's intrinsic width — a child's
- * max-w/max-h caps never feed into it — so without this the link stays
- * bubble-wide while the image renders at 16rem, and the invisible surplus
+ * Shrink the image button to the image's *rendered* width once loaded. The
+ * button's fit-content uses the image's intrinsic width — a child's
+ * max-w/max-h caps never feed into it — so without this the button stays
+ * bubble-wide while the image renders capped, and the invisible surplus
  * reads as a stray gap beside the preview. Synchronous DOM write (no state),
- * same pattern as the MessageList scroll reserve. `max-w-full` on the anchor
+ * same pattern as the MessageList scroll reserve. `max-w-full` on the button
  * still wins on narrow bubbles, so this only ever tightens the click target.
  */
 function shrinkLinkToRenderedImage(img: HTMLImageElement | null) {
@@ -82,24 +83,37 @@ function shrinkLinkToRenderedImage(img: HTMLImageElement | null) {
  * and generated images on assistant messages. */
 function AttachmentCard({ part }: AttachmentCardProps) {
   const t = useTranslations("Files");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const filename = part.filename ?? "";
   const category = classifyFile({ mediaType: part.mediaType, filename });
   if (category === "image") {
     return (
-      <a
-        href={part.url}
-        target={EXTERNAL_LINK_TARGET}
-        rel={EXTERNAL_LINK_REL}
-        className="inline-block max-w-full"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- attachment bytes are served by our own authenticated route; next/image would proxy and resize. The frame lives on the img itself so it always hugs the rendered size (see shrinkLinkToRenderedImage for the anchor's width). */}
-        <img
-          ref={shrinkLinkToRenderedImage}
-          src={part.url}
-          alt={part.filename ?? ""}
-          className="block h-auto max-h-64 w-auto max-w-[min(100%,16rem)] rounded-lg border border-border"
-        />
-      </a>
+      <>
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(true)}
+          className="inline-block max-w-full cursor-zoom-in"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- attachment bytes are served by our own authenticated route; next/image would proxy and resize. The frame lives on the img itself so it always hugs the rendered size (see shrinkLinkToRenderedImage for the button's width). */}
+          <img
+            ref={shrinkLinkToRenderedImage}
+            src={part.url}
+            alt={part.filename ?? ""}
+            className="block h-auto max-h-[28rem] w-auto max-w-[min(100%,28rem)] rounded-lg border border-border"
+          />
+        </button>
+        {previewOpen ? (
+          <ImagePreviewDialog
+            src={part.url}
+            filename={filename}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPreviewOpen(false);
+              }
+            }}
+          />
+        ) : null}
+      </>
     );
   }
   const linkClass =

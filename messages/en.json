@@ -555,6 +555,17 @@
       "truncated": "Long file — content will be truncated"
     }
   },
+  "ImagePreview": {
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetZoom": "Reset zoom",
+    "copy": "Copy image",
+    "copied": "Copied",
+    "download": "Download",
+    "openInNewTab": "Open in new tab",
+    "previous": "Previous image",
+    "next": "Next image"
+  },
   "Errors": {
     "generic": "Something went wrong. Please try again.",
     "unexpected": "An unexpected error occurred",

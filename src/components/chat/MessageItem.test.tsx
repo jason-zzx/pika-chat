@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
@@ -1149,18 +1149,46 @@ describe("MessageItem attachments", () => {
 
     const image = screen.getByRole("img", { name: "cat.png" });
     expect(image).toHaveAttribute("src", "/api/files/img-1");
-    const link = image.closest("a");
-    expect(link).toHaveAttribute("href", "/api/files/img-1");
+    // Click opens the in-page preview dialog instead of navigating away.
+    const button = image.closest("button");
+    expect(button).not.toBeNull();
     // The frame is drawn on the img itself so it hugs the rendered size; a
     // bordered wrapper cannot track an image capped by both max-w and max-h
     // and leaves a blank gap beside it.
-    expect(link?.className).toContain("inline-block");
+    expect(button?.className).toContain("inline-block");
     expect(image.className).toContain("border");
     expect(image.className).toContain("rounded-lg");
     expect(image.className).not.toContain("object-cover");
   });
 
-  it("shrinks the image link to the rendered image width on load", () => {
+  it("opens the image preview dialog when the thumbnail is clicked", async () => {
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "user-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/img-1",
+              mediaType: "image/png",
+              filename: "cat.png",
+            },
+          ],
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("img", { name: "cat.png" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    // The dialog renders its own full-size img with the same source.
+    const previews = within(dialog).getAllByRole("img", { name: "cat.png" });
+    expect(previews[0]).toHaveAttribute("src", "/api/files/img-1");
+  });
+
+  it("shrinks the image button to the rendered image width on load", () => {
     renderWithIntl(
       <MessageItem
         message={{
@@ -1185,8 +1213,8 @@ describe("MessageItem attachments", () => {
     Object.defineProperty(image, "offsetWidth", { value: 256 });
     fireEvent.load(image);
 
-    const link = image.closest("a");
-    expect(link?.style.width).toBe("256px");
+    const button = image.closest("button");
+    expect(button?.style.width).toBe("256px");
   });
 
   it("renders an attachment-only message without a text bubble", () => {

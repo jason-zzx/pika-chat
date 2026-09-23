@@ -555,6 +555,17 @@
       "truncated": "文件较长——内容将被截断"
     }
   },
+  "ImagePreview": {
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "resetZoom": "重置缩放",
+    "copy": "复制图片",
+    "copied": "已复制",
+    "download": "下载",
+    "openInNewTab": "在新标签页打开",
+    "previous": "上一张",
+    "next": "下一张"
+  },
   "Errors": {
     "generic": "出错了，请重试。",
     "unexpected": "发生意外错误",
