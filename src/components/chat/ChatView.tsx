@@ -74,6 +74,7 @@ import {
   sameModelPick,
 } from "./model-pick";
 import { reasoningEffortRequestValue } from "./reasoning-effort";
+import { imageRequestParams } from "./image-params";
 import { resolveComposerModel } from "./resolve-composer-model";
 import { shouldRequestTopicTitle } from "./should-request-topic-title";
 import {
@@ -82,6 +83,10 @@ import {
   useChatHistory,
   useTopicDetail,
 } from "./use-chat-history";
+
+// Stable fallback for drafts with no image params yet: a fresh `{}` per
+// selector call would re-render on every unrelated store change.
+const EMPTY_IMAGE_PARAMS = {};
 
 function markLastAssistant(
   current: ChatUIMessage[],
@@ -251,6 +256,10 @@ export default function ChatView({
   const resolvedAssistantId = assistantId ?? recentAssistantId ?? assistants[0]?.id;
   const draftKey = composerDraftKey(activeTopicId, resolvedAssistantId);
   const draft = useComposerStore((state) => state.drafts[draftKey] ?? "");
+  const imageParams = useComposerStore(
+    (state) => state.imageParams[draftKey] ?? EMPTY_IMAGE_PARAMS,
+  );
+  const setImageParams = useComposerStore((state) => state.setImageParams);
   const {
     attachments,
     addFiles,
@@ -561,6 +570,11 @@ export default function ChatView({
 
   const inFlight =
     status === "submitted" || status === "streaming" || regen !== null;
+  // Image mode mirrors the composer: an image-output model takes a prompt
+  // only — no attachments, search mode, or reasoning effort.
+  const pickedModelEntry = findAvailableModel(models.data, pickedModel);
+  const imageMode =
+    pickedModelEntry?.outputModalities.includes("image") ?? false;
   // Only `ready` attachments are sent; while anything is uploading (or failed)
   // sending is held back so the user never silently drops an attachment.
   const readyAttachments = attachments.filter(
@@ -571,8 +585,10 @@ export default function ChatView({
     (attachment) => attachment.status === "ready",
   );
   const canSend =
-    (draft.trim().length > 0 || readyAttachments.length > 0) &&
-    attachmentsSettled &&
+    (imageMode
+      ? draft.trim().length > 0
+      : draft.trim().length > 0 || readyAttachments.length > 0) &&
+    (imageMode || attachmentsSettled) &&
     Boolean(resolvedAssistantId) &&
     Boolean(pickedModel) &&
     !inFlight &&
@@ -724,6 +740,16 @@ export default function ChatView({
     // Regeneration inherits the composer's current search mode, matching the
     // existing rule that it uses the composer's current model and effort.
     const searchMode = useComposerStore.getState().searchMode;
+    // Same inheritance for image mode: the current draft's imageParams,
+    // sanitized against the regenerated pick's capability table. Non-image
+    // models (and a fully-stale sanitize) omit the key.
+    const image = selected?.outputModalities.includes("image")
+      ? imageRequestParams(
+          useComposerStore.getState().imageParams[draftKey] ??
+            EMPTY_IMAGE_PARAMS,
+          pick.modelId,
+        )
+      : undefined;
     let response: Response;
     try {
       response = await regenerateTopicMessage(topic, target.id, {
@@ -731,6 +757,7 @@ export default function ChatView({
         modelId: pick.modelId,
         ...(effort === undefined ? {} : { reasoningEffort: effort }),
         searchMode,
+        ...(image ? { image } : {}),
         timeZone: localTimeZone(),
       });
     } catch (caught) {
@@ -1066,8 +1093,8 @@ export default function ChatView({
     event.preventDefault();
     // The composer is inert while a turn streams (paperclip, textarea and the
     // drop handler itself all refuse input), so do not invite a drop that
-    // would be silently ignored.
-    if (inFlight) {
+    // would be silently ignored. Image mode takes no attachments either.
+    if (inFlight || imageMode) {
       return;
     }
     dragDepthRef.current += 1;
@@ -1099,7 +1126,7 @@ export default function ChatView({
     event.preventDefault();
     dragDepthRef.current = 0;
     setDragActive(false);
-    if (inFlight) {
+    if (inFlight || imageMode) {
       return;
     }
     const files = event.dataTransfer.files;
@@ -1132,12 +1159,16 @@ export default function ChatView({
       titlePick: pickedModel,
     };
     const text = draft.trim();
-    const outgoingFiles: FileUIPart[] = readyAttachments.map((attachment) => ({
-      type: "file",
-      url: attachment.url,
-      mediaType: attachment.mediaType,
-      filename: attachment.filename,
-    }));
+    // Image mode never sends attachments (the server rejects them); staged
+    // chips stay put so switching back to a chat model restores them.
+    const outgoingFiles: FileUIPart[] = imageMode
+      ? []
+      : readyAttachments.map((attachment) => ({
+          type: "file",
+          url: attachment.url,
+          mediaType: attachment.mediaType,
+          filename: attachment.filename,
+        }));
     pendingSendAttachments.current =
       outgoingFiles.length > 0
         ? { key: draftKey, attachments: readyAttachments }
@@ -1149,15 +1180,24 @@ export default function ChatView({
     }
     setDraft(draftKey, "");
     const selected = findAvailableModel(models.data, pickedModel);
-    const effort = reasoningEffortRequestValue(selected, reasoningEffort);
+    const effort = imageMode
+      ? undefined
+      : reasoningEffortRequestValue(selected, reasoningEffort);
     const searchMode = useComposerStore.getState().searchMode;
+    // Only params the user actually set ride along, sanitized against the
+    // selected model's capability table (stale picks from a previous image
+    // family are dropped); the provider default covers the rest.
+    const image = imageMode
+      ? imageRequestParams(imageParams, pickedModel.modelId)
+      : undefined;
     const body = {
       assistantId: resolvedAssistantId,
       topicId: activeTopicId,
       providerConfigId: pickedModel.configId,
       modelId: pickedModel.modelId,
       ...(effort === undefined ? {} : { reasoningEffort: effort }),
-      searchMode,
+      ...(imageMode ? {} : { searchMode }),
+      ...(image ? { image } : {}),
       timeZone: localTimeZone(),
     };
     const metadata = { createdAt: new Date().toISOString() };
@@ -1290,6 +1330,8 @@ export default function ChatView({
         onAddFiles={addFiles}
         onRemoveAttachment={removeAttachment}
         onRetryAttachment={retryAttachment}
+        imageParams={imageParams}
+        onImageParamsChange={(next) => setImageParams(draftKey, next)}
       />
       <ChatMapDialog
         open={chatMapOpen}

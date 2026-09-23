@@ -150,7 +150,24 @@
       "send": "发送",
       "stop": "停止",
       "reasoningEffort": "推理强度",
-      "auto": "自动"
+      "auto": "自动",
+      "imageParams": "图像设置",
+      "imageSize": "尺寸",
+      "imageCustomSize": "自定义尺寸",
+      "imageCustomSizeInvalid": "格式为 宽x高，如 1024x768",
+      "imageCount": "数量",
+      "imageCountDecrease": "减少数量",
+      "imageCountIncrease": "增加数量",
+      "imageQuality": "质量",
+      "imageResolution": "分辨率",
+      "imageRules": {
+        "divisible": "宽、高为 {n} 的倍数",
+        "ratio": "宽高比 {min} ~ {max}",
+        "maxSide": "单边最长 {n}px",
+        "minSide": "每边 ≥ {n}px",
+        "pixels": "总像素 {min} ~ {max}",
+        "hint": "自定义尺寸规则"
+      }
     },
     "MessageList": {
       "empty": "发送消息以开始对话。",
@@ -205,6 +222,7 @@
       "noMatchingModels": "没有匹配的模型",
       "vision": "视觉",
       "reasoning": "推理",
+      "imageGeneration": "图像生成",
       "sharedBy": "{configName}（由 {name} 共享）",
       "anotherUser": "其他用户",
       "searchMode": {
@@ -607,7 +625,12 @@
     "model": {
       "notFound": "模型不存在",
       "notAvailable": "所选模型不可用",
-      "effortUnavailable": "所选推理强度不可用"
+      "effortUnavailable": "所选推理强度不可用",
+      "imageUnsupported": "该服务商格式不支持图像生成"
+    },
+    "image": {
+      "attachmentUnsupported": "图像生成暂不支持携带附件",
+      "invalidParams": "图像生成参数无效：{param}"
     },
     "searchProvider": {
       "notConfigured": "未配置搜索服务商",

@@ -29,8 +29,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
 import { SUPPORTED_FILE_ACCEPT } from "@/lib/files/media-types";
+import { imageCapabilityFor } from "@/lib/image-capabilities";
 import { cn } from "@/lib/utils";
 import type {
+  ComposerImageParams,
   ComposerModelPick,
   StagedAttachment,
 } from "@/stores/composer-store";
@@ -40,6 +42,7 @@ import AssistantPicker from "./AssistantPicker";
 import ComposerPickerContent from "./ComposerPickerContent";
 import { stagedAttachmentSlotCount } from "./use-composer-attachments";
 import ComposerSelectTrigger from "./ComposerSelectTrigger";
+import ImageParamsPicker from "./ImageParamsPicker";
 import { findAvailableModel } from "./model-pick";
 import ModelPicker from "./ModelPicker";
 import SearchModePicker from "./SearchModePicker";
@@ -76,6 +79,9 @@ type ComposerProps = {
   onAddFiles?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
   onRetryAttachment?: (id: string) => void;
+  /** Image-generation params for the active draft (image models only). */
+  imageParams?: ComposerImageParams;
+  onImageParamsChange?: (next: ComposerImageParams) => void;
 };
 
 export default function Composer({
@@ -101,12 +107,17 @@ export default function Composer({
   onAddFiles,
   onRemoveAttachment,
   onRetryAttachment,
+  imageParams = {},
+  onImageParamsChange,
 }: ComposerProps) {
   const t = useTranslations("Chat.Composer");
   const tCompression = useTranslations("Chat.Compression");
   const tFiles = useTranslations("Files");
   const models = useAvailableModels();
   const selected = findAvailableModel(models.data, model);
+  // Image mode: the picked model generates images instead of chatting —
+  // attachments, web search, and reasoning effort do not apply (design §4).
+  const imageMode = selected?.outputModalities.includes("image") ?? false;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -162,7 +173,7 @@ export default function Composer({
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const files = event.clipboardData?.files;
-    if (files && files.length > 0 && onAddFiles) {
+    if (!imageMode && files && files.length > 0 && onAddFiles) {
       event.preventDefault();
       addFiles(files);
     }
@@ -181,7 +192,7 @@ export default function Composer({
     >
       <div className="mx-auto flex min-h-0 w-full max-w-[52.5rem] flex-1 flex-col">
         <div className="relative flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-muted/40">
-          {attachments.length > 0 ? (
+          {attachments.length > 0 && !imageMode ? (
             <div className="flex flex-wrap gap-2 px-3 pt-2">
               {attachments.map((attachment) => (
                 <AttachmentChip
@@ -227,7 +238,7 @@ export default function Composer({
                 disabled={inFlight || modelPickerDisabled}
                 iconOnly
               />
-              {onAddFiles ? (
+              {onAddFiles && !imageMode ? (
                 <>
                   <Button
                     // Composer root is a <form>: without an explicit type
@@ -260,8 +271,8 @@ export default function Composer({
                   />
                 </>
               ) : null}
-              <SearchModePicker disabled={inFlight} />
-              {selected?.reasoning ? (
+              {imageMode ? null : <SearchModePicker disabled={inFlight} />}
+              {!imageMode && selected?.reasoning ? (
                 <ReasoningEffortSelect
                   options={selected.reasoningOptions}
                   value={reasoningEffort}
@@ -271,6 +282,14 @@ export default function Composer({
               ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              {imageMode && selected && onImageParamsChange ? (
+                <ImageParamsPicker
+                  capability={imageCapabilityFor(selected.modelId)}
+                  value={imageParams}
+                  onChange={onImageParamsChange}
+                  disabled={inFlight}
+                />
+              ) : null}
               {onCompress ? (
                 <Button
                   type="button"

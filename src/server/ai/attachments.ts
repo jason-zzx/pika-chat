@@ -85,11 +85,16 @@ type ModalitySupport = {
   video: boolean;
 };
 
-/** Unique file ids referenced by the given messages, in first-seen order. */
+/** Unique file ids referenced by the given messages, in first-seen order.
+ * Only user messages are scanned: assistant file parts (generated images)
+ * are model output and never enter the model payload again. */
 function collectFileIds(messages: ChatUIMessage[]): string[] {
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
     for (const part of message.parts) {
       if (part.type !== "file") {
         continue;
@@ -227,6 +232,13 @@ function toDataUrl(file: FileRecord, data: Buffer): string {
  * payload sent to the model changes. Replaying a topic after switching models
  * re-routes every historical attachment against the new model's capabilities.
  *
+ * Assistant-role file parts (generated images) are dropped outright: they are
+ * model output, not user input, and do not re-enter the context. Routing them
+ * would 400 every later turn of a mixed-model topic — a text-only model rejects
+ * them as `file.imageRequiresVision`, and the google adapter throws on an
+ * assistant-role image it cannot serialize. An assistant message left with no
+ * parts at all is removed from the payload as well.
+ *
  * Failures are user-visible `AppError`s (design §9): an image without vision,
  * a scanned document the model cannot read natively, media the model or the
  * endpoint format cannot carry, or a corrupt file stops the turn rather than
@@ -237,13 +249,21 @@ export async function resolveAttachmentsForModel(
   caps: AttachmentCapabilities,
 ): Promise<ChatUIMessage[]> {
   const fileIds = collectFileIds(messages);
-  if (fileIds.length === 0) {
+  // Assistant file parts are dropped even when no user attachment needs
+  // routing, so the no-attachment fast path must check for them too.
+  const hasAssistantFileParts = messages.some(
+    (message) =>
+      message.role !== "user" &&
+      message.parts.some((part) => part.type === "file"),
+  );
+  if (fileIds.length === 0 && !hasAssistantFileParts) {
     return messages;
   }
 
   // One batched row read for the whole turn, then a reference lookup per
   // native file and a storage read only for the ones that still need bytes.
-  const rows = await getFilesByIds(fileIds);
+  const rows =
+    fileIds.length > 0 ? await getFilesByIds(fileIds) : new Map<string, FileRecord>();
   const support: ModalitySupport = {
     image: caps.inputModalities.includes("image"),
     pdf: caps.inputModalities.includes("pdf"),
@@ -296,12 +316,17 @@ export async function resolveAttachmentsForModel(
   }
 
   let changed = false;
-  const routed = messages.map((message) => {
+  const routed = messages.flatMap((message) => {
     let partsChanged = false;
     const parts: ChatUIMessage["parts"] = [];
     for (const part of message.parts) {
       if (part.type !== "file") {
         parts.push(part);
+        continue;
+      }
+      if (message.role !== "user") {
+        // Generated-image output: never routed back into the model payload.
+        partsChanged = true;
         continue;
       }
       const fileId = fileIdFromUrl(part.url);
@@ -341,10 +366,12 @@ export async function resolveAttachmentsForModel(
       });
     }
     if (!partsChanged) {
-      return message;
+      return [message];
     }
     changed = true;
-    return { ...message, parts };
+    // A generated-image message with no text part collapses to nothing;
+    // an empty assistant turn must not reach the provider either.
+    return parts.length > 0 ? [{ ...message, parts }] : [];
   });
 
   return changed ? routed : messages;

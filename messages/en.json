@@ -150,7 +150,24 @@
       "send": "Send",
       "stop": "Stop",
       "reasoningEffort": "Reasoning effort",
-      "auto": "Auto"
+      "auto": "Auto",
+      "imageParams": "Image settings",
+      "imageSize": "Size",
+      "imageCustomSize": "Custom size",
+      "imageCustomSizeInvalid": "Use the format WxH, e.g. 1024x768",
+      "imageCount": "Count",
+      "imageCountDecrease": "Decrease count",
+      "imageCountIncrease": "Increase count",
+      "imageQuality": "Quality",
+      "imageResolution": "Resolution",
+      "imageRules": {
+        "divisible": "Width and height are multiples of {n}",
+        "ratio": "Aspect ratio {min} ~ {max}",
+        "maxSide": "Longest side {n}px",
+        "minSide": "Each side ≥ {n}px",
+        "pixels": "Total pixels {min} ~ {max}",
+        "hint": "Custom size rules"
+      }
     },
     "MessageList": {
       "empty": "Send a message to start this conversation.",
@@ -205,6 +222,7 @@
       "noMatchingModels": "No matching models",
       "vision": "Vision",
       "reasoning": "Reasoning",
+      "imageGeneration": "Image generation",
       "sharedBy": "{configName} (shared by {name})",
       "anotherUser": "another user",
       "searchMode": {
@@ -607,7 +625,12 @@
     "model": {
       "notFound": "Model not found",
       "notAvailable": "Selected model is not available",
-      "effortUnavailable": "Selected reasoning effort is not available"
+      "effortUnavailable": "Selected reasoning effort is not available",
+      "imageUnsupported": "This provider format does not support image generation"
+    },
+    "image": {
+      "attachmentUnsupported": "Image generation does not support attachments yet",
+      "invalidParams": "Invalid image generation parameter: {param}"
     },
     "searchProvider": {
       "notConfigured": "Search provider not configured",

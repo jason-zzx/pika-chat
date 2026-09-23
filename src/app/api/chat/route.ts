@@ -7,16 +7,23 @@ import {
 } from "ai";
 
 import { withErrorHandling } from "@/app/api/_lib/with-error-handling";
+import type { ErrorsTranslator } from "@/lib/api/error-contract";
 import { newId } from "@/lib/id";
 import {
   chatRequestSchema,
   type ChatMessageOutcome,
+  type ChatRequest,
   type ChatRequestPart,
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
 import { getTranslations } from "next-intl/server";
 import { requireModelForActor } from "@/server/ai/require-model";
 import { resolveAttachmentsForModel } from "@/server/ai/attachments";
+import type { ChatModelHandle } from "@/server/ai/chat-model";
+import {
+  assertImageGenerationSupported,
+  createImageGenerationResponse,
+} from "@/server/ai/image/turn";
 import {
   stripMarkupFromTextParts,
   stripToolCallMarkupTransform,
@@ -35,16 +42,15 @@ import {
 } from "@/server/ai/reasoning-timer";
 import { createStreamFailureTracker } from "@/server/ai/stream-failure";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
-import { requireActor } from "@/server/auth/actor";
+import { requireActor, type Actor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
-import {
-  resolveOwnedFileParts,
-} from "@/server/files/file.service";
+import { resolveOwnedFileParts } from "@/server/files/file.service";
 import { logger } from "@/server/logger";
 import {
   appendAssistantMessage,
   appendUserMessage,
   listTopicMessages,
+  textFromMessage,
 } from "@/server/services/message.service";
 import {
   compressTopicHistory,
@@ -78,6 +84,70 @@ function partsHaveText(message: ChatUIMessage): boolean {
   );
 }
 
+/**
+ * Image-generation bypass (design §3): a model advertising the `image`
+ * output modality gets a single non-streaming generation call instead of
+ * the chat pipeline — no tools, no history/compression, no attachment
+ * routing, no system prompt. The response still speaks the UI message
+ * stream protocol (one complete assistant message) so the client's
+ * consumption path is unchanged.
+ */
+async function imageGenerationResponse({
+  input,
+  actor,
+  handle,
+  t,
+  newTopicTitle,
+}: {
+  input: ChatRequest;
+  actor: Actor;
+  handle: ChatModelHandle;
+  t: ErrorsTranslator;
+  newTopicTitle: string;
+}): Promise<Response> {
+  if (input.message.parts.some((part) => part.type === "file")) {
+    throw new AppError("VALIDATION_FAILED", 400, "image.attachmentUnsupported");
+  }
+  assertImageGenerationSupported(handle.apiFormat, input.modelId, input.image);
+
+  // Topic resolution mirrors the streaming path (ownership + assistant
+  // binding, draft creation with the sentinel title), minus history.
+  let topicId = input.topicId;
+  if (topicId) {
+    const context = await findTopicContextForActor(topicId, actor);
+    if (!context || context.assistant.id !== input.assistantId) {
+      throw new AppError("NOT_FOUND", 404, "topic.notFound");
+    }
+  } else {
+    const created = await createTopicForChat(
+      { assistantId: input.assistantId },
+      actor,
+      newTopicTitle,
+    );
+    topicId = created.id;
+  }
+
+  const userMessage = requestToUserMessage({
+    id: input.message.id,
+    parts: input.message.parts,
+  });
+  const prompt = textFromMessage(userMessage);
+  await appendUserMessage({ topicId, message: userMessage }, actor);
+  await touchTopicUpdatedAt(topicId, actor);
+
+  return createImageGenerationResponse({
+    actor,
+    handle,
+    t,
+    providerConfigId: input.providerConfigId,
+    modelId: input.modelId,
+    image: input.image,
+    prompt,
+    topicId,
+    announceTopic: true,
+  });
+}
+
 export const POST = withErrorHandling(async (request) => {
   const actor = await requireActor(request.headers);
   // Request-scoped translator for the streaming path: the stream can only
@@ -98,6 +168,19 @@ export const POST = withErrorHandling(async (request) => {
     actor,
     { builtinSearch: input.searchMode === "builtin" },
   );
+
+  // An image-output model takes the generation bypass: everything below
+  // (reasoning, attachments, tools, compression) is text-pipeline only.
+  if (selected.outputModalities.includes("image")) {
+    return imageGenerationResponse({
+      input,
+      actor,
+      handle,
+      t,
+      newTopicTitle: tChat("newTopic"),
+    });
+  }
+
   const reasoningEffort = resolvedReasoningEffort(
     selected,
     input.reasoningEffort,

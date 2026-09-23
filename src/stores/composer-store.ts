@@ -16,6 +16,20 @@ export type ComposerModelPick = {
   modelId: string;
 };
 
+/**
+ * Image-generation parameter overrides for one draft, mirrored into the
+ * `image` request field when the picked model advertises image output.
+ * All fields optional: absent means the provider default. Session-only like
+ * drafts (not persisted) — switching drafts restores each draft's own picks,
+ * matching how draft text and staged attachments behave.
+ */
+export type ComposerImageParams = {
+  size?: string;
+  n?: number;
+  quality?: string;
+  imageSize?: string;
+};
+
 /** Extraction metadata for an uploaded attachment (mirrors the API response). */
 export type AttachmentExtraction = {
   status: FileExtractionState;
@@ -53,6 +67,8 @@ type ComposerState = {
   setRecentAssistantId: (id: string | null) => void;
   pickedModel: ComposerModelPick | null;
   setPickedModel: (pick: ComposerModelPick | null) => void;
+  imageParams: Record<string, ComposerImageParams>;
+  setImageParams: (key: string, params: ComposerImageParams) => void;
   reasoningEffort: string | null;
   setReasoningEffort: (effort: string | null) => void;
   searchMode: SearchMode;
@@ -101,6 +117,11 @@ export const useComposerStore = create<ComposerState>()(
       setRecentAssistantId: (recentAssistantId) => set({ recentAssistantId }),
       pickedModel: null,
       setPickedModel: (pickedModel) => set({ pickedModel }),
+      imageParams: {},
+      setImageParams: (key, params) =>
+        set((state) => ({
+          imageParams: { ...state.imageParams, [key]: params },
+        })),
       reasoningEffort: null,
       setReasoningEffort: (reasoningEffort) => set({ reasoningEffort }),
       searchMode: "off",

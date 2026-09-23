@@ -314,3 +314,125 @@ const unlimited = limits.quotaBytes === null;
 // Always mounted, always visible; only the label shrinks on narrow screens.
 <Button type="button" variant="ghost" size="icon-sm" aria-label={t("preview")} …>
 ```
+
+---
+
+## Scenario: composer image-generation mode
+
+### 1. Scope / Trigger
+
+When the picked model's `outputModalities` includes `image`, the composer
+switches to image mode: a prompt plus generation parameters instead of a chat
+turn. Server side: [backend/image-generation.md](../backend/image-generation.md).
+
+Modules:
+
+```
+src/components/chat/ImageParamsPicker.tsx   parameter popover (size / count / quality / resolution)
+src/components/chat/image-params.ts         imageRequestParams() — pre-send sanitize
+capability source: imageCapabilityFor()     src/lib/image-capabilities.ts (shared with the server)
+src/stores/composer-store.ts                imageParams per draftKey (ComposerImageParams)
+src/components/chat/Composer.tsx            imageMode wiring; hides attachment/search/reasoning controls
+src/components/chat/ChatView.tsx            imageMode send path; request body `image` field
+src/components/chat/ModelPicker.tsx         ImageIcon badge on image-output models
+src/components/chat/MessageItem.tsx         generated images render through the same attachment card
+```
+
+### 2. Contracts
+
+- **`imageMode` is derived, never stored**: `selected.outputModalities.includes("image")`
+  in both `Composer` (controls) and `ChatView` (send path) — one predicate,
+  two consumers, so they cannot disagree.
+- **Image mode hides the attachment picker, search-mode picker, and reasoning
+  effort control** (the server rejects attachments with 400
+  `image.attachmentUnsupported` anyway; the UI never offers what will fail).
+  The drop zone and paste path stay inert in image mode too.
+- **`imageParams` is per-draft session state.** Keyed by the same `draftKey`
+  as draft text (`topic:<id>` / `draft:<assistantId>`), kept in
+  composer-store but excluded from `partialize` — session-only, like drafts
+  and staged attachments. All fields optional; absent means provider default.
+- **Sanitize before send.** The per-draft params outlive a model switch, so
+  `imageRequestParams(params, modelId)` filters them against the newly
+  selected model's capability table: a size outside a non-freeform table is
+  dropped (freeform keeps any `WxH`), undeclared quality/imageSize tiers are
+  dropped, `n` clamps to `[1, nMax]`. Returns `undefined` when nothing valid
+  remains so the `image` key is omitted from the body entirely. The server
+  re-validates (`assertImageGenerationSupported`) as the backstop — the
+  client sanitize exists to avoid a silent 400 from stale picks, not to
+  replace server validation.
+- **Image mode also suppresses** `reasoningEffort` and `searchMode` in the
+  request body, and blocks sending while `inFlight` exactly like chat mode.
+- **Custom-size rules live behind an info-icon Tooltip**, not as persistent
+  text: `freeformRules(capability.freeform)` (lib, `image-capabilities.ts`)
+  turns the family's constraints into structured rules, and the picker
+  renders a labelled info button **next to the "custom size" section label**
+  (via `ParamSection`'s `hint` slot) + base-ui Tooltip (hover/focus; inside
+  the params Popover, so portal + `positionMethod="fixed"` matter) whose
+  content is the translated rules joined by `" · "` (`imageRules.{divisible,ratio,minSide,maxSide,
+  pixels,hint}`; ratio bounds via `formatRatioBound` → `1:3` / `3:1`, pixel
+  counts `toLocaleString`ed). The icon renders only when the family actually
+  has constraints — the unconstrained DEFAULT fallback shows none. This is a
+  rule *explanation*, not the error: the inline `imageCustomSizeInvalid`
+  style still carries rejection, so the "no errors hidden in tooltips" rule
+  is untouched.
+- **Regenerate inherits the composer's current image params**, mirroring the
+  existing chat rule that regeneration uses the composer's current
+  model/effort/searchMode: the regenerate body carries `image:
+  imageRequestParams(imageParams[draftKey], pick.modelId)` when the picked
+  model is image-output, omitted when the sanitize comes back empty. Session
+  store means a full reload falls back to provider defaults — the same
+  lifecycle as draft text. Do not replay the original message's params (that
+  would need per-message metadata and conflicts with the current-composer
+  rule).
+- **ModelPicker** marks image-output models with an `ImageIcon` badge
+  (`t("imageGeneration")`); display only, the data already rides the model list.
+- **Assistant file parts render through the same attachment card** as user
+  attachments (`AttachmentCard`, image branch): `<img src={url}>` against the
+  authenticated `/api/files/<id>`, no object URLs, no `next/image`. Do not
+  fork an assistant-only renderer.
+- i18n: new `image.*` error keys plus the composer labels (`imageParams`,
+  `imageSize`, `imageCustomSize`, `imageCount`, `imageQuality`,
+  `imageResolution`, …) land in `en.json` and `zh-CN.json` together — see
+  [i18n.md](./i18n.md).
+
+### 3. Validation & Error Matrix
+
+| Condition | Client behaviour |
+|---|---|
+| stale param from a previous image family | dropped/clamped by `imageRequestParams`; no request field sent |
+| custom size not matching `WxH` | picker shows `imageCustomSizeInvalid` inline; value never sent |
+| custom size valid format but violates family constraints | same inline error; the rules themselves sit behind an info-icon Tooltip next to the section label — see below |
+| server rejects params (backstop) | composer banner via `apiErrorMessageFromUnknown`, `image.invalidParams` |
+| send fails | draft text and params stay put (session store is untouched on failure) |
+
+### 4. Tests Required
+
+- `image-params.test.ts`: per-sizeMode sanitize matrix, `n` clamping
+  boundaries (0, negative, > nMax, fractional), undefined-when-empty.
+- `Composer.test.tsx`: image mode hides attach/search/reasoning and shows the
+  params picker; chat mode is unchanged.
+- `ModelPicker.test.tsx`: image badge renders iff `outputModalities` includes
+  `image`.
+- `MessageItem.test.tsx`: assistant message with an image file part renders
+  the attachment card thumbnail.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// Per-draft params outlive a model switch: sending them verbatim hits the
+// server's capability gate as a 400 the user cannot explain.
+...(imageMode ? { image: imageParams } : {}),
+```
+
+#### Correct
+
+```ts
+// Sanitize against the *currently* selected model first; undefined omits the
+// key so a fully-stale pick degrades to provider defaults instead of an error.
+const image = imageMode
+  ? imageRequestParams(imageParams, pickedModel.modelId)
+  : undefined;
+...(image ? { image } : {}),
+```

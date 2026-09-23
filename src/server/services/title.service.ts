@@ -7,6 +7,7 @@ import { DEFAULT_TOPIC_TITLES, isDefaultTopicTitle } from "@/i18n/defaults";
 import { pairOrNull } from "@/lib/schemas/model-preferences";
 import type { Topic } from "@/lib/schemas/topic";
 import { createChatModelHandle } from "@/server/ai/chat-model";
+import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { assistants, topicColumns, topics } from "@/server/db/schema";
@@ -79,25 +80,40 @@ export async function titleTopicFromFirstMessage(
     // The user's title-model preference wins unconditionally; the
     // client-supplied pair (the first message's model) is the fallback, and
     // with neither the topic just gets the truncated-text title.
-    const pair =
-      (await resolveModelPreference(actor, "title")) ?? pairOrNull(input);
+    const preference = await resolveModelPreference(actor, "title");
+    const pair = preference ?? pairOrNull(input);
     if (pair) {
-      try {
-        const handle = await createChatModelHandle(pair, actor);
-        const result = await generateText({
-          model: handle.model,
-          instructions:
-            "Write a short conversation title from the user's message. Reply with the title only, no quotes, at most 8 words.",
-          prompt: text,
-          maxOutputTokens: 40,
-          abortSignal: AbortSignal.timeout(15_000),
-        });
-        generated = sanitizeGeneratedTitle(result.text);
-      } catch {
-        logger.warn(
-          { topicId: input.topicId },
-          "topic title generation failed",
+      // A fallback pair is the composer's current model; when that is an
+      // image-output model, generateText is guaranteed to fail, so skip
+      // straight to the truncated-text fallback instead of paying for the
+      // call and its timeout. An explicit title preference is honored
+      // as-is (the catch below degrades to the same fallback).
+      const fallbackIsImageModel =
+        preference === null &&
+        (await resolveAvailableModels(actor)).some(
+          (model) =>
+            model.configId === pair.providerConfigId &&
+            model.modelId === pair.modelId &&
+            model.outputModalities.includes("image"),
         );
+      if (!fallbackIsImageModel) {
+        try {
+          const handle = await createChatModelHandle(pair, actor);
+          const result = await generateText({
+            model: handle.model,
+            instructions:
+              "Write a short conversation title from the user's message. Reply with the title only, no quotes, at most 8 words.",
+            prompt: text,
+            maxOutputTokens: 40,
+            abortSignal: AbortSignal.timeout(15_000),
+          });
+          generated = sanitizeGeneratedTitle(result.text);
+        } catch {
+          logger.warn(
+            { topicId: input.topicId },
+            "topic title generation failed",
+          );
+        }
       }
     }
   }

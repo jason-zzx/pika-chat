@@ -16,6 +16,9 @@ const {
   getTopicSummaryState,
   compressTopicHistory,
   resolveModelPreference,
+  generateImageForEndpoint,
+  uploadFile,
+  deleteFile,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
   resolveAvailableModels: vi.fn(),
@@ -32,6 +35,15 @@ const {
   getTopicSummaryState: vi.fn(),
   compressTopicHistory: vi.fn(),
   resolveModelPreference: vi.fn(),
+  generateImageForEndpoint: vi.fn(),
+  uploadFile: vi.fn(),
+  deleteFile: vi.fn(),
+}));
+
+// Controllable abort for the image-bypass stop test: the real registry's
+// controller is internal, so the mock hands out a signal the test can abort.
+const streamControl = vi.hoisted(() => ({
+  controller: null as AbortController | null,
 }));
 
 vi.mock("next-intl/server", () => ({
@@ -39,13 +51,33 @@ vi.mock("next-intl/server", () => ({
 }));
 vi.mock("@/server/auth/actor", () => ({ requireActor }));
 vi.mock("@/server/ai/model-resolution", () => ({ resolveAvailableModels }));
-vi.mock("@/server/files/file.service", () => ({ resolveOwnedFileParts }));
+vi.mock("@/server/files/file.service", () => ({
+  resolveOwnedFileParts,
+  uploadFile,
+  deleteFile,
+}));
 vi.mock("@/server/ai/chat-model", () => ({ createChatModelHandle }));
+vi.mock("@/server/ai/image/generate", () => ({ generateImageForEndpoint }));
+vi.mock("@/server/ai/stream-registry", () => ({
+  registerStream: vi.fn(() => {
+    streamControl.controller = new AbortController();
+    return streamControl.controller.signal;
+  }),
+  releaseStream: vi.fn(),
+}));
 vi.mock("@/server/ai/attachments", () => ({ resolveAttachmentsForModel }));
 vi.mock("@/server/services/message.service", () => ({
   appendUserMessage,
   appendAssistantMessage,
   listTopicMessages,
+  // Faithful stand-in: the image bypass derives the prompt from it.
+  textFromMessage: (message: {
+    parts: Array<{ type: string; text?: string }>;
+  }) =>
+    message.parts
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join(""),
 }));
 vi.mock("@/server/services/topic.service", () => ({
   createTopicForChat,
@@ -84,15 +116,22 @@ vi.mock("@/server/ai/reasoning-timer", () => ({
 vi.mock("@/server/ai/output-budget", () => ({
   resolvedMaxOutputTokens: vi.fn(() => 1000),
 }));
-vi.mock("@/server/ai/provider-error", () => ({
-  // Faithful passthrough so a test can assert the text the user actually sees.
-  providerErrorText: vi.fn(
-    (description: { kind: string; messageKey?: string; message?: string }) =>
-      description.kind === "verbatim"
-        ? description.message
-        : description.messageKey,
-  ),
-}));
+vi.mock("@/server/ai/provider-error", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/server/ai/provider-error")>();
+  return {
+    ...actual,
+    // Faithful passthrough so a test can assert the text the user actually
+    // sees; describeProviderError stays real so AppError pass-through (code
+    // + messageKey, e.g. a quota failure from uploadFile) is exercised.
+    providerErrorText: vi.fn(
+      (description: { kind: string; messageKey?: string; message?: string }) =>
+        description.kind === "verbatim"
+          ? description.message
+          : description.messageKey,
+    ),
+  };
+});
 vi.mock("@/server/ai/model-messages", () => ({
   replayModelMessages: vi.fn(async (messages: unknown) => messages),
 }));
@@ -117,6 +156,7 @@ import { APICallError } from "ai";
 import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
 
 import { AppError } from "@/server/errors";
+import { describeProviderError } from "@/server/ai/provider-error";
 
 import { POST } from "./route";
 
@@ -139,12 +179,15 @@ function chatRequest(body: unknown): Request {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  streamTextOptions.current = undefined;
+  streamControl.controller = null;
   requireActor.mockResolvedValue(ACTOR);
   resolveAvailableModels.mockResolvedValue([
     {
       configId: "cfg-1",
       modelId: "model-1",
       inputModalities: ["text"],
+      outputModalities: ["text"],
       reasoning: false,
       reasoningOptions: [],
     },
@@ -400,6 +443,7 @@ describe("POST /api/chat history compression", () => {
         configId: "cfg-1",
         modelId: "model-1",
         inputModalities: ["text"],
+        outputModalities: ["text"],
         reasoning: false,
         reasoningOptions: [],
         contextTokens: 1000,
@@ -503,6 +547,7 @@ describe("POST /api/chat history compression", () => {
         configId: "cfg-1",
         modelId: "model-1",
         inputModalities: ["text"],
+        outputModalities: ["text"],
         reasoning: false,
         reasoningOptions: [],
         contextTokens: 256000,
@@ -572,5 +617,591 @@ describe("POST /api/chat history compression", () => {
       ],
       expect.anything(),
     );
+  });
+});
+
+const IMAGE_MODEL = {
+  configId: "cfg-1",
+  modelId: "gpt-image-1",
+  inputModalities: ["text"],
+  outputModalities: ["image", "text"],
+  reasoning: false,
+  reasoningOptions: [],
+};
+
+function imageHandle(overrides: Record<string, unknown> = {}) {
+  return {
+    model: {},
+    describeError: () => ({ kind: "key", key: "generic" }),
+    apiFormat: "openai-compatible",
+    providerConfigId: "cfg-1",
+    filesApi: null,
+    endpoint: {
+      apiFormat: "openai-compatible",
+      name: "test",
+      baseUrl: "https://api.test/v1",
+      apiKey: "k",
+    },
+    ...overrides,
+  };
+}
+
+function imageRequest(body: Record<string, unknown> = {}): Request {
+  return chatRequest({
+    assistantId: "assistant-1",
+    topicId: "topic-1",
+    providerConfigId: "cfg-1",
+    modelId: "gpt-image-1",
+    message: {
+      id: "message-1",
+      role: "user",
+      parts: [{ type: "text", text: "draw a cat" }],
+    },
+    ...body,
+  });
+}
+
+describe("POST /api/chat image generation bypass", () => {
+  beforeEach(() => {
+    resolveAvailableModels.mockResolvedValue([IMAGE_MODEL]);
+    createChatModelHandle.mockResolvedValue(imageHandle());
+    generateImageForEndpoint.mockResolvedValue({
+      images: [{ bytes: Buffer.from("png-bytes"), mediaType: "image/png" }],
+    });
+    uploadFile.mockImplementation(
+      async (input: { mediaType: string; data: Buffer }) => ({
+        id: "img-1",
+        url: "/api/files/img-1",
+        filename: "generated.png",
+        mediaType: input.mediaType,
+        sizeBytes: input.data.byteLength,
+        extraction: { status: "none", truncated: false },
+      }),
+    );
+  });
+
+  it("generates, stores the images as files, and streams one complete assistant message", async () => {
+    generateImageForEndpoint.mockResolvedValue({
+      images: [
+        { bytes: Buffer.from("a"), mediaType: "image/png" },
+        { bytes: Buffer.from("bb"), mediaType: "image/jpeg" },
+      ],
+      text: "here you go",
+    });
+    uploadFile
+      .mockImplementationOnce(async () => ({
+        id: "img-1",
+        url: "/api/files/img-1",
+        filename: "generated.png",
+        mediaType: "image/png",
+        sizeBytes: 1,
+        extraction: { status: "none", truncated: false },
+      }))
+      .mockImplementationOnce(async () => ({
+        id: "img-2",
+        url: "/api/files/img-2",
+        filename: "generated.jpg",
+        mediaType: "image/jpeg",
+        sizeBytes: 2,
+        extraction: { status: "none", truncated: false },
+      }));
+
+    const response = await POST(
+      imageRequest({ image: { size: "1024x1024", n: 2, quality: "high" } }),
+    );
+    const body = await response.text();
+
+    // The bypass never touches the text pipeline.
+    expect(streamTextOptions.current).toBeUndefined();
+    expect(resolveAttachmentsForModel).not.toHaveBeenCalled();
+    expect(compressTopicHistory).not.toHaveBeenCalled();
+
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ baseUrl: "https://api.test/v1" }),
+      "gpt-image-1",
+      { prompt: "draw a cat", n: 2, size: "1024x1024", quality: "high" },
+      expect.any(AbortSignal),
+    );
+    expect(appendUserMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: "topic-1" }),
+      ACTOR,
+    );
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicId: "topic-1",
+        outcome: "completed",
+        providerConfigId: "cfg-1",
+        modelId: "gpt-image-1",
+        message: expect.objectContaining({
+          role: "assistant",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/img-1",
+              mediaType: "image/png",
+              filename: "generated.png",
+              sizeBytes: 1,
+            },
+            {
+              type: "file",
+              url: "/api/files/img-2",
+              mediaType: "image/jpeg",
+              filename: "generated.jpg",
+              sizeBytes: 2,
+            },
+            { type: "text", text: "here you go" },
+          ],
+        }),
+      }),
+      ACTOR,
+    );
+    // The client sees the same file parts and the topic data chunk.
+    expect(body).toContain("/api/files/img-1");
+    expect(body).toContain("/api/files/img-2");
+    expect(body).toContain("here you go");
+    expect(body).toContain("data-topic");
+  });
+
+  it("creates the topic through the same draft path when no topicId is given", async () => {
+    createTopicForChat.mockResolvedValue({ id: "topic-new" });
+
+    const response = await POST(
+      chatRequest({
+        assistantId: "assistant-1",
+        providerConfigId: "cfg-1",
+        modelId: "gpt-image-1",
+        message: {
+          id: "message-1",
+          role: "user",
+          parts: [{ type: "text", text: "draw a cat" }],
+        },
+      }),
+    );
+    await response.text();
+
+    expect(createTopicForChat).toHaveBeenCalledWith(
+      { assistantId: "assistant-1" },
+      ACTOR,
+      expect.anything(),
+    );
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: "topic-new" }),
+      ACTOR,
+    );
+  });
+
+  it("rejects an image model on the claude format before any persistence", async () => {
+    createChatModelHandle.mockResolvedValue(
+      imageHandle({
+        apiFormat: "claude",
+        endpoint: {
+          apiFormat: "claude",
+          name: "test",
+          baseUrl: "https://api.test/v1",
+          apiKey: "k",
+        },
+      }),
+    );
+
+    const response = await POST(imageRequest());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "model.imageUnsupported" },
+    });
+    expect(appendUserMessage).not.toHaveBeenCalled();
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects attachments on an image model without creating a draft topic", async () => {
+    const response = await POST(
+      chatRequest({
+        assistantId: "assistant-1",
+        providerConfigId: "cfg-1",
+        modelId: "gpt-image-1",
+        message: { id: "message-1", role: "user", parts: [FILE_PART] },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "image.attachmentUnsupported" },
+    });
+    expect(createTopicForChat).not.toHaveBeenCalled();
+    expect(appendUserMessage).not.toHaveBeenCalled();
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects a size outside the model's tiers, naming the parameter", async () => {
+    const response = await POST(imageRequest({ image: { size: "999x999" } }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        messageKey: "image.invalidParams",
+        params: { param: "size" },
+      },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects n above the model's maximum", async () => {
+    // dall-e-3 caps at 1; gpt-image's nMax 10 coincides with the request
+    // schema's own ceiling, so the capability gate is only reachable here.
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "dall-e-3" },
+    ]);
+
+    const response = await POST(
+      imageRequest({ modelId: "dall-e-3", image: { n: 2 } }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "image.invalidParams", params: { param: "n" } },
+    });
+  });
+
+  it("rejects a quality the model does not offer", async () => {
+    const response = await POST(
+      imageRequest({ image: { quality: "ultra" } }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        messageKey: "image.invalidParams",
+        params: { param: "quality" },
+      },
+    });
+  });
+
+  it("rejects an imageSize on a model without image size tiers", async () => {
+    const response = await POST(
+      imageRequest({ image: { imageSize: "2K" } }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        messageKey: "image.invalidParams",
+        params: { param: "imageSize" },
+      },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("forwards a Gemini imageSize tier to the provider call on the google format", async () => {
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "gemini-3-pro-image" },
+    ]);
+    createChatModelHandle.mockResolvedValue(
+      imageHandle({
+        apiFormat: "google",
+        endpoint: {
+          apiFormat: "google",
+          name: "test",
+          baseUrl: "https://api.test/v1beta",
+          apiKey: "k",
+        },
+      }),
+    );
+
+    const response = await POST(
+      imageRequest({
+        modelId: "gemini-3-pro-image",
+        image: { size: "16:9", imageSize: "2K" },
+      }),
+    );
+    await response.text();
+
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.anything(),
+      "gemini-3-pro-image",
+      expect.objectContaining({ size: "16:9", imageSize: "2K", n: 1 }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("strips imageSize when a gemini-capable model is served over openai-compatible", async () => {
+    // The capability table validates the tier (gemini-3-pro-image offers
+    // 2K), but the OpenAI image endpoint has no resolution-tier parameter —
+    // a gateway serving the model over this format would silently ignore it.
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "gemini-3-pro-image" },
+    ]);
+
+    const response = await POST(
+      imageRequest({
+        modelId: "gemini-3-pro-image",
+        image: { size: "16:9", imageSize: "2K" },
+      }),
+    );
+    await response.text();
+
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.anything(),
+      "gemini-3-pro-image",
+      { prompt: "draw a cat", n: 1, size: "16:9" },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("rejects a Gemini imageSize tier the model does not offer", async () => {
+    // gemini-2.5-flash-image is 1K-only; a 2K request is a 400.
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "gemini-2.5-flash-image" },
+    ]);
+
+    const response = await POST(
+      imageRequest({
+        modelId: "gemini-2.5-flash-image",
+        image: { size: "16:9", imageSize: "2K" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        messageKey: "image.invalidParams",
+        params: { param: "imageSize" },
+      },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects a custom size below the model's pixel floor", async () => {
+    // seedream-4.5 requires at least 3,686,400 pixels; 1024x1024 is under.
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "doubao-seedream-4-5-251128" },
+    ]);
+
+    const response = await POST(
+      imageRequest({
+        modelId: "doubao-seedream-4-5-251128",
+        image: { size: "1024x1024" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "image.invalidParams", params: { param: "size" } },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+    expect(appendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("passes a freeform custom size through for freeform models", async () => {
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "seedream-4" },
+    ]);
+
+    const response = await POST(
+      chatRequest({
+        assistantId: "assistant-1",
+        topicId: "topic-1",
+        providerConfigId: "cfg-1",
+        modelId: "seedream-4",
+        image: { size: "1234x567" },
+        message: {
+          id: "message-1",
+          role: "user",
+          parts: [{ type: "text", text: "draw a cat" }],
+        },
+      }),
+    );
+    await response.text();
+
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.anything(),
+      "seedream-4",
+      expect.objectContaining({ size: "1234x567", n: 1 }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("rejects a custom size violating a constrained freeform model's limits", async () => {
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "gpt-image-2" },
+    ]);
+
+    // 1537 is not divisible by 16.
+    const response = await POST(
+      imageRequest({ modelId: "gpt-image-2", image: { size: "1537x864" } }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "image.invalidParams", params: { param: "size" } },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+    expect(appendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("accepts a constraint-satisfying custom size for gpt-image-2", async () => {
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "gpt-image-2" },
+    ]);
+
+    const response = await POST(
+      imageRequest({ modelId: "gpt-image-2", image: { size: "1536x864" } }),
+    );
+    await response.text();
+
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.anything(),
+      "gpt-image-2",
+      expect.objectContaining({ size: "1536x864", n: 1 }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("cleans up already-stored images when a stop lands during the upload loop", async () => {
+    generateImageForEndpoint.mockResolvedValue({
+      images: [
+        { bytes: Buffer.from("a"), mediaType: "image/png" },
+        { bytes: Buffer.from("bb"), mediaType: "image/png" },
+      ],
+    });
+    uploadFile.mockImplementationOnce(async () => {
+      // The user hits stop while the first image is being stored.
+      streamControl.controller?.abort();
+      return {
+        id: "img-1",
+        url: "/api/files/img-1",
+        filename: "generated.png",
+        mediaType: "image/png",
+        sizeBytes: 1,
+        extraction: { status: "none", truncated: false },
+      };
+    });
+
+    const response = await POST(imageRequest());
+    await response.text();
+
+    expect(uploadFile).toHaveBeenCalledTimes(1);
+    expect(deleteFile).toHaveBeenCalledWith("img-1", ACTOR);
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "stopped",
+        errorMessage: null,
+        message: expect.objectContaining({ parts: [] }),
+      }),
+      ACTOR,
+    );
+  });
+
+  it("cleans up already-stored images when a later one fails", async () => {
+    generateImageForEndpoint.mockResolvedValue({
+      images: [
+        { bytes: Buffer.from("a"), mediaType: "image/png" },
+        { bytes: Buffer.from("bb"), mediaType: "image/png" },
+      ],
+    });
+    uploadFile
+      .mockImplementationOnce(async () => ({
+        id: "img-1",
+        url: "/api/files/img-1",
+        filename: "generated.png",
+        mediaType: "image/png",
+        sizeBytes: 1,
+        extraction: { status: "none", truncated: false },
+      }))
+      .mockRejectedValueOnce(
+        new AppError("QUOTA_EXCEEDED", 413, "file.quotaExceeded", {
+          used: "4.9 GiB",
+          quota: "5 GiB",
+        }),
+      );
+
+    const response = await POST(imageRequest());
+    await response.text();
+
+    // The first image must not be left behind as an unreferenced row
+    // counting against the quota until the orphan sweep.
+    expect(deleteFile).toHaveBeenCalledWith("img-1", ACTOR);
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "failed",
+        message: expect.objectContaining({ parts: [] }),
+      }),
+      ACTOR,
+    );
+  });
+
+  it("persists the quota error text when storing the generated image hits the quota", async () => {
+    createChatModelHandle.mockResolvedValue(
+      imageHandle({
+        // The real handle's describeProviderError: our own AppError passes
+        // through with its catalog key instead of "provider.unreachable".
+        describeError: (error: unknown) =>
+          describeProviderError(error, {
+            apiKey: "k",
+            baseUrl: "https://api.test/v1",
+          }),
+      }),
+    );
+    uploadFile.mockRejectedValue(
+      new AppError("QUOTA_EXCEEDED", 413, "file.quotaExceeded", {
+        used: "4.9 GiB",
+        quota: "5 GiB",
+      }),
+    );
+
+    const response = await POST(imageRequest());
+    const body = await response.text();
+
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "failed",
+        errorMessage: "file.quotaExceeded",
+        message: expect.objectContaining({ parts: [] }),
+      }),
+      ACTOR,
+    );
+    expect(body).toContain("file.quotaExceeded");
+  });
+
+  it("persists a failed outcome with the error text when generation fails", async () => {
+    createChatModelHandle.mockResolvedValue(
+      imageHandle({
+        describeError: () => ({ kind: "verbatim", message: "provider boom" }),
+      }),
+    );
+    generateImageForEndpoint.mockRejectedValue(new Error("provider boom"));
+
+    const response = await POST(imageRequest());
+    const body = await response.text();
+
+    expect(body).toContain("provider boom");
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "failed",
+        errorMessage: "provider boom",
+        message: expect.objectContaining({ parts: [] }),
+      }),
+      ACTOR,
+    );
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+
+  it("persists a stopped outcome without partial images when the turn is aborted", async () => {
+    generateImageForEndpoint.mockImplementation(async () => {
+      streamControl.controller?.abort();
+      throw new Error("The operation was aborted");
+    });
+
+    const response = await POST(imageRequest());
+    await response.text();
+
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "stopped",
+        errorMessage: null,
+        message: expect.objectContaining({ parts: [] }),
+      }),
+      ACTOR,
+    );
+    expect(uploadFile).not.toHaveBeenCalled();
   });
 });

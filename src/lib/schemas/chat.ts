@@ -83,6 +83,20 @@ export const chatRequestMessageSchema = z.object({
   parts: z.array(chatRequestPartSchema).min(1),
 });
 
+/**
+ * Image-generation parameters, accepted only when the selected model
+ * advertises the `image` output modality; validated against the capability
+ * table (`imageCapabilityFor`) at the route before any provider call.
+ */
+export const imageGenerationParamsSchema = z.object({
+  size: z.string().trim().min(1).max(32).optional(),
+  n: z.number().int().min(1).max(10).optional(),
+  quality: z.string().trim().min(1).max(16).optional(),
+  // Gemini `imageConfig.imageSize` tier ("1K" | "2K" | "4K").
+  imageSize: z.string().trim().min(1).max(16).optional(),
+});
+export type ImageGenerationParams = z.infer<typeof imageGenerationParamsSchema>;
+
 export const chatRequestSchema = z.object({
   assistantId: z.string().min(1),
   topicId: z.string().min(1).optional(),
@@ -90,10 +104,12 @@ export const chatRequestSchema = z.object({
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),
   searchMode: searchModeSchema.optional(),
+  image: imageGenerationParamsSchema.optional(),
   // Browser IANA zone; the server falls back to its own zone when unset.
   timeZone: z.string().trim().min(1).max(64).optional(),
   message: chatRequestMessageSchema,
 });
+export type ChatRequest = z.infer<typeof chatRequestSchema>;
 export const stopChatRequestSchema = z.object({
   streamId: z.string().min(1),
 });
@@ -103,6 +119,7 @@ export const regenerateMessageRequestSchema = z.object({
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),
   searchMode: searchModeSchema.optional(),
+  image: imageGenerationParamsSchema.optional(),
   timeZone: z.string().trim().min(1).max(64).optional(),
 });
 

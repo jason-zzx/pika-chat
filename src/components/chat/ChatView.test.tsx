@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   listTopicMessages,
   deleteTopicMessage,
+  regenerateTopicMessage,
   translateMessage,
 } from "@/lib/api/chat";
 import { defaultModelMetadata } from "@/lib/schemas/provider";
@@ -13,7 +14,10 @@ import type {
   ChatMessagesResponse,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
-import { useComposerStore } from "@/stores/composer-store";
+import {
+  composerDraftKey,
+  useComposerStore,
+} from "@/stores/composer-store";
 import {
   renderWithIntl,
   wrapWithIntl,
@@ -817,5 +821,155 @@ describe("ChatView compression progress (PRD R7/AC8)", () => {
     expect(
       await screen.findByText("Unable to compress the conversation"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ChatView regenerate image params", () => {
+  const imageModel = {
+    configId: "c1",
+    configName: "Test provider",
+    modelId: "gpt-image-2",
+    provenance: "own" as const,
+    ownerName: null,
+    ...defaultModelMetadata(),
+    outputModalities: ["text", "image"],
+  };
+  const textModel = {
+    configId: "c1",
+    configName: "Test provider",
+    modelId: "m1",
+    provenance: "own" as const,
+    ownerName: null,
+    ...defaultModelMetadata(),
+  };
+  const draftKey = composerDraftKey("t1", "a1");
+
+  function assistantWithModel(
+    id: string,
+    text: string,
+    modelId = "m1",
+  ): StoredMessage {
+    return {
+      id,
+      role: "assistant",
+      parts: [{ type: "text", text }],
+      metadata: {
+        groupId: "g1",
+        createdAt: new Date().toISOString(),
+        providerConfigId: "c1",
+        modelId,
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    // A leaked compression boundary from the compression suite would lock
+    // the message's regenerate entry (compressed-zone lock), so pin the
+    // detail response here.
+    topicApiMocks.getTopic.mockResolvedValue({
+      id: "t1",
+      title: "Topic",
+      isFavorite: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      summaryUpToMessageId: null,
+    });
+    // A null body takes runRegeneration's failStart path after the POST, so
+    // the request body is observable without a stream to consume.
+    vi.mocked(regenerateTopicMessage).mockResolvedValue({
+      body: null,
+    } as unknown as Response);
+  });
+
+  afterEach(() => {
+    availableModelsMock.data = [];
+    useComposerStore.setState({ pickedModel: null, imageParams: {} });
+  });
+
+  async function triggerRegenerate() {
+    const article = await screen.findByRole("article", { name: "Assistant" });
+    fireEvent.click(
+      within(article).getByRole("button", { name: "More actions" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Regenerate" }),
+    );
+    await waitFor(() => {
+      expect(regenerateTopicMessage).toHaveBeenCalled();
+    });
+  }
+
+  it("sends the draft's sanitized image params when regenerating with an image model", async () => {
+    availableModelsMock.data = [imageModel];
+    // The seeded assistant carries the image model pair so the model-seeding
+    // effect keeps the picked model instead of replacing it from history.
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        assistantWithModel("srv-a1", "answer", "gpt-image-2"),
+      ],
+    });
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "gpt-image-2" },
+      imageParams: {
+        [draftKey]: { size: "1024x1024", n: 2, quality: "not-a-tier" },
+      },
+    });
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await triggerRegenerate();
+
+    // The stale quality tier is dropped by imageRequestParams; the rest
+    // rides along.
+    expect(regenerateTopicMessage).toHaveBeenCalledWith(
+      "t1",
+      "srv-a1",
+      expect.objectContaining({
+        providerConfigId: "c1",
+        modelId: "gpt-image-2",
+        image: { size: "1024x1024", n: 2 },
+      }),
+    );
+  });
+
+  it("omits image params when the picked model has no image output", async () => {
+    availableModelsMock.data = [textModel];
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        assistantWithModel("srv-a1", "answer"),
+      ],
+    });
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+      imageParams: { [draftKey]: { size: "1024x1024", n: 2 } },
+    });
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await triggerRegenerate();
+
+    const body = vi.mocked(regenerateTopicMessage).mock.calls[0]?.[2];
+    expect(body).not.toHaveProperty("image");
+  });
+
+  it("omits the image key when the draft has no valid params", async () => {
+    availableModelsMock.data = [imageModel];
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        assistantWithModel("srv-a1", "answer", "gpt-image-2"),
+      ],
+    });
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "gpt-image-2" },
+    });
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await triggerRegenerate();
+
+    const body = vi.mocked(regenerateTopicMessage).mock.calls[0]?.[2];
+    expect(body).not.toHaveProperty("image");
   });
 });

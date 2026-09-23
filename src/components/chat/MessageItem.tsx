@@ -52,7 +52,7 @@ type FilePart = ChatFilePart;
 const EXTERNAL_LINK_TARGET = "_blank";
 const EXTERNAL_LINK_REL = "noreferrer noopener";
 
-type UserAttachmentProps = { part: FilePart };
+type AttachmentCardProps = { part: FilePart };
 
 /**
  * Shrink the image link to the image's *rendered* width once loaded. The
@@ -77,9 +77,10 @@ function shrinkLinkToRenderedImage(img: HTMLImageElement | null) {
   }
 }
 
-/** User-message attachment card: a thumbnail for images, a native player for
- * audio/video, a name card for everything else. */
-function UserAttachment({ part }: UserAttachmentProps) {
+/** Attachment card: a thumbnail for images, a native player for
+ * audio/video, a name card for everything else. Shared by user attachments
+ * and generated images on assistant messages. */
+function AttachmentCard({ part }: AttachmentCardProps) {
   const t = useTranslations("Files");
   const filename = part.filename ?? "";
   const category = classifyFile({ mediaType: part.mediaType, filename });
@@ -489,7 +490,7 @@ export default function MessageItem({
         {fileParts.length > 0 ? (
           <div className="flex max-w-[min(100%,42rem)] flex-wrap justify-end gap-2">
             {fileParts.map((part, index) => (
-              <UserAttachment key={`${part.url}-${index}`} part={part} />
+              <AttachmentCard key={`${part.url}-${index}`} part={part} />
             ))}
           </div>
         ) : null}
@@ -539,6 +540,15 @@ export default function MessageItem({
         </span>
         <MessageTimestamp createdAt={createdAt} />
       </div>
+      {fileParts.length > 0 ? (
+        // Generated images (design §3) ride as regular file parts; render
+        // them with the same cards user attachments get, before the text.
+        <div className="flex max-w-full flex-wrap gap-2">
+          {fileParts.map((part, index) => (
+            <AttachmentCard key={`${part.url}-${index}`} part={part} />
+          ))}
+        </div>
+      ) : null}
       {contentBlocks.map((block, blockIndex) => {
         if (block.kind === "reasoning") {
           // Block i shows phase duration i: live from the early-emitted

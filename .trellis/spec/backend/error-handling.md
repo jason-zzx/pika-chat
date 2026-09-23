@@ -178,6 +178,12 @@ Consequences to keep in mind:
   "unreachable" copy — a rate limit presented as a connectivity problem, with
   the real body discarded. The regression test drives a real local endpoint
   returning 503 and asserts the provider's own text survives.
+- Our own `AppError` passes through with its catalog code and messageKey.
+  Everything that is neither `APICallError` nor `AppError` falls into the
+  "unreachable" bucket — folding an `AppError` like
+  `provider.unexpectedResponse` (a gateway answering 200 with an unparseable
+  body) into it misreports a malformed upstream answer as a connectivity
+  failure.
 
 Use the AI SDK's error handling on the stream response so the failure reaches
 the client as a stream event rather than a silently truncated response. A

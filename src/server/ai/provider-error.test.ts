@@ -6,6 +6,7 @@ import { createTranslator } from "next-intl";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { logger } from "@/server/logger";
+import { AppError } from "@/server/errors";
 
 import messages from "../../../messages/en.json";
 import {
@@ -231,6 +232,25 @@ describe("describeProviderError", () => {
       code: "PROVIDER_ERROR",
       kind: "key",
       messageKey: "provider.timedOut",
+    });
+    captured.restore();
+  });
+
+  it("passes our own AppError through with its catalog key", () => {
+    // The image adapters throw AppError(provider.unexpectedResponse) when a
+    // gateway answers 200 with an unparseable body; folding that into
+    // "unreachable" misreports a malformed upstream answer as a network
+    // failure.
+    const captured = captureLog();
+    expect(
+      describeProviderError(
+        new AppError("PROVIDER_ERROR", 500, "provider.unexpectedResponse"),
+        SECRETS,
+      ),
+    ).toEqual({
+      code: "PROVIDER_ERROR",
+      kind: "key",
+      messageKey: "provider.unexpectedResponse",
     });
     captured.restore();
   });

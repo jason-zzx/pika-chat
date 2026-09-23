@@ -14,17 +14,23 @@ const {
   findTopicForActor,
   generateText,
   listTopicMessages,
+  resolveAvailableModels,
   resolveModelPreference,
 } = vi.hoisted(() => ({
   createChatModelHandle: vi.fn(),
   findTopicForActor: vi.fn(),
   generateText: vi.fn(),
   listTopicMessages: vi.fn(),
+  resolveAvailableModels: vi.fn(),
   resolveModelPreference: vi.fn(),
 }));
 
 vi.mock("@/server/ai/chat-model", () => ({
   createChatModelHandle,
+}));
+
+vi.mock("@/server/ai/model-resolution", () => ({
+  resolveAvailableModels,
 }));
 
 vi.mock("@/server/services/model-preferences.service", () => ({
@@ -84,6 +90,8 @@ describe("titleTopicFromFirstMessage", () => {
     generateText.mockReset();
     createChatModelHandle.mockReset();
     listTopicMessages.mockReset();
+    resolveAvailableModels.mockReset();
+    resolveAvailableModels.mockResolvedValue([]);
     resolveModelPreference.mockReset();
     resolveModelPreference.mockResolvedValue(null);
   });
@@ -197,5 +205,82 @@ describe("titleTopicFromFirstMessage", () => {
     expect(generateText).not.toHaveBeenCalled();
     expect(createChatModelHandle).not.toHaveBeenCalled();
     expect(result).toEqual(untitled);
+  });
+
+  it("skips the model call when the fallback pair is an image model", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+    resolveAvailableModels.mockResolvedValue([
+      {
+        configId: "cfg-client",
+        modelId: "client-model",
+        outputModalities: ["image", "text"],
+      },
+    ]);
+
+    const result = await titleTopicFromFirstMessage(
+      {
+        topicId: untitled.id,
+        providerConfigId: "cfg-client",
+        modelId: "client-model",
+      },
+      actor,
+    );
+
+    // generateText on an image-only model is guaranteed to fail, so the
+    // service goes straight to the truncated-text title.
+    expect(generateText).not.toHaveBeenCalled();
+    expect(createChatModelHandle).not.toHaveBeenCalled();
+    expect(result).toEqual(untitled);
+  });
+
+  it("still titles via the model for a text-capable fallback pair", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+    resolveAvailableModels.mockResolvedValue([
+      {
+        configId: "cfg-client",
+        modelId: "client-model",
+        outputModalities: ["text"],
+      },
+    ]);
+    createChatModelHandle.mockResolvedValue({ model: "handle" });
+    generateText.mockResolvedValue({ text: "Onsen towns" });
+
+    await titleTopicFromFirstMessage(
+      {
+        topicId: untitled.id,
+        providerConfigId: "cfg-client",
+        modelId: "client-model",
+      },
+      actor,
+    );
+
+    expect(generateText).toHaveBeenCalled();
+  });
+
+  it("honors an explicit title preference even for an image model", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+    resolveModelPreference.mockResolvedValue({
+      providerConfigId: "cfg-pref",
+      modelId: "pref-model",
+    });
+    createChatModelHandle.mockResolvedValue({ model: "handle" });
+    generateText.mockResolvedValue({ text: "Onsen towns" });
+
+    await titleTopicFromFirstMessage(
+      {
+        topicId: untitled.id,
+        providerConfigId: "cfg-client",
+        modelId: "client-model",
+      },
+      actor,
+    );
+
+    // The short-circuit only inspects fallback pairs; an explicit
+    // preference is passed to the model untouched.
+    expect(generateText).toHaveBeenCalled();
+    expect(resolveAvailableModels).not.toHaveBeenCalled();
   });
 });
