@@ -912,3 +912,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed** (archived)
+
+
+## Session 32: 聊天内图片编辑（图生图/img2img）
+<!-- trellis-session: v=2 fp=64ed3698db32ef1b -->
+
+**Date**: 2026-09-28
+**Task**: 聊天内图片编辑（图生图/img2img）
+**Branch**: `main`
+
+### Summary
+
+完成 09-24-image-editing：能力表新增 imageInput（max + openAiTransport），/api/chat 与 regenerate 旁路经 resolveImageReferences 做分级 400 校验并解析参考图字节；适配层接入三种编辑 transport（OpenAI /images/edits multipart 已实证、Seedream generations image data-URL、Gemini inlineData，后两者按用户决定带 imageInput 上线、上游 400 兜底）；前端 Composer 按能力放开图像附件（accept=image/*，上限 min(5,max)，draft 必填），新增双入口"编辑这张图"（缩略图悬浮/触摸常驻按钮 + 预览对话框按钮）走 stageReference 复用 file id 不重传。spec 双侧同步，ponytail-review 后收敛 -20 行；150 suites / 1354 tests 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3b04520` | feat(chat): image editing with reference images (img2img) |
+
+### Status
+
+[OK] **Completed**
