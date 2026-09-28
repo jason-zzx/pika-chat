@@ -8,6 +8,7 @@ import {
   CopyIcon,
   DownloadIcon,
   ExternalLinkIcon,
+  PencilIcon,
   XIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -37,6 +38,9 @@ type ImagePreviewDialogProps = {
   onNext?: () => void;
   prevDisabled?: boolean;
   nextDisabled?: boolean;
+  /** "Edit this image" (chat messages only): stage the file as a composer
+   * reference. The file manager does not pass it. */
+  onEdit?: () => void;
 };
 
 /**
@@ -56,8 +60,10 @@ export default function ImagePreviewDialog({
   onNext,
   prevDisabled = false,
   nextDisabled = false,
+  onEdit,
 }: ImagePreviewDialogProps) {
   const t = useTranslations("ImagePreview");
+  const tFiles = useTranslations("Files");
   const tCommon = useTranslations("Common");
   const [baseWidth, setBaseWidth] = useState<number | null>(null);
   const [scale, setScale] = useState(1);
@@ -225,6 +231,18 @@ export default function ImagePreviewDialog({
                   <CopyIcon aria-hidden="true" />
                 )}
               </Button>
+              {onEdit ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={tFiles("editImage")}
+                  title={tFiles("editImage")}
+                  onClick={onEdit}
+                >
+                  <PencilIcon aria-hidden="true" />
+                </Button>
+              ) : null}
               {/* Download and open-in-new-tab stay plain anchors: the image
                * is same-origin (our authenticated /api/files route), so the
                * download attribute and target=_blank both work without

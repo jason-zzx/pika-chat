@@ -9,6 +9,15 @@ export const DEFAULT_MAX_FILE_BYTES = 20 * 1024 * 1024;
 /** Largest number of attachments allowed on one chat message. */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
 
+/** Per-message attachment cap for a model whose imageInput allows
+ *  `imageInputMax` reference images (0 = a plain chat model). Shared by the
+ *  composer's attach control and the staging hook. */
+export function attachmentLimitFor(imageInputMax = 0): number {
+  return imageInputMax > 0
+    ? Math.min(MAX_ATTACHMENTS_PER_MESSAGE, imageInputMax)
+    : MAX_ATTACHMENTS_PER_MESSAGE;
+}
+
 /** Page size of `GET /api/files` when the request omits `limit`. */
 export const FILE_LIST_DEFAULT_LIMIT = 50;
 

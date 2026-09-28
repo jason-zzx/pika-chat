@@ -19,6 +19,7 @@ import { resolveAttachmentsForModel } from "@/server/ai/attachments";
 import {
   assertImageGenerationSupported,
   createImageGenerationResponse,
+  resolveImageReferences,
 } from "@/server/ai/image/turn";
 import { replayModelMessages } from "@/server/ai/model-messages";
 import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
@@ -105,10 +106,18 @@ export const POST = withErrorHandling(async (request, context) => {
   // version group. The prompt is the text of the last user message in the
   // target history; the stream id travels in the response header as usual.
   if (selected.outputModalities.includes("image")) {
-    assertImageGenerationSupported(handle.apiFormat, input.modelId, input.image);
     const promptMessage = [...history]
       .reverse()
       .find((message) => message.role === "user");
+    // Reference images re-resolve from the source user message's file parts
+    // through the same flow as /api/chat (design §3.4); a deleted reference
+    // surfaces resolveOwnedFileParts' NOT_FOUND, which is correct.
+    const { references } = await resolveImageReferences(
+      promptMessage?.parts.filter((part) => part.type === "file") ?? [],
+      actor,
+      input.modelId,
+    );
+    assertImageGenerationSupported(handle.apiFormat, input.modelId, input.image);
     return createImageGenerationResponse({
       actor,
       handle,
@@ -117,6 +126,7 @@ export const POST = withErrorHandling(async (request, context) => {
       modelId: input.modelId,
       image: input.image,
       prompt: promptMessage ? textFromMessage(promptMessage) : "",
+      references,
       topicId,
       groupId: targetGroupId ?? undefined,
       announceTopic: false,

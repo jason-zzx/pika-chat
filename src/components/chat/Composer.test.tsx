@@ -411,14 +411,15 @@ describe("Composer image mode", () => {
   }
 
   it("hides attachments, search, and reasoning, and shows the image settings entry", async () => {
+    // dall-e-3 has no imageInput capability: attachments stay hidden.
     const { onAddFiles } = renderComposer({
-      model: { configId: "cfg", modelId: "gpt-image-1" },
-      models: [imageModel()],
+      model: { configId: "cfg", modelId: "dall-e-3" },
+      models: [imageModel({ modelId: "dall-e-3" })],
       attachments: [stagedAttachment()],
       reasoningEffort: "low",
     });
     await vi.waitFor(() =>
-      expect(screen.getByRole("button", { name: "gpt-image-1" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "dall-e-3" })).toBeEnabled(),
     );
 
     expect(
@@ -442,6 +443,60 @@ describe("Composer image mode", () => {
       clipboardData: { files: [new File(["x"], "pasted.png", { type: "image/png" })] },
     });
     expect(onAddFiles).not.toHaveBeenCalled();
+  });
+
+  it("keeps image-only attachments for a model with reference-image input", async () => {
+    renderComposer({
+      model: { configId: "cfg", modelId: "gpt-image-1" },
+      models: [imageModel()],
+      attachments: [
+        stagedAttachment({ filename: "ref.png", mediaType: "image/png" }),
+      ],
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "gpt-image-1" })).toBeEnabled(),
+    );
+
+    // Attach control and staged chips stay available; the picker is
+    // restricted to images.
+    expect(
+      screen.getByRole("button", { name: "Attach files" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("ref.png")).toBeInTheDocument();
+    const input = document.querySelector("input[type=file]");
+    expect(input?.getAttribute("accept")).toBe("image/*");
+    // Search and reasoning stay hidden in image mode.
+    expect(
+      screen.queryByRole("button", { name: /Web search mode/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "Reasoning effort" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("caps the attach control at min(per-message cap, imageInputMax)", async () => {
+    // gemini-3-pro-image accepts at most 3 reference images.
+    const ready = Array.from({ length: 3 }, (_, index) =>
+      stagedAttachment({
+        id: `ref-${index}`,
+        filename: `ref-${index}.png`,
+        mediaType: "image/png",
+      }),
+    );
+    renderComposer({
+      model: { configId: "cfg", modelId: "gemini-3-pro-image" },
+      models: [imageModel({ modelId: "gemini-3-pro-image" })],
+      attachments: ready,
+    });
+    await vi.waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "gemini-3-pro-image" }),
+      ).toBeEnabled(),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Attach files" }),
+    ).toBeDisabled();
   });
 
   it("keeps the regular controls and no image settings for a chat model", async () => {

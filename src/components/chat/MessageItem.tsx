@@ -1,5 +1,6 @@
 "use client";
 
+import { PencilIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   useState,
@@ -8,6 +9,7 @@ import {
 } from "react";
 
 import ImagePreviewDialog from "@/components/common/ImagePreviewDialog";
+import { Button } from "@/components/ui/button";
 import { classifyFile } from "@/lib/files/media-types";
 import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
@@ -53,7 +55,13 @@ type FilePart = ChatFilePart;
 const EXTERNAL_LINK_TARGET = "_blank";
 const EXTERNAL_LINK_REL = "noreferrer noopener";
 
-type AttachmentCardProps = { part: FilePart };
+type AttachmentCardProps = {
+  part: FilePart;
+  /** "Edit this image" (image parts only): stage the file as a composer
+   * reference. Rendered as a thumbnail overlay button plus a preview-dialog
+   * button, both invoking this handler. */
+  onEdit?: (part: FilePart) => void;
+};
 
 /**
  * Shrink the image button to the image's *rendered* width once loaded. The
@@ -81,27 +89,53 @@ function shrinkLinkToRenderedImage(img: HTMLImageElement | null) {
 /** Attachment card: a thumbnail for images, a native player for
  * audio/video, a name card for everything else. Shared by user attachments
  * and generated images on assistant messages. */
-function AttachmentCard({ part }: AttachmentCardProps) {
+function AttachmentCard({ part, onEdit }: AttachmentCardProps) {
   const t = useTranslations("Files");
   const [previewOpen, setPreviewOpen] = useState(false);
   const filename = part.filename ?? "";
   const category = classifyFile({ mediaType: part.mediaType, filename });
   if (category === "image") {
+    const thumbnail = (
+      <button
+        type="button"
+        onClick={() => setPreviewOpen(true)}
+        className="inline-block max-w-full cursor-zoom-in"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- attachment bytes are served by our own authenticated route; next/image would proxy and resize. The frame lives on the img itself so it always hugs the rendered size (see shrinkLinkToRenderedImage for the button's width). */}
+        <img
+          ref={shrinkLinkToRenderedImage}
+          src={part.url}
+          alt={part.filename ?? ""}
+          className="block h-auto max-h-[28rem] w-auto max-w-[min(100%,28rem)] rounded-lg border border-border"
+        />
+      </button>
+    );
+    const editImage = () => onEdit?.(part);
     return (
       <>
-        <button
-          type="button"
-          onClick={() => setPreviewOpen(true)}
-          className="inline-block max-w-full cursor-zoom-in"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- attachment bytes are served by our own authenticated route; next/image would proxy and resize. The frame lives on the img itself so it always hugs the rendered size (see shrinkLinkToRenderedImage for the button's width). */}
-          <img
-            ref={shrinkLinkToRenderedImage}
-            src={part.url}
-            alt={part.filename ?? ""}
-            className="block h-auto max-h-[28rem] w-auto max-w-[min(100%,28rem)] rounded-lg border border-border"
-          />
-        </button>
+        {onEdit ? (
+          // The wrapper shrink-wraps the thumbnail so the overlay button
+          // tracks the rendered image corner. Hover reveals it on pointer
+          // devices; touch (hover: none) keeps it always visible — hover-only
+          // entries are banned, and the preview dialog button is the
+          // always-visible fallback path.
+          <div className="group/edit relative inline-block max-w-full">
+            {thumbnail}
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-sm"
+              className="absolute right-1.5 top-1.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/edit:opacity-100 [@media(hover:none)]:opacity-100"
+              aria-label={t("editImage")}
+              title={t("editImage")}
+              onClick={editImage}
+            >
+              <PencilIcon aria-hidden="true" />
+            </Button>
+          </div>
+        ) : (
+          thumbnail
+        )}
         {previewOpen ? (
           <ImagePreviewDialog
             src={part.url}
@@ -111,6 +145,14 @@ function AttachmentCard({ part }: AttachmentCardProps) {
                 setPreviewOpen(false);
               }
             }}
+            onEdit={
+              onEdit
+                ? () => {
+                    setPreviewOpen(false);
+                    editImage();
+                  }
+                : undefined
+            }
           />
         ) : null}
       </>
@@ -347,6 +389,8 @@ type MessageItemProps = {
   /** Target language of an in-flight translation for this message (R5); an
    * in-progress placeholder renders where the finished block will land. */
   translatingTargetLang?: TranslateTargetLanguageCode | null;
+  /** "Edit this image": stage an image file part as a composer reference. */
+  onEditImage?: (part: FilePart) => void;
   /** Ref attached to the root article element (used by the list to locate
    * the latest user message for scroll positioning). */
   articleRef?: Ref<HTMLElement>;
@@ -379,6 +423,7 @@ export default function MessageItem({
   onSelectVersion,
   onTranslate,
   translatingTargetLang,
+  onEditImage,
   articleRef,
   minHeight,
   compressedLocked = false,
@@ -504,7 +549,11 @@ export default function MessageItem({
         {fileParts.length > 0 ? (
           <div className="flex max-w-[min(100%,42rem)] flex-wrap justify-end gap-2">
             {fileParts.map((part, index) => (
-              <AttachmentCard key={`${part.url}-${index}`} part={part} />
+              <AttachmentCard
+                key={`${part.url}-${index}`}
+                part={part}
+                onEdit={onEditImage}
+              />
             ))}
           </div>
         ) : null}
@@ -559,7 +608,11 @@ export default function MessageItem({
         // them with the same cards user attachments get, before the text.
         <div className="flex max-w-full flex-wrap gap-2">
           {fileParts.map((part, index) => (
-            <AttachmentCard key={`${part.url}-${index}`} part={part} />
+            <AttachmentCard
+              key={`${part.url}-${index}`}
+              part={part}
+              onEdit={onEditImage}
+            />
           ))}
         </div>
       ) : null}

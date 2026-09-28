@@ -51,9 +51,9 @@ function textFile(name = "notes.txt"): File {
 }
 
 /** A fresh client per hook instance so the limits cache never leaks across cases. */
-function renderAttachments(key: string) {
+function renderAttachments(key: string, imageInputMax = 0) {
   const client = new QueryClient();
-  const view = renderHook(() => useComposerAttachments(key), {
+  const view = renderHook(() => useComposerAttachments(key, imageInputMax), {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     ),
@@ -307,5 +307,122 @@ describe("useComposerAttachments", () => {
     });
     expect(result.current.attachments).toHaveLength(1);
     expect(result.current.attachments[0]?.status).toBe("ready");
+  });
+});
+
+describe("useComposerAttachments image-editing mode", () => {
+  function imageFile(name = "ref.png"): File {
+    return new File(["png"], name, { type: "image/png" });
+  }
+
+  it("rejects non-image files as unsupported without uploading", () => {
+    const { result } = renderAttachments(KEY, 3);
+
+    act(() => {
+      result.current.addFiles([textFile()]);
+    });
+
+    expect(result.current.attachments[0]?.status).toBe("error");
+    expect(messageKeyOf(result.current.attachments[0]?.error)).toBe(
+      "file.unsupportedType",
+    );
+    expect(uploadChatFile).not.toHaveBeenCalled();
+  });
+
+  it("caps references at min(per-message cap, imageInputMax)", async () => {
+    uploadChatFile.mockResolvedValue(uploaded({ mediaType: "image/png" }));
+    const { result } = renderAttachments(KEY, 3);
+
+    act(() => {
+      result.current.addFiles([
+        imageFile("a.png"),
+        imageFile("b.png"),
+        imageFile("c.png"),
+        imageFile("d.png"),
+      ]);
+    });
+
+    await waitFor(() =>
+      expect(result.current.attachments).toHaveLength(4),
+    );
+    const overflow = result.current.attachments[3]!;
+    expect(overflow.status).toBe("error");
+    expect(overflow.error).toMatchObject({
+      error: { messageKey: "file.tooMany", params: { max: 3 } },
+    });
+    expect(uploadChatFile).toHaveBeenCalledTimes(3);
+  });
+
+  it("stageReference adds a ready chip without uploading and dedupes by url", () => {
+    const { result } = renderAttachments(KEY);
+    const part = {
+      url: "/api/files/file-9",
+      filename: "generated.png",
+      mediaType: "image/png",
+      sizeBytes: 1234,
+    };
+
+    act(() => {
+      result.current.stageReference(part);
+    });
+
+    expect(result.current.attachments).toHaveLength(1);
+    expect(result.current.attachments[0]).toMatchObject({
+      status: "ready",
+      url: "/api/files/file-9",
+      filename: "generated.png",
+      mediaType: "image/png",
+      sizeBytes: 1234,
+    });
+    expect(result.current.attachments[0]?.file).toBeUndefined();
+    expect(uploadChatFile).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.stageReference(part);
+    });
+    expect(result.current.attachments).toHaveLength(1);
+  });
+
+  it("retryAttachment is a no-op for a referenced (file-less) attachment", () => {
+    const { result } = renderAttachments(KEY);
+    act(() => {
+      result.current.stageReference({
+        url: "/api/files/file-9",
+        filename: "generated.png",
+        mediaType: "image/png",
+      });
+    });
+    const id = result.current.attachments[0]!.id;
+
+    act(() => {
+      result.current.retryAttachment(id);
+    });
+
+    expect(result.current.attachments[0]?.status).toBe("ready");
+    expect(uploadChatFile).not.toHaveBeenCalled();
+  });
+
+  it("stageReference over the cap lands as a too-many error chip", () => {
+    const { result } = renderAttachments(KEY, 1);
+    act(() => {
+      result.current.stageReference({
+        url: "/api/files/file-1",
+        filename: "a.png",
+        mediaType: "image/png",
+      });
+    });
+    act(() => {
+      result.current.stageReference({
+        url: "/api/files/file-2",
+        filename: "b.png",
+        mediaType: "image/png",
+      });
+    });
+
+    expect(result.current.attachments).toHaveLength(2);
+    expect(result.current.attachments[1]?.status).toBe("error");
+    expect(result.current.attachments[1]?.error).toMatchObject({
+      error: { messageKey: "file.tooMany", params: { max: 1 } },
+    });
   });
 });

@@ -19,6 +19,8 @@ export type ImageGenParams = {
   n: number;
   quality?: string;
   imageSize?: string;
+  /** Reference images for editing (img2img); absent = pure text-to-image. */
+  references?: GeneratedImage[];
 };
 
 export type ImageGenResult = {
@@ -95,6 +97,7 @@ function openAiImagesRequestBody(
   modelId: string,
   params: ImageGenParams,
 ): Record<string, unknown> {
+  const references = params.references ?? [];
   return {
     model: modelId,
     prompt: params.prompt,
@@ -102,7 +105,52 @@ function openAiImagesRequestBody(
     response_format: "b64_json",
     ...(params.size ? { size: params.size } : {}),
     ...(params.quality ? { quality: params.quality } : {}),
+    // generations-param transport (Seedream, gateway-served Gemini): the
+    // references ride as base64 data URLs — a `/api/files/<id>` url is
+    // authenticated and unreachable for the provider.
+    ...(references.length > 0
+      ? {
+          image: references.map(
+            (reference) =>
+              `data:${reference.mediaType};base64,${reference.bytes.toString("base64")}`,
+          ),
+        }
+      : {}),
   };
+}
+
+/**
+ * OpenAI `POST /images/edits` (gpt-image family): multipart/form-data with
+ * the references as `image[]` file fields (the official SDK shape). No
+ * mask/input_fidelity/background — not exposed this round. gpt-image always
+ * answers b64_json, so no `response_format` is sent; the response parser is
+ * the shared one.
+ */
+function openAiImagesEditsForm(
+  modelId: string,
+  params: ImageGenParams,
+): FormData {
+  const form = new FormData();
+  form.set("model", modelId);
+  form.set("prompt", params.prompt);
+  form.set("n", String(params.n));
+  if (params.size) {
+    form.set("size", params.size);
+  }
+  if (params.quality) {
+    form.set("quality", params.quality);
+  }
+  for (const reference of params.references ?? []) {
+    const extension = reference.mediaType.split("/")[1] ?? "png";
+    form.append(
+      "image[]",
+      new Blob([new Uint8Array(reference.bytes)], {
+        type: reference.mediaType,
+      }),
+      `reference.${extension}`,
+    );
+  }
+  return form;
 }
 
 /**
@@ -126,8 +174,19 @@ function googleImageRequestBody(
       imageConfig.imageSize = params.imageSize;
     }
   }
+  // Reference images precede the prompt: Gemini reads the image before the
+  // edit instruction more reliably in that order.
+  const parts: Record<string, unknown>[] = (params.references ?? []).map(
+    (reference) => ({
+      inlineData: {
+        mimeType: reference.mediaType,
+        data: reference.bytes.toString("base64"),
+      },
+    }),
+  );
+  parts.push({ text: params.prompt });
   return {
-    contents: [{ role: "user", parts: [{ text: params.prompt }] }],
+    contents: [{ role: "user", parts }],
     generationConfig: {
       responseModalities: ["TEXT", "IMAGE"],
       ...(Object.keys(imageConfig).length > 0 ? { imageConfig } : {}),
@@ -161,10 +220,20 @@ async function postJson(
   headers: Headers,
   signal: AbortSignal,
 ): Promise<unknown> {
+  return postImage(url, JSON.stringify(body), headers, signal, body);
+}
+
+async function postImage(
+  url: string,
+  body: BodyInit,
+  headers: Headers,
+  signal: AbortSignal,
+  requestBodyValues: Record<string, unknown>,
+): Promise<unknown> {
   const response = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body,
     signal,
   });
   if (!response.ok) {
@@ -172,7 +241,7 @@ async function postJson(
     throw new APICallError({
       message: `Image generation request failed with status ${response.status}`,
       url,
-      requestBodyValues: body,
+      requestBodyValues,
       statusCode: response.status,
       responseBody,
       isRetryable: false,
@@ -257,15 +326,39 @@ const openAiCompatibleAdapter: ImageAdapter = async (
   params,
   signal,
 ) => {
-  const url = `${endpoint.baseUrl.replace(/\/+$/, "")}/images/generations`;
+  const baseUrl = endpoint.baseUrl.replace(/\/+$/, "");
   // openai-compatible keeps the key optional, like discovery.
-  const headers = new Headers({ "content-type": "application/json" });
+  const headers = new Headers();
   if (endpoint.apiKey) {
     headers.set("authorization", `Bearer ${endpoint.apiKey}`);
   }
+  // With references, the capability table picks the wire shape: the OpenAI
+  // family goes to /images/edits as multipart, everyone else stays on
+  // /images/generations with an `image` parameter.
+  const edits =
+    (params.references?.length ?? 0) > 0 &&
+    imageCapabilityFor(modelId).imageInput?.openAiTransport === "edits";
+  // The multipart edits body sets its own content-type boundary.
+  if (!edits) {
+    headers.set("content-type", "application/json");
+  }
   const payload = parseOrThrow(
     openAiImagesResponseSchema,
-    await postJson(url, openAiImagesRequestBody(modelId, params), headers, signal),
+    edits
+      ? // Multipart edits: fetch sets the content-type boundary itself.
+        await postImage(
+          `${baseUrl}/images/edits`,
+          openAiImagesEditsForm(modelId, params),
+          headers,
+          signal,
+          {},
+        )
+      : await postJson(
+          `${baseUrl}/images/generations`,
+          openAiImagesRequestBody(modelId, params),
+          headers,
+          signal,
+        ),
   );
   const images = await Promise.all(
     payload.data.map((item) => {

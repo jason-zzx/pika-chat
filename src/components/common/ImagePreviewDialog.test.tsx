@@ -57,6 +57,22 @@ describe("ImagePreviewDialog", () => {
     expect(
       within(dialog).queryByRole("button", { name: "Previous image" }),
     ).not.toBeInTheDocument();
+    // No onEdit: the edit entry stays out (file manager usage).
+    expect(
+      within(dialog).queryByRole("button", { name: "Edit this image" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders an always-visible edit button when onEdit is provided", async () => {
+    const onEdit = vi.fn();
+    renderDialog({ onEdit });
+
+    const dialog = await screen.findByRole("dialog");
+    const edit = within(dialog).getByRole("button", {
+      name: "Edit this image",
+    });
+    fireEvent.click(edit);
+    expect(onEdit).toHaveBeenCalledTimes(1);
   });
 
   it("zooms around the fitted width and resets to 100%", async () => {

@@ -19,6 +19,8 @@ const {
   generateImageForEndpoint,
   uploadFile,
   deleteFile,
+  getFilesByIds,
+  getFileStorage,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
   resolveAvailableModels: vi.fn(),
@@ -38,6 +40,8 @@ const {
   generateImageForEndpoint: vi.fn(),
   uploadFile: vi.fn(),
   deleteFile: vi.fn(),
+  getFilesByIds: vi.fn(),
+  getFileStorage: vi.fn(),
 }));
 
 // Controllable abort for the image-bypass stop test: the real registry's
@@ -55,7 +59,9 @@ vi.mock("@/server/files/file.service", () => ({
   resolveOwnedFileParts,
   uploadFile,
   deleteFile,
+  getFilesByIds,
 }));
+vi.mock("@/server/files/storage", () => ({ getFileStorage }));
 vi.mock("@/server/ai/chat-model", () => ({ createChatModelHandle }));
 vi.mock("@/server/ai/image/generate", () => ({ generateImageForEndpoint }));
 vi.mock("@/server/ai/stream-registry", () => ({
@@ -665,6 +671,9 @@ describe("POST /api/chat image generation bypass", () => {
   beforeEach(() => {
     resolveAvailableModels.mockResolvedValue([IMAGE_MODEL]);
     createChatModelHandle.mockResolvedValue(imageHandle());
+    // The image branch resolves references from file parts; most tests send
+    // none, so the default is "no owned parts".
+    resolveOwnedFileParts.mockResolvedValue([]);
     generateImageForEndpoint.mockResolvedValue({
       images: [{ bytes: Buffer.from("png-bytes"), mediaType: "image/png" }],
     });
@@ -813,7 +822,11 @@ describe("POST /api/chat image generation bypass", () => {
     expect(generateImageForEndpoint).not.toHaveBeenCalled();
   });
 
-  it("rejects attachments on an image model without creating a draft topic", async () => {
+  it("rejects a non-image attachment on an edit-capable model without creating a draft topic", async () => {
+    // resolveOwnedFileParts returns the canonical (pdf) row, so the graded
+    // check fires referenceNotImage, not the blanket rejection.
+    resolveOwnedFileParts.mockResolvedValue([FILE_PART]);
+
     const response = await POST(
       chatRequest({
         assistantId: "assistant-1",
@@ -825,11 +838,116 @@ describe("POST /api/chat image generation bypass", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "image.referenceNotImage" },
+    });
+    expect(createTopicForChat).not.toHaveBeenCalled();
+    expect(appendUserMessage).not.toHaveBeenCalled();
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects attachments on a model without image input", async () => {
+    // dall-e-3 has no imageInput capability: any file part is refused.
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "dall-e-3" },
+    ]);
+    resolveOwnedFileParts.mockResolvedValue([FILE_PART]);
+
+    const response = await POST(
+      imageRequest({ modelId: "dall-e-3" }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
       error: { messageKey: "image.attachmentUnsupported" },
     });
     expect(createTopicForChat).not.toHaveBeenCalled();
     expect(appendUserMessage).not.toHaveBeenCalled();
     expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects more reference images than the model accepts", async () => {
+    // gemini image models take at most 3 references; the 5-slot message cap
+    // is looser, so the capability check is what fires.
+    resolveAvailableModels.mockResolvedValue([
+      { ...IMAGE_MODEL, modelId: "gemini-2.5-flash-image" },
+    ]);
+    const parts = Array.from({ length: 4 }, (_, index) => ({
+      type: "file",
+      url: `/api/files/ref-${index}`,
+      mediaType: "image/png",
+      filename: `ref-${index}.png`,
+    }));
+    resolveOwnedFileParts.mockResolvedValue(parts);
+
+    const response = await POST(
+      imageRequest({
+        modelId: "gemini-2.5-flash-image",
+        message: { id: "message-1", role: "user", parts },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "image.tooManyReferences", params: { max: 3 } },
+    });
+    expect(createTopicForChat).not.toHaveBeenCalled();
+    expect(appendUserMessage).not.toHaveBeenCalled();
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("resolves reference images from the message's file parts and passes them to the generator", async () => {
+    const referencePart = {
+      type: "file",
+      url: "/api/files/ref-1",
+      mediaType: "image/png",
+      filename: "ref.png",
+      sizeBytes: 4,
+    };
+    resolveOwnedFileParts.mockResolvedValue([referencePart]);
+    getFilesByIds.mockResolvedValue(
+      new Map([
+        [
+          "ref-1",
+          { id: "ref-1", storageKey: "user-1/ref-1.png", mediaType: "image/png" },
+        ],
+      ]),
+    );
+    const storageGet = vi.fn().mockResolvedValue(Buffer.from([1, 2, 3, 4]));
+    getFileStorage.mockReturnValue({ get: storageGet });
+
+    const response = await POST(
+      imageRequest({
+        message: {
+          id: "message-1",
+          role: "user",
+          parts: [referencePart, { type: "text", text: "draw a cat" }],
+        },
+      }),
+    );
+    await response.text();
+
+    expect(storageGet).toHaveBeenCalledWith("user-1/ref-1.png");
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ baseUrl: "https://api.test/v1" }),
+      "gpt-image-1",
+      {
+        prompt: "draw a cat",
+        n: 1,
+        references: [
+          { bytes: Buffer.from([1, 2, 3, 4]), mediaType: "image/png" },
+        ],
+      },
+      expect.any(AbortSignal),
+    );
+    // The user message persists the canonical file part (files first).
+    expect(appendUserMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          parts: [referencePart, { type: "text", text: "draw a cat" }],
+        }),
+      }),
+      ACTOR,
+    );
   });
 
   it("rejects a size outside the model's tiers, naming the parameter", async () => {

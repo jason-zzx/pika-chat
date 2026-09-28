@@ -553,7 +553,8 @@
       "empty": "No extractable text",
       "failed": "This file cannot be read",
       "truncated": "Long file — content will be truncated"
-    }
+    },
+    "editImage": "Edit this image"
   },
   "ImagePreview": {
     "zoomIn": "Zoom in",
@@ -640,8 +641,10 @@
       "imageUnsupported": "This provider format does not support image generation"
     },
     "image": {
-      "attachmentUnsupported": "Image generation does not support attachments yet",
-      "invalidParams": "Invalid image generation parameter: {param}"
+      "attachmentUnsupported": "This image model does not accept reference images",
+      "invalidParams": "Invalid image generation parameter: {param}",
+      "referenceNotImage": "Only image files can be used as reference images",
+      "tooManyReferences": "Too many reference images (maximum {max})"
     },
     "searchProvider": {
       "notConfigured": "Search provider not configured",

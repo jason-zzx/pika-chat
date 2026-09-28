@@ -553,7 +553,8 @@
       "empty": "无可提取的文本",
       "failed": "无法读取此文件",
       "truncated": "文件较长——内容将被截断"
-    }
+    },
+    "editImage": "编辑这张图"
   },
   "ImagePreview": {
     "zoomIn": "放大",
@@ -640,8 +641,10 @@
       "imageUnsupported": "该服务商格式不支持图像生成"
     },
     "image": {
-      "attachmentUnsupported": "图像生成暂不支持携带附件",
-      "invalidParams": "图像生成参数无效：{param}"
+      "attachmentUnsupported": "该图像模型不支持参考图输入",
+      "invalidParams": "图像生成参数无效：{param}",
+      "referenceNotImage": "参考图仅支持图片文件",
+      "tooManyReferences": "参考图数量超出上限（最多 {max} 张）"
     },
     "searchProvider": {
       "notConfigured": "未配置搜索服务商",

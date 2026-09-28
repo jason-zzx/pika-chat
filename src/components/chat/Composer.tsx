@@ -15,6 +15,7 @@ import {
   type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -27,7 +28,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
+import { attachmentLimitFor } from "@/lib/files/constants";
 import { SUPPORTED_FILE_ACCEPT } from "@/lib/files/media-types";
 import { imageCapabilityFor } from "@/lib/image-capabilities";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,10 @@ import SearchModePicker from "./SearchModePicker";
 const AUTO_EFFORT = "__auto";
 
 const MIN_ROWS = 2;
+
+// Image-editing mode restricts the picker to reference images. Hoisted
+// (non-copy wire value) so the i18next guard does not read it as text.
+const IMAGE_ACCEPT = "image/*";
 
 type ComposerProps = {
   draft: string;
@@ -82,6 +87,8 @@ type ComposerProps = {
   /** Image-generation params for the active draft (image models only). */
   imageParams?: ComposerImageParams;
   onImageParamsChange?: (next: ComposerImageParams) => void;
+  /** Bumped by the parent to focus the textarea (e.g. "edit this image"). */
+  focusSignal?: number;
 };
 
 export default function Composer({
@@ -109,6 +116,7 @@ export default function Composer({
   onRetryAttachment,
   imageParams = {},
   onImageParamsChange,
+  focusSignal,
 }: ComposerProps) {
   const t = useTranslations("Chat.Composer");
   const tCompression = useTranslations("Chat.Compression");
@@ -116,8 +124,15 @@ export default function Composer({
   const models = useAvailableModels();
   const selected = findAvailableModel(models.data, model);
   // Image mode: the picked model generates images instead of chatting —
-  // attachments, web search, and reasoning effort do not apply (design §4).
+  // web search and reasoning effort do not apply (design §4). Attachments
+  // stay available when the model accepts reference images (imageInput).
   const imageMode = selected?.outputModalities.includes("image") ?? false;
+  // imageMode implies selected is non-null; the optional-chain condition
+  // narrows it for the true branch.
+  const imageInputMax = selected?.outputModalities.includes("image")
+    ? (imageCapabilityFor(selected.modelId).imageInput?.max ?? 0)
+    : 0;
+  const attachmentsEnabled = !imageMode || imageInputMax > 0;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -131,6 +146,12 @@ export default function Composer({
     }
     setOverflowsCollapsed(el.scrollHeight > el.clientHeight + 1);
   }, [draft, expanded]);
+
+  useEffect(() => {
+    if (focusSignal !== undefined && focusSignal > 0) {
+      textareaRef.current?.focus();
+    }
+  }, [focusSignal]);
 
   function collapseAndSend() {
     setExpanded(false);
@@ -173,14 +194,15 @@ export default function Composer({
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const files = event.clipboardData?.files;
-    if (!imageMode && files && files.length > 0 && onAddFiles) {
+    if (attachmentsEnabled && files && files.length > 0 && onAddFiles) {
       event.preventDefault();
       addFiles(files);
     }
   }
 
+  const attachmentLimit = attachmentLimitFor(imageMode ? imageInputMax : 0);
   const attachmentCapReached =
-    stagedAttachmentSlotCount(attachments) >= MAX_ATTACHMENTS_PER_MESSAGE;
+    stagedAttachmentSlotCount(attachments) >= attachmentLimit;
 
   return (
     <form
@@ -192,7 +214,7 @@ export default function Composer({
     >
       <div className="mx-auto flex min-h-0 w-full max-w-[52.5rem] flex-1 flex-col">
         <div className="relative flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-muted/40">
-          {attachments.length > 0 && !imageMode ? (
+          {attachments.length > 0 && attachmentsEnabled ? (
             <div className="flex flex-wrap gap-2 px-3 pt-2">
               {attachments.map((attachment) => (
                 <AttachmentChip
@@ -238,7 +260,7 @@ export default function Composer({
                 disabled={inFlight || modelPickerDisabled}
                 iconOnly
               />
-              {onAddFiles && !imageMode ? (
+              {onAddFiles && attachmentsEnabled ? (
                 <>
                   <Button
                     // Composer root is a <form>: without an explicit type
@@ -261,7 +283,7 @@ export default function Composer({
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept={SUPPORTED_FILE_ACCEPT}
+                    accept={imageMode ? IMAGE_ACCEPT : SUPPORTED_FILE_ACCEPT}
                     className="hidden"
                     onChange={(event) => {
                       addFiles(event.target.files);

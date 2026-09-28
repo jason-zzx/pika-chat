@@ -39,6 +39,10 @@ type ImageModelCapability = {
   qualities?: string[];   // OpenAI-style tiers
   imageSizes?: string[];  // Gemini imageConfig.imageSize tiers ("1K"|"2K"|"4K")
   freeform?: ImageFreeformConstraints;  // freeform only: { divisibleBy?, ratioMin?, ratioMax?, minSide?, maxSide?, minPixels?, maxPixels? }
+  imageInput?: {                        // reference-image input; absent = text-to-image only
+    max: number;
+    openAiTransport: "edits" | "generations-param";  // wire shape when apiFormat is openai-compatible
+  };                                    // google format ignores openAiTransport (always inlineData)
 };
 imageCapabilityFor(modelId: string): ImageModelCapability
 validateFreeformSize(size: string, constraints?: ImageFreeformConstraints): boolean  // shared by turn.ts, image-params.ts, and the picker
@@ -46,14 +50,16 @@ DEFAULT_IMAGE_CAPABILITY  // freeform (no constraints), 5 preset ratios, nMax 1
 
 // server/ai/image/generate.ts
 type GeneratedImage = { bytes: Buffer; mediaType: string };  // png/jpeg/webp/gif
-type ImageGenParams = { prompt: string; size?: string; n: number; quality?: string; imageSize?: string };
+type ImageGenParams = { prompt: string; size?: string; n: number; quality?: string; imageSize?: string; references?: GeneratedImage[] };
 type ImageGenResult = { images: GeneratedImage[]; text?: string };  // Gemini may attach text
 generateImageForEndpoint(endpoint, modelId, params, signal?): Promise<ImageGenResult>
 
 // server/ai/image/turn.ts
 assertImageGenerationSupported(apiFormat, modelId, image: ImageGenerationParams | undefined): void
+resolveImageReferences(fileParts, actor): Promise<{ parts: ChatFilePart[]; references: GeneratedImage[] }>
+  // ownership check + graded 400s + byte read; returns [] references for a text-only prompt
 createImageGenerationResponse({ actor, handle, t, providerConfigId, modelId, image,
-  prompt, topicId, groupId?, announceTopic }): Promise<Response>
+  prompt, topicId, groupId?, announceTopic, references? }): Promise<Response>
 ```
 
 Request schema: `chatRequestSchema` and `regenerateMessageRequestSchema` both
@@ -100,7 +106,11 @@ preserved:
 
 ```
 selected.outputModalities.includes("image")
-  ├─ message carries a file part → 400 image.attachmentUnsupported
+  ├─ resolveImageReferences(fileParts, actor) — graded validation, all before any topic row:
+  │    capability.imageInput absent        → 400 image.attachmentUnsupported
+  │    count > imageInput.max              → 400 image.tooManyReferences {max}
+  │    any part not image/*                → 400 image.referenceNotImage
+  │    (owned parts are canonicalized; bytes read via getFilesByIds + getFileStorage())
   ├─ assertImageGenerationSupported → 400 model.imageUnsupported / image.invalidParams
   └─ → image path: appendUserMessage → generateImageForEndpoint
        → uploadFile per image → createUIMessageStream (one complete message)
@@ -113,7 +123,10 @@ message's text.
 **Regenerate branch.** Same gate and same `createImageGenerationResponse`,
 with two differences: the prompt is the text of the last user message in the
 target history, and the answer joins the target version group via `groupId`
-(`is_selected` switching is the existing mechanism). No `data-topic` chunk —
+(`is_selected` switching is the existing mechanism). Reference images are
+re-resolved from that same user message's file parts through
+`resolveImageReferences` — a reference deleted since the original turn fails
+with the resolver's NOT_FOUND, which is the correct behaviour. No `data-topic` chunk —
 the stream id rides in the `x-pika-stream-id` header as on the streaming
 regenerate route. `/api/chat` instead announces the (possibly freshly
 created) topic via a `data-topic` chunk (`announceTopic: true`).
@@ -159,8 +172,14 @@ call and `POST /api/chat/stop` aborts it.
 
 | format | endpoint | notes |
 |---|---|---|
-| `openai-compatible` | `POST {baseUrl}/images/generations` | `response_format: "b64_json"` always requested; a gateway answering `url` is downloaded server-side with the same signal. b64 payloads get their media type sniffed from magic bytes (png/jpeg/webp/gif), falling back to png. Key optional, like discovery. |
-| `google` | `POST {baseUrl}/models/{model}:generateContent` | `generationConfig.responseModalities: ["TEXT","IMAGE"]`; `imageConfig.aspectRatio`/`imageSize` only for aspect-ratio models. One image per call, so `n` fans out into `n` parallel requests merged into one message. `inlineData` parts → images, `text` parts → the optional text; parts flagged `thought: true` (Gemini 3 thinking) are skipped. |
+| `openai-compatible` | `POST {baseUrl}/images/generations` | `response_format: "b64_json"` always requested; a gateway answering `url` is downloaded server-side with the same signal. b64 payloads get their media type sniffed from magic bytes (png/jpeg/webp/gif), falling back to png. Key optional, like discovery. **With references**, the family's `imageInput.openAiTransport` picks the wire shape: `"edits"` switches to `POST {baseUrl}/images/edits` as `multipart/form-data` (`image[]` Blob fields with filename+type — the official SDK shape; `size`/`quality`/`n` only when set; no mask/input_fidelity/background exposure), `"generations-param"` stays on `/images/generations` and adds `image: string[]` of base64 **data URLs** (never `/api/files/<id>` — an authenticated intranet URL the provider cannot fetch). Without references the request is byte-identical to before. |
+| `google` | `POST {baseUrl}/models/{model}:generateContent` | `generationConfig.responseModalities: ["TEXT","IMAGE"]`; `imageConfig.aspectRatio`/`imageSize` only for aspect-ratio models. One image per call, so `n` fans out into `n` parallel requests merged into one message (each carrying the references). References prepend as `inlineData` parts before the text part. `inlineData` parts → images, `text` parts → the optional text; parts flagged `thought: true` (Gemini 3 thinking) are skipped. |
+
+`imageInput.max` values are documentation-derived; the gpt-image `edits`
+transport is empirically verified (2026-09-24), the Gemini and Seedream
+families ship unverified with the upstream 400 pass-through as the backstop —
+if a family turns out wrong, blanking its `imageInput` field is the minimal
+rollback.
 
 **Timeout.** Generation is slow: `AbortSignal.any([callerSignal, AbortSignal.timeout(120s)])`
 — well above the 10s discovery timeout.
@@ -182,7 +201,9 @@ existing catch degrades it to the same fallback.
 | Condition | code | status | messageKey |
 |---|---|---|---|
 | image model on a `claude` config | `VALIDATION_FAILED` | 400 | `model.imageUnsupported` |
-| message carries a file part | `VALIDATION_FAILED` | 400 | `image.attachmentUnsupported` |
+| message carries a file part, model has no `imageInput` capability | `VALIDATION_FAILED` | 400 | `image.attachmentUnsupported` |
+| reference images exceed `imageInput.max` | `VALIDATION_FAILED` | 400 | `image.tooManyReferences` (`{max}`) |
+| reference part is not `image/*` | `VALIDATION_FAILED` | 400 | `image.referenceNotImage` |
 | size/n/quality/imageSize outside the capability table | `VALIDATION_FAILED` | 400 | `image.invalidParams` (`{param}`) |
 | provider non-2xx | `PROVIDER_ERROR` | 502 | `provider.*` via `describeProviderError`; a 400's legal-values text passes through scrubbed-verbatim |
 | malformed/empty provider response (no images) | `PROVIDER_ERROR` | 502 | `provider.unexpectedResponse` |
@@ -212,12 +233,17 @@ throws **before** any persistence, so a rejected turn leaves nothing behind.
 - `server/ai/image/generate.test.ts`: per-format request body shapes,
   b64_json and url responses (url triggers a download with the signal),
   Gemini mixed inlineData+text, timeout/abort, non-2xx → `APICallError`
-  mapping, `.nullish()` tolerance of explicit `null`s.
-- `api/chat/route.test.ts`: branch decision, all three 400s before any topic
-  row, success message shape, failure persisted as `failed` + `errorMessage`.
+  mapping, `.nullish()` tolerance of explicit `null`s. With references:
+  google `inlineData` parts precede the text part; `edits` multipart field set
+  (`image[]` with filename+type, conditional size/quality/n); `generations-param`
+  `image` data URLs; no-references bodies byte-identical to pre-edit.
+- `api/chat/route.test.ts`: branch decision, all 400s (unsupported input, too
+  many references, non-image reference, invalid params) before any topic row,
+  success message shape, failure persisted as `failed` + `errorMessage`,
+  reference byte resolution via resolveOwnedFileParts → getFilesByIds → storage.
 - regenerate `route.test.ts`: image regenerate produces a new version in the
-  target group with `is_selected` switched; prompt taken from the last user
-  message.
+  target group with `is_selected` switched; prompt **and references** taken
+  from the last user message; a deleted reference fails before any write.
 - `attachments.test.ts`: assistant-role file parts dropped (also on the
   no-user-attachment fast path), a parts-less assistant message removed from
   the payload.

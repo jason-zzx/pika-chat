@@ -220,6 +220,54 @@ describe("imageCapabilityFor", () => {
     expect(imageCapabilityFor("gpt-image-1").qualities).toContain("auto");
   });
 
+  it("describes reference-image input per family, absent = text-to-image only", () => {
+    // OpenAI family edits transport.
+    for (const id of ["gpt-image-2.5", "gpt-image-2", "gpt-image-1"]) {
+      expect(imageCapabilityFor(id).imageInput).toEqual({
+        max: 16,
+        openAiTransport: "edits",
+      });
+    }
+    // Gemini native image models (both tiers) via a gateway use the
+    // generations-param shape; direct google format ignores the field.
+    for (const id of [
+      "gemini-3-pro-image",
+      "gemini-3.1-flash-image",
+      "gemini-2.5-flash-image",
+      "gemini-3.1-flash-lite-image",
+    ]) {
+      expect(imageCapabilityFor(id).imageInput).toEqual({
+        max: 3,
+        openAiTransport: "generations-param",
+      });
+    }
+    // Seedream multi-image fusion; 5.0-pro stays single-image/text-only.
+    for (const id of [
+      "doubao-seedream-4-5-251128",
+      "seedream-5.0-lite",
+      "seedream-4-0",
+      "seedream-9-9-future",
+    ]) {
+      expect(imageCapabilityFor(id).imageInput).toEqual({
+        max: 4,
+        openAiTransport: "generations-param",
+      });
+    }
+    // No image input: dall-e, seedream-5.0-pro, qwen, wan, and unknown ids.
+    for (const id of [
+      "dall-e-2",
+      "dall-e-3",
+      "seedream-5.0-pro",
+      "qwen-image",
+      "qwen-image-2.0",
+      "wan2.7-image-pro",
+      "wanx2.1-t2i-turbo",
+      "flux-1.1-pro",
+    ]) {
+      expect(imageCapabilityFor(id).imageInput).toBeUndefined();
+    }
+  });
+
   it("falls back to the default capability for unknown models", () => {
     expect(imageCapabilityFor("flux-1.1-pro")).toBe(DEFAULT_IMAGE_CAPABILITY);
     expect(imageCapabilityFor("some-vendor/mystery-model")).toBe(

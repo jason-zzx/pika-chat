@@ -12,7 +12,7 @@ import {
   uploadChatFileDirect,
 } from "@/lib/api/files";
 import type { ErrorMessageParams } from "@/lib/api/error-contract";
-import { MAX_ATTACHMENTS_PER_MESSAGE } from "@/lib/files/constants";
+import { attachmentLimitFor } from "@/lib/files/constants";
 import { formatBytes } from "@/lib/files/format";
 import { classifyFile, fileIdFromUrl } from "@/lib/files/media-types";
 import { newId } from "@/lib/id";
@@ -67,9 +67,11 @@ function stagedFile(
  * Attachment staging for one composer draft key. Files upload on selection
  * (not on send) so type/size/extraction problems surface on the chip before the
  * turn is sent; the draft bucket mirrors the draft text — same key, same
- * lifetime.
+ * lifetime. `imageInputMax` > 0 marks image-editing mode: only `image/*`
+ * files are accepted and the slot cap tightens to the model's reference-image
+ * limit (`min(MAX_ATTACHMENTS_PER_MESSAGE, imageInputMax)`).
  */
-export function useComposerAttachments(draftKey: string) {
+export function useComposerAttachments(draftKey: string, imageInputMax = 0) {
   const attachments = useComposerStore(
     (state) => state.attachments[draftKey] ?? EMPTY_ATTACHMENTS,
   );
@@ -86,6 +88,9 @@ export function useComposerAttachments(draftKey: string) {
     retry: false,
   });
   const limits: FileLimits = fetchedLimits ?? DEFAULT_FILE_LIMITS;
+  // Image-editing mode caps references at the model's imageInput limit;
+  // chat mode keeps the plain per-message cap.
+  const attachmentLimit = attachmentLimitFor(imageInputMax);
 
   const upload = useCallback(
     (localId: string, file: File) => {
@@ -155,19 +160,26 @@ export function useComposerAttachments(draftKey: string) {
           );
           continue;
         }
+        if (imageInputMax > 0 && !file.type.startsWith("image/")) {
+          // Image-editing mode takes reference images only.
+          staged.push(
+            stagedFile(id, file, validationError("file.unsupportedType")),
+          );
+          continue;
+        }
         if (!classifyFile({ mediaType: file.type, filename: file.name })) {
           staged.push(
             stagedFile(id, file, validationError("file.unsupportedType")),
           );
           continue;
         }
-        if (count >= MAX_ATTACHMENTS_PER_MESSAGE) {
+        if (count >= attachmentLimit) {
           staged.push(
             stagedFile(
               id,
               file,
               validationError("file.tooMany", {
-                max: MAX_ATTACHMENTS_PER_MESSAGE,
+                max: attachmentLimit,
               }),
             ),
           );
@@ -189,7 +201,7 @@ export function useComposerAttachments(draftKey: string) {
         upload(pending.id, pending.file);
       }
     },
-    [draftKey, limits.maxFileBytes, updateAttachments, upload],
+    [draftKey, imageInputMax, attachmentLimit, limits.maxFileBytes, updateAttachments, upload],
   );
 
   const removeAttachment = useCallback(
@@ -216,7 +228,9 @@ export function useComposerAttachments(draftKey: string) {
       const current =
         useComposerStore.getState().attachments[draftKey] ?? EMPTY_ATTACHMENTS;
       const attachment = current.find((entry) => entry.id === id);
-      if (!attachment) {
+      if (!attachment?.file) {
+        // Referenced attachments carry no local File and never enter an
+        // error/uploading state, so there is nothing to retry.
         return;
       }
       updateAttachments(draftKey, (list) =>
@@ -257,6 +271,48 @@ export function useComposerAttachments(draftKey: string) {
     [updateAttachments],
   );
 
+  /** Stages an already-uploaded file ("edit this image") as a ready
+   * attachment — no upload, no local File. The slot cap still applies. */
+  const stageReference = useCallback(
+    (part: {
+      url: string;
+      filename?: string;
+      mediaType: string;
+      sizeBytes?: number;
+    }) => {
+      const current =
+        useComposerStore.getState().attachments[draftKey] ?? EMPTY_ATTACHMENTS;
+      // One chip per file: a second click on the same image is a no-op.
+      if (
+        current.some(
+          (entry) => entry.status !== "error" && entry.url === part.url,
+        )
+      ) {
+        return;
+      }
+      const entry: StagedAttachment = {
+        id: newId(),
+        filename: part.filename ?? "",
+        mediaType: part.mediaType,
+        sizeBytes: part.sizeBytes ?? 0,
+        status: "ready",
+        url: part.url,
+      };
+      const overCap = stagedAttachmentSlotCount(current) >= attachmentLimit;
+      updateAttachments(draftKey, (list) => [
+        ...list,
+        overCap
+          ? {
+              ...entry,
+              status: "error",
+              error: validationError("file.tooMany", { max: attachmentLimit }),
+            }
+          : entry,
+      ]);
+    },
+    [draftKey, attachmentLimit, updateAttachments],
+  );
+
   return {
     attachments,
     addFiles,
@@ -264,5 +320,6 @@ export function useComposerAttachments(draftKey: string) {
     retryAttachment,
     clearAttachments,
     restoreAttachments,
+    stageReference,
   };
 }

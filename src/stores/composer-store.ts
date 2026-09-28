@@ -38,12 +38,14 @@ export type AttachmentExtraction = {
 
 /**
  * A file staged in the composer for the current draft. `file` is the original
- * browser File kept in memory so a failed upload can be retried; attachments
- * are session-only client state and are never persisted (see `partialize`).
+ * browser File kept in memory so a failed upload can be retried; it is absent
+ * for referenced attachments (an already-uploaded file staged via "edit this
+ * image" — nothing to upload or retry). Attachments are session-only client
+ * state and are never persisted (see `partialize`).
  */
 export type StagedAttachment = {
   id: string;
-  file: File;
+  file?: File;
   filename: string;
   mediaType: string;
   sizeBytes: number;

@@ -16,6 +16,9 @@ const {
   generateImageForEndpoint,
   uploadFile,
   deleteFile,
+  resolveOwnedFileParts,
+  getFilesByIds,
+  getFileStorage,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
   resolveAvailableModels: vi.fn(),
@@ -30,6 +33,9 @@ const {
   generateImageForEndpoint: vi.fn(),
   uploadFile: vi.fn(),
   deleteFile: vi.fn(),
+  resolveOwnedFileParts: vi.fn(),
+  getFilesByIds: vi.fn(),
+  getFileStorage: vi.fn(),
 }));
 
 vi.mock("next-intl/server", () => ({
@@ -86,7 +92,13 @@ vi.mock("@/server/services/message.service", () => ({
       .map((part) => part.text)
       .join(""),
 }));
-vi.mock("@/server/files/file.service", () => ({ uploadFile, deleteFile }));
+vi.mock("@/server/files/file.service", () => ({
+  uploadFile,
+  deleteFile,
+  resolveOwnedFileParts,
+  getFilesByIds,
+}));
+vi.mock("@/server/files/storage", () => ({ getFileStorage }));
 vi.mock("@/server/services/topic.service", () => ({
   findTopicContextForActor,
   touchTopicUpdatedAt,
@@ -118,6 +130,7 @@ vi.mock("@/server/logger", () => ({
 }));
 
 import { POST } from "./route";
+import { AppError } from "@/server/errors";
 
 const ACTOR = { userId: "user-1", role: "user" as const };
 const PROVIDER_MESSAGE = "insufficient_quota: you exceeded your current quota";
@@ -168,6 +181,7 @@ beforeEach(() => {
     },
   ]);
   resolveAttachmentsForModel.mockResolvedValue([]);
+  resolveOwnedFileParts.mockResolvedValue([]);
   resolveSearchProviderCredentials.mockResolvedValue([]);
   findTopicContextForActor.mockResolvedValue({
     assistant: { systemPrompt: null },
@@ -466,6 +480,97 @@ describe("POST regenerate image generation bypass", () => {
     // Regenerate framing: stream id in the header, no data-topic chunk.
     expect(response.headers.get("x-pika-stream-id")).toBeTruthy();
     expect(body).not.toContain("data-topic");
+  });
+
+  it("re-resolves reference images from the source user message's file parts", async () => {
+    const referencePart = {
+      type: "file",
+      url: "/api/files/ref-1",
+      mediaType: "image/png",
+      filename: "ref.png",
+    };
+    resolveRegenerateTarget.mockResolvedValue({
+      targetGroupId: "group-1",
+      history: [
+        {
+          id: "u-1",
+          role: "user",
+          parts: [referencePart, { type: "text", text: "edit this" }],
+        },
+        IMAGE_HISTORY[1],
+      ],
+    });
+    resolveOwnedFileParts.mockResolvedValue([referencePart]);
+    getFilesByIds.mockResolvedValue(
+      new Map([
+        [
+          "ref-1",
+          { id: "ref-1", storageKey: "user-1/ref-1.png", mediaType: "image/png" },
+        ],
+      ]),
+    );
+    const storageGet = vi.fn().mockResolvedValue(Buffer.from([7]));
+    getFileStorage.mockReturnValue({ get: storageGet });
+
+    const response = await POST(
+      regenerateRequest({ modelId: "gpt-image-1" }),
+      CONTEXT,
+    );
+    await response.text();
+
+    expect(resolveOwnedFileParts).toHaveBeenCalledWith([referencePart], ACTOR);
+    expect(storageGet).toHaveBeenCalledWith("user-1/ref-1.png");
+    expect(generateImageForEndpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ baseUrl: "https://api.test/v1" }),
+      "gpt-image-1",
+      {
+        prompt: "edit this",
+        n: 1,
+        references: [{ bytes: Buffer.from([7]), mediaType: "image/png" }],
+      },
+      expect.any(AbortSignal),
+    );
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ groupId: "group-1", outcome: "completed" }),
+      ACTOR,
+    );
+  });
+
+  it("fails the regenerate when a source reference image is gone", async () => {
+    resolveRegenerateTarget.mockResolvedValue({
+      targetGroupId: "group-1",
+      history: [
+        {
+          id: "u-1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/gone-1",
+              mediaType: "image/png",
+              filename: "gone.png",
+            },
+            { type: "text", text: "edit this" },
+          ],
+        },
+        IMAGE_HISTORY[1],
+      ],
+    });
+    resolveOwnedFileParts.mockRejectedValue(
+      new AppError("NOT_FOUND", 404, "file.notFound"),
+    );
+
+    const response = await POST(
+      regenerateRequest({ modelId: "gpt-image-1" }),
+      CONTEXT,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "file.notFound" },
+    });
+    expect(generateImageForEndpoint).not.toHaveBeenCalled();
+    expect(appendAssistantMessage).not.toHaveBeenCalled();
   });
 
   it("rejects an image model on the claude format before any persistence", async () => {

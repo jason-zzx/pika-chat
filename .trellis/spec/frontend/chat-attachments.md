@@ -33,11 +33,12 @@ src/components/settings/files/                    management page: FilesScreen /
 ### 2. Signatures
 
 ```ts
-useComposerAttachments(draftKey: string): {
+useComposerAttachments(draftKey: string, imageInputMax = 0): {
   attachments: StagedAttachment[];          // bucketed in composer-store by draftKey
   addFiles(files: File[]): void;
   removeAttachment(id: string): void;
-  retryAttachment(id: string): void;
+  retryAttachment(id: string): void;        // no-op for file-less (referenced) entries
+  stageReference(part): void;               // stage an existing file id as ready — no upload
   clearAttachments(key: string): void;      // after a successful send
   restoreAttachments(key: string, restored: StagedAttachment[]): void;
 }
@@ -47,7 +48,9 @@ stagedAttachmentSlotCount(attachments: readonly StagedAttachment[]): number
 sendMessage({ text, files })   // files: FileUIPart[] = { type:"file", url, mediaType, filename, sizeBytes }
 ```
 
-`StagedAttachment` (composer-store) carries `id`, `file`, `filename`,
+`StagedAttachment` (composer-store) carries `id`, `file?` (optional —
+a referenced attachment staged via `stageReference` has no local `File`),
+`filename`,
 `mediaType`, `sizeBytes`, `status: "uploading" | "ready" | "error"`,
 `error?: unknown`, `extraction?: { status, truncated }`.
 
@@ -343,10 +346,19 @@ src/components/chat/MessageItem.tsx         generated images render through the 
 - **`imageMode` is derived, never stored**: `selected.outputModalities.includes("image")`
   in both `Composer` (controls) and `ChatView` (send path) — one predicate,
   two consumers, so they cannot disagree.
-- **Image mode hides the attachment picker, search-mode picker, and reasoning
-  effort control** (the server rejects attachments with 400
-  `image.attachmentUnsupported` anyway; the UI never offers what will fail).
-  The drop zone and paste path stay inert in image mode too.
+- **Image mode gates the attachment picker on the capability table.**
+  `imageCapabilityFor(modelId).imageInput?.max > 0` → the picker, chip list,
+  paste path, and drop zone all follow one `attachmentsEnabled` /
+  `sendsAttachments` predicate; a `max`-less image model (dall-e, qwen, wan)
+  keeps every attachment control hidden and inert exactly as before. In
+  image-editing mode the input is `accept="image/*"`, non-image picks land an
+  error chip (`file.unsupportedType`), the count caps at
+  `min(MAX_ATTACHMENTS_PER_MESSAGE, imageInput.max)`, and the draft text
+  stays required (all three transports require a prompt — attachment-only
+  sends are disabled). The server re-checks the same table
+  (`image.attachmentUnsupported` / `image.tooManyReferences` /
+  `image.referenceNotImage`). Search-mode and reasoning controls stay hidden
+  in image mode regardless.
 - **`imageParams` is per-draft session state.** Keyed by the same `draftKey`
   as draft text (`topic:<id>` / `draft:<assistantId>`), kept in
   composer-store but excluded from `partialize` — session-only, like drafts
@@ -384,6 +396,16 @@ src/components/chat/MessageItem.tsx         generated images render through the 
   lifecycle as draft text. Do not replay the original message's params (that
   would need per-message metadata and conflicts with the current-composer
   rule).
+- **"Edit this image" has two entry points, one handler.** A floating button
+  on the top-right of every image thumbnail (hover-revealed on pointer
+  devices, always visible under `@media (hover: none)` — never hover-only)
+  and an always-visible button in `ImagePreviewDialog` (`onEdit?`, omitted by
+  FilesScreen) both call the same handler: `stageReference` the part into the
+  current draftKey's composer store (`status: "ready"`, metadata copied from
+  the part, **no re-upload** — the file id is reused), close the dialog,
+  focus the composer. No model gating: with a vision chat model the staged
+  image is an ordinary attachment; with a text-to-image-only model the server
+  400 is the backstop.
 - **ModelPicker** marks image-output models with an `ImageIcon` badge
   (`t("imageGeneration")`); display only, the data already rides the model list.
 - **Assistant file parts render through the same attachment card** as user
@@ -410,7 +432,16 @@ src/components/chat/MessageItem.tsx         generated images render through the 
 - `image-params.test.ts`: per-sizeMode sanitize matrix, `n` clamping
   boundaries (0, negative, > nMax, fractional), undefined-when-empty.
 - `Composer.test.tsx`: image mode hides attach/search/reasoning and shows the
-  params picker; chat mode is unchanged.
+  params picker for a capability-less image model; an `imageInput.max > 0`
+  model shows the attach button with `accept="image/*"` and the capped slot
+  count; chat mode is unchanged.
+- `use-composer-attachments.test.tsx`: image-editing mode rejects non-image
+  files, caps at `min(5, imageInputMax)`; `stageReference` stages ready
+  without uploading, dedupes by file url, and `retryAttachment` is a no-op
+  for file-less entries.
+- `MessageItem.test.tsx` / `ImagePreviewDialog.test.tsx`: the edit button
+  renders on thumbnails (hover + touch classes) and in the dialog, both wired
+  to the same handler; absent handler → no button.
 - `ModelPicker.test.tsx`: image badge renders iff `outputModalities` includes
   `image`.
 - `MessageItem.test.tsx`: assistant message with an image file part renders

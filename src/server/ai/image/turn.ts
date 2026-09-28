@@ -3,6 +3,7 @@ import "server-only";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 
 import type { ErrorsTranslator } from "@/lib/api/error-contract";
+import { fileIdFromUrl } from "@/lib/files/media-types";
 import {
   imageCapabilityFor,
   isSizeAllowed,
@@ -16,12 +17,21 @@ import type {
   ImageGenerationParams,
 } from "@/lib/schemas/chat";
 import type { ChatModelHandle } from "@/server/ai/chat-model";
-import { generateImageForEndpoint } from "@/server/ai/image/generate";
+import {
+  generateImageForEndpoint,
+  type GeneratedImage,
+} from "@/server/ai/image/generate";
 import { createStreamFailureTracker } from "@/server/ai/stream-failure";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import type { Actor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
-import { deleteFile, uploadFile } from "@/server/files/file.service";
+import {
+  deleteFile,
+  getFilesByIds,
+  resolveOwnedFileParts,
+  uploadFile,
+} from "@/server/files/file.service";
+import { getFileStorage } from "@/server/files/storage";
 import { logger } from "@/server/logger";
 import { appendAssistantMessage } from "@/server/services/message.service";
 import { touchTopicUpdatedAt } from "@/server/services/topic.service";
@@ -77,6 +87,56 @@ export function assertImageGenerationSupported(
   }
 }
 
+/**
+ * Reference-image resolution shared by both image routes (design §3.1/§3.4):
+ * ownership + canonicalization via the text path's resolveOwnedFileParts,
+ * then the graded capability checks, then the byte read. Everything throws
+ * before any topic/message row exists, so a rejected turn leaves nothing
+ * behind. Returns the canonical parts (for persisting on the user message)
+ * alongside the decoded references.
+ */
+export async function resolveImageReferences(
+  parts: ChatFilePart[],
+  actor: Actor,
+  modelId: string,
+): Promise<{ parts: ChatFilePart[]; references: GeneratedImage[] }> {
+  const owned = await resolveOwnedFileParts(parts, actor);
+  if (owned.length === 0) {
+    return { parts: [], references: [] };
+  }
+  const imageInput = imageCapabilityFor(modelId).imageInput;
+  if (!imageInput) {
+    throw new AppError("VALIDATION_FAILED", 400, "image.attachmentUnsupported");
+  }
+  if (owned.length > imageInput.max) {
+    throw new AppError("VALIDATION_FAILED", 400, "image.tooManyReferences", {
+      max: imageInput.max,
+    });
+  }
+  if (owned.some((part) => !part.mediaType.startsWith("image/"))) {
+    throw new AppError("VALIDATION_FAILED", 400, "image.referenceNotImage");
+  }
+  // resolveOwnedFileParts already authorized every id, so the batch read
+  // (which does not filter by owner) is safe here.
+  const rows = await getFilesByIds(
+    owned.map((part) => fileIdFromUrl(part.url) ?? ""),
+  );
+  const storage = getFileStorage();
+  const references = await Promise.all(
+    owned.map(async (part) => {
+      const row = rows.get(fileIdFromUrl(part.url) ?? "");
+      if (!row) {
+        throw new AppError("NOT_FOUND", 404, "file.notFound");
+      }
+      return {
+        bytes: await storage.get(row.storageKey),
+        mediaType: row.mediaType,
+      };
+    }),
+  );
+  return { parts: owned, references };
+}
+
 const GENERATED_IMAGE_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
@@ -103,6 +163,7 @@ export async function createImageGenerationResponse({
   modelId,
   image,
   prompt,
+  references,
   topicId,
   groupId,
   announceTopic,
@@ -114,6 +175,8 @@ export async function createImageGenerationResponse({
   modelId: string;
   image: ImageGenerationParams | undefined;
   prompt: string;
+  /** Reference images resolved from the user message's file parts. */
+  references?: GeneratedImage[];
   topicId: string;
   /** Existing version group to add the answer to; omit for a new group. */
   groupId?: string;
@@ -150,6 +213,9 @@ export async function createImageGenerationResponse({
         {
           prompt,
           n: image?.n ?? 1,
+          // Empty stays undefined: a no-references request must remain
+          // byte-identical to plain text-to-image.
+          references: references?.length ? references : undefined,
           ...(image?.size ? { size: image.size } : {}),
           ...(image?.quality ? { quality: image.quality } : {}),
           // imageSize is a Gemini-only tier: the openai-compatible adapter

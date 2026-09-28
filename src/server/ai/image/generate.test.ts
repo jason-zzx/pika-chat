@@ -147,6 +147,81 @@ describe("generateImageForEndpoint", () => {
       expect(unknown.images[0]?.mediaType).toBe("image/png");
     });
 
+    it("posts references to /images/edits as multipart for the gpt-image family", async () => {
+      const reference = {
+        bytes: Buffer.from([1, 2, 3]),
+        mediaType: "image/png",
+      };
+      globalThis.fetch = async (input, init) => {
+        expect(String(input)).toBe("https://api.example.com/v1/images/edits");
+        const headers = new Headers(init?.headers);
+        expect(headers.get("authorization")).toBe("Bearer sk-secret");
+        // fetch owns the multipart content-type boundary; we must not set one.
+        expect(headers.get("content-type")).toBeNull();
+        const form = init?.body as FormData;
+        expect(form).toBeInstanceOf(FormData);
+        expect(form.get("model")).toBe("gpt-image-1");
+        expect(form.get("prompt")).toBe("make it a dog");
+        expect(form.get("n")).toBe("1");
+        expect(form.get("size")).toBe("1024x1024");
+        expect(form.get("quality")).toBe("high");
+        const images = form.getAll("image[]") as File[];
+        expect(images).toHaveLength(1);
+        expect(images[0]?.type).toBe("image/png");
+        expect(images[0]?.name).toBe("reference.png");
+        expect(Buffer.from(await images[0]!.arrayBuffer())).toEqual(
+          reference.bytes,
+        );
+        return jsonResponse({ data: [{ b64_json: PNG_B64 }] });
+      };
+
+      const result = await generateImageForEndpoint(
+        endpoint("openai-compatible"),
+        "gpt-image-1",
+        {
+          prompt: "make it a dog",
+          size: "1024x1024",
+          n: 1,
+          quality: "high",
+          references: [reference],
+        },
+      );
+      expect(result.images).toHaveLength(1);
+    });
+
+    it("sends references as base64 data URLs on /images/generations for generations-param models", async () => {
+      const reference = {
+        bytes: Buffer.from([9, 8]),
+        mediaType: "image/jpeg",
+      };
+      globalThis.fetch = async (input, init) => {
+        expect(String(input)).toBe(
+          "https://api.example.com/v1/images/generations",
+        );
+        expect(JSON.parse(String(init?.body))).toEqual({
+          model: "seedream-4-5",
+          prompt: "make it a dog",
+          n: 1,
+          response_format: "b64_json",
+          size: "2048x2048",
+          image: [`data:image/jpeg;base64,${reference.bytes.toString("base64")}`],
+        });
+        return jsonResponse({ data: [{ b64_json: PNG_B64 }] });
+      };
+
+      const result = await generateImageForEndpoint(
+        endpoint("openai-compatible"),
+        "seedream-4-5",
+        {
+          prompt: "make it a dog",
+          size: "2048x2048",
+          n: 1,
+          references: [reference],
+        },
+      );
+      expect(result.images).toHaveLength(1);
+    });
+
     it("tolerates explicit nulls from gateways", async () => {
       globalThis.fetch = async () =>
         jsonResponse({ data: [{ b64_json: PNG_B64, url: null }] });
@@ -199,6 +274,59 @@ describe("generateImageForEndpoint", () => {
       expect(result.images).toHaveLength(1);
       expect(result.images[0]?.mediaType).toBe("image/png");
       expect(result.text).toBe("Here is your cat.");
+    });
+
+    it("prepends references as inlineData parts before the prompt", async () => {
+      const references = [
+        { bytes: Buffer.from([1, 2]), mediaType: "image/png" },
+        { bytes: Buffer.from([3, 4]), mediaType: "image/jpeg" },
+      ];
+      globalThis.fetch = async (_input, init) => {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: "image/png",
+                    data: references[0]!.bytes.toString("base64"),
+                  },
+                },
+                {
+                  inlineData: {
+                    mimeType: "image/jpeg",
+                    data: references[1]!.bytes.toString("base64"),
+                  },
+                },
+                { text: "combine these" },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseModalities: ["TEXT", "IMAGE"],
+            imageConfig: { aspectRatio: "1:1" },
+          },
+        });
+        return jsonResponse({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { inlineData: { data: PNG_B64, mimeType: "image/png" } },
+                ],
+              },
+            },
+          ],
+        });
+      };
+
+      const result = await generateImageForEndpoint(
+        endpoint("google"),
+        "gemini-2.5-flash-image",
+        { prompt: "combine these", size: "1:1", n: 1, references },
+      );
+      expect(result.images).toHaveLength(1);
     });
 
     it("skips thought parts when collecting accompanying text", async () => {

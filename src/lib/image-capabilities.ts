@@ -39,6 +39,19 @@ export type ImageModelCapability = {
   imageSizes?: string[];
   /** Freeform-only limits; absent means any well-formed "WxH" is accepted. */
   freeform?: ImageFreeformConstraints;
+  /**
+   * Reference-image (img2img/edit) input; absent means the model is
+   * text-to-image only. `openAiTransport` picks the wire shape when the
+   * provider is openai-compatible; the google format always inlines
+   * references as `inlineData` parts and ignores it.
+   */
+  imageInput?: {
+    max: number;
+    /** "edits" = POST /images/edits (multipart, OpenAI family);
+     *  "generations-param" = /images/generations JSON plus an `image`
+     *  array of base64 data URLs (Seedream, gateway-served Gemini). */
+    openAiTransport: "edits" | "generations-param";
+  };
 };
 
 export const DEFAULT_IMAGE_CAPABILITY: ImageModelCapability = {
@@ -86,6 +99,7 @@ const FAMILY_RULES: FamilyRule[] = [
       nMax: 10,
       qualities: ["low", "medium", "high", "xhigh", "max", "auto"],
       freeform: GPT_IMAGE_2_FREEFORM,
+      imageInput: { max: 16, openAiTransport: "edits" },
     },
   },
   {
@@ -103,6 +117,7 @@ const FAMILY_RULES: FamilyRule[] = [
       nMax: 10,
       qualities: ["low", "medium", "high", "auto"],
       freeform: GPT_IMAGE_2_FREEFORM,
+      imageInput: { max: 16, openAiTransport: "edits" },
     },
   },
   {
@@ -113,6 +128,7 @@ const FAMILY_RULES: FamilyRule[] = [
       sizes: ["1024x1024", "1536x1024", "1024x1536"],
       nMax: 10,
       qualities: ["low", "medium", "high", "auto"],
+      imageInput: { max: 16, openAiTransport: "edits" },
     },
   },
   {
@@ -161,6 +177,7 @@ const FAMILY_RULES: FamilyRule[] = [
       ],
       nMax: 4,
       imageSizes: ["1K", "2K", "4K"],
+      imageInput: { max: 3, openAiTransport: "generations-param" },
     },
   },
   {
@@ -186,6 +203,7 @@ const FAMILY_RULES: FamilyRule[] = [
       ],
       nMax: 4,
       imageSizes: ["1K"],
+      imageInput: { max: 3, openAiTransport: "generations-param" },
     },
   },
   // Seedream (ark ids like "doubao-seedream-4-5-251128"; gateways also use
@@ -223,6 +241,7 @@ const FAMILY_RULES: FamilyRule[] = [
       ],
       nMax: 4,
       freeform: { minPixels: 3_686_400, maxPixels: 16_777_216 },
+      imageInput: { max: 4, openAiTransport: "generations-param" },
     },
   },
   {
@@ -234,6 +253,7 @@ const FAMILY_RULES: FamilyRule[] = [
       sizes: ["1280x720", "720x1280", "1024x1024", "2048x2048", "4096x4096"],
       nMax: 4,
       freeform: { minPixels: 921_600, maxPixels: 16_777_216 },
+      imageInput: { max: 4, openAiTransport: "generations-param" },
     },
   },
   {
@@ -252,6 +272,7 @@ const FAMILY_RULES: FamilyRule[] = [
         "3024x1296",
       ],
       nMax: 4,
+      imageInput: { max: 4, openAiTransport: "generations-param" },
     },
   },
   {

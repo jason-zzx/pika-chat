@@ -23,6 +23,7 @@ import type { ChatModelHandle } from "@/server/ai/chat-model";
 import {
   assertImageGenerationSupported,
   createImageGenerationResponse,
+  resolveImageReferences,
 } from "@/server/ai/image/turn";
 import {
   stripMarkupFromTextParts,
@@ -105,9 +106,14 @@ async function imageGenerationResponse({
   t: ErrorsTranslator;
   newTopicTitle: string;
 }): Promise<Response> {
-  if (input.message.parts.some((part) => part.type === "file")) {
-    throw new AppError("VALIDATION_FAILED", 400, "image.attachmentUnsupported");
-  }
+  // Reference images (edit/img2img): ownership + graded capability checks +
+  // byte read, all before any topic row exists (design §3.1). The canonical
+  // parts are what the user message persists.
+  const { parts: fileParts, references } = await resolveImageReferences(
+    input.message.parts.filter((part) => part.type === "file"),
+    actor,
+    input.modelId,
+  );
   assertImageGenerationSupported(handle.apiFormat, input.modelId, input.image);
 
   // Topic resolution mirrors the streaming path (ownership + assistant
@@ -129,7 +135,10 @@ async function imageGenerationResponse({
 
   const userMessage = requestToUserMessage({
     id: input.message.id,
-    parts: input.message.parts,
+    parts: [
+      ...fileParts,
+      ...input.message.parts.filter((part) => part.type === "text"),
+    ],
   });
   const prompt = textFromMessage(userMessage);
   // Turn-start time from the app clock: the assistant row uses generatedAt
@@ -149,6 +158,7 @@ async function imageGenerationResponse({
     modelId: input.modelId,
     image: input.image,
     prompt,
+    references,
     topicId,
     announceTopic: true,
   });

@@ -42,6 +42,7 @@ import {
   parseAssistantPath,
 } from "@/lib/assistant-path";
 import type {
+  ChatFilePart,
   ChatHistoryData,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
@@ -53,6 +54,7 @@ import {
   type ComposerModelPick,
   type StagedAttachment,
 } from "@/stores/composer-store";
+import { imageCapabilityFor } from "@/lib/image-capabilities";
 
 import { useComposerAttachments } from "./use-composer-attachments";
 import ChatMapDialog from "./ChatMapDialog";
@@ -193,6 +195,8 @@ export default function ChatView({
     streamingId: string;
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Bumped to focus the composer textarea ("edit this image" flow).
+  const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   // In-flight translation (R5): shows a placeholder at the target message's
   // translation slot until the one-shot request resolves.
   const [translating, setTranslating] = useState<{
@@ -260,6 +264,16 @@ export default function ChatView({
     (state) => state.imageParams[draftKey] ?? EMPTY_IMAGE_PARAMS,
   );
   const setImageParams = useComposerStore((state) => state.setImageParams);
+  // Image mode mirrors the composer: an image-output model takes a prompt
+  // plus optional reference images — no search mode or reasoning effort.
+  const pickedModelEntry = findAvailableModel(models.data, pickedModel);
+  const imageMode =
+    pickedModelEntry?.outputModalities.includes("image") ?? false;
+  // Reference-image input limit from the shared capability table; 0 means
+  // the image model takes no references and attachments stay stashed.
+  const imageInputMax = pickedModelEntry?.outputModalities.includes("image")
+    ? (imageCapabilityFor(pickedModelEntry.modelId).imageInput?.max ?? 0)
+    : 0;
   const {
     attachments,
     addFiles,
@@ -267,7 +281,8 @@ export default function ChatView({
     retryAttachment,
     clearAttachments,
     restoreAttachments,
-  } = useComposerAttachments(draftKey);
+    stageReference,
+  } = useComposerAttachments(draftKey, imageInputMax);
   // Attachments cleared on send are put back if the request fails, so the user
   // can switch model / retry without re-uploading.
   const pendingSendAttachments = useRef<{
@@ -570,11 +585,6 @@ export default function ChatView({
 
   const inFlight =
     status === "submitted" || status === "streaming" || regen !== null;
-  // Image mode mirrors the composer: an image-output model takes a prompt
-  // only — no attachments, search mode, or reasoning effort.
-  const pickedModelEntry = findAvailableModel(models.data, pickedModel);
-  const imageMode =
-    pickedModelEntry?.outputModalities.includes("image") ?? false;
   // Only `ready` attachments are sent; while anything is uploading (or failed)
   // sending is held back so the user never silently drops an attachment.
   const readyAttachments = attachments.filter(
@@ -584,11 +594,15 @@ export default function ChatView({
   const attachmentsSettled = attachments.every(
     (attachment) => attachment.status === "ready",
   );
+  // Image models without imageInput take no attachments at all: staged chips
+  // stay put (a switch back to a chat model restores them) and cannot block
+  // or join the send.
+  const sendsAttachments = !imageMode || imageInputMax > 0;
   const canSend =
     (imageMode
       ? draft.trim().length > 0
       : draft.trim().length > 0 || readyAttachments.length > 0) &&
-    (imageMode || attachmentsSettled) &&
+    (!sendsAttachments || attachmentsSettled) &&
     Boolean(resolvedAssistantId) &&
     Boolean(pickedModel) &&
     !inFlight &&
@@ -1086,6 +1100,19 @@ export default function ChatView({
     return event.dataTransfer.types.includes("Files");
   }
 
+  /**
+   * "Edit this image" (both entries — thumbnail overlay and preview
+   * dialog): stage the already-uploaded file as a ready referenced
+   * attachment (no re-upload) and focus the composer. Deliberately not
+   * model-gated: on a vision chat model the reference is a plain
+   * attachment; on a reference-less image model the server 400 is the
+   * backstop.
+   */
+  function handleEditImage(part: ChatFilePart) {
+    stageReference(part);
+    setComposerFocusSignal((count) => count + 1);
+  }
+
   function handleDragEnter(event: DragEvent<HTMLElement>) {
     if (!isFileDrag(event)) {
       return;
@@ -1093,8 +1120,9 @@ export default function ChatView({
     event.preventDefault();
     // The composer is inert while a turn streams (paperclip, textarea and the
     // drop handler itself all refuse input), so do not invite a drop that
-    // would be silently ignored. Image mode takes no attachments either.
-    if (inFlight || imageMode) {
+    // would be silently ignored. Image models without imageInput take no
+    // attachments either.
+    if (inFlight || !sendsAttachments) {
       return;
     }
     dragDepthRef.current += 1;
@@ -1126,7 +1154,7 @@ export default function ChatView({
     event.preventDefault();
     dragDepthRef.current = 0;
     setDragActive(false);
-    if (inFlight || imageMode) {
+    if (inFlight || !sendsAttachments) {
       return;
     }
     const files = event.dataTransfer.files;
@@ -1159,11 +1187,13 @@ export default function ChatView({
       titlePick: pickedModel,
     };
     const text = draft.trim();
-    // Image mode never sends attachments (the server rejects them); staged
-    // chips stay put so switching back to a chat model restores them.
-    const outgoingFiles: FileUIPart[] = imageMode
-      ? []
-      : readyAttachments.map((attachment) => ({
+    // Image models without imageInput never send attachments (the server
+    // rejects them); staged chips stay put so switching back to a chat model
+    // restores them.
+    const outgoingFiles: FileUIPart[] =
+      imageMode && imageInputMax === 0
+        ? []
+        : readyAttachments.map((attachment) => ({
           type: "file",
           url: attachment.url,
           mediaType: attachment.mediaType,
@@ -1266,6 +1296,7 @@ export default function ChatView({
               ? (message, targetLang) => void handleTranslate(message, targetLang)
               : undefined
           }
+          onEditImage={handleEditImage}
           translating={translating}
           compression={{
             upToMessageId: topicDetail.data?.summaryUpToMessageId ?? null,
@@ -1332,6 +1363,7 @@ export default function ChatView({
         onRetryAttachment={retryAttachment}
         imageParams={imageParams}
         onImageParamsChange={(next) => setImageParams(draftKey, next)}
+        focusSignal={composerFocusSignal}
       />
       <ChatMapDialog
         open={chatMapOpen}

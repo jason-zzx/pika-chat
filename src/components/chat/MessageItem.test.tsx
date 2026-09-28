@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
@@ -1186,6 +1186,67 @@ describe("MessageItem attachments", () => {
     // The dialog renders its own full-size img with the same source.
     const previews = within(dialog).getAllByRole("img", { name: "cat.png" });
     expect(previews[0]).toHaveAttribute("src", "/api/files/img-1");
+  });
+
+  function imageMessage() {
+    return {
+      id: "user-1",
+      role: "user" as const,
+      parts: [
+        {
+          type: "file" as const,
+          url: "/api/files/img-1",
+          mediaType: "image/png",
+          filename: "cat.png",
+          sizeBytes: 2048,
+        },
+      ],
+    };
+  }
+
+  it("offers \"edit this image\" on the thumbnail when onEditImage is provided", () => {
+    const onEditImage = vi.fn();
+    renderWithIntl(
+      <MessageItem message={imageMessage()} onEditImage={onEditImage} />,
+    );
+
+    const edit = screen.getByRole("button", { name: "Edit this image" });
+    // Hover-revealed on pointer devices, always visible on touch (the
+    // preview dialog button is the no-hover fallback path).
+    expect(edit.className).toContain("group-hover/edit:opacity-100");
+    expect(edit.className).toContain("[@media(hover:none)]:opacity-100");
+    fireEvent.click(edit);
+    expect(onEditImage).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "/api/files/img-1" }),
+    );
+  });
+
+  it("renders no edit button without onEditImage", () => {
+    renderWithIntl(<MessageItem message={imageMessage()} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Edit this image" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("routes the preview dialog's edit button to the same handler and closes the dialog", async () => {
+    const onEditImage = vi.fn();
+    renderWithIntl(
+      <MessageItem message={imageMessage()} onEditImage={onEditImage} />,
+    );
+
+    fireEvent.click(screen.getByRole("img", { name: "cat.png" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Edit this image" }),
+    );
+
+    expect(onEditImage).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "/api/files/img-1" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 
   it("shrinks the image button to the rendered image width on load", () => {
