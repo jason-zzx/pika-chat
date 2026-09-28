@@ -1083,6 +1083,37 @@ describe("MessageItem attachments", () => {
     expect(screen.getByText("here you go")).toBeInTheDocument();
   });
 
+  it("hides copy and translate actions on generated-image messages", () => {
+    renderWithIntl(
+      <MessageItem
+        message={{
+          id: "assistant-1",
+          role: "assistant",
+          parts: [
+            {
+              type: "file",
+              url: "/api/files/gen-1",
+              mediaType: "image/png",
+              filename: "generated.png",
+            },
+          ],
+        }}
+        onTranslate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Copy message" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Translate" }),
+    ).not.toBeInTheDocument();
+    // The more menu stays: it still carries delete etc.
+    expect(
+      screen.getByRole("button", { name: "More actions" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders a file card linking to the canonical attachment url", () => {
     renderWithIntl(
       <MessageItem

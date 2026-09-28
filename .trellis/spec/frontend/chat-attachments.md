@@ -374,6 +374,11 @@ src/components/chat/MessageItem.tsx         generated images render through the 
   replace server validation.
 - **Image mode also suppresses** `reasoningEffort` and `searchMode` in the
   request body, and blocks sending while `inFlight` exactly like chat mode.
+- **Generated-image messages hide copy and translate actions.** An assistant
+  message carrying file parts is a generation result (`hasGeneratedImages`
+  in `MessageItem`): copy and translate both target text, so `MessageActions`
+  receives `hideCopy` (drops the icon button and the more-menu copy item)
+  and no `onTranslate`. Version switching, regenerate, and delete stay.
 - **Custom-size rules live behind an info-icon Tooltip**, not as persistent
   text: `freeformRules(capability.freeform)` (lib, `image-capabilities.ts`)
   turns the family's constraints into structured rules, and the picker

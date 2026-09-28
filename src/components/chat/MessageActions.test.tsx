@@ -326,6 +326,16 @@ describe("MessageActions", () => {
     }
   });
 
+  it("hides the copy button when hideCopy is set", () => {
+    renderWithIntl(
+      <MessageActions text="hello" messageRole="assistant" hideCopy />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Copy message" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("hides the translate entry when onTranslate is not provided", () => {
     renderWithIntl(<MessageActions text="hello" messageRole="assistant" />);
 

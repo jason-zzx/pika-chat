@@ -57,6 +57,9 @@ type MessageActionsProps = {
   /** Languages this message version is already translated into (cached
    * server-side); those menu items show a check mark. */
   translatedLangs?: readonly string[];
+  /** Hide both copy entries (icon button and more-menu item) — used for
+   * generated-image messages whose text is not worth copying. */
+  hideCopy?: boolean;
   /** True while the transient copy feedback (check icon) is showing, so the
    * parent can keep the row visible for the whole feedback window (B4). */
   onCopyFeedbackChange?: (active: boolean) => void;
@@ -76,6 +79,7 @@ export default function MessageActions({
   onMenuOpenChange,
   onTranslate,
   translatedLangs,
+  hideCopy = false,
   onCopyFeedbackChange,
 }: MessageActionsProps) {
   const t = useTranslations("Chat.Actions");
@@ -178,21 +182,23 @@ export default function MessageActions({
             <RefreshCwIcon aria-hidden="true" className="size-3.5" />
           </button>
         ) : null}
-        <button
-          type="button"
-          aria-label={t("copyMessage")}
-          title={copyTitle}
-          onClick={() => {
-            void handleCopy();
-          }}
-          className={ACTION_BUTTON_CLASS}
-        >
-          {copyState === "success" ? (
-            <CheckIcon aria-hidden="true" className="size-3.5" />
-          ) : (
-            <CopyIcon aria-hidden="true" className="size-3.5" />
-          )}
-        </button>
+        {hideCopy ? null : (
+          <button
+            type="button"
+            aria-label={t("copyMessage")}
+            title={copyTitle}
+            onClick={() => {
+              void handleCopy();
+            }}
+            className={ACTION_BUTTON_CLASS}
+          >
+            {copyState === "success" ? (
+              <CheckIcon aria-hidden="true" className="size-3.5" />
+            ) : (
+              <CopyIcon aria-hidden="true" className="size-3.5" />
+            )}
+          </button>
+        )}
         {onTranslate ? (
           <DropdownMenu onOpenChange={onMenuOpenChange}>
             <DropdownMenuTrigger
@@ -247,14 +253,16 @@ export default function MessageActions({
             <MoreHorizontalIcon aria-hidden="true" className="size-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-auto">
-            <DropdownMenuItem
-              className="whitespace-nowrap"
-              onClick={() => {
-                void handleCopy();
-              }}
-            >
-              {t("copy")}
-            </DropdownMenuItem>
+            {hideCopy ? null : (
+              <DropdownMenuItem
+                className="whitespace-nowrap"
+                onClick={() => {
+                  void handleCopy();
+                }}
+              >
+                {t("copy")}
+              </DropdownMenuItem>
+            )}
             {onRegenerate ? (
               <DropdownMenuItem
                 className="whitespace-nowrap"

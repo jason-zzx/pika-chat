@@ -503,6 +503,9 @@ export default function MessageItem({
     onReveal?.();
   }
 
+  // Generated-image messages carry file parts (and possibly empty text):
+  // copy and translate target the text, so both are hidden for them.
+  const hasGeneratedImages = !isUser && fileParts.length > 0;
   const actions = (
     <MessageActions
       text={plainText}
@@ -528,8 +531,11 @@ export default function MessageItem({
       }
       onMenuOpenChange={setMenuOpen}
       onCopyFeedbackChange={setCopyFeedback}
+      hideCopy={hasGeneratedImages}
       onTranslate={
-        onTranslate ? (lang) => onTranslate(message, lang) : undefined
+        !hasGeneratedImages && onTranslate
+          ? (lang) => onTranslate(message, lang)
+          : undefined
       }
       translatedLangs={translationEntries.map(([lang]) => lang)}
     />
