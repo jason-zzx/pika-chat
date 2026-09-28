@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/09-24-image-editing/design.md", "reason": "本任务技术设计：能力表 imageInput 字段、三条编辑 transport 分流、前后端接缝与明确不做清单"}
+{"file": ".trellis/spec/backend/image-generation.md", "reason": "生图旁路既有契约：适配器表、turn 持久化语义、错误矩阵、响应协议——编辑功能在此之上扩展"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "附件归属校验 resolveOwnedFileParts、上传管线与配额语义，参考图解析复用这些机制"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "Composer 附件暂存/上传/错误 chip 约定，imageMode 放开附件与 referenced attachment 需遵守"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "新增 image.tooManyReferences 等 key 需遵守 i18n guard（无硬编码 JSX 字符串）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "新增 400 错误的 AppError/messageKey 形状与透传约定"}

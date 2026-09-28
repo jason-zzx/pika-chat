@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/image-generation.md", "reason": "核对实现是否保持旁路契约：无参考图路径逐字节不变、持久化全有或全无、错误矩阵一致"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "核对参考图归属校验与配额语义未被绕过"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "核对 Composer 附件行为（上限、错误 chip、清除/恢复）在 imageMode 下不回归"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "核对新文案 key 双语同步且无硬编码字符串"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "通用后端质量门槛"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "通用前端质量门槛"}
