@@ -245,8 +245,14 @@ export async function createImageGenerationResponse({
           }
         }
       };
+      // Filename carries the model and generation time so stored files are
+      // distinguishable; same-second batches disambiguate with a 1-based index.
+      const nameBase = `${modelId.replace(/[^a-z0-9]+/gi, "-")}-${generatedAt
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[T:]/g, "-")}`;
       try {
-        for (const generated of result.images) {
+        for (const [index, generated] of result.images.entries()) {
           // A stop can land between generation and the upload loop: skip the
           // rest and reclaim what is already stored (same as a mid-batch
           // failure) — nothing will reference these rows.
@@ -257,7 +263,7 @@ export async function createImageGenerationResponse({
           // storage quota is not.
           const uploaded = await uploadFile(
             {
-              filename: `generated.${GENERATED_IMAGE_EXTENSIONS[generated.mediaType] ?? "png"}`,
+              filename: `${nameBase}${result.images.length > 1 ? `-${index + 1}` : ""}.${GENERATED_IMAGE_EXTENSIONS[generated.mediaType] ?? "png"}`,
               mediaType: generated.mediaType,
               data: generated.bytes,
             },
