@@ -17,6 +17,8 @@ import { z } from "zod";
 
 import AssistantEditorDialog from "@/components/assistant/AssistantEditorDialog";
 import DeleteAssistantDialog from "@/components/assistant/DeleteAssistantDialog";
+import SearchResults from "@/components/assistant/SearchResults";
+import SidebarSearch from "@/components/assistant/SidebarSearch";
 import { useAssistantTree, useSetTopicFavorite } from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
 import PikaMark from "@/components/common/PikaMark";
@@ -76,6 +78,10 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
   );
   const [renameTopic, setRenameTopic] = useState<Topic | null>(null);
   const [deleteTopic, setDeleteTopic] = useState<Topic | null>(null);
+  // Non-empty search swaps the tree for the result list; clearing (or Esc in
+  // the box) restores the tree. Not URL state — the box is session chrome.
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchActive = searchQuery.trim().length > 0;
 
   const isLastAssistant = assistants.length === 1;
 
@@ -119,9 +125,17 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
           </div>
         )}
       </SidebarHeader>
+      {isSettings ? null : (
+        <SidebarSearch query={searchQuery} onQueryChange={setSearchQuery} />
+      )}
       <SidebarContent className="overflow-hidden">
         {isSettings ? (
           <SettingsNav showUsers={showUsers} />
+        ) : searchActive ? (
+          <SearchResults
+            query={searchQuery.trim()}
+            onNavigate={() => setSearchQuery("")}
+          />
         ) : tree.isPending ? (
           <LoadingRows />
         ) : tree.isError ? (

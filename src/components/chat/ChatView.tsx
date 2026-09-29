@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   DefaultChatTransport,
@@ -213,6 +213,15 @@ export default function ChatView({
   // through this handle, so all scroll knowledge stays in MessageList.
   const messageListRef = useRef<MessageListHandle>(null);
   const [chatMapOpen, setChatMapOpen] = useState(false);
+  // Search-result deep link (`?m=<groupId>`): the message key to scroll to
+  // and flash once the history has loaded.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  // Last consumed `m` jump (`topicId:m`), so each result click consumes its
+  // param exactly once even though this view is not remounted between
+  // topic navigations.
+  const consumedJumpRef = useRef<string | null>(null);
   // Whole-content-area drop zone (message list + composer): the enter/leave
   // counter keeps the overlay steady while the pointer crosses children —
   // dragenter/dragleave fire in pairs per element, so the zone is active
@@ -453,6 +462,48 @@ export default function ChatView({
     seededHistoryFor.current = activeTopicId;
     setMessages(history.data.messages);
   }, [history.data, setMessages, activeTopicId]);
+
+  // Search-result deep link: `?m=<groupId>` scrolls to the message and
+  // flashes it once the history has seeded, then the param is stripped so a
+  // refresh does not re-jump. Consumed once per (topic, key) pair; a missing
+  // (deleted) target simply no-ops inside scrollToMessage, and an empty topic
+  // strips the param without scrolling rather than leaving it stuck. setState
+  // runs in the rAF callback — a synchronous setState here violates
+  // react-hooks/set-state-in-effect.
+  const targetMessageKey = searchParams.get("m");
+  useEffect(() => {
+    if (targetMessageKey === null) {
+      // Param stripped after a jump (or never present): re-arm so clicking
+      // the same result again jumps again instead of hitting the guard.
+      consumedJumpRef.current = null;
+      return;
+    }
+    if (activeTopicId === undefined) {
+      return;
+    }
+    const jumpKey = `${activeTopicId}:${targetMessageKey}`;
+    if (consumedJumpRef.current === jumpKey) {
+      return;
+    }
+    if (messages.length === 0) {
+      // Nothing to scroll to. Wait while the history is still loading or the
+      // seed has not landed yet; strip only once the topic settled empty.
+      if (!history.data || history.data.messages.length > 0) {
+        return;
+      }
+      consumedJumpRef.current = jumpKey;
+      router.replace(pathname);
+      return;
+    }
+    consumedJumpRef.current = jumpKey;
+    const key = targetMessageKey;
+    requestAnimationFrame(() => {
+      messageListRef.current?.scrollToMessage(key);
+      setHighlightKey(key);
+      setTimeout(() => setHighlightKey(null), 2000);
+    });
+    router.replace(pathname);
+  }, [targetMessageKey, activeTopicId, messages.length, history.data, pathname, router]);
 
   useEffect(() => {
     const key = topicId ?? `draft:${resolvedAssistantId ?? "none"}`;
@@ -1298,6 +1349,7 @@ export default function ChatView({
           }
           onEditImage={handleEditImage}
           translating={translating}
+          highlightKey={highlightKey}
           compression={{
             upToMessageId: topicDetail.data?.summaryUpToMessageId ?? null,
             upToGroupId: topicDetail.data?.summaryUpToGroupId ?? null,

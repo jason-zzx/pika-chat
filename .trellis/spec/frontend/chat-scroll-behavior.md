@@ -79,6 +79,19 @@ Re-engaging the pin afterwards is the opposite operation ("back to latest"),
 and landing on the last message re-pins naturally through the existing
 downward-scroll rule in `handleScroll`.
 
+## Search-result anchor (`?m=`)
+
+Sidebar search results deep-link to `/assistant/{aid}/{tid}?m={groupId}`
+(landed in `09-29-topic-message-search`; backend contract in
+`../backend/search.md`). `ChatView` consumes the param once per (topic, key):
+after messages seed, it jumps through the existing `scrollToMessage` (which
+already releases the pin — do not add a second scroll path) and flashes the
+target row for 2s via the `highlightKey`/`highlighted` prop chain, then
+`router.replace`s the URL without `m`. The consumption guard must re-arm when
+the param is absent: a repeat click on the same result re-adds the same `m`,
+and a one-shot-per-mount guard swallows that click (found by check). A missing
+target (deleted message) is a silent no-op but the param is still stripped; an empty topic (history settled, nothing seeded) also strips `m` without scrolling rather than leaving the param stuck.
+
 ## Effect declaration order
 
 The topic-entry effect (scroll to bottom once when messages first appear)

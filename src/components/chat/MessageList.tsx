@@ -156,6 +156,10 @@ type MessageListProps = {
    * without one it stays a static divider. Purely presentational — it takes
    * no part in scroll/pin logic. */
   compression?: MessageListCompression | null;
+  /** Search-result deep link (PRD R4): the row whose `data-message-key`
+   * matches flashes an accent background while the parent clears it (~2s).
+   * Pure presentation, like the compression marker. */
+  highlightKey?: string | null;
   /** Imperative scroll handle (chat map jumps, scroll-to-latest). */
   ref?: Ref<MessageListHandle>;
 };
@@ -175,6 +179,7 @@ export default function MessageList({
   translating,
   onEditImage,
   compression,
+  highlightKey,
   ref,
 }: MessageListProps) {
   const t = useTranslations("Chat.MessageList");
@@ -609,6 +614,7 @@ export default function MessageList({
                   }
                   itemKey={itemKey}
                   compressedLocked={index <= compressedThroughIndex}
+                  highlighted={highlightKey === itemKey}
                 />
                 {matchesCompressionBoundary(message) ? (
                   <CompressionSummary summaryText={summaryText} />

@@ -37,6 +37,11 @@ Rules for editing or adding presets:
 - `--destructive` and `--success` must stay distinguishable from the preset's
   accent (forest shifts `--success` hue for this reason). Body text contrast
   ≥ WCAG AA 4.5:1 in every palette.
+- Transient emphasis (search-hit row flash, result `<mark>`) reuses the
+  preset's own `--primary` at low alpha (`bg-primary/8`, `ring-primary/50`,
+  `text-primary`) rather than introducing palette-external colors — every
+  preset's primary is already its attention hue, so the emphasis stays
+  theme-fitted without new tokens.
 - Mermaid's dark variables in `chat/Markdown.tsx` are hardcoded neutral-gray
   hex shared by all presets (khroma cannot parse oklch); shiki follows the
   `dark` class via Streamdown's `dark:` classes. Neither is per-preset —

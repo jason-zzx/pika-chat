@@ -1,0 +1,16 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend 层 spec 索引与通用约定"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "service/route 文件放置与命名约定"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "drizzle 查询与 schema 约定，搜索 SQL 需遵守"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError 与 route 错误返回约定"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "resolveActor 与归属校验惯例"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "测试与质量门禁要求"}
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "groupId/isSelected 语义，搜索只命中 isSelected 版本"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend 层 spec 索引"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "SidebarSearch 组件编写约定"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useQuery/防抖 hook 约定"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "新增 Search.* key 的 i18n 流程"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "URL 参数与本地状态约定（?m= 消费）"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "scrollToMessage 定位机制与 pin 释放约定"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端测试与质量门禁"}
+{"file": ".trellis/tasks/09-29-topic-message-search/prd.md", "reason": "需求与验收标准"}
+{"file": ".trellis/tasks/09-29-topic-message-search/design.md", "reason": "技术设计"}

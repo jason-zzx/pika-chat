@@ -24,6 +24,19 @@ import AttachmentIcon from "./AttachmentIcon";
 import CollapseBlock from "./CollapseBlock";
 import ErrorBlock from "./ErrorBlock";
 import Markdown from "./Markdown";
+
+/** Search-result deep-link flash (PRD R4/R7a): the matching row carries a
+ * faint `--primary` fill plus an inset `--primary` ring — NO dedicated color;
+ * each preset's own primary is its attention hue (mono themes: ink), so the
+ * flash is theme-fitted everywhere. The outlined ring, not the fill, is the
+ * visual handle in monochrome themes. It fades back out when the highlight
+ * clears. Negative margin + padding and the transparent ring in the off
+ * state keep the bubble layout identical in both states, so the flash never
+ * shifts the content. */
+const HIGHLIGHT_CLASS = {
+  on: "-mx-2 rounded-lg bg-primary/8 px-2 ring-2 ring-inset ring-primary/50 transition-[background-color,box-shadow] duration-700 motion-reduce:transition-none",
+  off: "-mx-2 rounded-lg bg-transparent px-2 ring-2 ring-inset ring-transparent transition-[background-color,box-shadow] duration-700 motion-reduce:transition-none",
+} as const;
 import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
 import MessageActions from "./MessageActions";
 import MessageTimestamp from "./MessageTimestamp";
@@ -408,6 +421,9 @@ type MessageItemProps = {
    * the version-group key (`groupId ?? id`) by the list, which already uses it
    * as the React key — the item must not derive it itself. */
   itemKey?: string;
+  /** Search-result deep link target (PRD R4): flash a `--primary` tint
+   * while the parent's ~2s highlight window is open. */
+  highlighted?: boolean;
 };
 
 export default function MessageItem({
@@ -428,6 +444,7 @@ export default function MessageItem({
   minHeight,
   compressedLocked = false,
   itemKey,
+  highlighted = false,
 }: MessageItemProps) {
   const t = useTranslations("Chat.MessageItem");
   const tAssistant = useTranslations("Assistant");
@@ -545,7 +562,10 @@ export default function MessageItem({
     return (
       <article
         ref={articleRef}
-        className="group/message flex flex-col items-end gap-1"
+        className={cn(
+          "group/message flex flex-col items-end gap-1",
+          HIGHLIGHT_CLASS[highlighted ? "on" : "off"],
+        )}
         aria-label={t("you")}
         data-revealed={revealedAny ? "true" : "false"}
         data-message-key={itemKey}
@@ -596,7 +616,10 @@ export default function MessageItem({
     <article
       ref={articleRef}
       style={minHeight !== undefined ? { minHeight } : undefined}
-      className="group/message flex flex-col items-start gap-1"
+      className={cn(
+        "group/message flex flex-col items-start gap-1",
+        HIGHLIGHT_CLASS[highlighted ? "on" : "off"],
+      )}
       aria-label={t("assistant")}
       data-revealed={revealedAny ? "true" : "false"}
       data-message-key={itemKey}

@@ -25,10 +25,16 @@ import {
 
 import ChatView from "./ChatView";
 
-const nav = vi.hoisted(() => ({ pathname: "/" }));
+const nav = vi.hoisted(() => ({
+  pathname: "/",
+  search: "",
+  replace: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
+  useRouter: () => ({ replace: nav.replace }),
+  useSearchParams: () => new URLSearchParams(nav.search),
 }));
 
 vi.mock("streamdown", () => ({
@@ -971,5 +977,94 @@ describe("ChatView regenerate image params", () => {
 
     const body = vi.mocked(regenerateTopicMessage).mock.calls[0]?.[2];
     expect(body).not.toHaveProperty("image");
+  });
+});
+
+describe("ChatView search-result deep link (?m=)", () => {
+  const scrollToMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    nav.search = "?m=g1";
+    // jsdom implements neither; the jump path (scrollToPosition → scrollTo,
+    // prefersReducedMotion → matchMedia) needs both. See MessageList.test.
+    Element.prototype.scrollTo = scrollToMock;
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+  });
+
+  afterEach(() => {
+    nav.search = "";
+    scrollToMock.mockClear();
+  });
+
+  function seedHistory() {
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        assistantVersion("srv-a1", "answer", 1, ["srv-a1"]),
+      ],
+    });
+  }
+
+  it("scrolls to and flashes the target row, then strips m from the URL", async () => {
+    seedHistory();
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+
+    const article = await screen.findByRole("article", { name: "Assistant" });
+    expect(article).toHaveAttribute("data-message-key", "g1");
+
+    await waitFor(() => {
+      expect(scrollToMock).toHaveBeenCalled();
+    });
+    expect(nav.replace).toHaveBeenCalledWith("/assistant/a1/t1");
+    await waitFor(() => {
+      expect(article.className).toContain("bg-primary/8");
+    });
+  });
+
+  it("jumps again when the same m value reappears after being stripped", async () => {
+    seedHistory();
+    const view = renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "Assistant" });
+    await waitFor(() => {
+      expect(scrollToMock).toHaveBeenCalled();
+    });
+    const callsAfterFirstJump = scrollToMock.mock.calls.length;
+
+    const rerenderView = () =>
+      view.rerender(
+        wrapWithIntl(
+          <QueryClientProvider client={view.client}>
+            <ChatView assistantId="a1" topicId="t1" />
+          </QueryClientProvider>,
+        ),
+      );
+
+    // Next applies the replace: the param disappears and the guard re-arms.
+    nav.search = "";
+    rerenderView();
+
+    // Clicking the same search result puts the same m back on the URL; a
+    // one-shot guard would swallow this click.
+    nav.search = "?m=g1";
+    rerenderView();
+
+    await waitFor(() => {
+      expect(scrollToMock.mock.calls.length).toBeGreaterThan(
+        callsAfterFirstJump,
+      );
+    });
+    expect(nav.replace).toHaveBeenCalledTimes(2);
+  });
+
+  it("strips m without scrolling when the topic has no messages", async () => {
+    vi.mocked(listTopicMessages).mockResolvedValue({ messages: [] });
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+
+    await waitFor(() => {
+      expect(nav.replace).toHaveBeenCalledWith("/assistant/a1/t1");
+    });
+    expect(scrollToMock).not.toHaveBeenCalled();
   });
 });

@@ -78,6 +78,7 @@ review blocker, not a style nit.
 | [Chat Search Tools](./chat-search-tools.md) | Search provider settings, searchWeb tool + fallback chain, searchMode wiring, builtin fetch injection, tool-part persistence/replay/rendering |
 | [Provider Configs](./provider-configs.md) | Endpoint `apiFormat` (openai-compatible / claude / google), the api-key requirement rule, per-format provider construction + discovery, `addProviderModel` optional metadata overrides vs catalog fill, `metadataSource` marking, `vendorKey` null-vs-undefined |
 | [Topic Favorites](./topic-favorites.md) | `topics.is_favorite` column, PATCH favorite endpoint, `topics.updatedAt` last-active semantics (which mutations may bump it) |
+| [Search](./search.md) | Sidebar full-text search: ILIKE literal semantics, text-part-only match scope, selected-version filter, snippet duality, `?m=` navigation anchor |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logs, levels, redaction |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, types, tests, forbidden patterns |
 

@@ -96,8 +96,12 @@ Every `/settings/*` page composes the shared primitives in
   visibility) that carry no status.
 
 Status color: the theme is deliberately monochrome; `--success` (declared in
-`globals.css` for light and dark) is the only accent, reserved for "on/open"
-state dots. Do not introduce further status colors without a spec discussion.
+`globals.css` for light and dark) is the only status accent, reserved for
+"on/open" state dots. Search-hit emphasis (the `?m=` message-row flash and
+the sidebar result `<mark>`) uses `--primary` tints — `bg-primary/8` +
+`ring-primary/50` for the flash, `font-semibold text-primary underline` for
+marks — never a new hue. Do not introduce further status colors without a
+spec discussion.
 
 Entity management on settings pages is dialog-first: creation and editing
 happen in modal `Dialog`s (`ProviderConfigForm`, `ModelEditorDialog`,

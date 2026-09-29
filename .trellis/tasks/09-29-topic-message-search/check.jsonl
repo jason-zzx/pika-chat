@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend 层 spec 索引与通用约定"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核对搜索 SQL 与归属过滤是否符合约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对 route 错误处理"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "核对鉴权与数据隔离"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "核对测试覆盖要求"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend 层 spec 索引"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对组件约定"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "核对 i18n key 完整性（en/zh-CN 同步）"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "核对 ?m= 定位不破坏滚动 pin 机制"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "核对前端质量门禁"}
+{"file": ".trellis/tasks/09-29-topic-message-search/prd.md", "reason": "验收标准对照"}
+{"file": ".trellis/tasks/09-29-topic-message-search/design.md", "reason": "设计符合性对照"}

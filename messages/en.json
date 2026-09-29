@@ -537,7 +537,16 @@
     "edit": "Edit",
     "keyHint": "key …{lastFour}",
     "editProviderTitle": "Edit {name}",
-    "addProviderNamedTitle": "Add {name}"
+    "addProviderNamedTitle": "Add {name}",
+    "sidebar": {
+      "placeholder": "Search topics and messages",
+      "openSearch": "Search",
+      "clear": "Clear search",
+      "searching": "Searching…",
+      "topicsGroup": "Topics",
+      "messagesGroup": "Messages",
+      "noResults": "No matches for \"{query}\""
+    }
   },
   "Files": {
     "attach": "Attach files",
