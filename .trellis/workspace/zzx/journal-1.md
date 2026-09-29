@@ -934,3 +934,25 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+
+## Session 33: 话题与消息全文搜索落地并精简
+<!-- trellis-session: v=2 fp=a5490b563f9b08eb -->
+
+**Date**: 2026-09-29
+**Task**: 话题与消息全文搜索落地并精简
+**Branch**: `main`
+
+### Summary
+
+完成 09-29-topic-message-search：后端 /api/search（ILIKE 字面匹配、isSelected+text-part 过滤、归属 join、20 条上限、非对称摘要窗口），侧边栏搜索行替换树渲染分组结果，消息命中经 ?m=groupId 深链跳转 + --primary 行闪烁 2s + 去参 re-arm。三轮高亮迭代定稿为 preset 原生 --primary 方案（amber token 方案否决）。ponytail-review 后精简：search.service 复用 uiPartsFromJson、开窗逻辑合并为共享 windowAroundMatch、删除 theming.md 矛盾 bullet，净减约 45 行。质量门全绿（152 文件/1373 用例），已提交 8716314。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8716314` | feat(search): sidebar full-text search for topics and messages |
+
+### Status
+
+[OK] **Completed**
