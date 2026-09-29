@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 
 const {
   requireActor,
@@ -47,6 +48,19 @@ function context(id: string) {
 
 const storageGet = vi.fn();
 const createPresignedGet = vi.fn();
+
+function pngBytes(): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: 200,
+      height: 100,
+      channels: 3,
+      background: { r: 200, g: 10, b: 10 },
+    },
+  })
+    .png()
+    .toBuffer();
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -137,5 +151,69 @@ describe("GET /api/files/[id]", () => {
     });
     expect(createPresignedGet).not.toHaveBeenCalled();
     expect(storageGet).not.toHaveBeenCalled();
+  });
+
+  it("serves a downscaled square webp for ?thumb=1 on an image", async () => {
+    storageGet.mockResolvedValue(await pngBytes());
+
+    const response = await GET(
+      new Request("http://test/api/files/file-1?thumb=1"),
+      context("file-1"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/webp");
+    expect(response.headers.get("Cache-Control")).toBe("private, max-age=3600");
+    const thumb = await sharp(
+      Buffer.from(await response.arrayBuffer()),
+    ).metadata();
+    expect(thumb.format).toBe("webp");
+    expect(thumb.width).toBe(64);
+    expect(thumb.height).toBe(64);
+  });
+
+  it("relays ?thumb=1 through the app even when direct access is on", async () => {
+    isS3DirectAccessEnabled.mockReturnValue(true);
+    createPresignedGet.mockResolvedValue("https://s3.test/signed-get");
+    getFileStorage.mockReturnValue({ get: storageGet, createPresignedGet });
+    storageGet.mockResolvedValue(await pngBytes());
+
+    const response = await GET(
+      new Request("http://test/api/files/file-1?thumb=1"),
+      context("file-1"),
+    );
+
+    // A presigned redirect would hand back the full original, so thumbnails
+    // never redirect.
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/webp");
+    expect(createPresignedGet).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the original bytes when the image cannot be resized", async () => {
+    // The default storageGet payload ("png") is not a real image.
+    const response = await GET(
+      new Request("http://test/api/files/file-1?thumb=1"),
+      context("file-1"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/png");
+    const body = Buffer.from(await response.arrayBuffer());
+    expect(body.equals(Buffer.from("png"))).toBe(true);
+  });
+
+  it("ignores ?thumb=1 for non-image files", async () => {
+    getFileForActor.mockResolvedValue(
+      fileRow({ filename: "notes.txt", mediaType: "text/plain" }),
+    );
+
+    const response = await GET(
+      new Request("http://test/api/files/file-1?thumb=1"),
+      context("file-1"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
   });
 });

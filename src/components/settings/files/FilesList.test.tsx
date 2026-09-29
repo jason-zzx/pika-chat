@@ -85,6 +85,17 @@ describe("FilesList", () => {
     expect(deleteButton.closest('[class*="group-hover"]')).toBeNull();
   });
 
+  it("renders a server thumbnail instead of the category icon for images", () => {
+    const { container } = renderList([
+      file({ mediaType: "image/png", filename: "pic.png" }),
+    ]);
+
+    // alt="" keeps the decorative thumbnail out of the accessibility tree.
+    const img = container.querySelector("img");
+    expect(img).toHaveAttribute("src", "/api/files/file-1?thumb=1");
+    expect(img).toHaveAttribute("loading", "lazy");
+  });
+
   it("previews an image through the callback", () => {
     const onPreview = vi.fn();
     renderList(

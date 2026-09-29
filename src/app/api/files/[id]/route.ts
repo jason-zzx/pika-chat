@@ -9,6 +9,7 @@ import {
 } from "@/server/files/file.service";
 import { isS3DirectAccessEnabled } from "@/server/files/limits";
 import { getFileStorage } from "@/server/files/storage";
+import sharp from "sharp";
 
 function fileId(context: Parameters<typeof requireParam>[0]): Promise<string> {
   return requireParam(context, "id", "file.notFound");
@@ -48,12 +49,19 @@ function servesInline(file: FileRecord): boolean {
   );
 }
 
-function contentHeaders(file: FileRecord): Headers {
+// The 1h private cache covers originals and thumbnails alike: uploads are
+// immutable, so their derivatives are too.
+function baseHeaders(contentType: string, sizeBytes: number): Headers {
   const headers = new Headers();
-  headers.set("Content-Type", file.mediaType);
-  headers.set("Content-Length", String(file.sizeBytes));
+  headers.set("Content-Type", contentType);
+  headers.set("Content-Length", String(sizeBytes));
   headers.set("Cache-Control", "private, max-age=3600");
   headers.set("X-Content-Type-Options", "nosniff");
+  return headers;
+}
+
+function contentHeaders(file: FileRecord): Headers {
+  const headers = baseHeaders(file.mediaType, file.sizeBytes);
   headers.set(
     "Content-Disposition",
     contentDisposition(file.filename, servesInline(file)),
@@ -72,6 +80,32 @@ export const GET = withErrorHandling(async (request, context) => {
   // never produces a presigned URL.
   const file = await getFileForActor(await fileId(context), actor);
   const storage = getFileStorage();
+
+  // `?thumb=1` serves a small downscaled webp for list rendering. It always
+  // relays through the app, even under direct access: a presigned redirect
+  // would hand back the full original. A resize failure (corrupt or exotic
+  // payload) falls through to the normal response so the file stays reachable.
+  const wantsThumb =
+    new URL(request.url).searchParams.get("thumb") === "1" &&
+    file.mediaType.startsWith("image/");
+  if (wantsThumb) {
+    const data = await storage.get(file.storageKey);
+    try {
+      // 64px covers the 32px list slot at 2x DPR; cover matches the row's
+      // object-cover rendering.
+      const thumb = await sharp(data)
+        .resize(64, 64, { fit: "cover" })
+        .webp({ quality: 80 })
+        .toBuffer();
+      return new Response(new Uint8Array(thumb), {
+        headers: baseHeaders("image/webp", thumb.byteLength),
+      });
+    } catch {
+      return new Response(new Uint8Array(data), {
+        headers: contentHeaders(file),
+      });
+    }
+  }
 
   if (isS3DirectAccessEnabled()) {
     // Direct access: the bytes never pass through the app. The signed URL

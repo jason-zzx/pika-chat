@@ -78,11 +78,23 @@ function FileRow({
           aria-label={t("selectFile", { filename: file.filename })}
         />
       )}
-      <AttachmentIcon
-        mediaType={file.mediaType}
-        filename={file.filename}
-        className="size-5 text-muted-foreground"
-      />
+      {isImage ? (
+        // Server-downscaled derivative (?thumb=1); the full original only
+        // loads when the row's preview dialog opens.
+        // eslint-disable-next-line @next/next/no-img-element -- dynamic authenticated file URL, next/image cannot fetch it
+        <img
+          src={`${FILE_URL_PREFIX}${file.id}?thumb=1`}
+          alt=""
+          loading="lazy"
+          className="size-8 shrink-0 rounded border border-border object-cover"
+        />
+      ) : (
+        <AttachmentIcon
+          mediaType={file.mediaType}
+          filename={file.filename}
+          className="size-5 text-muted-foreground"
+        />
+      )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="truncate text-sm font-medium">{file.filename}</p>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
