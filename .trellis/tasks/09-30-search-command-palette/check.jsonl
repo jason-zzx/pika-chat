@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Final quality gate: lint, typecheck, tests, accessibility, both breakpoints"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify popup positioning, keyboard reachability, and no hover-only triggers (#248)"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Verify all new Search.palette.* keys exist in both catalogs and no hardcoded copy"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Verify no server state leaked into the Zustand dialog store"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "Verify hit-nav scrolling reuses scrollToMessage without breaking pin/reserve behavior"}

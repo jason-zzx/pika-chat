@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Dialog composition, responsive layout, and cursor affordance rules for the new SearchDialog and SearchHitNav components"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand vs TanStack Query boundary; the dialog open state must follow the client-state rules"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Query hook conventions for reusing useSearch/useDebouncedValue inside the dialog"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Catalog structure for adding Search.palette.* keys to en and zh-CN"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Where the new store, SearchDialog, and SearchHitNav files belong"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "scrollToMessage/pin contracts that the hit-nav control must not break"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint/typecheck/test and accessibility gates for the implementation"}

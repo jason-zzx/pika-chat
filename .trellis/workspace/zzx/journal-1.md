@@ -956,3 +956,26 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Status
 
 [OK] **Completed**
+
+## Session 34: 搜索命令面板弹窗与话题内命中导航
+<!-- trellis-session: v=2 fp=09-30-search-command-palette -->
+
+**Date**: 2026-09-30
+**Task**: 09-30-search-command-palette
+**Branch**: `main`
+
+### Summary
+
+完成 09-30-search-command-palette：搜索从侧栏内嵌改为命令面板弹窗。SearchDialog 挂 AppShell（Zustand open store），Ctrl/Cmd+K 全局唤起、↑/↓+Enter 纯键盘导航、复用 useSearch 数据层与 HighlightedText 迁移；SidebarSearch 退化为只读入口、SearchResults 删除、话题树常驻。话题内「下一条命中」：同话题 ≥2 命中时 sessionStorage 一次性队列（lib/search-hit-queue.ts，consume-once），ChatView 仅在确认跳转分支消费，SearchHitNav 浮动控件 k/n ↑↓× 复用 flashMessage。trellis-check 发现定位问题：bottom-20 相对含 Composer 的外层容器会压到 Composer —— 修复为包在 MessageList 的 relative 消息区容器内，并将该覆盖层定位契约写入 chat-scroll-behavior.md。质量门全绿（154 文件/1387 用例）。未提交（用户保留提交决策）；浏览器两断点人工验证待做（agent-browser 版本过旧本会话不可用）。
+
+### Status
+
+[OK] **Implemented, pending user commit + manual browser verification**
+
+### Session 34 追加：弹窗焦点回路修复
+
+用户浏览器实测发现三症状（点击入口闪开、遮罩无法关闭、选中结果弹窗不消失），同源于入口框 onFocus 打开 + Base UI 焦点管理：(1) 关闭后 finalFocus 回落入口框 → onFocus 重开；(2) mousedown-focus 打开后同次 press 的 trailing click 落在弹窗 outside-press 监听上即关。修复：DialogContent finalFocus={false} + 入口框 onMouseDown preventDefault。契约已写入 component-guidelines.md 与 design.md。质量门全绿。
+
+### Session 34 追加 2：验收与提交
+
+浏览器验收通过后修复两处低危项（Enter 选中不可见旧结果 → listReady 门；flashMessage 定时器未跟踪 → ref 清理）。ponytail-review 结论 lean。按 implement.md 提交计划落两个 commit：628e14d 弹窗主体、fd9fd54 话题内命中导航。
