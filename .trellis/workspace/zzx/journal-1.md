@@ -979,3 +979,26 @@ Added opt-in TOTP 2FA on better-auth's twoFactor plugin: two_factors table + use
 ### Session 34 追加 2：验收与提交
 
 浏览器验收通过后修复两处低危项（Enter 选中不可见旧结果 → listReady 门；flashMessage 定时器未跟踪 → ref 清理）。ponytail-review 结论 lean。按 implement.md 提交计划落两个 commit：628e14d 弹窗主体、fd9fd54 话题内命中导航。
+
+
+## Session 35: Search command palette modal + in-topic hit navigation
+<!-- trellis-session: v=2 fp=1c9de14be3095052 -->
+
+**Date**: 2026-10-07
+**Task**: Search command palette modal + in-topic hit navigation
+**Branch**: `main`
+
+### Summary
+
+Replaced inline sidebar search with a global command-palette dialog (Ctrl/Cmd+K, sidebar entry, icon-rail button): debounced grouped topic/message results, mark highlighting, full keyboard navigation; topic tree stays mounted. Message jumps with >=2 same-topic hits surface a floating k/n prev/next navigator (consume-once sessionStorage queue, reading order so arrows match visual direction; cleared on topic switch/close). Browser testing surfaced and fixed a Base UI focus-return reopen loop (finalFocus=false + entry onMouseDown preventDefault — contract recorded in component-guidelines.md) and the hit-queue desc order making prev/next feel inverted (reversed to createdAt asc; PRD/design/scroll-spec updated). Final check round fixed two low-severity items: Enter could select invisible stale results (listReady gate) and flash timer was untracked (ref cleanup). Quality gates green: 154 files / 1388 tests.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `628e14d` | feat(search): command palette modal with Ctrl+K entry |
+| `fd9fd54` | feat(search): in-topic next-hit navigation |
+
+### Status
+
+[OK] **Completed**

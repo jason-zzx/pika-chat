@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 33
-- **Last Active**: 2026-09-29
+- **Total Sessions**: 35
+- **Last Active**: 2026-10-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~958 | Active |
+| `journal-1.md` | ~1004 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 35 | 2026-10-07 | Search command palette modal + in-topic hit navigation | `628e14d`, `fd9fd54` | `main` |
 | 33 | 2026-09-29 | 话题与消息全文搜索落地并精简 | `8716314` | `main` |
 | 32 | 2026-09-28 | 聊天内图片编辑（图生图/img2img） | `3b04520` | `main` |
 | 31 | 2026-09-23 | In-chat image generation | `41c7e9a` | `feat/image-generation` |
