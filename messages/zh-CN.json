@@ -540,12 +540,16 @@
     "addProviderNamedTitle": "添加 {name}",
     "sidebar": {
       "placeholder": "搜索话题和消息",
-      "openSearch": "搜索",
-      "clear": "清除搜索",
       "searching": "搜索中…",
       "topicsGroup": "话题",
       "messagesGroup": "消息",
       "noResults": "没有匹配「{query}」的结果"
+    },
+    "palette": {
+      "openSearch": "搜索",
+      "prevHit": "上一条",
+      "nextHit": "下一条",
+      "closeNav": "关闭命中导航"
     }
   },
   "Files": {

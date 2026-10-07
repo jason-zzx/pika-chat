@@ -1,37 +1,19 @@
 "use client";
 
-import { SearchIcon, XIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
-import { SidebarInput, useSidebar } from "@/components/ui/sidebar";
+import { SidebarInput } from "@/components/ui/sidebar";
+import { useSearchDialogStore } from "@/stores/search-dialog-store";
 
-type SidebarSearchProps = {
-  query: string;
-  onQueryChange: (query: string) => void;
-};
-
-/** Persistent search row between the sidebar header and the tree. In the
- * icon-collapsed rail it degenerates to a search button that re-expands the
- * sidebar and focuses the input. */
-export default function SidebarSearch({
-  query,
-  onQueryChange,
-}: SidebarSearchProps) {
-  const t = useTranslations("Search.sidebar");
-  const { state, toggleSidebar } = useSidebar();
-  const inputRef = useRef<HTMLInputElement>(null);
-  // Set by the collapsed-rail button; the input only exists (visibly) once
-  // the rail has expanded again, so the focus waits for that state.
-  const focusOnExpandRef = useRef(false);
-
-  useEffect(() => {
-    if (state === "expanded" && focusOnExpandRef.current) {
-      focusOnExpandRef.current = false;
-      inputRef.current?.focus();
-    }
-  }, [state]);
+/** Persistent search row between the sidebar header and the tree. The box is
+ * an entry point only: focusing or clicking it (or the icon-rail button)
+ * opens the global search dialog; the topic tree is never replaced. */
+export default function SidebarSearch() {
+  const t = useTranslations("Search.palette");
+  const tSidebar = useTranslations("Search.sidebar");
+  const setOpen = useSearchDialogStore((state) => state.setOpen);
 
   return (
     <div className="shrink-0 px-2 pb-1">
@@ -41,10 +23,7 @@ export default function SidebarSearch({
         size="icon"
         aria-label={t("openSearch")}
         className="hidden w-full group-data-[collapsible=icon]:flex"
-        onClick={() => {
-          focusOnExpandRef.current = true;
-          toggleSidebar();
-        }}
+        onClick={() => setOpen(true)}
       >
         <SearchIcon aria-hidden="true" />
       </Button>
@@ -53,34 +32,23 @@ export default function SidebarSearch({
           aria-hidden="true"
           className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
         />
+        {/* readOnly entry box: focusing (keyboard) and clicking (already
+            focused) both open the dialog. mousedown is prevented so a
+            mouse press never focuses the box: the open then happens on
+            click, AFTER the click has fully dispatched. Opening on
+            mousedown-focus instead lets the trailing click land on the
+            dialog's just-attached outside-press listener, which dismisses
+            it again (the open-flash bug). */}
         <SidebarInput
-          ref={inputRef}
-          value={query}
-          placeholder={t("placeholder")}
-          aria-label={t("placeholder")}
-          className="pl-8 pr-8"
-          onChange={(event) => onQueryChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              onQueryChange("");
-            }
-          }}
+          readOnly
+          value=""
+          placeholder={tSidebar("placeholder")}
+          aria-label={tSidebar("placeholder")}
+          className="pl-8"
+          onMouseDown={(event) => event.preventDefault()}
+          onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
         />
-        {query.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t("clear")}
-            className="absolute right-1 top-1/2 -translate-y-1/2"
-            onClick={() => {
-              onQueryChange("");
-              inputRef.current?.focus();
-            }}
-          >
-            <XIcon aria-hidden="true" />
-          </Button>
-        ) : null}
       </div>
     </div>
   );

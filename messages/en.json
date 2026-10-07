@@ -540,12 +540,16 @@
     "addProviderNamedTitle": "Add {name}",
     "sidebar": {
       "placeholder": "Search topics and messages",
-      "openSearch": "Search",
-      "clear": "Clear search",
       "searching": "Searching…",
       "topicsGroup": "Topics",
       "messagesGroup": "Messages",
       "noResults": "No matches for \"{query}\""
+    },
+    "palette": {
+      "openSearch": "Search",
+      "prevHit": "Previous hit",
+      "nextHit": "Next hit",
+      "closeNav": "Close hit navigation"
     }
   },
   "Files": {

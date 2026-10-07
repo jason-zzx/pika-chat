@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import SearchDialog from "@/components/assistant/SearchDialog";
 import AppSidebar from "@/components/layout/AppSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import type { ActorRole } from "@/lib/auth-hierarchy";
@@ -36,6 +37,9 @@ export default function AppShell({
           {children}
         </div>
       </SidebarInset>
+      {/* Globally mounted so Ctrl/Cmd+K works on every page, including
+          routes where the sidebar tree is not rendered. */}
+      <SearchDialog />
     </SidebarProvider>
   );
 }

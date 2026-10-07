@@ -526,6 +526,19 @@ Consequences:
 - A search field inside a Dialog `<form>` (`ModelPicker`,
   `AssistantEmojiPicker`): Enter submits Save unless that key is
   `preventDefault`ed on the popover.
+- An entry element that opens a Dialog **on focus** (the sidebar search
+  box): two compounding traps, both only visible in a real browser.
+  (1) Base UI returns focus to the previously focused element on close —
+  that is the entry, whose `onFocus` immediately reopens the dialog, so
+  overlay-click/Esc/result-select all "fail to close". Pass
+  `finalFocus={false}` to `DialogContent` (it forwards to `Popup`).
+  (2) A mouse press opens the dialog on `mousedown`-focus, and the
+  trailing `click` of the same press then lands on the dialog's
+  just-attached outside-press listener (capture-phase `click` on
+  `document`), dismissing it instantly — the "flashes open" bug. Add
+  `onMouseDown={(e) => e.preventDefault()}` to the entry so the mouse
+  path never focuses it and the open happens on `click`, after the click
+  has fully dispatched. Keyboard Tab-focus still opens via `onFocus`.
 - Copying Radix `PopoverTrigger asChild` from upstream docs. This repo's
   popover is Base UI — use `render={<Button type="button" … />}` like
   `ModelPicker`. Generated `components/ui/emoji-picker.tsx` is Frimousse via
