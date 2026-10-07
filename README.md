@@ -24,7 +24,7 @@
 
 ---
 
-**Pika Chat** is a privacy-conscious, self-hosted AI chat platform designed for both individual power users and teams. Connect your own LLM providers, search the live web with citations, upload and parse multimodal files, and organize workflows with assistants and topics — all in a clean, responsive interface that works just as smoothly on mobile touchscreens as it does on multi-monitor desktops.
+**Pika Chat** is a privacy-conscious, self-hosted AI chat platform designed for both individual power users and teams. Connect your own LLM providers, generate and edit images, search the live web with citations, upload and parse multimodal files, and organize workflows with assistants and topics — all in a clean, responsive interface that works just as smoothly on mobile touchscreens as it does on multi-monitor desktops.
 
 ---
 
@@ -44,14 +44,18 @@
 - **Endpoint Auto-Discovery**: Fetch available models directly from your endpoint (`/v1/models`) with one click.
 - **Granular Model Settings**: Customize context window limits, reasoning effort (thinking tokens), input modalities, and custom vendor icons per model.
 - **Credential Encryption**: API keys are encrypted at rest with authenticated AES-256-GCM (`CREDENTIAL_ENCRYPTION_SECRET`). Keys are never exposed to clients or logged.
+- **Default Models**: Choose personal default models for chat, title generation, context compression, and translation — applied automatically across all sessions.
 - **Private & Shared Configurations**: Share vetted provider configs across all instance members, or keep custom keys personal.
 
 ### 💬 Seamless Conversational Experience
 - **Non-Tail Regeneration**: Regenerate any prior assistant turn without truncating or modifying subsequent conversation turns. Branching message versions are tracked via `group_id` and server-persisted selection states.
 - **Rich Markdown & Code Rendering**: Powered by Streamdown with real-time KaTeX math formulas, interactive Mermaid diagrams, syntax-highlighted code blocks with one-click copying, and CJK-friendly typography.
+- **Context History Compression**: Automatically compresses long conversations into rolling summaries at ~80% of the model context budget, with one-click manual compression and collapsible summary views in the message list.
+- **On-Demand Message Translation**: Translate any question or answer into 8 languages with per-version persistent caching and preserved citation links.
 - **Smart Scroll Management**: Tail message reserve space prevents layout jumps during streaming, while gesture-based unpinning respects wheel and touch scrolls.
 - **Mobile-First UX**: Responsive split-column layout, tap-to-reveal message actions (no hover-only dependencies), and non-modal dropdowns designed for touch interactions.
-- **Assistants & Topics**: Create custom assistants with dedicated system instructions and default models. Pin topics, search conversation history, and export dialogues.
+- **Assistants & Topics**: Create custom assistants with dedicated system instructions and default models. Pin topics and export dialogues.
+- **Full-Text Message Search**: Instantly jump to any topic or message with global full-text search, a `Ctrl+K` command palette, and in-topic hit navigation.
 
 ### 📎 Multimodal Attachments & Document Parsing
 - **Wide Format Support**:
@@ -60,6 +64,12 @@
 - **Upload-Time Document Extraction**: Documents are parsed at upload time with page counts, word statistics, and C0 control byte sanitization, displayed as preview chips before sending.
 - **Dynamic Model Replay**: Automatically supplies native multimodal payloads to vision/audio models and falls back to parsed text when switching to text-only models across turns.
 - **Provider Files API Integration**: Native support for Gemini and Anthropic Files APIs with expiration tracking and lazy re-upload handling.
+
+### 🎨 AI Image Generation & Editing
+- **Multi-Family Image Models**: Text-to-image and image editing across OpenAI gpt-image, Google Gemini image models, ByteDance Seedream, and Alibaba Wan / Qwen-Image.
+- **Per-Model Parameter Presets**: Resolution, aspect ratio, quality, and batch count options validated against each model family's real constraints.
+- **Reference-Image Editing**: Reuse any existing attachment as an edit reference — no re-uploads needed.
+- **Quota-Aware Persistence**: Generated images are stored as first-class attachments under the same per-user storage quotas.
 
 ### 🔍 Real-Time Web Search with Citations
 - **LLM Function Calling**: The model autonomously decides when external search is required.
@@ -80,8 +90,9 @@
 - **Storage Quotas**: Per-user storage limits and instance-wide global quotas (default 5 GiB) with automatic orphan cleanup sweeps.
 - **Instance Governance**: Toggle registration status (open/closed), ban malicious accounts, and reset user credentials from the admin dashboard.
 
-### 🌐 Internationalization (i18n)
-- Ships with complete **English** and **Simplified Chinese** (简体中文) localizations, switchable instantly per browser under **Settings → General**.
+### 🌐 Themes & Internationalization
+- **Curated Theme Presets**: 6 built-in presets (Paper, Graphite, Ocean, Forest, Rose, Violet) alongside the neutral default, each with light and dark palettes, persisted per user with flash-free server rendering.
+- **Bilingual i18n**: Ships with complete **English** and **Simplified Chinese** (简体中文) localizations, switchable instantly per browser under **Settings → General**.
 
 ---
 
