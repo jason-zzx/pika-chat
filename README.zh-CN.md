@@ -26,6 +26,10 @@
 
 **Pika Chat** 是一套注重隐私的自托管多模态 AI 聊天系统，面向个人极客与团队协作设计。支持接入各类大模型服务商、AI 图片生成与编辑、联网搜索并提供精确引用来源、多格式文件解析与多模态交互、结构化助手与话题管理，拥有兼顾桌面多屏与触屏移动端的优雅交互界面。
 
+<p align="center">
+  <img src="docs/screenshots/chat-conversation.png" alt="Pika Chat 对话界面：富 Markdown、LaTeX 数学公式与代码高亮渲染" />
+</p>
+
 ---
 
 ## 核心特性
@@ -93,6 +97,19 @@
 ### 🌐 主题与国际化
 - **精选主题预设**：内置 6 款主题（Paper、Graphite、Ocean、Forest、Rose、Violet）及默认中性主题，每款均提供明暗两套配色，按用户持久化并在服务端渲染时直接注入，无闪烁切换。
 - **双语界面**：完整内置**英文**与**简体中文**界面语言包，可在**设置 → 通用**中随时切换。
+
+---
+
+## 界面预览
+
+| 🎨 AI 图片生成与编辑 | 🌈 主题预设 |
+|:---:|:---:|
+| ![对话中的 AI 图片生成](docs/screenshots/image-generation.png) | ![设置中的主题预设选择器](docs/screenshots/settings-themes.png) |
+
+<p align="center">
+  <img src="docs/screenshots/mobile-chat.png" width="320" alt="Pika Chat 移动端对话体验" /><br/>
+  <sub>📱 移动优先、触控友好的对话体验</sub>
+</p>
 
 ---
 

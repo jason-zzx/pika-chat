@@ -26,6 +26,10 @@
 
 **Pika Chat** is a privacy-conscious, self-hosted AI chat platform designed for both individual power users and teams. Connect your own LLM providers, generate and edit images, search the live web with citations, upload and parse multimodal files, and organize workflows with assistants and topics — all in a clean, responsive interface that works just as smoothly on mobile touchscreens as it does on multi-monitor desktops.
 
+<p align="center">
+  <img src="docs/screenshots/chat-conversation.png" alt="Pika Chat conversation with rich Markdown, LaTeX math, and syntax-highlighted code" />
+</p>
+
 ---
 
 ## Highlights
@@ -93,6 +97,19 @@
 ### 🌐 Themes & Internationalization
 - **Curated Theme Presets**: 6 built-in presets (Paper, Graphite, Ocean, Forest, Rose, Violet) alongside the neutral default, each with light and dark palettes, persisted per user with flash-free server rendering.
 - **Bilingual i18n**: Ships with complete **English** and **Simplified Chinese** (简体中文) localizations, switchable instantly per browser under **Settings → General**.
+
+---
+
+## Screenshots
+
+| 🎨 AI Image Generation & Editing | 🌈 Theme Presets |
+|:---:|:---:|
+| ![AI image generation in a chat conversation](docs/screenshots/image-generation.png) | ![Theme preset picker in settings](docs/screenshots/settings-themes.png) |
+
+<p align="center">
+  <img src="docs/screenshots/mobile-chat.png" width="320" alt="Pika Chat mobile chat experience" /><br/>
+  <sub>📱 Mobile-first, touch-friendly chat experience</sub>
+</p>
 
 ---
 
