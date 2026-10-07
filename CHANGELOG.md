@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-07
+
+### Highlights
+
+- **In-Chat Image Generation & Editing**: Select an image-output model and generate images directly in chat — OpenAI-compatible `/images/generations` & `/images/edits`, Gemini native `generateContent`, and Seedream multi-reference fusion are all adapted. Attach reference images for img2img editing via the one-tap "Edit this image" shortcut.
+- **Global Search Command Palette**: Press `Ctrl+K` / `Cmd+K` anywhere to search topic titles and full message text in a centered modal with full keyboard navigation, highlighted matches, scroll-to-message deep links, and in-topic next/previous hit navigation.
+- **User-Level Default Models**: New `/settings/models` page pins dedicated default models for chat, title generation, context compression, and translation, with silent fallback when a preferred model becomes unavailable.
+
+### Feats
+
+- **In-Chat Image Generation**:
+  - Models whose `outputModalities` include `image` (catalog-populated or manually overridden) are treated as image models and carry a recognizable badge in model pickers.
+  - Dedicated non-streaming generation bypass: `openai-compatible` → `POST /images/generations`; `google` → `generateContent` with `responseModalities`; `claude` is rejected with an explicit error.
+  - Static per-family capability table drives size/resolution tiers, image count, and quality options; vendor 400 errors are surfaced verbatim to the user.
+  - Generated images persist as regular file attachments (reusing storage, quota, and ownership pipelines) and render inline as assistant message file parts.
+  - Supports regenerate (new version via the version-group mechanism) and mid-generation abort with stopped-state marking.
+  - Generated images are named with the model and timestamp; copy and translate actions are hidden on generated-image messages.
+- **Image Editing (img2img)**:
+  - Attach reference images in image mode, or use the "Edit this image" shortcut on generated-image thumbnails and in the preview dialog to load the image as a referenced attachment without re-uploading.
+  - Adapters: Gemini prepends `inlineData` parts; OpenAI-compatible routes by family capability to multipart `/images/edits` or the Seedream-style `image` parameter on `/images/generations`.
+  - Server-side graded validation runs before topic creation: `image.attachmentUnsupported`, `image.tooManyReferences`, and `image.referenceNotImage`.
+- **In-Page Image Preview**: Shared preview dialog with zoom, pan, and previous/next navigation across message images.
+- **User-Level Default Model Preferences**:
+  - New `/settings/models` settings page with four slots — chat, title, compression, translation — backed by `users.model_preferences` (JSONB) and `GET/PATCH /api/account/model-preferences` with availability validation on save.
+  - Chat model resolution chain: topic's last-message model → assistant default → user chat default; preferred models that are deleted or disabled silently fall back to existing behavior.
+  - Title generation, translation, and both manual and automatic compression honor their respective preference slots.
+- **Global Search**:
+  - Sidebar full-text search over topic titles and message text (Postgres `ILIKE` over extracted text parts, selected versions only, ownership-scoped, match-window snippets).
+  - Command palette modal via `Ctrl+K` / `Cmd+K` or the sidebar search entry: grouped results, ↑/↓ + Enter keyboard navigation, and `<mark>` match highlighting themed by the active preset's `--primary`.
+  - Message-hit deep links (`?m=<groupId>`) scroll to and flash-highlight the target message before stripping the parameter; a floating `k / n` control navigates between same-topic hits without reopening the palette.
+- **Attachment Thumbnails**: Server-generated thumbnails for image rows in the file management list.
+
+### Fixes
+
+- **Message Ordering Under Clock Skew**: Unified all `chat_messages.created_at` timestamps onto the Node application clock (`appendUserMessage` now accepts an explicit `createdAt` captured early in the request), eliminating inverted user/assistant ordering when the Postgres container clock drifts from the app clock.
+
+### Dev
+
+- **Database Migration**: Committed migration `0023_petite_liz_osborn.sql` (`users.model_preferences`).
+
+### Chore
+
+- Refreshed README feature descriptions and added UI screenshots.
+
 ## [0.2.0] - 2026-09-17
 
 ### Highlights

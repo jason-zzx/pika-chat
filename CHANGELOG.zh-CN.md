@@ -5,6 +5,50 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2026-10-07
+
+### Highlights
+
+- **聊天内生图与图片编辑**：在会话中选中生图模型即可直接生成图片——适配 OpenAI 兼容 `/images/generations` 与 `/images/edits`、Gemini 原生 `generateContent` 以及 Seedream 多参考图融合；支持携带参考图进行图生图编辑，生成的图片可通过「编辑这张图」快捷入口一键回传继续创作。
+- **全局搜索命令面板**：任意页面按下 `Ctrl+K` / `Cmd+K` 唤起居中弹窗，对话题标题与消息正文做全文检索，支持纯键盘导航、匹配词高亮、消息级跳转定位，以及话题内上一条/下一条命中导航。
+- **用户级默认模型**：新增「默认模型」设置页，可为聊天、标题生成、上下文压缩、翻译四个用途分别配置默认模型；偏好模型失效时静默回退，不阻塞操作。
+
+### Feats
+
+- **聊天内生图**：
+  - `outputModalities` 包含 `image` 的模型（catalog 自动填充或手动覆盖均生效）自动识别为生图模型，并在模型选择器中展示醒目标识。
+  - 独立非流式生图旁路：`openai-compatible` → `POST /images/generations`；`google` → `generateContent`（`responseModalities` 含 IMAGE）；`claude` 明确报错拒绝。
+  - 内置按模型家族维护的静态能力表，驱动尺寸/分辨率档位、生成数量与质量选项；厂商 400 错误原文透传给用户。
+  - 生成图片复用附件管线落库（存储、配额、归属校验一致），作为 assistant 消息的 file part 内联渲染。
+  - 支持重新生成（复用版本组机制产生新版本）与生成中途停止（消息标记 stopped）。
+  - 生成图片自动以模型名与时间戳命名；生图消息隐藏复制与翻译操作。
+- **图片编辑（图生图）**：
+  - 生图模式下可直接附加参考图，或在生成图缩略图与预览弹窗中点击「编辑这张图」，将已有图片作为引用附件载入输入框，无需重新上传。
+  - 适配层：Gemini 前置 `inlineData` parts；OpenAI 兼容按家族能力分流至 multipart `/images/edits` 或 Seedream 风格 `/images/generations` 的 `image` 参数。
+  - 服务端在创建话题前完成分级校验：`image.attachmentUnsupported`（模型不支持图像输入）、`image.tooManyReferences`（参考图超上限）、`image.referenceNotImage`（非图片附件）。
+- **页内图片预览**：新增共享预览弹窗，支持缩放、平移与上一张/下一张浏览，消息列表与文件管理页通用。
+- **用户级默认模型偏好**：
+  - 新增独立设置页 `/settings/models`，提供聊天、标题、压缩、翻译四个槽位，落库至 `users.model_preferences`（JSONB），经 `GET/PATCH /api/account/model-preferences` 读写并在保存时校验模型可用性。
+  - 聊天模型解析链升级为「话题上一条消息模型 → 助手默认模型 → 用户默认聊天模型」；偏好模型被删除或禁用后静默回退到现有行为。
+  - 标题生成、消息翻译、手动与自动压缩均遵循各自槽位的偏好模型。
+- **全局搜索**：
+  - 侧边栏全文搜索覆盖话题标题与消息正文（Postgres `ILIKE` 精确匹配 text part、仅命中已选中版本、严格归属隔离、摘要围绕匹配词开窗）。
+  - 命令面板弹窗经 `Ctrl+K` / `Cmd+K` 或侧栏搜索入口唤起：结果分组展示、↑/↓ + Enter 纯键盘操作、匹配词以当前主题 `--primary` 高亮。
+  - 消息命中深链（`?m=<groupId>`）滚动定位并闪烁高亮目标消息后自动抹除参数；浮动 `k / n` 控件支持同话题命中间往复定位，无需反复打开弹窗。
+- **附件缩略图**：文件管理列表为图片行服务端生成缩略图。
+
+### Fixes
+
+- **时钟漂移导致的消息乱序**：统一所有 `chat_messages.created_at` 时间戳来源为 Node 应用进程时钟（`appendUserMessage` 新增显式 `createdAt` 参数，在请求处理早期一次性捕获），消除 Postgres 容器时钟与应用时钟漂移时用户消息与助手消息顺序倒置的问题。
+
+### Dev
+
+- **数据库迁移**：提交迁移 `0023_petite_liz_osborn.sql`（`users.model_preferences`）。
+
+### Chore
+
+- 刷新 README 功能描述并新增 UI 截图。
+
 ## [0.2.0] - 2026-09-17
 
 ### Highlights
