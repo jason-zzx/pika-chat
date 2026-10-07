@@ -92,6 +92,28 @@ the param is absent: a repeat click on the same result re-adds the same `m`,
 and a one-shot-per-mount guard swallows that click (found by check). A missing
 target (deleted message) is a silent no-op but the param is still stripped; an empty topic (history settled, nothing seeded) also strips `m` without scrolling rather than leaving the param stuck.
 
+## In-topic search-hit navigation (landed in `09-30-search-command-palette`)
+
+The command-palette search (`SearchDialog`, mounted in `AppShell`, opened via
+Ctrl/Cmd+K or the sidebar entry) stashes a one-shot hit queue in
+sessionStorage (`pika:search-hit-queue`, `{ topicId, hits: groupId[]
+createdAt-ASC — reversed from API order so prev/next match the visual
+up/down direction, current }`, written only when the same topic has ≥2 hits)
+before pushing the `?m=` deep link. `ChatView` consumes it **only in the
+confirmed-jump rAF branch** of the `?m` effect — never in the
+loading/empty-topic branches, which would eat the queue without a jump —
+validates topic + membership (`lib/search-hit-queue.ts`, consume-once), and
+drives `SearchHitNav` (`k / n`, prev/next/close) through the same
+`flashMessage` path as the deep link (no second scroll path). The navigator
+clears on topic switch (adjust-state-during-render), on close, and is
+replaced (not stacked) by a fresh queue-less jump.
+
+**Overlay positioning contract**: anything floating over the message area
+must position against the `relative` wrapper that encloses `MessageList`
+alone — not ChatView's outer container, which also holds the Composer, so
+`bottom-*` offsets measured from it land inside the composer band on narrow
+viewports. jsdom cannot catch this; verify in a browser.
+
 ## Effect declaration order
 
 The topic-entry effect (scroll to bottom once when messages first appear)

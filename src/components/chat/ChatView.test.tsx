@@ -987,6 +987,7 @@ describe("ChatView search-result deep link (?m=)", () => {
     vi.clearAllMocks();
     nav.pathname = "/assistant/a1/t1";
     nav.search = "?m=g1";
+    window.sessionStorage.clear();
     // jsdom implements neither; the jump path (scrollToPosition → scrollTo,
     // prefersReducedMotion → matchMedia) needs both. See MessageList.test.
     Element.prototype.scrollTo = scrollToMock;
@@ -1066,5 +1067,72 @@ describe("ChatView search-result deep link (?m=)", () => {
       expect(nav.replace).toHaveBeenCalledWith("/assistant/a1/t1");
     });
     expect(scrollToMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the stashed in-topic hit navigator and walks it prev/next", async () => {
+    seedHistory();
+    // The palette stashes the same-topic queue (reading order, oldest
+    // first) before the jump.
+    window.sessionStorage.setItem(
+      "pika:search-hit-queue",
+      JSON.stringify({ topicId: "t1", hits: ["g1", "g0"], current: "g1" }),
+    );
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "Assistant" });
+
+    expect(await screen.findByText("1 / 2")).toBeInTheDocument();
+    // The queue is consumed once: gone from storage right after the jump.
+    expect(window.sessionStorage.getItem("pika:search-hit-queue")).toBeNull();
+
+    // g0 no longer exists: scrolling no-ops but the position still advances.
+    fireEvent.click(screen.getByRole("button", { name: "Next hit" }));
+    expect(await screen.findByText("2 / 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Previous hit" }));
+    expect(await screen.findByText("1 / 2")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close hit navigation" }),
+    );
+    expect(screen.queryByText("1 / 2")).toBeNull();
+  });
+
+  it("ignores a queue stashed for another topic", async () => {
+    seedHistory();
+    window.sessionStorage.setItem(
+      "pika:search-hit-queue",
+      JSON.stringify({ topicId: "other", hits: ["g1", "g0"], current: "g1" }),
+    );
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "Assistant" });
+
+    await waitFor(() => {
+      expect(scrollToMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByText("1 / 2")).toBeNull();
+    expect(window.sessionStorage.getItem("pika:search-hit-queue")).toBeNull();
+  });
+
+  it("drops the navigator when the topic changes", async () => {
+    seedHistory();
+    window.sessionStorage.setItem(
+      "pika:search-hit-queue",
+      JSON.stringify({ topicId: "t1", hits: ["g1", "g0"], current: "g1" }),
+    );
+    const view = renderChatView({ assistantId: "a1", topicId: "t1" });
+    expect(await screen.findByText("1 / 2")).toBeInTheDocument();
+
+    nav.pathname = "/assistant/a1/t2";
+    nav.search = "";
+    view.rerender(
+      wrapWithIntl(
+        <QueryClientProvider client={view.client}>
+          <ChatView assistantId="a1" topicId="t2" />
+        </QueryClientProvider>,
+      ),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("1 / 2")).toBeNull();
+    });
   });
 });

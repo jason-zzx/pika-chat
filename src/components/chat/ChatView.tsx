@@ -48,6 +48,7 @@ import type {
 } from "@/lib/schemas/chat";
 import { localTimeZone } from "@/lib/time-zone";
 import type { TranslateTargetLanguageCode } from "@/lib/translate/languages";
+import { consumeHitQueue } from "@/lib/search-hit-queue";
 import {
   composerDraftKey,
   useComposerStore,
@@ -61,6 +62,7 @@ import ChatMapDialog from "./ChatMapDialog";
 import Composer from "./Composer";
 import ErrorBlock from "./ErrorBlock";
 import MessageList, { type MessageListHandle } from "./MessageList";
+import SearchHitNav from "./SearchHitNav";
 import {
   buildRegenPlaceholder,
   insertRegenPlaceholder,
@@ -218,6 +220,16 @@ export default function ChatView({
   const searchParams = useSearchParams();
   const router = useRouter();
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // In-topic hit navigation: the search palette stashes the same-topic hit
+  // queue in sessionStorage before a message jump; the `?m` effect consumes
+  // it on the confirmed jump. Topic-scoped — cleared when the topic changes.
+  const [hitNav, setHitNav] = useState<{ hits: string[]; index: number } | null>(null);
+  const [hitNavTopic, setHitNavTopic] = useState(activeTopicId);
+  if (hitNavTopic !== activeTopicId) {
+    setHitNavTopic(activeTopicId);
+    setHitNav(null);
+  }
   // Last consumed `m` jump (`topicId:m`), so each result click consumes its
   // param exactly once even though this view is not remounted between
   // topic navigations.
@@ -463,6 +475,28 @@ export default function ChatView({
     setMessages(history.data.messages);
   }, [history.data, setMessages, activeTopicId]);
 
+  /** Scroll to a message and flash it for 2s. Shared by the search-result
+   * deep link and the in-topic hit navigator. */
+  function flashMessage(key: string) {
+    messageListRef.current?.scrollToMessage(key);
+    // Track the timer: rapid prev/next clicks would otherwise let an older
+    // timeout clear a newer flash early.
+    if (flashTimeoutRef.current !== null) {
+      clearTimeout(flashTimeoutRef.current);
+    }
+    setHighlightKey(key);
+    flashTimeoutRef.current = setTimeout(() => setHighlightKey(null), 2000);
+  }
+
+  function goToHit(index: number) {
+    const key = hitNav?.hits[index];
+    if (!hitNav || key === undefined) {
+      return;
+    }
+    setHitNav({ ...hitNav, index });
+    flashMessage(key);
+  }
+
   // Search-result deep link: `?m=<groupId>` scrolls to the message and
   // flashes it once the history has seeded, then the param is stripped so a
   // refresh does not re-jump. Consumed once per (topic, key) pair; a missing
@@ -497,10 +531,13 @@ export default function ChatView({
     }
     consumedJumpRef.current = jumpKey;
     const key = targetMessageKey;
+    const topic = activeTopicId;
     requestAnimationFrame(() => {
-      messageListRef.current?.scrollToMessage(key);
-      setHighlightKey(key);
-      setTimeout(() => setHighlightKey(null), 2000);
+      flashMessage(key);
+      // Only this confirmed-jump branch consumes the palette's hit queue
+      // (never the empty-topic/loading exits above). A fresh jump without a
+      // queue also clears any stale navigator.
+      setHitNav(consumeHitQueue(topic, key));
     });
     router.replace(pathname);
   }, [targetMessageKey, activeTopicId, messages.length, history.data, pathname, router]);
@@ -1326,37 +1363,51 @@ export default function ChatView({
           <p className="text-sm text-muted-foreground">{t("loading")}</p>
         </div>
       ) : (
-        <MessageList
-          ref={messageListRef}
-          messages={messages}
-          streaming={status === "streaming" || regen !== null}
-          streamingMessageId={
-            regen && regen.streamingId.length > 0 ? regen.streamingId : undefined
-          }
-          sendSignal={sendSignal}
-          assistantName={resolvedAssistant?.name}
-          assistantIcon={resolvedAssistant?.icon}
-          onRegenerate={(message) => void handleRegenerate(message)}
-          onDelete={(message) => void handleDelete(message)}
-          onDeleteRegenerate={(message) => void handleDeleteRegenerate(message)}
-          onSelectVersion={(message, versionId) =>
-            void handleSelectVersion(message, versionId)
-          }
-          onTranslate={
-            pickedModel
-              ? (message, targetLang) => void handleTranslate(message, targetLang)
-              : undefined
-          }
-          onEditImage={handleEditImage}
-          translating={translating}
-          highlightKey={highlightKey}
-          compression={{
-            upToMessageId: topicDetail.data?.summaryUpToMessageId ?? null,
-            upToGroupId: topicDetail.data?.summaryUpToGroupId ?? null,
-            summaryText: topicDetail.data?.summaryText ?? null,
-            inProgress: compressing,
-          }}
-        />
+        // Wrapper is the positioning ancestor for SearchHitNav: `bottom-20`
+        // must measure from the message area, not the outer container that
+        // also holds the Composer (it would land inside the composer band).
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <MessageList
+            ref={messageListRef}
+            messages={messages}
+            streaming={status === "streaming" || regen !== null}
+            streamingMessageId={
+              regen && regen.streamingId.length > 0 ? regen.streamingId : undefined
+            }
+            sendSignal={sendSignal}
+            assistantName={resolvedAssistant?.name}
+            assistantIcon={resolvedAssistant?.icon}
+            onRegenerate={(message) => void handleRegenerate(message)}
+            onDelete={(message) => void handleDelete(message)}
+            onDeleteRegenerate={(message) => void handleDeleteRegenerate(message)}
+            onSelectVersion={(message, versionId) =>
+              void handleSelectVersion(message, versionId)
+            }
+            onTranslate={
+              pickedModel
+                ? (message, targetLang) => void handleTranslate(message, targetLang)
+                : undefined
+            }
+            onEditImage={handleEditImage}
+            translating={translating}
+            highlightKey={highlightKey}
+            compression={{
+              upToMessageId: topicDetail.data?.summaryUpToMessageId ?? null,
+              upToGroupId: topicDetail.data?.summaryUpToGroupId ?? null,
+              summaryText: topicDetail.data?.summaryText ?? null,
+              inProgress: compressing,
+            }}
+          />
+          {hitNav ? (
+            <SearchHitNav
+              index={hitNav.index}
+              total={hitNav.hits.length}
+              onPrev={() => goToHit(hitNav.index - 1)}
+              onNext={() => goToHit(hitNav.index + 1)}
+              onClose={() => setHitNav(null)}
+            />
+          ) : null}
+        </div>
       )}
       {error && !failureShownInTranscript ? (
         <ComposerError
