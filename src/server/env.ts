@@ -5,6 +5,18 @@ import { z } from "zod";
 const emptyToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((val) => (val === "" ? undefined : val), schema);
 
+/**
+ * Presence-based boolean flag: "1"/"true" enables, "0"/"false" is
+ * normalized to unset (explicit off) so operators can write the intuitive
+ * spelling without a boot crash. Wrap in `emptyToUndefined` at the use site
+ * so an empty string is also unset. Any other value still fails validation
+ * — a typo must not silently disable the feature.
+ */
+const booleanFlag = z.preprocess(
+  (val) => (val === "0" || val === "false" ? undefined : val),
+  z.enum(["1", "true"]).optional(),
+);
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   TEST_DATABASE_URL: z.string().min(1).optional(),
@@ -17,25 +29,31 @@ const envSchema = z.object({
   APP_TRUSTED_ORIGINS: emptyToUndefined(z.string().min(1).optional()),
   // Root directory for locally stored chat attachments. Defaults to
   // `.data/files` relative to the process working directory.
-  FILE_STORAGE_DIR: z.string().min(1).optional(),
+  //
+  // Every optional variable below is wrapped in `emptyToUndefined` so an
+  // empty assignment (`VAR=`, common as a placeholder in .env files) means
+  // "unset" instead of crashing the boot-time validation.
+  FILE_STORAGE_DIR: emptyToUndefined(z.string().min(1).optional()),
   // S3-compatible object storage for chat attachments. `S3_BUCKET` is the
   // switch: set it and the S3 backend is used, leave it unset and attachments
   // stay on local disk. `S3_ENDPOINT` covers MinIO/RustFS/R2 style endpoints;
   // unset means the official AWS endpoint. Never log these values.
-  S3_BUCKET: z.string().min(1).optional(),
-  S3_REGION: z.string().min(1).optional(),
-  S3_ENDPOINT: z.url().optional(),
-  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
-  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_BUCKET: emptyToUndefined(z.string().min(1).optional()),
+  S3_REGION: emptyToUndefined(z.string().min(1).optional()),
+  S3_ENDPOINT: emptyToUndefined(z.url().optional()),
+  S3_ACCESS_KEY_ID: emptyToUndefined(z.string().min(1).optional()),
+  S3_SECRET_ACCESS_KEY: emptyToUndefined(z.string().min(1).optional()),
   // Largest single chat attachment the server accepts, in MiB. Optional:
   // unset means 20. Values outside 1–100 fail at boot rather than silently
   // clamping — a limit the operator did not choose is worse than a crash.
-  FILE_UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(100).optional(),
+  FILE_UPLOAD_MAX_MB: emptyToUndefined(
+    z.coerce.number().int().min(1).max(100).optional(),
+  ),
   // Direct client↔S3 byte transfer, both directions: presigned POST uploads
-  // and 302-redirect presigned GET downloads. "1" or "true" turns it on;
-  // unset keeps the server-side relay. Requires S3_BUCKET — enforced in
-  // instrumentation.ts.
-  S3_DIRECT_ACCESS: z.enum(["1", "true"]).optional(),
+  // and 302-redirect presigned GET downloads. "1"/"true" turns it on;
+  // "0"/"false"/unset keeps the server-side relay. Requires S3_BUCKET —
+  // enforced in instrumentation.ts.
+  S3_DIRECT_ACCESS: emptyToUndefined(booleanFlag),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -256,7 +256,7 @@ Pika Chat 通过根目录 `.env` 文件或容器环境进行配置：
 | `S3_REGION` | 否 | `us-east-1` | S3 所在地区。 |
 | `S3_ACCESS_KEY_ID` | 使用 S3 时必填 | — | S3 访问凭据 Access Key ID。 |
 | `S3_SECRET_ACCESS_KEY` | 使用 S3 时必填 | — | S3 访问凭据 Secret Access Key。 |
-| `S3_DIRECT_ACCESS` | 否 | `false` | 设置为 `1` 或 `true` 开启客户端直传直链模式（前端通过预签名 POST 直传、预签名 302 GET 直接访问）。需配合 `S3_BUCKET` 使用。 |
+| `S3_DIRECT_ACCESS` | 否 | 关闭 | 设置为 `1` 或 `true` 开启客户端直传直链模式（前端通过预签名 POST 直传、预签名 302 GET 直接访问）。`0`/`false`/不设置即为关闭。需配合 `S3_BUCKET` 使用。 |
 | `PIKA_IMAGE` | 否 | `ghcr.io/jason-zzx/pika-chat:latest` | Compose 编排中拉取的应用容器镜像地址与标签。 |
 | `TEST_DATABASE_URL` | 仅测试环境 | — | 运行 Vitest 集成测试专用的测试数据库连接字符串（如 `postgres://pika:pika@localhost:5432/pika_chat_test`）。 |
 

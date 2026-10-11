@@ -15,6 +15,11 @@ const MANAGED = [
   "FILE_UPLOAD_MAX_MB",
   "S3_DIRECT_ACCESS",
   "S3_BUCKET",
+  "S3_REGION",
+  "S3_ENDPOINT",
+  "S3_ACCESS_KEY_ID",
+  "S3_SECRET_ACCESS_KEY",
+  "FILE_STORAGE_DIR",
   "NEXT_RUNTIME",
   "APP_URL",
   "APP_TRUSTED_ORIGINS",
@@ -60,7 +65,7 @@ describe("FILE_UPLOAD_MAX_MB", () => {
     expect(getEnv().FILE_UPLOAD_MAX_MB).toBe(Number(value));
   });
 
-  it.each(["0", "101", "1.5", "abc", ""])("rejects %j", async (value) => {
+  it.each(["0", "101", "1.5", "abc"])("rejects %j", async (value) => {
     process.env.FILE_UPLOAD_MAX_MB = value;
     const { getEnv } = await loadEnvModule();
     expect(() => getEnv()).toThrow(/FILE_UPLOAD_MAX_MB/);
@@ -73,16 +78,38 @@ describe("S3_DIRECT_ACCESS", () => {
     expect(getEnv().S3_DIRECT_ACCESS).toBeUndefined();
   });
 
-  it.each(["1", "true"])("accepts %s", async (value) => {
+  it.each(["1", "true"])("accepts %s as enabled", async (value) => {
     process.env.S3_DIRECT_ACCESS = value;
     const { getEnv } = await loadEnvModule();
     expect(getEnv().S3_DIRECT_ACCESS).toBe(value);
   });
 
-  it.each(["0", "false", "yes", ""])("rejects %j", async (value) => {
+  it.each(["0", "false", ""])("treats %j as unset", async (value) => {
+    process.env.S3_DIRECT_ACCESS = value;
+    const { getEnv } = await loadEnvModule();
+    expect(getEnv().S3_DIRECT_ACCESS).toBeUndefined();
+  });
+
+  it.each(["yes", "2", "TRUE"])("rejects %j", async (value) => {
     process.env.S3_DIRECT_ACCESS = value;
     const { getEnv } = await loadEnvModule();
     expect(() => getEnv()).toThrow(/S3_DIRECT_ACCESS/);
+  });
+});
+
+describe("optional variable empty-string normalization", () => {
+  it.each([
+    "FILE_STORAGE_DIR",
+    "FILE_UPLOAD_MAX_MB",
+    "S3_BUCKET",
+    "S3_REGION",
+    "S3_ENDPOINT",
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
+  ])("treats an empty %s as unset", async (key) => {
+    process.env[key] = "";
+    const { getEnv } = await loadEnvModule();
+    expect((getEnv() as Record<string, unknown>)[key]).toBeUndefined();
   });
 });
 

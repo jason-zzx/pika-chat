@@ -256,7 +256,7 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 | `S3_REGION` | No | `us-east-1` | S3 region identifier. |
 | `S3_ACCESS_KEY_ID` | If S3 set | — | S3 access key credential. |
 | `S3_SECRET_ACCESS_KEY` | If S3 set | — | S3 secret access key credential. |
-| `S3_DIRECT_ACCESS` | No | `false` | Set to `1` or `true` to enable direct browser S3 uploads (presigned POST) and downloads (presigned 302 GET), bypassing server transfer. Requires `S3_BUCKET`. |
+| `S3_DIRECT_ACCESS` | No | off | Set to `1` or `true` to enable direct browser S3 uploads (presigned POST) and downloads (presigned 302 GET), bypassing server transfer. `0`/`false`/unset disables. Requires `S3_BUCKET`. |
 | `PIKA_IMAGE` | No | `ghcr.io/jason-zzx/pika-chat:latest` | Container image tag override in Docker Compose. |
 | `TEST_DATABASE_URL` | Dev only | — | Dedicated test database URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat_test`) for running Vitest integration tests. |
 
