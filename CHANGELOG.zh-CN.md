@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [0.3.1] - 2026-10-11
+
+### Fixes
+
+- **环境变量容错**：可选环境变量（`S3_BUCKET`、`S3_ENDPOINT`、`FILE_STORAGE_DIR`、`FILE_UPLOAD_MAX_MB` 等）的空赋值（`VAR=`）现视为未设置，不再导致启动校验崩溃；`S3_DIRECT_ACCESS` 除不设置外，也接受 `0`/`false` 作为显式关闭。拼写错误的值仍会在启动时快速失败。
+
 ## [0.3.0] - 2026-10-07
 
 ### Highlights

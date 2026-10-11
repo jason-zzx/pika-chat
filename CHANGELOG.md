@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-10-11
+
+### Fixes
+
+- **Environment Variable Tolerance**: Optional env vars (`S3_BUCKET`, `S3_ENDPOINT`, `FILE_STORAGE_DIR`, `FILE_UPLOAD_MAX_MB`, etc.) now treat an empty assignment (`VAR=`) as unset instead of crashing boot-time validation, and `S3_DIRECT_ACCESS` accepts `0`/`false` as explicit off alongside unset. Misspelled values still fail fast at startup.
+
 ## [0.3.0] - 2026-10-07
 
 ### Highlights
