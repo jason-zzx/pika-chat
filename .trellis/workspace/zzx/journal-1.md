@@ -1002,3 +1002,25 @@ Replaced inline sidebar search with a global command-palette dialog (Ctrl/Cmd+K,
 ### Status
 
 [OK] **Completed**
+
+
+## Session 36: 用户消息就地编辑并重新生成
+<!-- trellis-session: v=2 fp=b5f07b14d63ab4f6 -->
+
+**Date**: 2026-10-19
+**Task**: 用户消息就地编辑并重新生成
+**Branch**: `feat/edit-user-message-regenerate`
+
+### Summary
+
+新增用户消息就地编辑：操作区铅笔图标（版本切换器右侧）+ 下拉菜单「编辑」入口，编辑器支持文本修改与附件增删（复用 composer 上传/校验管线），发送后经 regenerate 端点的可选 edit 负载持久化为同组新选中版本（事务化 deselect+insert），随后用 composer 当前模型重新生成，assistant 回复进入既有版本组。用户行放开版本元数据，版本切换器对用户消息可用。修复验收反馈：编辑图标位置、附件 chip 0B（sizeBytes 可选化 + 发送路径补齐）。ponytail 优化：resolveRegenerateTarget 提取 targetRef。spec/backend/chat-message-versions.md 已同步。1425+5 测试全过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e672155` | feat(chat): edit user messages in place and regenerate |
+
+### Status
+
+[OK] **Completed**
