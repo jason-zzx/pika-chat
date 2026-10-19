@@ -204,6 +204,8 @@
       "copied": "Copied",
       "copyFailed": "Copy failed",
       "copyMessage": "Copy message",
+      "edit": "Edit",
+      "editMessage": "Edit message",
       "translate": "Translate",
       "regenerate": "Regenerate",
       "regenerateResponse": "Regenerate response",
@@ -621,7 +623,8 @@
       "notFound": "Message not found",
       "storeFailed": "Failed to store message",
       "emptyVersionGroup": "Empty version group",
-      "compressedLocked": "Compressed history cannot be changed"
+      "compressedLocked": "Compressed history cannot be changed",
+      "editTargetNotUser": "Only user messages can be edited"
     },
     "translation": {
       "emptyText": "There is no text to translate"

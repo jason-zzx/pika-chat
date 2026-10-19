@@ -31,6 +31,7 @@ import { createAssistant } from "@/server/services/assistant.service";
 import {
   appendAssistantMessage,
   appendUserMessage,
+  appendUserMessageVersion,
   deleteMessage,
   listTopicMessages,
   resolveRegenerateTarget,
@@ -224,8 +225,13 @@ describe("message.service versions", () => {
       versionCount: 1,
       versionIds: ["m2"],
     });
-    // User rows never carry version metadata.
-    expect(messages[0]?.metadata?.groupId).toBeUndefined();
+    // User rows carry version metadata too (edit-and-regenerate).
+    expect(messages[0]?.metadata).toMatchObject({
+      groupId: "m1",
+      versionIndex: 1,
+      versionCount: 1,
+      versionIds: ["m1"],
+    });
   });
 
   it("persists a caller-provided user createdAt (single app clock)", async () => {
@@ -528,5 +534,127 @@ describe("message.service versions", () => {
       "m2",
       "m4",
     ]);
+  });
+
+  it("appends a new selected user version and keeps the group position", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+    await seedTurn(topicId, actor, { user: "m3", assistant: "m4" });
+
+    await appendUserMessageVersion(
+      {
+        topicId,
+        groupId: "m1",
+        message: userMessage("m1b", "edited question"),
+        createdAt: new Date(),
+      },
+      actor,
+    );
+
+    // The group still sits at its earliest version's position, but the
+    // selected view shows the new version with full version metadata.
+    const messages = await listTopicMessages({ topicId }, actor);
+    expect(messages.map((message) => message.id)).toEqual([
+      "m1b",
+      "m2",
+      "m3",
+      "m4",
+    ]);
+    expect(messages[0]?.parts).toEqual([
+      { type: "text", text: "edited question" },
+    ]);
+    expect(messages[0]?.metadata).toMatchObject({
+      groupId: "m1",
+      versionIndex: 2,
+      versionCount: 2,
+      versionIds: ["m1", "m1b"],
+    });
+
+    // The old version survives, deselected — exactly one selected per group.
+    const selectedRows = await db
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(eq(chatMessages.isSelected, true));
+    expect(selectedRows.map((row) => row.id).sort()).toEqual([
+      "m1b",
+      "m2",
+      "m3",
+      "m4",
+    ]);
+    expect(await storedMessageIds(topicId)).toEqual([
+      "m1",
+      "m1b",
+      "m2",
+      "m3",
+      "m4",
+    ]);
+  });
+
+  it("feeds the edited user version into the regenerate history", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+    await appendUserMessageVersion(
+      {
+        topicId,
+        groupId: "m1",
+        message: userMessage("m1b", "edited question"),
+      },
+      actor,
+    );
+
+    // Re-resolving against the new version id targets the same answer group.
+    const target = await resolveRegenerateTarget(
+      { topicId, messageId: "m1b" },
+      actor,
+    );
+    expect(target.targetGroupId).toBe("m2");
+    expect(target.history.map((message) => message.id)).toEqual(["m1b"]);
+    expect(target.history[0]?.parts).toEqual([
+      { type: "text", text: "edited question" },
+    ]);
+  });
+
+  it("rejects appending a user version to a non-user or unknown group", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+
+    await expect(
+      appendUserMessageVersion(
+        { topicId, groupId: "m2", message: userMessage("m9", "nope") },
+        actor,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
+    await expect(
+      appendUserMessageVersion(
+        { topicId, groupId: "gone", message: userMessage("m9", "nope") },
+        actor,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    expect(await storedMessageIds(topicId)).toEqual(["m1", "m2"]);
+  });
+
+  it("reselects the newest remaining user version after deleting the selected one", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
+    await appendUserMessageVersion(
+      {
+        topicId,
+        groupId: "m1",
+        message: userMessage("m1b", "edited question"),
+      },
+      actor,
+    );
+
+    const result = await deleteMessage({ topicId, messageId: "m1b" }, actor);
+    expect(result).toEqual({ deleted: true, groupEmpty: false });
+
+    const messages = await listTopicMessages({ topicId }, actor);
+    expect(messages.map((message) => message.id)).toEqual(["m1", "m2"]);
+    expect(messages[0]?.metadata).toMatchObject({
+      versionIndex: 1,
+      versionCount: 1,
+      versionIds: ["m1"],
+    });
   });
 });

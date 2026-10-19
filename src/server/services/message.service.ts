@@ -81,7 +81,7 @@ export function metadataFromRow(row: {
   };
 }
 
-/** Version metadata attached to assistant messages of a group. */
+/** Version metadata attached to the selected message of a group. */
 export type VersionInfo = {
   groupId: string;
   /** 1-based position of this version within the group. */
@@ -100,11 +100,9 @@ export function rowToChatUIMessage(
     id: row.id,
     role: row.role,
     parts: uiPartsFromJson(row.parts),
-    // Version metadata is assistant-only; user rows stay single-version.
-    metadata:
-      version && row.role === "assistant"
-        ? { ...metadata, ...version }
-        : metadata,
+    // Version metadata rides on every role: editing a user message turns
+    // its group multi-version too, and the switcher is role-agnostic.
+    metadata: version ? { ...metadata, ...version } : metadata,
   };
 }
 
@@ -217,8 +215,8 @@ async function assertTargetNotCompressed(
 /**
  * Returns the selected-version view of a topic: one message per version group
  * (the group's `isSelected` row, or the latest version when nothing is
- * selected), ordered by each group's earliest version. Assistant messages
- * carry version metadata; single-version groups return exactly what the
+ * selected), ordered by each group's earliest version. Every message carries
+ * version metadata; single-version groups return exactly what the
  * pre-grouping query returned, plus that metadata.
  */
 export async function listTopicMessages(
@@ -263,6 +261,74 @@ export async function appendUserMessage(
     })
     .returning();
   const row = inserted[0];
+  if (!row) {
+    throw new AppError("INTERNAL", 500, "message.storeFailed");
+  }
+  return rowToChatUIMessage(row);
+}
+
+/**
+ * Edit-and-regenerate: appends a new SELECTED version to an existing user
+ * group. The deselect and the insert share one transaction so the partial
+ * unique index (`chat_messages_selected_version_idx`) never sees two selected
+ * versions of the group — the same contract as appendAssistantMessage's group
+ * branch.
+ */
+export async function appendUserMessageVersion(
+  input: {
+    topicId: string;
+    /** Existing USER group the new version joins. */
+    groupId: string;
+    message: ChatUIMessage;
+    createdAt?: Date;
+  },
+  actor: Actor,
+): Promise<ChatUIMessage> {
+  await requireOwnedTopic(input.topicId, actor);
+  const db = getDb();
+  const groupRows = await db
+    .select({ role: chatMessages.role })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.topicId, input.topicId),
+        eq(chatMessages.groupId, input.groupId),
+      ),
+    )
+    .limit(1);
+  // Editing applies to user messages only; an unknown group and a non-user
+  // group are indistinguishable to the caller.
+  if (groupRows[0]?.role !== "user") {
+    throw new AppError("NOT_FOUND", 404, "message.notFound");
+  }
+  const id = input.message.id.length > 0 ? input.message.id : newId();
+  const parts = input.message.parts.filter(
+    (part) => part.type === "text" || part.type === "file",
+  );
+  const row = await db.transaction(async (tx) => {
+    await tx
+      .update(chatMessages)
+      .set({ isSelected: false })
+      .where(
+        and(
+          eq(chatMessages.topicId, input.topicId),
+          eq(chatMessages.groupId, input.groupId),
+        ),
+      );
+    const inserted = await tx
+      .insert(chatMessages)
+      .values({
+        id,
+        topicId: input.topicId,
+        role: "user",
+        parts,
+        groupId: input.groupId,
+        // App-side turn time, same single-clock rule as appendUserMessage.
+        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+      })
+      .returning();
+    return inserted[0];
+  });
   if (!row) {
     throw new AppError("INTERNAL", 500, "message.storeFailed");
   }
@@ -427,6 +493,12 @@ export type RegenerateTarget = {
   targetGroupId: string | null;
   /** Selected-version history the new version is generated from. */
   history: ChatUIMessage[];
+  /**
+   * The clicked message itself: role and its OWN version group (as opposed
+   * to `targetGroupId`, which for a user target is the following answer's
+   * group). Edit-and-regenerate needs both to validate and persist the edit.
+   */
+  target: { role: ChatMessageRow["role"]; groupId: string };
 };
 
 /**
@@ -464,10 +536,16 @@ export async function resolveRegenerateTarget(
       return rowToChatUIMessage(selected, versionInfoOf(group, selected));
     });
 
+  // The clicked message itself (role + its OWN group, as opposed to
+  // `targetGroupId`, which for a user target is the following answer's
+  // group): edit-and-regenerate needs both to validate and persist the edit.
+  const targetRef = { role: target.role, groupId: target.groupId };
+
   if (target.role === "assistant") {
     return {
       targetGroupId: target.groupId,
       history: selectedView(targetGroupIndex),
+      target: targetRef,
     };
   }
 
@@ -477,10 +555,12 @@ export async function resolveRegenerateTarget(
     return {
       targetGroupId: nextSelected.groupId,
       history: selectedView(targetGroupIndex + 1),
+      target: targetRef,
     };
   }
   return {
     targetGroupId: null,
     history: selectedView(targetGroupIndex + 1),
+    target: targetRef,
   };
 }

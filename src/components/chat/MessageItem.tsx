@@ -13,7 +13,11 @@ import { Button } from "@/components/ui/button";
 import { classifyFile } from "@/lib/files/media-types";
 import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
-import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
+import type {
+  ChatFilePart,
+  ChatRequestPart,
+  ChatUIMessage,
+} from "@/lib/schemas/chat";
 import {
   translateLanguageNativeName,
   type TranslateTargetLanguageCode,
@@ -42,6 +46,7 @@ import MessageActions from "./MessageActions";
 import MessageTimestamp from "./MessageTimestamp";
 import ReasoningBlock from "./ReasoningBlock";
 import SearchToolCall, { type SearchWebToolPart } from "./SearchToolCall";
+import UserMessageEditor from "./UserMessageEditor";
 import { SHIMMER_TEXT_CLASS } from "./shimmer";
 import { collectCitationSources, type CitationSource } from "./citations";
 
@@ -404,6 +409,11 @@ type MessageItemProps = {
   translatingTargetLang?: TranslateTargetLanguageCode | null;
   /** "Edit this image": stage an image file part as a composer reference. */
   onEditImage?: (part: FilePart) => void;
+  /** Edit-and-regenerate (user messages): submit the edited parts as a new
+   * version of this message's group and regenerate the answer. Gated by the
+   * parent (undefined while a turn is in flight or no model is picked), so
+   * its presence also unlocks the edit entry. */
+  onEditSubmit?: (message: ChatUIMessage, parts: ChatRequestPart[]) => void;
   /** Ref attached to the root article element (used by the list to locate
    * the latest user message for scroll positioning). */
   articleRef?: Ref<HTMLElement>;
@@ -440,6 +450,7 @@ export default function MessageItem({
   onTranslate,
   translatingTargetLang,
   onEditImage,
+  onEditSubmit,
   articleRef,
   minHeight,
   compressedLocked = false,
@@ -454,6 +465,8 @@ export default function MessageItem({
   // Keep the row visible for the whole copy-feedback window so the 2s check
   // icon is seen even when the pointer/focus has left the message (B4).
   const [copyFeedback, setCopyFeedback] = useState(false);
+  // In-place message editor (edit-and-regenerate, user rows only).
+  const [editing, setEditing] = useState(false);
   const revealedAny = revealed || menuOpen || copyFeedback;
   const isUser = message.role === "user";
   const metadata = message.metadata;
@@ -508,7 +521,7 @@ export default function MessageItem({
     // check could see.
     if (
       event.target instanceof HTMLElement &&
-      event.target.closest("button, a, audio, video")
+      event.target.closest("button, a, audio, video, textarea, input")
     ) {
       return;
     }
@@ -523,6 +536,10 @@ export default function MessageItem({
   // Generated-image messages carry file parts (and possibly empty text):
   // copy and translate target the text, so both are hidden for them.
   const hasGeneratedImages = !isUser && fileParts.length > 0;
+  // Edit entry: user rows only, never inside the compressed zone (a
+  // regenerate there is rejected server-side), and only while the parent
+  // exposes the submit path (no turn in flight, a model is picked).
+  const canEdit = isUser && onEditSubmit !== undefined && !compressedLocked;
   const actions = (
     <MessageActions
       text={plainText}
@@ -533,6 +550,7 @@ export default function MessageItem({
           ? (versionId) => onSelectVersion(message, versionId)
           : undefined
       }
+      onEdit={canEdit ? () => setEditing(true) : undefined}
       onRegenerate={
         onRegenerate && !compressedLocked
           ? () => onRegenerate(message)
@@ -572,42 +590,59 @@ export default function MessageItem({
         onClick={handleArticleClick}
       >
         <MessageTimestamp createdAt={createdAt} />
-        {fileParts.length > 0 ? (
-          <div className="flex max-w-[min(100%,42rem)] flex-wrap justify-end gap-2">
-            {fileParts.map((part, index) => (
-              <AttachmentCard
-                key={`${part.url}-${index}`}
-                part={part}
-                onEdit={onEditImage}
-              />
-            ))}
-          </div>
-        ) : null}
-        {hasAnswer ? (
-          <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-            {textParts.map((part, index) => (
-              <p key={index} className="whitespace-pre-wrap">
-                {part.text}
-              </p>
-            ))}
-          </div>
-        ) : null}
-        {translationEntries.length > 0 || translatingTargetLang ? (
-          <div className="flex w-full max-w-[min(100%,42rem)] flex-col gap-2">
-            {translationEntries.map(([lang, translatedText]) => (
-              <TranslationBlock
-                key={lang}
-                lang={lang}
-                text={translatedText}
-                citations={citations}
-              />
-            ))}
-            {translatingTargetLang ? (
-              <TranslationPendingBlock lang={translatingTargetLang} />
+        {editing ? (
+          <UserMessageEditor
+            message={message}
+            // The submit path vanishes while a turn is in flight (the entry
+            // hides then); an editor already open keeps its draft and holds
+            // the send button instead of dropping the edit silently.
+            locked={onEditSubmit === undefined}
+            onSubmit={(parts) => {
+              setEditing(false);
+              onEditSubmit?.(message, parts);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <>
+            {fileParts.length > 0 ? (
+              <div className="flex max-w-[min(100%,42rem)] flex-wrap justify-end gap-2">
+                {fileParts.map((part, index) => (
+                  <AttachmentCard
+                    key={`${part.url}-${index}`}
+                    part={part}
+                    onEdit={onEditImage}
+                  />
+                ))}
+              </div>
             ) : null}
-          </div>
-        ) : null}
-        {actions}
+            {hasAnswer ? (
+              <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+                {textParts.map((part, index) => (
+                  <p key={index} className="whitespace-pre-wrap">
+                    {part.text}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {translationEntries.length > 0 || translatingTargetLang ? (
+              <div className="flex w-full max-w-[min(100%,42rem)] flex-col gap-2">
+                {translationEntries.map(([lang, translatedText]) => (
+                  <TranslationBlock
+                    key={lang}
+                    lang={lang}
+                    text={translatedText}
+                    citations={citations}
+                  />
+                ))}
+                {translatingTargetLang ? (
+                  <TranslationPendingBlock lang={translatingTargetLang} />
+                ) : null}
+              </div>
+            ) : null}
+            {actions}
+          </>
+        )}
       </article>
     );
   }

@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { renderWithIntl } from "@/test-utils/render-with-intl";
+import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageActions from "./MessageActions";
 
@@ -324,6 +324,95 @@ describe("MessageActions", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("places the edit button right of the version switcher and heads the menu for user messages", async () => {
+    const onEdit = vi.fn();
+    renderWithIntl(
+      <MessageActions
+        text="hello"
+        messageRole="user"
+        version={TWO_VERSIONS}
+        onSelectVersion={vi.fn()}
+        onEdit={onEdit}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    // With a version switcher the pencil sits on its right — before
+    // regenerate and copy.
+    const editButton = screen.getByRole("button", { name: "Edit message" });
+    const switcher = screen.getByRole("group", { name: "Version 1 of 2" });
+    expect(
+      switcher.compareDocumentPosition(editButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      editButton.compareDocumentPosition(
+        screen.getByRole("button", { name: "Regenerate response" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(editButton);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    const items = await screen.findAllByRole("menuitem");
+    // The edit item heads the menu (before copy/regenerate/delete).
+    expect(items[0]).toHaveTextContent("Edit");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    expect(onEdit).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the edit button leftmost when no version switcher renders", () => {
+    renderWithIntl(
+      <MessageActions
+        text="hello"
+        messageRole="user"
+        onEdit={vi.fn()}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    const editButton = screen.getByRole("button", { name: "Edit message" });
+    expect(
+      editButton.compareDocumentPosition(
+        screen.getByRole("button", { name: "Regenerate response" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      editButton.compareDocumentPosition(
+        screen.getByRole("button", { name: "Copy message" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("offers no edit entry for assistant messages or without onEdit", async () => {
+    const onEdit = vi.fn();
+    const { rerender } = renderWithIntl(
+      <MessageActions text="hello" messageRole="assistant" onEdit={onEdit} />,
+    );
+
+    // The role gate: an assistant row never shows the entry even when the
+    // handler is passed.
+    expect(
+      screen.queryByRole("button", { name: "Edit message" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Copy" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Edit" }),
+    ).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    // A user row without the handler stays entry-less too.
+    rerender(wrapWithIntl(<MessageActions text="hello" messageRole="user" />));
+    expect(
+      screen.queryByRole("button", { name: "Edit message" }),
+    ).not.toBeInTheDocument();
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it("hides the copy button when hideCopy is set", () => {

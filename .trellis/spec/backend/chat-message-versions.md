@@ -1,8 +1,10 @@
 # Chat Message Versions
 
 > Cross-layer contract for regenerating assistant answers as switchable,
-> persisted versions, and for single-message deletion. Landed with
-> `09-04-chat-message-regenerate-delete`. Complements
+> persisted versions, for editing user messages into new versions, and for
+> single-message deletion. Landed with
+> `09-04-chat-message-regenerate-delete`; user-message editing landed with
+> `10-19-edit-user-message-regenerate`. Complements
 > [Chat Message Metadata](./chat-message-metadata.md).
 
 ## Scenario: message versioning and single-message mutation
@@ -40,9 +42,13 @@ getting the invariants wrong corrupts what the model sees as context.
 - Selection fallback: if a group has no `is_selected` row (legacy or
   partial writes), the latest version wins (`selectedRowOf`).
 - Version metadata (`groupId`, `versionIndex`, `versionCount`,
-  `versionIds`) rides in `chatMetadataSchema` — all optional,
-  **assistant rows only**; user messages are always single-version groups.
-  Live-streamed regenerate messages omit it; the view converges on reseed.
+  `versionIds`) rides in `chatMetadataSchema` — all optional, and emitted
+  for **both roles** (`rowToChatUIMessage` applies it to any group with
+  version info). User messages start as single-version groups and gain
+  versions through editing (below); assistant messages gain them through
+  regeneration. Single-version groups still carry the metadata
+  (`versionCount: 1`). Live-streamed messages omit it; the view converges
+  on reseed.
 - `resolveRegenerateTarget({ topicId, messageId })`:
   - assistant message → its group; history = selected messages in groups
     before it.
@@ -62,8 +68,28 @@ getting the invariants wrong corrupts what the model sees as context.
   - `POST .../regenerate` → UI message stream; mirrors the `/api/chat`
     skeleton (availability check → `createChatModelHandle` →
     `registerStream` → `streamText` → `createUIMessageStream` → `onEnd`
-    persists with `groupId`). **No** topic creation, user-message append,
-    or title trigger. Stopped/failed outcomes persist as versions too.
+    persists with `groupId`). **No** topic creation or title trigger.
+    Stopped/failed outcomes persist as versions too. Optional `edit`
+    payload (`chatRequestMessageSchema`) turns it into an
+    edit-and-regenerate (below); without `edit` no user-message row is
+    written.
+- **Edit-and-regenerate** (user messages only): the regenerate request
+  body may carry `edit: { id, parts }` — the edited content of the target
+  user message. Contract and ordering, all before any DB write:
+  model availability check → `resolveRegenerateTarget` (includes the
+  compressed-zone assertion) → target must be a user row (else
+  `VALIDATION_FAILED` `message.editTargetNotUser`) →
+  `resolveOwnedFileParts` on the edit's file parts (ownership +
+  canonicalization, same rule as `/api/chat`) →
+  `appendUserMessageVersion` persists the edit (transaction: deselect
+  siblings, then insert the new selected row into the same `group_id`;
+  `createdAt` comes from the app clock, single-clock rule) →
+  `resolveRegenerateTarget` re-runs on the new id so the history carries
+  the edited version → the ordinary regenerate flow streams a new
+  assistant version into the following answer group (or a fresh slot).
+  The edit is persisted before streaming and is **never rolled back**: a
+  failed stream lands a failed assistant version, same as plain
+  regeneration.
 - The regenerate stream carries no `data-topic` chunk: the client reads
   the stream id from the `x-pika-stream-id` response header instead.
   Stop reuses `POST /api/chat/stop`.
@@ -116,6 +142,19 @@ getting the invariants wrong corrupts what the model sees as context.
   fully ends) clears `seededHistoryFor` and invalidates
   `chatKeys.history(topicId)`; the existing seed effect then replaces
   local state with the persisted selected-version view.
+- **Edit flow** (`UserMessageEditor` + `ChatView.handleEditSubmit`):
+  user messages get an edit entry (pencil icon, leftmost action + first
+  dropdown item) when the turn is actionable (not compressed-locked, not
+  inFlight). The editor edits text and attachments in place (attachments
+  reuse `useComposerAttachments` with a per-group `edit:<groupId>` staging
+  bucket, cleared on exit — cancel performs zero writes). Submit mints a
+  client-side id, optimistically swaps the user message with computed
+  version metadata, drops the regen placeholder into the following answer
+  slot, and POSTs regenerate with `edit` (path id = the clicked row's id;
+  same group, so old/new ids are equivalent targets). A pre-stream failure
+  restores the original version and placeholder-free list plus a localized
+  error; a mid-stream failure keeps the edit (server already persisted
+  it) and the teardown reseed converges the view.
 - Version switch, delete, and delete-and-regenerate are server-confirmed
   mutations followed by the same reseed — no optimistic version swaps.
 - Delete-and-regenerate is assistant-only (user menus omit it); it is a
@@ -139,6 +178,16 @@ getting the invariants wrong corrupts what the model sees as context.
 - Two consecutive user messages (answer deleted): regenerating the
   earlier one creates a **new** slot rather than hijacking the next
   user message's answer — the "immediately following" rule.
+- Regenerate with an `edit` payload on a non-user target →
+  `VALIDATION_FAILED` `message.editTargetNotUser`, nothing written.
+- `edit` with a foreign/forged file id → `resolveOwnedFileParts` 4xx
+  before any write; the target group keeps its prior selected version.
+- `edit` on a target in the compressed zone → the same `CONFLICT` 409 as
+  plain regenerate (asserted inside `resolveRegenerateTarget`, before the
+  edit branch writes anything).
+- Edit stream fails after the edit persisted → the edited user version
+  stays selected; the assistant side follows ordinary failed-turn
+  semantics (a persisted failed version). Never roll back the edit.
 
 ### 6. Tests Required
 
@@ -160,5 +209,14 @@ getting the invariants wrong corrupts what the model sees as context.
   appears after a message action without refresh (B8).
 - `sync-message.test.ts` / `regenerate-stream.test.ts`: persistence-race
   guard (user-role skip, retry, give-up), placeholder insert/remove/fold.
+- Edit-and-regenerate: `appendUserMessageVersion` (transactional
+  deselect+insert, user-role enforcement, group position unchanged);
+  route-level edit cases (history carries the edited version, non-user
+  target 400, forged file id 4xx with zero writes, compressed-zone 409);
+  `rowToChatUIMessage` emits version metadata for user rows. Component:
+  edit entry is user-only and leftmost, editor prefill/cancel/zero-write,
+  send disabled on empty content, attachment chips add/remove;
+  `ChatView` edit submit (optimistic swap + placeholder + stream fold +
+  pre-stream failure rollback).
 - `clipboard.test.ts`: clipboard success, missing/reject fallback,
   double failure.

@@ -204,6 +204,8 @@
       "copied": "已复制",
       "copyFailed": "复制失败",
       "copyMessage": "复制消息",
+      "edit": "编辑",
+      "editMessage": "编辑消息",
       "translate": "翻译",
       "regenerate": "重新生成",
       "regenerateResponse": "重新生成回复",
@@ -621,7 +623,8 @@
       "notFound": "消息不存在",
       "storeFailed": "保存消息失败",
       "emptyVersionGroup": "版本组为空",
-      "compressedLocked": "已压缩的早期历史不可修改"
+      "compressedLocked": "已压缩的早期历史不可修改",
+      "editTargetNotUser": "只能编辑用户消息"
     },
     "translation": {
       "emptyText": "没有可翻译的文本"

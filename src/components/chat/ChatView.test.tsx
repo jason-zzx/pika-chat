@@ -53,6 +53,8 @@ const composerProps = vi.hoisted(() => ({
   latest: undefined as
     | {
         showAssistantPicker?: boolean;
+        canSend?: boolean;
+        onSend?: () => void;
         onCompress?: () => void;
         compressDisabled?: boolean;
       }
@@ -133,6 +135,7 @@ const captured = vi.hoisted(() => ({
   setMessages: undefined as
     | Dispatch<SetStateAction<ChatUIMessage[]>>
     | undefined,
+  sendMessage: undefined as ((...args: never[]) => void) | undefined,
   clearError: undefined as (() => void) | undefined,
   status: "ready" as "ready" | "submitted" | "streaming" | "error",
   error: undefined as Error | undefined,
@@ -157,11 +160,19 @@ vi.mock("@ai-sdk/react", async () => {
       const clearErrorRef = React.useRef<(() => void) | null>(null);
       clearErrorRef.current ??= vi.fn(() => setError(undefined));
       captured.clearError = clearErrorRef.current;
+      // Same stability rule as clearError: one spy per mounted hook, or the
+      // assertion never sees the call.
+      const sendMessageRef = React.useRef<ReturnType<typeof vi.fn> | null>(
+        null,
+      );
+      sendMessageRef.current ??= vi.fn();
+      captured.sendMessage =
+        sendMessageRef.current as (...args: never[]) => void;
       return {
         messages,
         status: captured.status,
         error,
-        sendMessage: vi.fn(),
+        sendMessage: sendMessageRef.current,
         stop: vi.fn().mockResolvedValue(undefined),
         setMessages,
         clearError: clearErrorRef.current,
@@ -170,20 +181,30 @@ vi.mock("@ai-sdk/react", async () => {
   };
 });
 
-const attachmentMocks = vi.hoisted(() => ({ addFiles: vi.fn() }));
+const attachmentMocks = vi.hoisted(() => ({
+  addFiles: vi.fn(),
+  attachments: [] as import("@/stores/composer-store").StagedAttachment[],
+}));
 
 // Composer is stubbed out above; the drop zone on the content root needs an
 // observable addFiles, so the attachment hook is stubbed too.
-vi.mock("./use-composer-attachments", () => ({
-  useComposerAttachments: () => ({
-    attachments: [],
-    addFiles: attachmentMocks.addFiles,
-    removeAttachment: vi.fn(),
-    retryAttachment: vi.fn(),
-    clearAttachments: vi.fn(),
-    restoreAttachments: vi.fn(),
-  }),
-}));
+vi.mock("./use-composer-attachments", async (importOriginal) => {
+  // Keep the real slot-count helper: the message editor imports it too.
+  const actual =
+    await importOriginal<typeof import("./use-composer-attachments")>();
+  return {
+    ...actual,
+    useComposerAttachments: () => ({
+      attachments: attachmentMocks.attachments,
+      addFiles: attachmentMocks.addFiles,
+      removeAttachment: vi.fn(),
+      retryAttachment: vi.fn(),
+      clearAttachments: vi.fn(),
+      restoreAttachments: vi.fn(),
+      stageReference: vi.fn(),
+    }),
+  };
+});
 
 type StoredMessage = ChatMessagesResponse["messages"][number];
 
@@ -497,6 +518,89 @@ describe("ChatView attachment drop zone", () => {
   });
 });
 
+describe("ChatView send file parts", () => {
+  const testModel = {
+    configId: "c1",
+    providerId: "p1",
+    modelId: "m1",
+    displayName: "GPT-5",
+    ...defaultModelMetadata(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    availableModelsMock.data = [testModel];
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+    });
+    topicApiMocks.getTopic.mockResolvedValue({
+      id: "t1",
+      title: "Chat",
+      assistantId: "a1",
+      assistant: { id: "a1", name: "Helper", icon: null },
+      summaryUpToMessageId: null,
+    });
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        // Carries the model pair so the composer-model seeding effect keeps
+        // the store pick (c1/m1) instead of resetting it to null.
+        {
+          id: "srv-a1",
+          role: "assistant",
+          parts: [{ type: "text", text: "answer" }],
+          metadata: {
+            createdAt: new Date().toISOString(),
+            providerConfigId: "c1",
+            modelId: "m1",
+          },
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    availableModelsMock.data = [];
+    attachmentMocks.attachments = [];
+    useComposerStore.setState({ pickedModel: null });
+  });
+
+  it("carries sizeBytes on the outgoing file parts so the optimistic card shows the size", async () => {
+    attachmentMocks.attachments = [
+      {
+        id: "att-1",
+        filename: "notes.txt",
+        mediaType: "text/plain",
+        sizeBytes: 2048,
+        status: "ready",
+        url: "/api/files/file-1",
+      },
+    ];
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "You" });
+
+    act(() => {
+      composerProps.latest?.onSend?.();
+    });
+
+    expect(captured.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: [
+          expect.objectContaining({
+            type: "file",
+            url: "/api/files/file-1",
+            mediaType: "text/plain",
+            filename: "notes.txt",
+            sizeBytes: 2048,
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+});
+
 describe("ChatView failure rendering", () => {
   const STREAM_ERROR_TEXT = JSON.stringify(
     {
@@ -577,6 +681,227 @@ describe("ChatView failure rendering", () => {
 
     expect(await screen.findByText("Topic not found")).toBeInTheDocument();
     expect(captured.clearError).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChatView edit-and-regenerate", () => {
+  const testModel = {
+    configId: "c1",
+    providerId: "p1",
+    modelId: "m1",
+    displayName: "GPT-5",
+    ...defaultModelMetadata(),
+  };
+
+  /** Minimal UI message stream carrying one text reply. */
+  function streamResponse(messageId: string, text: string): Response {
+    const encoder = new TextEncoder();
+    const frames = [
+      { type: "start", messageId },
+      { type: "text-start", id: "p1" },
+      { type: "text-delta", id: "p1", delta: text },
+      { type: "text-end", id: "p1" },
+      { type: "finish" },
+    ];
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(frame)}\n\n`),
+          );
+        }
+        controller.close();
+      },
+    });
+    return new Response(stream, {
+      headers: { "x-pika-stream-id": "rs-edit-1" },
+    });
+  }
+
+  /** Assistant message carrying the model pair that seeds the composer pick,
+   * and its own version group (the edit placeholder takes it over). */
+  function assistantWithModel(id: string, text: string): ChatUIMessage {
+    return {
+      id,
+      role: "assistant",
+      parts: [{ type: "text", text }],
+      metadata: {
+        createdAt: new Date().toISOString(),
+        providerConfigId: "c1",
+        modelId: "m1",
+        groupId: `g-${id}`,
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    availableModelsMock.data = [testModel];
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+    });
+    topicApiMocks.getTopic.mockResolvedValue({
+      id: "t1",
+      title: "Chat",
+      assistantId: "a1",
+      assistant: { id: "a1", name: "Helper", icon: null },
+      summaryUpToMessageId: null,
+    });
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        assistantWithModel("srv-a1", "answer"),
+      ],
+    });
+  });
+
+  afterEach(() => {
+    availableModelsMock.data = [];
+    useComposerStore.setState({ pickedModel: null });
+  });
+
+  async function openEditorAndSubmit(text: string) {
+    const article = await screen.findByRole("article", { name: "You" });
+    fireEvent.click(
+      within(article).getByRole("button", { name: "Edit message" }),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Edit message" }), {
+      target: { value: text },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  }
+
+  it("swaps in the edited version, shows the placeholder immediately, and posts the edit payload against the clicked message id (R5/R6)", async () => {
+    let resolveRegen: ((value: Response) => void) | undefined;
+    vi.mocked(regenerateTopicMessage).mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRegen = resolve;
+        }),
+    );
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await openEditorAndSubmit("edited question");
+
+    // Immediate feedback (R6): the new version is in place and the answer
+    // slot shows the thinking placeholder before the POST resolves.
+    expect(screen.getByText("edited question")).toBeInTheDocument();
+    expect(screen.queryByText("question")).toBeNull();
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+
+    await waitFor(() => expect(regenerateTopicMessage).toHaveBeenCalled());
+    const call = vi.mocked(regenerateTopicMessage).mock.calls[0];
+    expect(call?.[0]).toBe("t1");
+    // The path parameter addresses the clicked (pre-edit) message…
+    expect(call?.[1]).toBe("u1");
+    // …while the body carries the client-minted new version in `edit`, with
+    // the composer's current model (R5/AC7).
+    expect(call?.[2]).toMatchObject({
+      providerConfigId: "c1",
+      modelId: "m1",
+      searchMode: "off",
+      edit: {
+        role: "user",
+        parts: [{ type: "text", text: "edited question" }],
+      },
+    });
+    const editId = call?.[2].edit?.id;
+    expect(editId).toBeDefined();
+    expect(editId).not.toBe("u1");
+
+    // Server truth for the post-edit reseed: the edited version is selected
+    // in the same user group; the regenerated answer joins the answer group
+    // as its newest version.
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        {
+          id: editId as string,
+          role: "user",
+          parts: [{ type: "text", text: "edited question" }],
+          metadata: {
+            createdAt: new Date().toISOString(),
+            groupId: "u1",
+            versionIndex: 2,
+            versionCount: 2,
+            versionIds: ["u1", editId as string],
+          },
+        },
+        assistantVersion("srv-a2", "new answer", 2, ["srv-a1", "srv-a2"]),
+      ],
+    });
+
+    await act(async () => {
+      resolveRegen?.(streamResponse("srv-a2", "new answer"));
+    });
+
+    // After the teardown reseed both groups show their newest version with
+    // the version switcher (AC3/AC5).
+    await waitFor(() => {
+      expect(screen.getByText("new answer")).toBeInTheDocument();
+      expect(
+        within(screen.getByRole("article", { name: "Assistant" })).getByRole(
+          "group",
+          { name: "Version 2 of 2" },
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(
+      within(screen.getByRole("article", { name: "You" })).getByRole("group", {
+        name: "Version 2 of 2",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("restores the pre-edit message and shows a parsed error when the request fails before streaming (AC8)", async () => {
+    vi.mocked(regenerateTopicMessage).mockRejectedValue({
+      error: { code: "VALIDATION_FAILED", messageKey: "model.notAvailable" },
+    });
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await openEditorAndSubmit("edited question");
+
+    // The pre-edit version and its answer come back; the placeholder and the
+    // optimistic version are gone, and the error is the localized envelope
+    // message, not raw JSON.
+    await screen.findByText("Selected model is not available");
+    expect(screen.getByText("question")).toBeInTheDocument();
+    expect(screen.getByText("answer")).toBeInTheDocument();
+    expect(screen.queryByText("edited question")).toBeNull();
+    expect(screen.queryByText("Thinking…")).toBeNull();
+  });
+
+  it("hides the edit entry while a turn is in flight (R8)", async () => {
+    captured.status = "streaming";
+    try {
+      renderChatView({ assistantId: "a1", topicId: "t1" });
+      const article = await screen.findByRole("article", { name: "You" });
+      expect(
+        within(article).queryByRole("button", { name: "Edit message" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      captured.status = "ready";
+    }
+  });
+
+  it("hides the edit entry inside the compressed zone (R8)", async () => {
+    topicApiMocks.getTopic.mockResolvedValue({
+      id: "t1",
+      title: "Chat",
+      assistantId: "a1",
+      assistant: { id: "a1", name: "Helper", icon: null },
+      summaryUpToMessageId: "u1",
+    });
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    const article = await screen.findByRole("article", { name: "You" });
+    // The boundary arrives with the topic detail; the lock then hides the
+    // entry (the server 409 stays the backstop).
+    await waitFor(() => {
+      expect(
+        within(article).queryByRole("button", { name: "Edit message" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Earlier conversation compressed"),
+    ).toBeInTheDocument();
   });
 });
 

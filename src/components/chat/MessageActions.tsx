@@ -7,6 +7,7 @@ import {
   CopyIcon,
   LanguagesIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -45,6 +46,10 @@ type MessageActionsProps = {
   version?: MessageVersionInfo;
   onSelectVersion?: (versionId: string) => void;
   onRegenerate?: () => void;
+  /** User-only: enter the in-place message editor (edit-and-regenerate).
+   * Rendered right of the version switcher (leftmost when no switcher shows)
+   * and as the top menu item. */
+  onEdit?: () => void;
   onDelete?: () => void;
   /** Assistant-only menu item: delete the shown version, then regenerate. */
   onDeleteRegenerate?: () => void;
@@ -74,6 +79,7 @@ export default function MessageActions({
   version,
   onSelectVersion,
   onRegenerate,
+  onEdit,
   onDelete,
   onDeleteRegenerate,
   onMenuOpenChange,
@@ -109,6 +115,10 @@ export default function MessageActions({
     version !== undefined &&
     version.versionCount > 1 &&
     onSelectVersion !== undefined;
+  // Edit is a user-message operation (the server rejects assistant targets);
+  // the prop is only ever passed for user rows, but the role gate keeps the
+  // component contract honest on its own.
+  const showEdit = messageRole === "user" && onEdit !== undefined;
   const hasPrevious = version !== undefined && version.versionIndex > 1;
   const hasNext =
     version !== undefined && version.versionIndex < version.versionCount;
@@ -170,6 +180,19 @@ export default function MessageActions({
               <ChevronRightIcon aria-hidden="true" className="size-3.5" />
             </button>
           </div>
+        ) : null}
+        {/* The pencil sits right of the version switcher (R1); without a
+            switcher it is naturally the leftmost action. */}
+        {showEdit ? (
+          <button
+            type="button"
+            aria-label={t("editMessage")}
+            title={t("editMessage")}
+            onClick={onEdit}
+            className={ACTION_BUTTON_CLASS}
+          >
+            <PencilIcon aria-hidden="true" className="size-3.5" />
+          </button>
         ) : null}
         {onRegenerate ? (
           <button
@@ -253,6 +276,14 @@ export default function MessageActions({
             <MoreHorizontalIcon aria-hidden="true" className="size-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-auto">
+            {showEdit ? (
+              <DropdownMenuItem
+                className="whitespace-nowrap"
+                onClick={onEdit}
+              >
+                {t("edit")}
+              </DropdownMenuItem>
+            ) : null}
             {hideCopy ? null : (
               <DropdownMenuItem
                 className="whitespace-nowrap"

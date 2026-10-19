@@ -40,7 +40,9 @@ export type AttachmentExtraction = {
  * A file staged in the composer for the current draft. `file` is the original
  * browser File kept in memory so a failed upload can be retried; it is absent
  * for referenced attachments (an already-uploaded file staged via "edit this
- * image" — nothing to upload or retry). Attachments are session-only client
+ * image" — nothing to upload or retry). `sizeBytes` is absent only for
+ * referenced attachments whose source part carried no size (legacy rows).
+ * Attachments are session-only client
  * state and are never persisted (see `partialize`).
  */
 export type StagedAttachment = {
@@ -48,7 +50,7 @@ export type StagedAttachment = {
   file?: File;
   filename: string;
   mediaType: string;
-  sizeBytes: number;
+  sizeBytes?: number;
   status: "uploading" | "ready" | "error";
   /** Canonical `/api/files/<id>` url once uploaded. */
   url?: string;

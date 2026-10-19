@@ -9,6 +9,7 @@ const {
   resolveAttachmentsForModel,
   resolveRegenerateTarget,
   appendAssistantMessage,
+  appendUserMessageVersion,
   findTopicContextForActor,
   touchTopicUpdatedAt,
   resolveSearchProviderCredentials,
@@ -26,6 +27,7 @@ const {
   resolveAttachmentsForModel: vi.fn(),
   resolveRegenerateTarget: vi.fn(),
   appendAssistantMessage: vi.fn(),
+  appendUserMessageVersion: vi.fn(),
   findTopicContextForActor: vi.fn(),
   touchTopicUpdatedAt: vi.fn(),
   resolveSearchProviderCredentials: vi.fn(),
@@ -82,6 +84,7 @@ vi.mock("@/server/ai/reasoning-timer", () => ({
 }));
 vi.mock("@/server/services/message.service", () => ({
   appendAssistantMessage,
+  appendUserMessageVersion,
   resolveRegenerateTarget,
   // Faithful stand-in: the image bypass derives the prompt from it.
   textFromMessage: (message: {
@@ -638,5 +641,160 @@ describe("POST regenerate image generation bypass", () => {
       ACTOR,
     );
     expect(uploadFile).not.toHaveBeenCalled();
+  });
+});
+
+// Edit-and-regenerate: the edit payload is validated and persisted as a new
+// selected user version BEFORE the stream, then the target is re-resolved so
+// the model history carries the edited content.
+describe("POST regenerate with an edit payload", () => {
+  const FILE_PART = {
+    type: "file",
+    url: "/api/files/f-1",
+    mediaType: "application/pdf",
+    filename: "a.pdf",
+  };
+  const NORMALIZED_FILE_PART = { ...FILE_PART, sizeBytes: 1234 };
+  const EDIT = {
+    id: "u-1v2",
+    role: "user",
+    parts: [FILE_PART, { type: "text", text: "edited question" }],
+  };
+  const EDITED_HISTORY = [
+    { id: "u-1v2", role: "user", parts: EDIT.parts },
+  ];
+
+  beforeEach(() => {
+    createChatModelHandle.mockResolvedValue({
+      model: okModel(),
+      describeError: () => ({ kind: "key", key: "generic" }),
+      apiFormat: "openai-compatible",
+      providerConfigId: "cfg-1",
+      filesApi: null,
+    });
+    resolveAttachmentsForModel.mockImplementation(
+      async (messages: unknown) => messages,
+    );
+    resolveOwnedFileParts.mockResolvedValue([NORMALIZED_FILE_PART]);
+    appendUserMessageVersion.mockResolvedValue({
+      id: "u-1v2",
+      role: "user",
+      parts: EDIT.parts,
+    });
+    // First resolution validates the clicked message; the second (against
+    // the new version id) feeds the edited history to the stream.
+    resolveRegenerateTarget
+      .mockResolvedValueOnce({
+        targetGroupId: "group-a1",
+        history: [],
+        target: { role: "user", groupId: "group-u1" },
+      })
+      .mockResolvedValueOnce({
+        targetGroupId: "group-a1",
+        history: EDITED_HISTORY,
+        target: { role: "user", groupId: "group-u1" },
+      });
+  });
+
+  it("persists the edited version, then regenerates from the re-resolved history", async () => {
+    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
+    await response.text();
+
+    // Ownership validation runs before any write.
+    expect(resolveOwnedFileParts).toHaveBeenCalledWith([FILE_PART], ACTOR);
+    expect(
+      resolveOwnedFileParts.mock.invocationCallOrder[0],
+    ).toBeLessThan(appendUserMessageVersion.mock.invocationCallOrder[0]!);
+
+    // The new version joins the clicked message's own group, files first.
+    expect(appendUserMessageVersion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicId: "topic-1",
+        groupId: "group-u1",
+        createdAt: expect.any(Date),
+        message: {
+          id: "u-1v2",
+          role: "user",
+          parts: [
+            NORMALIZED_FILE_PART,
+            { type: "text", text: "edited question" },
+          ],
+        },
+      }),
+      ACTOR,
+    );
+
+    // The target is re-resolved against the new version id and its history
+    // (carrying the edited message) is what reaches the model.
+    expect(resolveRegenerateTarget).toHaveBeenNthCalledWith(
+      2,
+      { topicId: "topic-1", messageId: "u-1v2" },
+      ACTOR,
+    );
+    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "u-1v2" })],
+      expect.anything(),
+    );
+    // The assistant version lands in the re-resolved answer group. (The
+    // mocked replayModelMessages passthrough means the stream itself always
+    // errors in this harness, so the persisted outcome is not asserted here —
+    // that path is covered by the provider-failure test above.)
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: "topic-1", groupId: "group-a1" }),
+      ACTOR,
+    );
+  });
+
+  it("rejects an edit targeting an assistant message before any write", async () => {
+    resolveRegenerateTarget.mockReset();
+    resolveRegenerateTarget.mockResolvedValue({
+      targetGroupId: "group-a1",
+      history: [],
+      target: { role: "assistant", groupId: "group-a1" },
+    });
+
+    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "message.editTargetNotUser" },
+    });
+    expect(resolveOwnedFileParts).not.toHaveBeenCalled();
+    expect(appendUserMessageVersion).not.toHaveBeenCalled();
+    expect(appendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("rejects a forged file id before any write", async () => {
+    resolveOwnedFileParts.mockRejectedValue(
+      new AppError("NOT_FOUND", 404, "file.notFound"),
+    );
+
+    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "file.notFound" },
+    });
+    expect(appendUserMessageVersion).not.toHaveBeenCalled();
+    expect(appendAssistantMessage).not.toHaveBeenCalled();
+    // The target is never re-resolved for the edited version.
+    expect(resolveRegenerateTarget).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an edit inside the compressed zone without any write", async () => {
+    resolveRegenerateTarget.mockReset();
+    resolveRegenerateTarget.mockRejectedValue(
+      new AppError("CONFLICT", 409, "message.compressedLocked"),
+    );
+
+    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { messageKey: "message.compressedLocked" },
+    });
+    expect(resolveOwnedFileParts).not.toHaveBeenCalled();
+    expect(appendUserMessageVersion).not.toHaveBeenCalled();
+    expect(appendAssistantMessage).not.toHaveBeenCalled();
   });
 });

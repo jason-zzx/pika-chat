@@ -383,6 +383,21 @@ describe("useComposerAttachments image-editing mode", () => {
     expect(result.current.attachments).toHaveLength(1);
   });
 
+  it("stageReference keeps an unknown size absent instead of zeroing it", () => {
+    const { result } = renderAttachments(KEY);
+
+    act(() => {
+      result.current.stageReference({
+        url: "/api/files/file-9",
+        filename: "legacy.png",
+        mediaType: "image/png",
+      });
+    });
+
+    // Legacy parts carry no size; a fabricated 0 would render as "0 B".
+    expect(result.current.attachments[0]?.sizeBytes).toBeUndefined();
+  });
+
   it("retryAttachment is a no-op for a referenced (file-less) attachment", () => {
     const { result } = renderAttachments(KEY);
     act(() => {

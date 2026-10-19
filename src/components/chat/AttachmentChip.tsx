@@ -97,11 +97,13 @@ export default function AttachmentChip({
         >
           {attachment.filename}
         </span>
-        <span className="text-muted-foreground">
-          {attachment.status === "uploading"
-            ? t("uploading")
-            : formatBytes(attachment.sizeBytes)}
-        </span>
+        {attachment.status === "uploading" ? (
+          <span className="text-muted-foreground">{t("uploading")}</span>
+        ) : attachment.sizeBytes !== undefined ? (
+          <span className="text-muted-foreground">
+            {formatBytes(attachment.sizeBytes)}
+          </span>
+        ) : null}
         {warnings.map((warning, index) => (
           <span
             key={index}

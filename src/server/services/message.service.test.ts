@@ -6,6 +6,7 @@ import { chatMessages } from "@/server/db/schema";
 import {
   appendAssistantMessage,
   appendUserMessage,
+  appendUserMessageVersion,
   listTopicMessages,
   metadataFromRow,
   rowToChatUIMessage,
@@ -232,7 +233,7 @@ describe("rowToChatUIMessage", () => {
     });
   });
 
-  it("never attaches version metadata to user rows", () => {
+  it("attaches version metadata to user rows too (edit-and-regenerate)", () => {
     const message = rowToChatUIMessage(
       row({ id: "user-1", role: "user", outcome: null }),
       {
@@ -244,6 +245,10 @@ describe("rowToChatUIMessage", () => {
     );
     expect(message.metadata).toEqual({
       createdAt: "2026-01-01T00:00:00.000Z",
+      groupId: "user-1",
+      versionIndex: 1,
+      versionCount: 1,
+      versionIds: ["user-1"],
     });
   });
 
@@ -315,6 +320,10 @@ describe("listTopicMessages", () => {
     expect(messages.map((message) => message.id)).toEqual(["u1", "a1"]);
     expect(messages[0]?.metadata).toEqual({
       createdAt: "2026-01-01T00:00:01.000Z",
+      groupId: "u1",
+      versionIndex: 1,
+      versionCount: 1,
+      versionIds: ["u1"],
     });
     expect(messages[1]?.metadata).toMatchObject({
       groupId: "a1",
@@ -498,6 +507,125 @@ describe("appendUserMessage", () => {
       },
       { type: "text", text: "summarize this" },
     ]);
+  });
+});
+
+describe("appendUserMessageVersion", () => {
+  let capturedValues: ChatMessageInsert | undefined;
+  let deselectedWhere: unknown;
+  let groupRole: string | null;
+
+  beforeEach(() => {
+    capturedValues = undefined;
+    deselectedWhere = undefined;
+    groupRole = "user";
+    findTopicContextForActor.mockReset();
+    getDb.mockReset();
+    findTopicContextForActor.mockResolvedValue({ id: "topic-1" });
+    getDb.mockImplementation(() => ({
+      // Group existence/role lookup.
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => (groupRole ? [{ role: groupRole }] : []),
+          }),
+        }),
+      }),
+      transaction: async (
+        fn: (tx: {
+          update: () => {
+            set: (v: unknown) => { where: (w: unknown) => Promise<void> };
+          };
+          insert: () => {
+            values: (v: ChatMessageInsert) => {
+              returning: () => Promise<ChatMessageRow[]>;
+            };
+          };
+        }) => Promise<unknown>,
+      ) =>
+        fn({
+          update: () => ({
+            set: () => ({
+              where: async (whereClause: unknown) => {
+                deselectedWhere = whereClause;
+              },
+            }),
+          }),
+          insert: () => ({
+            values: (values: ChatMessageInsert) => {
+              capturedValues = values;
+              return {
+                returning: async () => [
+                  row({
+                    id: values.id ?? "user-2",
+                    role: "user",
+                    outcome: null,
+                    groupId: values.groupId ?? "g-1",
+                  }),
+                ],
+              };
+            },
+          }),
+        }),
+    }));
+  });
+
+  const editInput = {
+    topicId: "topic-1",
+    groupId: "g-1",
+    message: {
+      id: "user-2",
+      role: "user" as const,
+      parts: [
+        {
+          type: "file" as const,
+          url: "/api/files/f1",
+          mediaType: "application/pdf",
+          filename: "a.pdf",
+        },
+        { type: "text" as const, text: "edited" },
+      ],
+    },
+  };
+
+  it("deselects siblings and inserts the new selected version in one transaction", async () => {
+    const message = await appendUserMessageVersion(editInput, actor);
+
+    expect(deselectedWhere).toBeDefined();
+    expect(capturedValues).toMatchObject({
+      id: "user-2",
+      role: "user",
+      groupId: "g-1",
+    });
+    expect(capturedValues?.parts).toEqual(editInput.message.parts);
+    expect(message.id).toBe("user-2");
+  });
+
+  it("persists the caller-provided createdAt (single app clock)", async () => {
+    const createdAt = new Date("2026-01-01T10:00:00.000Z");
+
+    await appendUserMessageVersion({ ...editInput, createdAt }, actor);
+
+    expect(capturedValues?.createdAt).toBe(createdAt);
+  });
+
+  it("rejects a group whose role is not user, without any write", async () => {
+    groupRole = "assistant";
+
+    await expect(
+      appendUserMessageVersion(editInput, actor),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
+    expect(capturedValues).toBeUndefined();
+    expect(deselectedWhere).toBeUndefined();
+  });
+
+  it("rejects an unknown group, without any write", async () => {
+    groupRole = null;
+
+    await expect(
+      appendUserMessageVersion(editInput, actor),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(capturedValues).toBeUndefined();
   });
 });
 
