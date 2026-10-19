@@ -1024,3 +1024,25 @@ Replaced inline sidebar search with a global command-palette dialog (Ctrl/Cmd+K,
 ### Status
 
 [OK] **Completed**
+
+## Session 37: 消息版本删除闪烁 + 组位置锚点修复
+<!-- trellis-session: v=2 fp=manual -->
+
+**Date**: 2026-10-19
+**Task**: （未建任务，用户选择直接修复）
+**Branch**: `main`
+
+### Summary
+
+修复两个消息版本相关 bug。(1) 删除非末版本时本地无条件移除整行导致闪烁：handleDelete 改为仅当删除的是组内最后一个版本时才本地移除，其余交给 reseed 原地换内容。(2) 更深的根因：组位置由"最早剩余版本 created_at"隐式锚定，删除早期版本导致组漂移（看起来像整组被删），漂移后 resolveRegenerateTarget 错配，重生成消息脱组排到话题末尾（"出现又消失"）。新增 chat_messages.group_created_at 稳定锚点列（迁移 0024 回填 min(created_at)），版本插入时从事务内兄弟行继承；脱组重生成继承点击消息的组锚点落回原位。ponytail 优化 4 处（-10 行）。spec/backend/chat-message-versions.md 已同步，memory #2 已更新。1438 测试全过。用户话题 tpc_gMOKPSWsSum1 已用 SQL 手动修复（锚点归位 + 脱组消息并入第一组为未选中版本）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3f68719` | fix(chat): keep group row mounted when deleting a non-final version |
+| 见下 | fix(chat): anchor message group position with group_created_at |
+
+### Status
+
+[OK] **Completed**
