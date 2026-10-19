@@ -476,6 +476,43 @@ export default function MessageList({
     }
   }
 
+  // Scrollbar drags and track clicks fire neither wheel nor touch events,
+  // so the hand-overs above miss them: pressing the scrollbar while pinned
+  // at the bottom leaves the pin engaged, and the next ResizeObserver
+  // growth (async code highlighting, mermaid, images) yanks the view back
+  // to the bottom mid-drag. A scrollbar press surfaces as a mousedown whose
+  // target is the scroll container itself (content presses bubble up from
+  // children) landing in the scrollbar gutter — release the pin there. The
+  // listener is attached natively (not via onMouseDown): the press is a
+  // passive scroll-ownership signal, not an interactive control, and
+  // Chromium does not dispatch pointer events for scrollbar interaction.
+  // Re-runs on the empty/non-empty transition because the scroll container
+  // does not exist on first mount (same gate as the ResizeObserver above).
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.target !== container) {
+        return;
+      }
+      const gutter = container.offsetWidth - container.clientWidth;
+      if (gutter <= 0) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      // LTR-only UI: the scrollbar gutter is the right-hand strip.
+      if (rect.right - event.clientX <= gutter) {
+        // Same hand-over as the wheel: the drag owns the scroll position.
+        bottomPendingRef.current = false;
+        pinnedRef.current = false;
+      }
+    };
+    container.addEventListener("mousedown", onMouseDown);
+    return () => container.removeEventListener("mousedown", onMouseDown);
+  }, [hasMessages]);
+
   const scrollToBottom = useCallback(() => {
     const container = containerRef.current;
     if (!container) {

@@ -11,7 +11,15 @@
 ## The pin model
 
 - `pinnedRef` (at-bottom) may ONLY be released by explicit user gestures:
-  `onWheel` with `deltaY < 0` and upward `onTouchMove`. **Never** release it
+  `onWheel` with `deltaY < 0`, upward `onTouchMove`, and a native
+  `mousedown` landing in the scrollbar gutter (scrollbar drags and track
+  clicks fire neither wheel nor touch events; without that hand-over the
+  pin stays engaged and the next ResizeObserver growth — async code
+  highlighting, mermaid, images — yanks the view back to the bottom
+  mid-drag). The gutter is detected via `offsetWidth - clientWidth` with
+  the press targeting the scroll container itself, and the listener must be
+  a native mouse event: Chromium does not dispatch pointer events for
+  scrollbar interaction. **Never** release it
   in a generic scroll handler based on distance-to-bottom: programmatic
   scrolls (send positioning, follow-output) move scrollTop away from the
   bottom and fire scroll events, so a distance-based release instantly
