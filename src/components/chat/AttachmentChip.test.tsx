@@ -63,4 +63,19 @@ describe("AttachmentChip image preview", () => {
     expect(container.querySelector("svg")).not.toBeNull();
     expect(screen.getByText("notes.txt")).toBeInTheDocument();
   });
+
+  it("renders the formatted size when sizeBytes is known", () => {
+    renderChip(stagedAttachment({ sizeBytes: 2048 }));
+
+    expect(screen.getByText("2.0 KB")).toBeInTheDocument();
+  });
+
+  it("renders no size line at all when sizeBytes is unknown", () => {
+    renderChip(stagedAttachment({ sizeBytes: undefined }));
+
+    // A zero-fallback would render a misleading "0 B".
+    expect(screen.queryByText("0 B")).toBeNull();
+    const column = screen.getByText("photo.png").parentElement;
+    expect(column?.querySelectorAll(":scope > span")).toHaveLength(1);
+  });
 });

@@ -294,7 +294,9 @@ export function useComposerAttachments(draftKey: string, imageInputMax = 0) {
         id: newId(),
         filename: part.filename ?? "",
         mediaType: part.mediaType,
-        sizeBytes: part.sizeBytes ?? 0,
+        // Pass through unknown sizes as absent (legacy parts carry none) — a
+        // fabricated 0 would render as a misleading "0 B" on the chip.
+        sizeBytes: part.sizeBytes,
         status: "ready",
         url: part.url,
       };

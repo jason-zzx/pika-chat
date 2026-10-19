@@ -15,7 +15,11 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
+import type {
+  ChatFilePart,
+  ChatRequestPart,
+  ChatUIMessage,
+} from "@/lib/schemas/chat";
 import type { TranslateTargetLanguageCode } from "@/lib/translate/languages";
 
 import CollapseBlock from "./CollapseBlock";
@@ -150,6 +154,10 @@ type MessageListProps = {
   } | null;
   /** "Edit this image": stage the part's file as a composer reference. */
   onEditImage?: (part: ChatFilePart) => void;
+  /** Edit-and-regenerate (user messages): submit the edited parts as a new
+   * version of the message's group and regenerate the answer. Undefined
+   * hides the edit entry (no model picked, or a turn is in flight). */
+  onEditSubmit?: (message: ChatUIMessage, parts: ChatRequestPart[]) => void;
   /** History-compression boundary: an "earlier conversation
    * compressed" marker renders right after this message (PRD R3/R9). With a
    * persisted `summaryText` the marker is a toggle revealing the summary;
@@ -178,6 +186,7 @@ export default function MessageList({
   onTranslate,
   translating,
   onEditImage,
+  onEditSubmit,
   compression,
   highlightKey,
   ref,
@@ -628,6 +637,7 @@ export default function MessageList({
                   onSelectVersion={onSelectVersion}
                   onTranslate={onTranslate}
                   onEditImage={onEditImage}
+                  onEditSubmit={onEditSubmit}
                   translatingTargetLang={
                     translating?.messageId === message.id
                       ? translating.targetLang

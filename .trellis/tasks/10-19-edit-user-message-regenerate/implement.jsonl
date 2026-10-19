@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "版本组/is_selected/部分唯一索引契约、resolveRegenerateTarget 语义、regenerate 路由骨架与前端占位/reseed 机制——本任务在其上扩展用户消息版本"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "chatMetadataSchema 版本元数据字段契约；edit 需把元数据放开到用户行"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "附件归属校验 resolveOwnedFileParts、附件路由 resolveAttachmentsForModel 的顺序约束（memory #54）"}
+{"file": ".trellis/spec/backend/chat-history-compression.md", "reason": "压缩区不可变（assertTargetNotCompressed）与边界裁剪对 edit 分支的约束"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "编辑触发的流式增长的滚动行为约束；确认走 regenerate 路径不触发 send-reserve"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "就地编辑器与操作区按钮的组件规范"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "新增编辑文案的中英同步规则"}

@@ -1,10 +1,34 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import type { ComponentProps } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChatUIMessage } from "@/lib/schemas/chat";
+import { DEFAULT_FILE_LIMITS } from "@/lib/api/files";
+import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
+import { useComposerStore } from "@/stores/composer-store";
 import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageItem from "./MessageItem";
+
+const filesApi = vi.hoisted(() => ({
+  uploadChatFile: vi.fn(),
+  uploadChatFileDirect: vi.fn(),
+  deleteChatFile: vi.fn(),
+  getFileLimits: vi.fn(),
+}));
+
+// The in-place editor stages attachments through the composer hook; mock the
+// files API so its uploads/deletes stay observable and off the network.
+vi.mock("@/lib/api/files", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/files")>();
+  return {
+    ...actual,
+    uploadChatFile: filesApi.uploadChatFile,
+    uploadChatFileDirect: filesApi.uploadChatFileDirect,
+    deleteChatFile: filesApi.deleteChatFile,
+    getFileLimits: filesApi.getFileLimits,
+  };
+});
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children: string }) => <div>{children}</div>,
@@ -378,6 +402,224 @@ describe("MessageItem version and action wiring", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("menuitem", { name: "Delete and regenerate" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("MessageItem editing (edit-and-regenerate)", () => {
+  type EditableProps = Omit<ComponentProps<typeof MessageItem>, "message">;
+
+  function renderEditable(message: ChatUIMessage, props: EditableProps = {}) {
+    // The editor's attachment hook reads the upload limits via React Query.
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    return renderWithIntl(
+      <QueryClientProvider client={client}>
+        <MessageItem message={message} {...props} />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    filesApi.getFileLimits.mockResolvedValue(DEFAULT_FILE_LIMITS);
+    // Removing a ready chip fires a best-effort server delete; the hook
+    // chains `.catch` onto it, so the mock must return a promise.
+    filesApi.deleteChatFile.mockResolvedValue(undefined);
+    useComposerStore.setState({ attachments: {}, drafts: {} });
+  });
+
+  it("opens the editor prefilled with the current version; cancel restores it without submitting (R2/R4)", () => {
+    const onEditSubmit = vi.fn();
+    renderEditable(userMessage("Hello there"), { onEditSubmit });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+
+    const textarea = screen.getByRole("textbox", { name: "Edit message" });
+    expect(textarea).toHaveValue("Hello there");
+
+    fireEvent.change(textarea, { target: { value: "changed" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByText("Hello there")).toBeInTheDocument();
+    expect(onEditSubmit).not.toHaveBeenCalled();
+  });
+
+  it("also enters the editor from the more menu (R1)", async () => {
+    renderEditable(userMessage("Hello there"), { onEditSubmit: vi.fn() });
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+
+    expect(
+      screen.getByRole("textbox", { name: "Edit message" }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables send for empty content and re-enables it with text (R7)", () => {
+    renderEditable(userMessage("Hello there"), { onEditSubmit: vi.fn() });
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+
+    const textarea = screen.getByRole("textbox", { name: "Edit message" });
+    fireEvent.change(textarea, { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+
+    fireEvent.change(textarea, { target: { value: "changed" } });
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+  });
+
+  it("submits the trimmed edited text and exits the editor", () => {
+    const onEditSubmit = vi.fn();
+    const message = userMessage("Hello there");
+    renderEditable(message, { onEditSubmit });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Edit message" }), {
+      target: { value: "  changed  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(onEditSubmit).toHaveBeenCalledWith(message, [
+      { type: "text", text: "changed" },
+    ]);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("pre-stages the version's attachments as removable chips and submits without the removed one (R3)", async () => {
+    const onEditSubmit = vi.fn();
+    // sizeBytes rides along structurally on persisted file parts (the SDK's
+    // FileUIPart type does not declare it).
+    const filePart: ChatFilePart = {
+      type: "file",
+      url: "/api/files/f1",
+      mediaType: "text/plain",
+      filename: "notes.txt",
+      sizeBytes: 12,
+    };
+    const message: ChatUIMessage = {
+      id: "user-1",
+      role: "user",
+      parts: [filePart, { type: "text", text: "see attached" }],
+    };
+    renderEditable(message, { onEditSubmit });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+
+    // The existing attachment becomes a ready chip without re-uploading.
+    expect(await screen.findByText("notes.txt")).toBeInTheDocument();
+    expect(filesApi.uploadChatFile).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove notes.txt" }));
+    expect(screen.queryByText("notes.txt")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onEditSubmit).toHaveBeenCalledWith(message, [
+      { type: "text", text: "see attached" },
+    ]);
+  });
+
+  it("allows an attachment-only edit with no text (R7)", async () => {
+    const onEditSubmit = vi.fn();
+    const message: ChatUIMessage = {
+      id: "user-1",
+      role: "user",
+      parts: [
+        {
+          type: "file",
+          url: "/api/files/f1",
+          mediaType: "text/plain",
+          filename: "notes.txt",
+        },
+      ],
+    };
+    renderEditable(message, { onEditSubmit });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+    await screen.findByText("notes.txt");
+
+    const send = screen.getByRole("button", { name: "Send" });
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+
+    expect(onEditSubmit).toHaveBeenCalledWith(message, [
+      {
+        type: "file",
+        url: "/api/files/f1",
+        mediaType: "text/plain",
+        filename: "notes.txt",
+      },
+    ]);
+  });
+
+  it("uploads a newly added file through the shared flow and sends it first (R3)", async () => {
+    filesApi.uploadChatFile.mockResolvedValue({
+      id: "file-9",
+      url: "/api/files/file-9",
+      filename: "added.txt",
+      mediaType: "text/plain",
+      sizeBytes: 5,
+      extraction: { status: "ok", truncated: false },
+    });
+    const onEditSubmit = vi.fn();
+    const message = userMessage("Hello there");
+    const { container } = renderEditable(message, { onEditSubmit });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+    const input = container.querySelector<HTMLInputElement>(
+      'input[type="file"]',
+    );
+    expect(input).not.toBeNull();
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["hello"], "added.txt", { type: "text/plain" })],
+      },
+    });
+
+    expect(await screen.findByText("added.txt")).toBeInTheDocument();
+    // Wait for the upload to settle so the chip leaves the uploading state.
+    await waitFor(() => {
+      expect(screen.queryByText("Uploading…")).not.toBeInTheDocument();
+    });
+    expect(filesApi.uploadChatFile).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    // Files first, then text — the order the server persists. The uploaded
+    // file's known size rides along so the optimistic card can show it.
+    expect(onEditSubmit).toHaveBeenCalledWith(message, [
+      {
+        type: "file",
+        url: "/api/files/file-9",
+        mediaType: "text/plain",
+        filename: "added.txt",
+        sizeBytes: 5,
+      },
+      { type: "text", text: "Hello there" },
+    ]);
+  });
+
+  it("shows no edit entry for assistant messages (R1)", () => {
+    renderEditable(assistantMessage("Answer"), { onEditSubmit: vi.fn() });
+
+    expect(
+      screen.queryByRole("button", { name: "Edit message" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the edit entry inside the compressed zone and without a submit handler (R8)", () => {
+    const view = renderEditable(userMessage("Hello there"), {
+      onEditSubmit: vi.fn(),
+      compressedLocked: true,
+    });
+    expect(
+      screen.queryByRole("button", { name: "Edit message" }),
+    ).not.toBeInTheDocument();
+
+    view.unmount();
+    renderEditable(userMessage("Hello there"));
+    expect(
+      screen.queryByRole("button", { name: "Edit message" }),
     ).not.toBeInTheDocument();
   });
 });

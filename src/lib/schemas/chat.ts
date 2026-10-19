@@ -121,6 +121,10 @@ export const regenerateMessageRequestSchema = z.object({
   searchMode: searchModeSchema.optional(),
   image: imageGenerationParamsSchema.optional(),
   timeZone: z.string().trim().min(1).max(64).optional(),
+  // Edit-and-regenerate: the new user-message version to persist before
+  // regenerating. Same shape as a sent message, so an attachment-only edit
+  // (no text part) is legal.
+  edit: chatRequestMessageSchema.optional(),
 });
 
 export const translateMessageRequestSchema = z.object({

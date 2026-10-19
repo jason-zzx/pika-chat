@@ -41,9 +41,12 @@ import {
   assistantTopicHref,
   parseAssistantPath,
 } from "@/lib/assistant-path";
+import { newId } from "@/lib/id";
 import type {
   ChatFilePart,
   ChatHistoryData,
+  ChatRequest,
+  ChatRequestPart,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
 import { localTimeZone } from "@/lib/time-zone";
@@ -135,6 +138,20 @@ function markAssistantOutcome(
       : message,
   );
 }
+
+/**
+ * Edit-and-regenerate context threaded through `runRegeneration`: the
+ * request path addresses the clicked (pre-edit) message, while the body
+ * carries the new user version the server persists before streaming.
+ */
+type RegenerationEdit = {
+  /** Path-parameter id: the clicked (pre-edit) message. */
+  requestMessageId: string;
+  /** New user-version payload for the request body's `edit` field. */
+  message: ChatRequest["message"];
+  /** Pre-edit message, restored when the stream never starts (AC8). */
+  revert: ChatUIMessage;
+};
 
 /**
  * Error surface above the composer, in the same container the transcript uses
@@ -843,10 +860,21 @@ export default function ChatView({
     targetIndex: number,
     pick: ComposerModelPick,
     plan: RegenPlaceholderPlan | null,
+    edit?: RegenerationEdit,
   ) {
     const failStart = (caught?: unknown) => {
       // The stream never started: nothing changed server-side, so put the
       // replaced version back instead of leaving an orphan placeholder (B5).
+      // An edit submission additionally restores the pre-edit user message
+      // (AC8): a pre-stream failure (network/validation) persisted nothing.
+      // The reseed below converges either way.
+      if (edit) {
+        setMessages((current) =>
+          current.map((entry) =>
+            entry.id === edit.message.id ? edit.revert : entry,
+          ),
+        );
+      }
       if (plan) {
         setMessages((current) => removeRegenPlaceholder(current, plan));
       }
@@ -875,14 +903,23 @@ export default function ChatView({
       : undefined;
     let response: Response;
     try {
-      response = await regenerateTopicMessage(topic, target.id, {
-        providerConfigId: pick.configId,
-        modelId: pick.modelId,
-        ...(effort === undefined ? {} : { reasoningEffort: effort }),
-        searchMode,
-        ...(image ? { image } : {}),
-        timeZone: localTimeZone(),
-      });
+      response = await regenerateTopicMessage(
+        topic,
+        // Edit submissions address the clicked (pre-edit) message in the
+        // path; the server appends the payload as the group's new selected
+        // version, then regenerates against it. `target.id` already carries
+        // the new version id used for local folding.
+        edit?.requestMessageId ?? target.id,
+        {
+          providerConfigId: pick.configId,
+          modelId: pick.modelId,
+          ...(effort === undefined ? {} : { reasoningEffort: effort }),
+          searchMode,
+          ...(image ? { image } : {}),
+          ...(edit ? { edit: edit.message } : {}),
+          timeZone: localTimeZone(),
+        },
+      );
     } catch (caught) {
       failStart(caught);
       return;
@@ -982,6 +1019,73 @@ export default function ChatView({
       pick,
       plan,
     );
+  }
+
+  /**
+   * Edit-and-regenerate (PRD 用户消息编辑后重新生成): the edited content
+   * becomes a new selected version of the message's version group and the
+   * answer below is regenerated with the composer's current model/params —
+   * the same path as a plain regenerate. The list swaps to the new version
+   * and drops the thinking placeholder into the answer slot before the POST
+   * (R6); a pre-stream failure restores the pre-edit version (AC8), while a
+   * stream failure keeps the persisted edit (C3) and the teardown reseed
+   * converges the view. Later messages are never truncated (D1).
+   */
+  async function handleEditSubmit(
+    message: ChatUIMessage,
+    parts: ChatRequestPart[],
+  ) {
+    if (
+      !canActOnMessages ||
+      !pickedModel ||
+      !activeTopicId ||
+      message.role !== "user"
+    ) {
+      return;
+    }
+    setActionError(null);
+    const topic = activeTopicId;
+    const pick = pickedModel;
+    const index = messages.findIndex((entry) => entry.id === message.id);
+    // Client-minted id for the new version, carried inside the edit payload;
+    // the path parameter stays the clicked message id (the server resolves
+    // its group, appends this as the new selected version, and re-reads the
+    // history from it).
+    const editId = newId();
+    const versionIds = [
+      ...(message.metadata?.versionIds ?? [message.id]),
+      editId,
+    ];
+    const edited: ChatUIMessage = {
+      id: editId,
+      role: "user",
+      parts,
+      metadata: {
+        createdAt: new Date().toISOString(),
+        groupId: message.metadata?.groupId ?? message.id,
+        versionIndex: versionIds.length,
+        versionCount: versionIds.length,
+        versionIds,
+      },
+    };
+    const withEdit = messages.map((entry) =>
+      entry.id === message.id ? edited : entry,
+    );
+    setMessages(withEdit);
+    // Same immediate-shimmer contract as handleRegenerate (R7), anchored on
+    // the new version id that now sits in the list.
+    const target: RegenerateTargetRef = { id: editId, role: "user" };
+    const plan = buildRegenPlaceholder(withEdit, target, index);
+    if (plan) {
+      setMessages((current) => insertRegenPlaceholder(current, plan));
+    }
+    regenStopRequestedRef.current = false;
+    setRegen({ streamId: null, streamingId: plan?.placeholder.id ?? "" });
+    await runRegeneration(topic, target, index, pick, plan, {
+      requestMessageId: message.id,
+      message: { id: editId, role: "user", parts },
+      revert: message,
+    });
   }
 
   async function handleDelete(message: ChatUIMessage) {
@@ -1299,14 +1403,20 @@ export default function ChatView({
     // Image models without imageInput never send attachments (the server
     // rejects them); staged chips stay put so switching back to a chat model
     // restores them.
-    const outgoingFiles: FileUIPart[] =
+    // `sizeBytes` rides along when known so the optimistic message card
+    // shows the size (the server re-stamps it from the stored row anyway);
+    // the SDK type does not know the field, hence the intersection.
+    const outgoingFiles: (FileUIPart & { sizeBytes?: number })[] =
       imageMode && imageInputMax === 0
         ? []
         : readyAttachments.map((attachment) => ({
-          type: "file",
+          type: "file" as const,
           url: attachment.url,
           mediaType: attachment.mediaType,
           filename: attachment.filename,
+          ...(attachment.sizeBytes !== undefined
+            ? { sizeBytes: attachment.sizeBytes }
+            : {}),
         }));
     pendingSendAttachments.current =
       outgoingFiles.length > 0
@@ -1412,6 +1522,14 @@ export default function ChatView({
                 : undefined
             }
             onEditImage={handleEditImage}
+            onEditSubmit={
+              // Gating on canActOnMessages hides the edit entry while a turn
+              // is in flight (PRD R8); MessageItem additionally withholds it
+              // inside the compressed zone.
+              canActOnMessages && pickedModel
+                ? (message, parts) => void handleEditSubmit(message, parts)
+                : undefined
+            }
             translating={translating}
             highlightKey={highlightKey}
             compression={{

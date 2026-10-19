@@ -41,6 +41,7 @@ import { createStreamFailureTracker } from "@/server/ai/stream-failure";
 import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
+import { resolveOwnedFileParts } from "@/server/files/file.service";
 import { logger } from "@/server/logger";
 import { getTranslations } from "next-intl/server";
 import {
@@ -50,6 +51,7 @@ import {
 } from "@/server/services/compression.service";
 import {
   appendAssistantMessage,
+  appendUserMessageVersion,
   resolveRegenerateTarget,
   textFromMessage,
 } from "@/server/services/message.service";
@@ -95,10 +97,56 @@ export const POST = withErrorHandling(async (request, context) => {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
 
-  const { targetGroupId, history } = await resolveRegenerateTarget(
+  const resolved = await resolveRegenerateTarget(
     { topicId, messageId },
     actor,
   );
+  let targetGroupId = resolved.targetGroupId;
+  let history = resolved.history;
+
+  // Edit-and-regenerate: persist the edited user message as a new selected
+  // version of its group BEFORE streaming, then re-resolve so the history
+  // carries the edited content. Attachment ownership is validated ahead of
+  // any write, so a forged or foreign file id 4xxes with nothing persisted.
+  if (input.edit) {
+    if (resolved.target.role !== "user") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        400,
+        "message.editTargetNotUser",
+      );
+    }
+    const normalizedFileParts = await resolveOwnedFileParts(
+      input.edit.parts.filter((part) => part.type === "file"),
+      actor,
+    );
+    const normalizedTextParts = input.edit.parts.filter(
+      (part) => part.type === "text",
+    );
+    // Files first, then the text — the same ordering /api/chat persists.
+    await appendUserMessageVersion(
+      {
+        topicId,
+        groupId: resolved.target.groupId,
+        message: {
+          id: input.edit.id,
+          role: "user",
+          parts: [...normalizedFileParts, ...normalizedTextParts],
+        },
+        // App-side clock, the same single-clock rule as appendUserMessage.
+        createdAt: new Date(),
+      },
+      actor,
+    );
+    // Re-resolve against the new version id: the selected-version history
+    // now contains the edited message, and the answer slot derives from it.
+    const reResolved = await resolveRegenerateTarget(
+      { topicId, messageId: input.edit.id },
+      actor,
+    );
+    targetGroupId = reResolved.targetGroupId;
+    history = reResolved.history;
+  }
 
   // Image-generation bypass (same contract as /api/chat): an image-output
   // model regenerates with one non-streaming call — no history, compression,
