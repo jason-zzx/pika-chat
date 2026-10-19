@@ -4,6 +4,10 @@ import { getTranslations } from "next-intl/server";
 import SignInForm from "@/components/auth/SignInForm";
 import { getInstanceState } from "@/server/services/instance-settings.service";
 
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Auth"))("signIn.title"),
+});
+
 export default async function SignInPage() {
   const state = await getInstanceState();
   if (state.needsSetup) {

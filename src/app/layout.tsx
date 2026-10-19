@@ -33,7 +33,7 @@ const geistMono = Geist_Mono({
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("RootLayout");
   return {
-    title: t("title"),
+    title: { default: t("title"), template: t("titleTemplate") },
     description: t("description"),
   };
 }

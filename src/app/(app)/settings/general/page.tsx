@@ -13,6 +13,10 @@ import ThemePresetControl from "@/components/settings/ThemePresetControl";
 import { resolveActor } from "@/server/auth/actor";
 import { getUserThemePreference } from "@/server/services/user-preferences.service";
 
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Settings.General"))("title"),
+});
+
 export default async function SettingsGeneralPage() {
   const actor = await resolveActor(await headers());
   if (!actor) {

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
@@ -9,6 +10,21 @@ import { findTopicContextForActor } from "@/server/services/topic.service";
 type TopicPageProps = {
   params: Promise<{ assistantId: string; topicId: string }>;
 };
+
+export async function generateMetadata({
+  params,
+}: TopicPageProps): Promise<Metadata> {
+  const actor = await resolveActor(await headers());
+  if (!actor) {
+    return {};
+  }
+  const { assistantId, topicId } = await params;
+  const context = await findTopicContextForActor(topicId, actor);
+  if (!context || context.assistant.id !== assistantId) {
+    return {};
+  }
+  return { title: context.topic.title };
+}
 
 export default async function AssistantTopicPage({ params }: TopicPageProps) {
   const actor = await resolveActor(await headers());

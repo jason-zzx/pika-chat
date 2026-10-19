@@ -8,6 +8,10 @@ import ProviderConfigsScreen from "@/components/provider/ProviderConfigsScreen";
 import { isStaffRole } from "@/lib/auth-hierarchy";
 import { resolveActor } from "@/server/auth/actor";
 
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Settings.Providers"))("title"),
+});
+
 export default async function SettingsProviderDetailPage({
   params,
 }: {

@@ -4,6 +4,10 @@ import { getTranslations } from "next-intl/server";
 import SetupForm from "@/components/auth/SetupForm";
 import { getInstanceState } from "@/server/services/instance-settings.service";
 
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Auth"))("setup.title"),
+});
+
 export default async function SetupPage() {
   const state = await getInstanceState();
   if (!state.needsSetup) {

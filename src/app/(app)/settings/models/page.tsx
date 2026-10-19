@@ -7,6 +7,10 @@ import PageHeader from "@/components/layout/PageHeader";
 import ModelPreferencesScreen from "@/components/settings/models/ModelPreferencesScreen";
 import { resolveActor } from "@/server/auth/actor";
 
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Settings.Models"))("title"),
+});
+
 export default async function SettingsModelsPage() {
   const actor = await resolveActor(await headers());
   if (!actor) {

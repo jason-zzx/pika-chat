@@ -153,6 +153,24 @@ function ComposerError({ text }: { text: string }) {
   );
 }
 
+/**
+ * Keeps the tab title on the same value as the header. Server metadata only
+ * updates on real navigations, but the chat routes create topics, receive
+ * generated titles, and apply renames entirely client-side
+ * (history.replaceState). Rendering a hoisted <title> instead would create a
+ * second title element alongside the one Next's metadata owns, and
+ * document.title reads whichever comes first in document order — a race we
+ * lose on some navigation paths. Writing document.title always mutates the
+ * first <title> element, so there is a single effective writer.
+ */
+function DocumentTitle({ name }: { name: string }) {
+  const tRoot = useTranslations("RootLayout");
+  useEffect(() => {
+    document.title = tRoot("titleTemplate").replace("%s", name);
+  }, [tRoot, name]);
+  return null;
+}
+
 type ChatViewProps = {
   assistantId?: string;
   topicId?: string;
@@ -316,6 +334,9 @@ export default function ChatView({
   // leaves the topic, which restores the picker for the next draft.
   const showAssistantPicker =
     assistantId === undefined && activeTopicId === undefined;
+  // The home draft keeps the bare default tab title; every other chat route
+  // (assistant draft, existing or session-created topic) gets a titled tab.
+  const showDocumentTitle = !showAssistantPicker;
   const headerTitle =
     (activeTopicId
       ? assistants
@@ -1338,6 +1359,7 @@ export default function ChatView({
   if (topicId && history.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
+        {showDocumentTitle ? <DocumentTitle name={headerTitle} /> : null}
         <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
         <EmptyState
           title={t("loadFailedTitle")}
@@ -1357,6 +1379,7 @@ export default function ChatView({
       onDragLeave={handleDragLeave}
       onDrop={handleFileDrop}
     >
+      {showDocumentTitle ? <DocumentTitle name={headerTitle} /> : null}
       <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
       {historyPending ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">

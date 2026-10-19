@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 import ChatView from "@/components/chat/ChatView";
 import { resolveActor } from "@/server/auth/actor";
@@ -9,6 +10,10 @@ import { requireOwnedAssistant } from "@/server/services/assistant.service";
 type AssistantDraftPageProps = {
   params: Promise<{ assistantId: string }>;
 };
+
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Chat"))("newTopic"),
+});
 
 export default async function AssistantDraftPage({
   params,

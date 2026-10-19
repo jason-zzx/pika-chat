@@ -9,6 +9,10 @@ import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSection from "@/components/settings/SettingsSection";
 import { auth } from "@/server/auth";
 
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Account"))("title"),
+});
+
 export default async function SettingsAccountPage() {
   const t = await getTranslations("Account");
   const session = await auth.api.getSession({ headers: await headers() });

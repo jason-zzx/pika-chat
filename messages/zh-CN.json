@@ -1,6 +1,7 @@
 {
   "RootLayout": {
     "title": "Pika chat",
+    "titleTemplate": "%s · Pika chat",
     "description": "自托管的 AI 聊天"
   },
   "Layout": {

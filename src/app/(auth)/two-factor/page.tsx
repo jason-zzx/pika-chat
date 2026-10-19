@@ -5,6 +5,10 @@ import { getTranslations } from "next-intl/server";
 import TwoFactorForm from "@/components/auth/TwoFactorForm";
 import { isChallengeCookie } from "@/lib/two-factor";
 
+export const generateMetadata = async () => ({
+  title: (await getTranslations("Auth"))("twoFactor.title"),
+});
+
 export default async function TwoFactorPage() {
   // Presence here is only a routing decision — authorization still happens
   // server-side in `/two-factor/verify-totp`.
