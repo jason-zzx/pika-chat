@@ -103,6 +103,10 @@ export const POST = withErrorHandling(async (request, context) => {
   );
   let targetGroupId = resolved.targetGroupId;
   let history = resolved.history;
+  // Anchor for the new group when the answer slot was deleted empty
+  // (targetGroupId null): the clicked message's group anchor keeps the
+  // regenerated answer at the slot's position instead of the topic's end.
+  let detachedGroupAnchor = resolved.target.groupCreatedAt;
 
   // Edit-and-regenerate: persist the edited user message as a new selected
   // version of its group BEFORE streaming, then re-resolve so the history
@@ -146,6 +150,7 @@ export const POST = withErrorHandling(async (request, context) => {
     );
     targetGroupId = reResolved.targetGroupId;
     history = reResolved.history;
+    detachedGroupAnchor = reResolved.target.groupCreatedAt;
   }
 
   // Image-generation bypass (same contract as /api/chat): an image-output
@@ -177,6 +182,7 @@ export const POST = withErrorHandling(async (request, context) => {
       references,
       topicId,
       groupId: targetGroupId ?? undefined,
+      groupCreatedAt: targetGroupId ? undefined : detachedGroupAnchor,
       announceTopic: false,
     });
   }
@@ -398,6 +404,7 @@ export const POST = withErrorHandling(async (request, context) => {
             reasoningMs: reasoningTimer.measure(),
             createdAt: streamStartedAt,
             groupId: targetGroupId ?? undefined,
+            groupCreatedAt: targetGroupId ? undefined : detachedGroupAnchor,
           },
           actor,
         );

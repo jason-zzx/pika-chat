@@ -124,8 +124,14 @@ async function requireOwnedTopic(
 }
 
 /**
- * Groups rows (already ordered by createdAt, id) by groupId, preserving the
- * position of each group's earliest version. Returns the groups in order.
+ * Groups rows (already ordered by createdAt, id) by groupId and returns the
+ * groups in stable position order: each group sorts by its `groupCreatedAt`
+ * anchor, which is set at group creation and inherited by every version, so
+ * deleting a group's earliest version never shifts the group's place in the
+ * topic. Ties (a detached regenerate inherits the target group's anchor) break
+ * by the group's earliest remaining row, keeping the inherited group right
+ * after the group it sprang from. Within a group, versions stay in
+ * (createdAt, id) order — `versionInfoOf` relies on it.
  */
 function groupRows(rows: ChatMessageRow[]): ChatMessageRow[][] {
   const byGroup = new Map<string, ChatMessageRow[]>();
@@ -137,7 +143,23 @@ function groupRows(rows: ChatMessageRow[]): ChatMessageRow[][] {
       byGroup.set(row.groupId, [row]);
     }
   }
-  return [...byGroup.values()];
+  const groups = [...byGroup.values()];
+  groups.sort((a, b) => {
+    // Groups are built from rows: every group has at least one element.
+    const first = a[0]!;
+    const second = b[0]!;
+    const anchorDiff =
+      first.groupCreatedAt.getTime() - second.groupCreatedAt.getTime();
+    if (anchorDiff !== 0) {
+      return anchorDiff;
+    }
+    const createdDiff = first.createdAt.getTime() - second.createdAt.getTime();
+    if (createdDiff !== 0) {
+      return createdDiff;
+    }
+    return first.groupId.localeCompare(second.groupId);
+  });
+  return groups;
 }
 
 /** Selected version of a group; falls back to the latest version. */
@@ -257,7 +279,11 @@ export async function appendUserMessage(
       // shares one clock; the DB default would mix in the Postgres clock,
       // whose drift (e.g. Docker/WSL2) can invert list ordering against the
       // app-timestamped assistant rows.
-      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+      ...(input.createdAt
+        ? // New group: anchor to the row's own createdAt (single app clock);
+          // when omitted both fall back to the same statement's now() default.
+          { createdAt: input.createdAt, groupCreatedAt: input.createdAt }
+        : {}),
     })
     .returning();
   const row = inserted[0];
@@ -287,7 +313,10 @@ export async function appendUserMessageVersion(
   await requireOwnedTopic(input.topicId, actor);
   const db = getDb();
   const groupRows = await db
-    .select({ role: chatMessages.role })
+    .select({
+      role: chatMessages.role,
+      groupCreatedAt: chatMessages.groupCreatedAt,
+    })
     .from(chatMessages)
     .where(
       and(
@@ -325,6 +354,9 @@ export async function appendUserMessageVersion(
         groupId: input.groupId,
         // App-side turn time, same single-clock rule as appendUserMessage.
         ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+        // The version inherits the group's position anchor (verified to
+        // exist by the role check above).
+        groupCreatedAt: groupRows[0]!.groupCreatedAt,
       })
       .returning();
     return inserted[0];
@@ -347,6 +379,14 @@ export async function appendAssistantMessage(
     createdAt?: Date;
     /** Existing group to add a version to; omit for a new single-version group. */
     groupId?: string;
+    /**
+     * Position anchor for a NEW group (ignored when `groupId` joins an
+     * existing group, which always inherits the group's own anchor). The
+     * regenerate route passes the clicked message's group anchor when the
+     * answer slot was deleted empty, so the new group lands back at the
+     * slot's position instead of sorting to the end of the topic.
+     */
+    groupCreatedAt?: Date;
   },
   actor: Actor,
 ): Promise<ChatUIMessage> {
@@ -368,6 +408,10 @@ export async function appendAssistantMessage(
     reasoningMs: input.reasoningMs,
     createdAt: input.createdAt,
     groupId: input.groupId ?? id,
+    // New group: anchor to the explicit override, else the row's own
+    // createdAt (undefined lets both fall back to the same statement's
+    // now() default). The existing-group branch overwrites this below.
+    groupCreatedAt: input.groupCreatedAt ?? input.createdAt,
   };
   const existingGroupId = input.groupId;
   const row = existingGroupId
@@ -383,7 +427,29 @@ export async function appendAssistantMessage(
               eq(chatMessages.groupId, existingGroupId),
             ),
           );
-        const inserted = await tx.insert(chatMessages).values(values).returning();
+        // Inherit the group's position anchor from any sibling so the
+        // version never re-anchors the group to its own createdAt.
+        const siblings = await tx
+          .select({ groupCreatedAt: chatMessages.groupCreatedAt })
+          .from(chatMessages)
+          .where(
+            and(
+              eq(chatMessages.topicId, input.topicId),
+              eq(chatMessages.groupId, existingGroupId),
+            ),
+          )
+          .limit(1);
+        const inserted = await tx
+          .insert(chatMessages)
+          .values({
+            ...values,
+            // An empty group here is unreachable (resolveRegenerateTarget
+            // only returns groups with rows); fall back to the precomputed
+            // anchor rather than dropping the column.
+            groupCreatedAt:
+              siblings[0]?.groupCreatedAt ?? values.groupCreatedAt,
+          })
+          .returning();
         return inserted[0];
       })
     : (await db.insert(chatMessages).values(values).returning())[0];
@@ -498,7 +564,17 @@ export type RegenerateTarget = {
    * to `targetGroupId`, which for a user target is the following answer's
    * group). Edit-and-regenerate needs both to validate and persist the edit.
    */
-  target: { role: ChatMessageRow["role"]; groupId: string };
+  target: {
+    role: ChatMessageRow["role"];
+    groupId: string;
+    /**
+     * Position anchor of the clicked message's own group. When
+     * `targetGroupId` is null (the answer slot was deleted empty), the new
+     * group inherits this anchor so the answer lands back where the slot
+     * was instead of sorting to the end of the topic.
+     */
+    groupCreatedAt: Date;
+  };
 };
 
 /**
@@ -539,7 +615,11 @@ export async function resolveRegenerateTarget(
   // The clicked message itself (role + its OWN group, as opposed to
   // `targetGroupId`, which for a user target is the following answer's
   // group): edit-and-regenerate needs both to validate and persist the edit.
-  const targetRef = { role: target.role, groupId: target.groupId };
+  const targetRef = {
+    role: target.role,
+    groupId: target.groupId,
+    groupCreatedAt: target.groupCreatedAt,
+  };
 
   if (target.role === "assistant") {
     return {

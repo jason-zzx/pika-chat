@@ -47,6 +47,7 @@ function row(overrides: Partial<ChatMessageRow>): ChatMessageRow {
     groupId: "msg-1",
     isSelected: true,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    groupCreatedAt: new Date("2026-01-01T00:00:00.000Z"),
     ...overrides,
   };
 }
@@ -527,7 +528,15 @@ describe("appendUserMessageVersion", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            limit: async () => (groupRole ? [{ role: groupRole }] : []),
+            limit: async () =>
+              groupRole
+                ? [
+                    {
+                      role: groupRole,
+                      groupCreatedAt: new Date("2026-01-01T00:00:00.000Z"),
+                    },
+                  ]
+                : [],
           }),
         }),
       }),
@@ -596,6 +605,8 @@ describe("appendUserMessageVersion", () => {
       id: "user-2",
       role: "user",
       groupId: "g-1",
+      // The version inherits the group's position anchor.
+      groupCreatedAt: new Date("2026-01-01T00:00:00.000Z"),
     });
     expect(capturedValues?.parts).toEqual(editInput.message.parts);
     expect(message.id).toBe("user-2");
@@ -652,6 +663,11 @@ describe("appendAssistantMessage", () => {
       transaction: async (
         fn: (tx: {
           update: () => { set: (v: unknown) => { where: (w: unknown) => Promise<void> } };
+          select: () => {
+            from: () => {
+              where: () => { limit: () => Promise<{ groupCreatedAt: Date }[]> };
+            };
+          };
           insert: () => {
             values: (v: ChatMessageInsert) => { returning: () => Promise<ChatMessageRow[]> };
           };
@@ -663,6 +679,16 @@ describe("appendAssistantMessage", () => {
               where: async (whereClause: unknown) => {
                 updatedWhere = whereClause;
               },
+            }),
+          }),
+          // Sibling anchor lookup for group-version inserts.
+          select: () => ({
+            from: () => ({
+              where: () => ({
+                limit: async () => [
+                  { groupCreatedAt: new Date("2026-01-01T00:00:00.000Z") },
+                ],
+              }),
             }),
           }),
           insert: () => ({
@@ -731,6 +757,21 @@ describe("appendAssistantMessage", () => {
     expect(updatedWhere).toBeUndefined();
   });
 
+  it("anchors a new group to its own createdAt, or to the explicit override", async () => {
+    mockDbReturning(assistantRow);
+    const createdAt = new Date("2026-01-02T10:00:00.000Z");
+
+    await appendAssistantMessage({ ...baseInput, createdAt }, actor);
+    expect(capturedValues?.groupCreatedAt).toEqual(createdAt);
+
+    const anchor = new Date("2026-01-01T08:00:00.000Z");
+    await appendAssistantMessage(
+      { ...baseInput, createdAt, groupCreatedAt: anchor },
+      actor,
+    );
+    expect(capturedValues?.groupCreatedAt).toEqual(anchor);
+  });
+
   it("joins an existing group inside a transaction that deselects siblings", async () => {
     mockDbReturning(row({ ...assistantRow, id: "assistant-2", groupId: "g-1" }));
 
@@ -742,9 +783,12 @@ describe("appendAssistantMessage", () => {
       },
       actor,
     );
-
     expect(updatedWhere).toBeDefined();
     expect(capturedValues).toMatchObject({ id: "assistant-2", groupId: "g-1" });
+    // The version inherits the group's position anchor from a sibling row.
+    expect(capturedValues?.groupCreatedAt).toEqual(
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
     expect(message.id).toBe("assistant-2");
   });
 });

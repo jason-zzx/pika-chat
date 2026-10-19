@@ -140,6 +140,14 @@ const PROVIDER_MESSAGE = "insufficient_quota: you exceeded your current quota";
 
 const CONTEXT = { params: Promise.resolve({ id: "topic-1", messageId: "m-1" }) };
 
+/** The clicked message the resolver hands back; only the edit flow cares
+ * about role/groupId, but the route always reads the group anchor. */
+const TARGET = {
+  role: "user" as const,
+  groupId: "group-u1",
+  groupCreatedAt: new Date("2026-01-01T00:00:00.000Z"),
+};
+
 function regenerateRequest(body: Record<string, unknown> = {}): Request {
   return new Request(
     "http://localhost/api/topics/topic-1/messages/m-1/regenerate",
@@ -192,6 +200,7 @@ beforeEach(() => {
   resolveRegenerateTarget.mockResolvedValue({
     targetGroupId: "group-1",
     history: [],
+    target: TARGET,
   });
   appendAssistantMessage.mockResolvedValue(undefined);
   touchTopicUpdatedAt.mockResolvedValue(undefined);
@@ -242,6 +251,31 @@ describe("POST regenerate provider failure", () => {
     );
     expect(body).toContain(PROVIDER_MESSAGE);
     expect(body).not.toContain("An error occurred.");
+  });
+
+  it("anchors a detached regenerate to the clicked message's group", async () => {
+    // The answer slot was deleted empty: the resolver returns no group, and
+    // the new group must inherit the clicked message's anchor so it lands
+    // back at the slot's position instead of the topic's end.
+    resolveRegenerateTarget.mockResolvedValue({
+      targetGroupId: null,
+      history: [],
+      target: TARGET,
+    });
+
+    const response = await POST(regenerateRequest(), CONTEXT);
+    await response.text();
+
+    expect(appendAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topicId: "topic-1",
+        groupCreatedAt: TARGET.groupCreatedAt,
+      }),
+      ACTOR,
+    );
+    expect(
+      vi.mocked(appendAssistantMessage).mock.calls[0]?.[0]?.groupId,
+    ).toBeUndefined();
   });
 });
 
@@ -294,6 +328,7 @@ describe("POST regenerate with a compressed topic", () => {
     resolveRegenerateTarget.mockResolvedValue({
       targetGroupId: "group-1",
       history: HISTORY,
+      target: TARGET,
     });
     createChatModelHandle.mockResolvedValue({
       model: okModel(),
@@ -344,6 +379,7 @@ describe("POST regenerate with a compressed topic", () => {
         },
         { id: "h-3", role: "user", parts: [{ type: "text", text: "new turn" }] },
       ],
+      target: TARGET,
     });
 
     const response = await POST(regenerateRequest(), CONTEXT);
@@ -421,6 +457,7 @@ describe("POST regenerate image generation bypass", () => {
     resolveRegenerateTarget.mockResolvedValue({
       targetGroupId: "group-1",
       history: IMAGE_HISTORY,
+      target: TARGET,
     });
     generateImageForEndpoint.mockResolvedValue({
       images: [{ bytes: Buffer.from("png-bytes"), mediaType: "image/png" }],
@@ -502,6 +539,7 @@ describe("POST regenerate image generation bypass", () => {
         },
         IMAGE_HISTORY[1],
       ],
+      target: TARGET,
     });
     resolveOwnedFileParts.mockResolvedValue([referencePart]);
     getFilesByIds.mockResolvedValue(
@@ -558,6 +596,7 @@ describe("POST regenerate image generation bypass", () => {
         },
         IMAGE_HISTORY[1],
       ],
+      target: TARGET,
     });
     resolveOwnedFileParts.mockRejectedValue(
       new AppError("NOT_FOUND", 404, "file.notFound"),
@@ -687,12 +726,20 @@ describe("POST regenerate with an edit payload", () => {
       .mockResolvedValueOnce({
         targetGroupId: "group-a1",
         history: [],
-        target: { role: "user", groupId: "group-u1" },
+        target: {
+          role: "user",
+          groupId: "group-u1",
+          groupCreatedAt: TARGET.groupCreatedAt,
+        },
       })
       .mockResolvedValueOnce({
         targetGroupId: "group-a1",
         history: EDITED_HISTORY,
-        target: { role: "user", groupId: "group-u1" },
+        target: {
+          role: "user",
+          groupId: "group-u1",
+          groupCreatedAt: TARGET.groupCreatedAt,
+        },
       });
   });
 
@@ -750,7 +797,11 @@ describe("POST regenerate with an edit payload", () => {
     resolveRegenerateTarget.mockResolvedValue({
       targetGroupId: "group-a1",
       history: [],
-      target: { role: "assistant", groupId: "group-a1" },
+      target: {
+        role: "assistant",
+        groupId: "group-a1",
+        groupCreatedAt: TARGET.groupCreatedAt,
+      },
     });
 
     const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);

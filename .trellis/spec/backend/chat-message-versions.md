@@ -29,8 +29,15 @@ getting the invariants wrong corrupts what the model sees as context.
 - No version-number column: `versionIndex` is derived from the
   `createdAt, id` ordering inside the group (versions are append-only, so
   the rank is stable).
-- Group display position = the group's earliest version's `createdAt`.
-  Regenerating never reorders the conversation.
+- `chat_messages.group_created_at` (timestamptz, NOT NULL, default
+  `now()`): the group's **stable position anchor**, set at group creation
+  and inherited by every later version (version inserts read it from a
+  sibling row inside the deselect+insert transaction). Group display
+  position = `groupCreatedAt`, never a version's own `createdAt` —
+  deleting a group's earliest version must not move the group (before the
+  anchor existed, position was the earliest *remaining* version's
+  `createdAt`, so deleting it shifted the group and broke regenerate
+  target resolution). Regenerating never reorders the conversation.
 
 ### 3. Contracts
 
@@ -55,12 +62,19 @@ getting the invariants wrong corrupts what the model sees as context.
   - user message → the *immediately following* assistant group if one
     exists, else a new answer slot; history = selected messages up to and
     including that user message.
+  - `target` carries the clicked message's own `groupCreatedAt`; when
+    `targetGroupId` is null (the slot was deleted empty), the route passes
+    it as `groupCreatedAt` to `appendAssistantMessage` so the new group
+    lands back at the slot's position instead of sorting to the topic's
+    end. Same pass-through for the image-generation bypass.
   - Regenerating or deleting never truncates later messages (product
     decision D1).
 - `deleteMessage` removes exactly one row. Deleting the selected version
   re-selects the newest remaining version in the same transaction;
-  deleting the last version removes the slot. The topic survives an empty
-  conversation.
+  deleting the last version removes the slot. The group's
+  `group_created_at` anchor lives on every row, so the surviving rows
+  keep the group's position no matter which versions are deleted. The
+  topic survives an empty conversation.
 - Endpoints (all topic-scoped, ownership via `requireOwnedTopic` +
   `topicId` in every WHERE; foreign id → `NOT_FOUND`):
   - `DELETE /api/topics/[id]/messages/[messageId]` → 204
@@ -157,6 +171,12 @@ getting the invariants wrong corrupts what the model sees as context.
   it) and the teardown reseed converges the view.
 - Version switch, delete, and delete-and-regenerate are server-confirmed
   mutations followed by the same reseed — no optimistic version swaps.
+  Delete removes the row locally **only when the deleted version was the
+  group's last one** (`versionIds` has no other id); when versions
+  remain, the row stays mounted (keyed by `groupId`) showing the deleted
+  version until the reseed swaps in the server's fallback selection —
+  removing it first blanked the row for a full history round-trip, and a
+  reseed hiccup left the group looking fully deleted.
 - Delete-and-regenerate is assistant-only (user menus omit it); it is a
   client composition of DELETE then regenerate, and a failed regenerate
   never rolls back the delete.
@@ -196,7 +216,10 @@ getting the invariants wrong corrupts what the model sees as context.
 - Integration (`message.service.integration.test.ts`): delete with
   reselection incl. middle version, empty-group delete, select
   persistence, all four `resolveRegenerateTarget` branches,
-  selected-only history, foreign-id `NOT_FOUND`.
+  selected-only history, foreign-id `NOT_FOUND`, group-anchor stability
+  (deleting the earliest version keeps the group's position and the
+  resolve still finds the following group, a detached regenerate lands
+  back at the slot's position, user-message versions inherit the anchor).
 - Component (`MessageActions.test.tsx` / `MessageItem.test.tsx`):
   switcher inside the reveal group, boundary disabling, per-role
   menu contents (user menu has no delete-and-regenerate), copy check-icon

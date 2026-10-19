@@ -121,7 +121,7 @@ function assistantMessage(id: string, text: string) {
 async function appendAssistant(
   topicId: string,
   actor: Actor,
-  input: { id: string; text: string; groupId?: string },
+  input: { id: string; text: string; groupId?: string; createdAt?: Date },
 ) {
   return appendAssistantMessage(
     {
@@ -131,6 +131,7 @@ async function appendAssistant(
       providerConfigId: "cfg-1",
       modelId: "gpt-4o",
       ...(input.groupId ? { groupId: input.groupId } : {}),
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     },
     actor,
   );
@@ -656,5 +657,147 @@ describe("message.service versions", () => {
       versionCount: 1,
       versionIds: ["m1"],
     });
+  });
+
+  // Group-position anchor (groupCreatedAt): deleting versions must never
+  // move the group, and a regenerate must still find the answer slot.
+  // Deterministic timestamps stand in for turns spread over hours.
+  const T0 = new Date("2026-01-01T00:00:00.000Z");
+  // Assistant rows get their own tick: identical timestamps would tie-break
+  // groups by groupId and order the answer before its user message.
+  const T0B = new Date("2026-01-01T00:00:00.001Z");
+  const T1 = new Date("2026-01-01T01:00:00.000Z");
+  const T2 = new Date("2026-01-01T02:00:00.000Z");
+  const T3 = new Date("2026-01-01T03:00:00.000Z");
+
+  async function seedShiftedGroup(topicId: string, actor: Actor) {
+    await appendUserMessage(
+      { topicId, message: userMessage("u1", "q1"), createdAt: T0 },
+      actor,
+    );
+    await appendAssistant(topicId, actor, {
+      id: "a1v1",
+      text: "first",
+      createdAt: T0B,
+    });
+    await appendUserMessage(
+      { topicId, message: userMessage("u2", "q2"), createdAt: T1 },
+      actor,
+    );
+    // A later regeneration of the first answer, created after u2.
+    await appendAssistant(topicId, actor, {
+      id: "a1v2",
+      text: "second",
+      groupId: "a1v1",
+      createdAt: T2,
+    });
+    // Deleting the original (earliest) version used to drop the group's
+    // implicit position anchor with it.
+    await deleteMessage({ topicId, messageId: "a1v1" }, actor);
+  }
+
+  it("keeps the group position when the earliest version is deleted", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedShiftedGroup(topicId, actor);
+
+    const messages = await listTopicMessages({ topicId }, actor);
+    expect(messages.map((message) => message.id)).toEqual([
+      "u1",
+      "a1v2",
+      "u2",
+    ]);
+    expect(messages[1]?.metadata).toMatchObject({
+      groupId: "a1v1",
+      versionIndex: 1,
+      versionCount: 1,
+      versionIds: ["a1v2"],
+    });
+  });
+
+  it("still resolves the following answer group after its earliest version is deleted", async () => {
+    const { actor, topicId } = await setupTopic();
+    await seedShiftedGroup(topicId, actor);
+
+    const resolved = await resolveRegenerateTarget(
+      { topicId, messageId: "u1" },
+      actor,
+    );
+    // The answer group still follows u1, so the regeneration joins it
+    // instead of detaching into a new group at the end of the topic.
+    expect(resolved.targetGroupId).toBe("a1v1");
+    expect(resolved.history.map((message) => message.id)).toEqual(["u1"]);
+  });
+
+  it("lands a detached regenerate back at the deleted slot's position", async () => {
+    const { actor, topicId } = await setupTopic();
+    await appendUserMessage(
+      { topicId, message: userMessage("u1", "q1"), createdAt: T0 },
+      actor,
+    );
+    await appendAssistant(topicId, actor, {
+      id: "a1",
+      text: "answer",
+      createdAt: T0B,
+    });
+    await appendUserMessage(
+      { topicId, message: userMessage("u2", "q2"), createdAt: T1 },
+      actor,
+    );
+    // The answer slot is deleted empty, then regenerated (the route passes
+    // the resolved target's group anchor for the new group).
+    await deleteMessage({ topicId, messageId: "a1" }, actor);
+    const resolved = await resolveRegenerateTarget(
+      { topicId, messageId: "u1" },
+      actor,
+    );
+    expect(resolved.targetGroupId).toBeNull();
+
+    await appendAssistantMessage(
+      {
+        topicId,
+        message: assistantMessage("a1b", "regenerated"),
+        outcome: "completed",
+        providerConfigId: "cfg-1",
+        modelId: "gpt-4o",
+        createdAt: T2,
+        groupCreatedAt: resolved.target.groupCreatedAt,
+      },
+      actor,
+    );
+
+    const messages = await listTopicMessages({ topicId }, actor);
+    expect(messages.map((message) => message.id)).toEqual([
+      "u1",
+      "a1b",
+      "u2",
+    ]);
+  });
+
+  it("keeps a user group's position after its original version is edited away and deleted", async () => {
+    const { actor, topicId } = await setupTopic();
+    await appendUserMessage(
+      { topicId, message: userMessage("u1", "q1"), createdAt: T0 },
+      actor,
+    );
+    await appendAssistant(topicId, actor, {
+      id: "a1",
+      text: "answer",
+      createdAt: T1,
+    });
+    // Edit much later, then delete the original user version: the group
+    // must stay ahead of its answer.
+    await appendUserMessageVersion(
+      {
+        topicId,
+        groupId: "u1",
+        message: userMessage("u1b", "edited q1"),
+        createdAt: T3,
+      },
+      actor,
+    );
+    await deleteMessage({ topicId, messageId: "u1" }, actor);
+
+    const messages = await listTopicMessages({ topicId }, actor);
+    expect(messages.map((message) => message.id)).toEqual(["u1b", "a1"]);
   });
 });

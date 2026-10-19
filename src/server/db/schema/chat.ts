@@ -51,6 +51,12 @@ export const chatMessages = pgTable(
     // Exactly one selected version per group (partial unique index below).
     isSelected: boolean("is_selected").notNull().default(true),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    // Stable position anchor of the whole version group: set once at group
+    // creation and inherited by every later version, so deleting the
+    // group's earliest version can never shift the group's place in the
+    // topic (deleting the implicit anchor — the earliest row's createdAt —
+    // used to move the group and break regenerate target resolution).
+    groupCreatedAt: timestamptz("group_created_at").notNull().defaultNow(),
   },
   (table) => [
     index("chat_messages_topic_created_idx").on(table.topicId, table.createdAt),

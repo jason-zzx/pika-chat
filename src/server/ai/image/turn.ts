@@ -166,6 +166,7 @@ export async function createImageGenerationResponse({
   references,
   topicId,
   groupId,
+  groupCreatedAt,
   announceTopic,
 }: {
   actor: Actor;
@@ -180,6 +181,8 @@ export async function createImageGenerationResponse({
   topicId: string;
   /** Existing version group to add the answer to; omit for a new group. */
   groupId?: string;
+  /** Position anchor for a NEW group (see appendAssistantMessage). */
+  groupCreatedAt?: Date;
   /** /api/chat emits a data-topic chunk; regenerate uses the header instead. */
   announceTopic: boolean;
 }): Promise<Response> {
@@ -331,6 +334,7 @@ export async function createImageGenerationResponse({
             modelId,
             createdAt: generatedAt,
             ...(groupId ? { groupId } : {}),
+            ...(groupCreatedAt ? { groupCreatedAt } : {}),
           },
           actor,
         );
