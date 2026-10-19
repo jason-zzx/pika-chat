@@ -592,6 +592,88 @@ describe("MessageList chat-map jump (R5)", () => {
   });
 });
 
+describe("MessageList scrollbar press (follow pin hand-over)", () => {
+  const CLIENT_WIDTH = 205;
+  const SCROLLBAR_GUTTER = 15;
+
+  function renderWithScrollbar() {
+    // jsdom ships no ResizeObserver; capture the callback so the
+    // follow-output behaviour can be driven directly.
+    const callbacks: Array<() => void> = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          callbacks.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    renderWithIntl(
+      <MessageList
+        messages={[
+          userMessage("u1", "question"),
+          assistantMessage("a1", "answer"),
+        ]}
+        streaming={false}
+      />,
+    );
+    const container = scrollContainer();
+    mockScrollMetrics(container);
+    // jsdom reports zero widths; give the container a right-hand scrollbar
+    // gutter so the press-location math has something to measure.
+    Object.defineProperty(container, "clientWidth", {
+      value: CLIENT_WIDTH,
+      configurable: true,
+    });
+    Object.defineProperty(container, "offsetWidth", {
+      value: CLIENT_WIDTH + SCROLLBAR_GUTTER,
+      configurable: true,
+    });
+    container.getBoundingClientRect = () =>
+      // Only left/right are read by the gutter math.
+      ({ left: 0, right: CLIENT_WIDTH + SCROLLBAR_GUTTER }) as DOMRect;
+    return { container, callbacks };
+  }
+
+  it("releases the follow pin when the scrollbar is pressed, so async growth cannot drag the view back", () => {
+    try {
+      const { container, callbacks } = renderWithScrollbar();
+      // Press inside the right-hand gutter = grabbing the scrollbar thumb.
+      fireEvent.mouseDown(container, { clientX: CLIENT_WIDTH + 5 });
+      // The drag moves the view up, then a code block settles and grows.
+      act(() => {
+        container.scrollTop = 500;
+      });
+      act(() => {
+        callbacks.forEach((cb) => cb());
+      });
+      expect(container.scrollTop).toBe(500);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the pin when the press lands outside the scrollbar gutter", () => {
+    try {
+      const { container, callbacks } = renderWithScrollbar();
+      // A press on the container's own padding also targets the container,
+      // but sits inside clientWidth — it must not hand over the pin.
+      fireEvent.mouseDown(container, { clientX: 100 });
+      act(() => {
+        container.scrollTop = 500;
+      });
+      act(() => {
+        callbacks.forEach((cb) => cb());
+      });
+      expect(container.scrollTop).toBe(SCROLL_HEIGHT);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe("MessageList regenerate placeholder shimmer (B5/R7)", () => {
   it("shows the thinking shimmer on the placeholder immediately, even mid-list", () => {
     const placeholder: ChatUIMessage = {
