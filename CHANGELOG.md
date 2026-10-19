@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-10-20
+
+### Highlights
+
+- **Edit User Messages In Place & Regenerate**: Sent user messages can now be edited directly in the message list — text and attachments included. Sending the edit creates a new switchable version of the user message and automatically regenerates the assistant reply below it as another switchable version.
+
+### Feats
+
+- **User Message Editing**:
+  - User messages gain a pencil icon action and an "Edit" dropdown menu item (tap-reveal path on mobile, no hover dependency); assistant messages are unaffected.
+  - In-place editor prefills the current version's text, shows the current version's attachment chips (removable, with new uploads reusing the composer's upload/validation/quota pipeline), and offers Cancel/Send; Cancel exits with zero server writes.
+  - Sending an edit never mutates the original: the edited content is written as a **new version in the same version group** (transactional `is_selected` switch), and the version switcher now appears on user messages too.
+  - The edit then auto-triggers a regeneration using the composer's **currently selected** model/assistant/search mode/reasoning effort (identical to the regenerate button); the new assistant reply joins the existing reply's version group (or opens a new slot), with immediate thinking-shimmer feedback. Later messages are never truncated.
+  - Server side: the existing regenerate endpoint accepts an optional `edit` payload; edited attachments pass `resolveOwnedFileParts` ownership validation before the new version is persisted, so failed streams keep the user edit and record a failed assistant version (same semantics as regenerate).
+  - Compressed-region messages cannot be edited, and editing is disabled while any stream is in flight; content-free sends (no text and no attachments) are blocked exactly like the composer.
+- **Per-Route Document Titles**: Settings, auth, and assistant pages now set distinct browser tab titles via route metadata, and the chat view keeps the tab title in sync with the active topic title.
+
+### Fixes
+
+- **Message Group Position Stability**: Group display order is now anchored by a new immutable `group_created_at` column instead of a version's own `created_at` — deleting a group's earliest version no longer shifts the group in the list, and regenerating an emptied slot lands back at its original position instead of jumping to the topic's end.
+- **Group Row Remount on Version Delete**: Deleting a non-final version no longer unmounts and remounts the message group row, preserving active UI state.
+- **Scrollbar Drag vs. Scroll Follow**: Pressing the scrollbar (drag or track click) now releases the streaming scroll-follow pin, so the view is no longer yanked back to the bottom mid-drag by async content growth.
+
 ## [0.3.1] - 2026-10-11
 
 ### Fixes

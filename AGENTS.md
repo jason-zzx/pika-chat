@@ -46,3 +46,6 @@ Whenever preparing a release or documenting notable changes, adhere to the follo
      - `Chore`
    - Include only the sections that contain actual additions or modifications in the release (omit empty sections).
 
+4. **No Routine Database Migrations**:
+   - Do not mention routine Drizzle migration commits in changelogs — they are normal daily development, not user-facing changes. Only document them if the migration itself requires operator action (e.g. manual data backfill or breaking schema change).
+
