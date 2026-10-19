@@ -1103,9 +1103,20 @@ export default function ChatView({
       setActionError(apiErrorMessage(caught, tErrors, "actions.deleteMessage"));
       return;
     }
-    setMessages((current) =>
-      current.filter((entry) => entry.id !== message.id),
-    );
+    // Only remove the row locally when the deleted version was the group's
+    // last one. When versions remain, the server selects the newest of them
+    // and the reseed swaps the content in place (the row is keyed by
+    // groupId) — removing the row first would blank it for a full history
+    // round-trip (visible flicker), and any reseed hiccup would leave the
+    // group looking fully deleted until the next refetch.
+    const groupSurvives = (
+      message.metadata?.versionIds ?? [message.id]
+    ).some((id) => id !== message.id);
+    if (!groupSurvives) {
+      setMessages((current) =>
+        current.filter((entry) => entry.id !== message.id),
+      );
+    }
     reseedHistory(activeTopicId);
   }
 

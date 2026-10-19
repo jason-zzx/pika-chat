@@ -435,6 +435,88 @@ describe("ChatView session-created topic history (B8)", () => {
   });
 });
 
+describe("ChatView message delete", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+  });
+
+  async function clickDelete(articleName: string) {
+    const article = await screen.findByRole("article", { name: articleName });
+    fireEvent.click(
+      within(article).getByRole("button", { name: "More actions" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+  }
+
+  it("keeps the row mounted while the reseed is in flight when the group has remaining versions", async () => {
+    const v1 = assistantVersion("srv-a1", "first answer", 1, [
+      "srv-a1",
+      "srv-a2",
+    ]);
+    let resolveReseed:
+      | ((value: { messages: StoredMessage[] }) => void)
+      | undefined;
+    vi.mocked(listTopicMessages)
+      // Initial history seed.
+      .mockResolvedValueOnce({ messages: [userMessage("u1", "question"), v1] })
+      // ensureServerMessageId's fresh fetch (pre-delete).
+      .mockResolvedValueOnce({ messages: [userMessage("u1", "question"), v1] })
+      // The delete teardown reseed: held back so the mid-flight state is
+      // observable.
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveReseed = resolve;
+          }),
+      );
+    vi.mocked(deleteTopicMessage).mockResolvedValue(undefined);
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByText("first answer");
+
+    await clickDelete("Assistant");
+    await waitFor(() => {
+      expect(deleteTopicMessage).toHaveBeenCalledWith("t1", "srv-a1");
+    });
+
+    // No blank window: the row keeps showing the deleted version until the
+    // reseed delivers the server's fallback selection.
+    expect(screen.getByText("first answer")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveReseed?.({
+        messages: [
+          userMessage("u1", "question"),
+          assistantVersion("srv-a2", "second answer", 2, ["srv-a2"]),
+        ],
+      });
+    });
+    expect(await screen.findByText("second answer")).toBeInTheDocument();
+    expect(screen.queryByText("first answer")).toBeNull();
+  });
+
+  it("removes the row at once when the deleted version was the group's last one", async () => {
+    const only = assistantVersion("srv-a1", "only answer", 1, ["srv-a1"]);
+    vi.mocked(listTopicMessages)
+      .mockResolvedValueOnce({
+        messages: [userMessage("u1", "question"), only],
+      })
+      .mockResolvedValueOnce({
+        messages: [userMessage("u1", "question"), only],
+      })
+      // Reseed hangs: the local removal must not depend on it.
+      .mockImplementationOnce(() => new Promise(() => {}));
+    vi.mocked(deleteTopicMessage).mockResolvedValue(undefined);
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByText("only answer");
+
+    await clickDelete("Assistant");
+    await waitFor(() => {
+      expect(screen.queryByText("only answer")).toBeNull();
+    });
+  });
+});
+
 describe("ChatView attachment drop zone", () => {
   beforeEach(() => {
     attachmentMocks.addFiles.mockClear();
