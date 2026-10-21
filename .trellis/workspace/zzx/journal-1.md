@@ -1046,3 +1046,26 @@ Replaced inline sidebar search with a global command-palette dialog (Ctrl/Cmd+K,
 ### Status
 
 [OK] **Completed**
+
+
+## Session 38: 流式恢复：客户端 Chat 池 + 断连即断 provider
+<!-- trellis-session: v=2 fp=68a66334b93bc3e2 -->
+
+**Date**: 2026-10-21
+**Task**: 流式恢复：客户端 Chat 池 + 断连即断 provider
+**Branch**: `main`
+
+### Summary
+
+（未建任务，用户选择直接实现）三件套。(1) 服务端：两流式路由用 withDisconnectAbort 包装响应流，客户端取消（刷新/关标签）即 abortStream 断开 provider 连接，不再空烧 token；SPA 导航不断 fetch，不影响可恢复的后台流。(2) 客户端 Chat 池（chat-pool.ts）：每话题一个长驻 Chat 实例交给 useChat({ chat })，切走保活、切回重订阅累积中的消息与流式状态；draft 在 data-topic 时迁移键；双层回调（模块级：侧栏 streaming store/桥接失效/标题请求；视图级：URL 采纳/附件恢复）；空闲且无视图才驱逐，驱逐延迟到 microtask 以防 StrictMode 同 commit detach/reattach 换出空 chat；播种标记 seededFor 挂在 entry 上随驱逐消失。(3) 侧栏流式话题显示 Loader2（streaming-topics.ts 外置 store，遵守跨域边界）。修复两个回归：a) 播种标记曾是组件 ref，entry 驱逐后标记错位导致 B/A 轮空；b) 后台完成时 invalidateQueries 对 inactive query 只标 stale 不 refetch，下次挂载播种过期缓存且守卫挡住挂载 refetch——桥接对 inactive query 主动 fetchQuery。ponytail 优化落地 4 项（-35 行）：titleRequestedRef 死 Set、sendContext.assistantId 死字段、ChatPoolEntrySnapshot 假门面（直接写字段被 React Compiler immutability 拦截，mutator 函数保留为合法通道）、identity transform。经真实浏览器验证全流程。136 文件 1240 测试全绿。memory #135 已更新。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c70a919` | feat(chat): resume background streams across topic navigation |
+| `2292dc5` | feat(chat): sever provider stream when client disconnects |
+
+### Status
+
+[OK] **Completed**
