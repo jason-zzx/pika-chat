@@ -628,7 +628,9 @@ export default function MessageList({
                         message.role === "assistant")
                   }
                   revealed={revealedKey === itemKey}
-                  onReveal={() => setRevealedKey(itemKey)}
+                  // setRevealedKey is referentially stable and its
+                  // SetStateAction parameter accepts the itemKey string.
+                  onReveal={setRevealedKey}
                   assistantName={assistantName}
                   assistantIcon={assistantIcon}
                   onRegenerate={onRegenerate}

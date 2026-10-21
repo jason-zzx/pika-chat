@@ -3,6 +3,7 @@
 import { PencilIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
+  memo,
   useState,
   type MouseEvent as ReactMouseEvent,
   type Ref,
@@ -393,8 +394,10 @@ type MessageItemProps = {
   /** Single-active tap reveal (R9/B7): owned by the parent list, which keeps
    * at most one message revealed. Undefined behaves as not revealed. */
   revealed?: boolean;
-  /** The message body was tapped; the parent decides which message reveals. */
-  onReveal?: () => void;
+  /** The message body was tapped; the parent decides which message reveals.
+   * Receives the row's version-group key so the parent callback can stay
+   * referentially stable (memoization depends on it). */
+  onReveal?: (itemKey: string) => void;
   onRegenerate?: (message: ChatUIMessage) => void;
   onDelete?: (message: ChatUIMessage) => void;
   onDeleteRegenerate?: (message: ChatUIMessage) => void;
@@ -436,7 +439,7 @@ type MessageItemProps = {
   highlighted?: boolean;
 };
 
-export default function MessageItem({
+function MessageItem({
   message,
   streaming = false,
   assistantName,
@@ -530,7 +533,7 @@ export default function MessageItem({
       return;
     }
     // Single-active semantics (R9): a tap only ever reveals; it never hides.
-    onReveal?.();
+    onReveal?.(itemKey ?? message.id);
   }
 
   // Generated-image messages carry file parts (and possibly empty text):
@@ -779,3 +782,12 @@ export default function MessageItem({
     </article>
   );
 }
+
+// Memoized so a stream update (throttled to ~20fps in ChatView) re-renders
+// only the message that actually changed: the chat store snapshots only the
+// mutated message object, so unchanged `message` references plus stable
+// callback props let the default shallow compare skip every other row.
+// When adding a prop, keep it referentially stable across parent renders
+// (primitives, refs, or stable callbacks) — a fresh object or inline closure
+// per render silently defeats the memo for the whole list.
+export default memo(MessageItem);

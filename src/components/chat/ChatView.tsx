@@ -23,6 +23,7 @@ import EmptyState from "@/components/common/EmptyState";
 import InsetHeader from "@/components/layout/InsetHeader";
 import { useAvailableModels } from "@/components/provider/use-available-models";
 import { useModelPreferences } from "@/hooks/use-model-preferences";
+import { useStableCallback } from "@/hooks/use-stable-callback";
 import {
   deleteTopicMessage,
   listTopicMessages as fetchTopicMessages,
@@ -392,6 +393,11 @@ export default function ChatView({
     useChat<ChatUIMessage>({
       id: chatId,
       transport,
+      // Coalesce high-frequency stream chunks into ~20fps state updates so a
+      // chatty provider cannot force a re-render (and a Streamdown reparse of
+      // the streaming message) per chunk. `onData` is invoked per data part
+      // outside this throttle, so topic/title/URL side effects stay immediate.
+      throttle: 50,
       onData: (part) => {
         if (part.type !== "data-topic") {
           return;
@@ -1477,6 +1483,18 @@ export default function ChatView({
     }
   }
 
+  // Stable callback identities for MessageList: with MessageItem memoized,
+  // a per-render inline arrow here would re-render every row on each stream
+  // update. The wrappers always invoke the latest render's handler, so
+  // closure freshness is unchanged.
+  const listOnRegenerate = useStableCallback(handleRegenerate);
+  const listOnDelete = useStableCallback(handleDelete);
+  const listOnDeleteRegenerate = useStableCallback(handleDeleteRegenerate);
+  const listOnSelectVersion = useStableCallback(handleSelectVersion);
+  const listOnTranslate = useStableCallback(handleTranslate);
+  const listOnEditImage = useStableCallback(handleEditImage);
+  const listOnEditSubmit = useStableCallback(handleEditSubmit);
+
   if (topicId && history.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -1521,25 +1539,17 @@ export default function ChatView({
             sendSignal={sendSignal}
             assistantName={resolvedAssistant?.name}
             assistantIcon={resolvedAssistant?.icon}
-            onRegenerate={(message) => void handleRegenerate(message)}
-            onDelete={(message) => void handleDelete(message)}
-            onDeleteRegenerate={(message) => void handleDeleteRegenerate(message)}
-            onSelectVersion={(message, versionId) =>
-              void handleSelectVersion(message, versionId)
-            }
-            onTranslate={
-              pickedModel
-                ? (message, targetLang) => void handleTranslate(message, targetLang)
-                : undefined
-            }
-            onEditImage={handleEditImage}
+            onRegenerate={listOnRegenerate}
+            onDelete={listOnDelete}
+            onDeleteRegenerate={listOnDeleteRegenerate}
+            onSelectVersion={listOnSelectVersion}
+            onTranslate={pickedModel ? listOnTranslate : undefined}
+            onEditImage={listOnEditImage}
             onEditSubmit={
               // Gating on canActOnMessages hides the edit entry while a turn
               // is in flight (PRD R8); MessageItem additionally withholds it
               // inside the compressed zone.
-              canActOnMessages && pickedModel
-                ? (message, parts) => void handleEditSubmit(message, parts)
-                : undefined
+              canActOnMessages && pickedModel ? listOnEditSubmit : undefined
             }
             translating={translating}
             highlightKey={highlightKey}
