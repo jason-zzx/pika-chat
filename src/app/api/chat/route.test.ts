@@ -70,6 +70,7 @@ vi.mock("@/server/ai/stream-registry", () => ({
     return streamControl.controller.signal;
   }),
   releaseStream: vi.fn(),
+  abortStream: vi.fn(),
 }));
 vi.mock("@/server/ai/attachments", () => ({ resolveAttachmentsForModel }));
 vi.mock("@/server/services/message.service", () => ({
@@ -1321,5 +1322,54 @@ describe("POST /api/chat image generation bypass", () => {
       ACTOR,
     );
     expect(uploadFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/chat client disconnect", () => {
+  beforeEach(() => {
+    resolveAttachmentsForModel.mockResolvedValue([]);
+    resolveOwnedFileParts.mockResolvedValue([]);
+    createChatModelHandle.mockResolvedValue({
+      // A provider stream that stays open until aborted — the client
+      // disconnects before any chunk arrives.
+      model: new MockLanguageModelV3({
+        doStream: async () => ({
+          stream: new ReadableStream({ start: () => {} }),
+        }),
+      }),
+      describeError: () => ({ kind: "key", key: "generic" }),
+      apiFormat: "openai-compatible",
+      providerConfigId: "cfg-1",
+      filesApi: null,
+    });
+  });
+
+  it("aborts the provider stream when the client cancels the response", async () => {
+    const { abortStream } = await import("@/server/ai/stream-registry");
+
+    const response = await POST(
+      chatRequest({
+        assistantId: "assistant-1",
+        topicId: "topic-1",
+        providerConfigId: "cfg-1",
+        modelId: "model-1",
+        message: {
+          id: "message-1",
+          role: "user",
+          parts: [{ type: "text", text: "hi" }],
+        },
+      }),
+    );
+
+    // A page refresh/tab close cancels the response body; the route must
+    // sever the provider stream instead of burning tokens into the void.
+    // (SPA navigations keep the fetch alive — that path is the client chat
+    // pool, not this handler.)
+    const reader = response.body!.getReader();
+    await reader.cancel();
+
+    await vi.waitFor(() => {
+      expect(abortStream).toHaveBeenCalledWith(expect.any(String), "user-1");
+    });
   });
 });

@@ -38,7 +38,8 @@ import {
 } from "@/server/ai/search/tool";
 import { buildChatInstructions } from "@/server/ai/instructions";
 import { createStreamFailureTracker } from "@/server/ai/stream-failure";
-import { registerStream, releaseStream } from "@/server/ai/stream-registry";
+import { registerStream, releaseStream, abortStream } from "@/server/ai/stream-registry";
+import { withDisconnectAbort } from "@/server/ai/disconnect-abort";
 import { requireActor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
 import { resolveOwnedFileParts } from "@/server/files/file.service";
@@ -416,7 +417,12 @@ export const POST = withErrorHandling(async (request, context) => {
   });
 
   return createUIMessageStreamResponse({
-    stream,
+    // A cancelled response means the client disconnected (refresh/tab close;
+    // SPA navigations keep the fetch alive for resume): stop paying for the
+    // provider stream nobody can read.
+    stream: withDisconnectAbort(stream, () =>
+      abortStream(streamId, actor.userId),
+    ),
     headers: { "x-pika-stream-id": streamId },
   });
 });

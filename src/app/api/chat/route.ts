@@ -42,7 +42,12 @@ import {
   withReasoningDurations,
 } from "@/server/ai/reasoning-timer";
 import { createStreamFailureTracker } from "@/server/ai/stream-failure";
-import { registerStream, releaseStream } from "@/server/ai/stream-registry";
+import {
+  abortStream,
+  registerStream,
+  releaseStream,
+} from "@/server/ai/stream-registry";
+import { withDisconnectAbort } from "@/server/ai/disconnect-abort";
 import { requireActor, type Actor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
 import { resolveOwnedFileParts } from "@/server/files/file.service";
@@ -538,5 +543,11 @@ export const POST = withErrorHandling(async (request) => {
     },
   });
 
-  return createUIMessageStreamResponse({ stream });
+  return createUIMessageStreamResponse({
+    // See regenerate: a cancelled response means the client disconnected —
+    // sever the provider stream too.
+    stream: withDisconnectAbort(stream, () =>
+      abortStream(streamId, actor.userId),
+    ),
+  });
 });
