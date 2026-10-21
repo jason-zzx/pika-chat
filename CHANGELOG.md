@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-10-21
+
+### Highlights
+
+- **Replies Keep Streaming While You Browse Away**: Switching topics mid-reply no longer shows an empty view that suddenly fills in later — the stream keeps running in the background, and returning to the topic resubscribes to the still-accumulating reply with its live streaming indicator. Topics streaming in the background are marked with a spinner in the sidebar.
+
+### Feats
+
+- **Background Stream Resume**:
+  - A session-level chat pool keeps one live connection per topic: navigating away no longer abandons the in-flight reply, and navigating back shows the accumulated text and live status instantly instead of waiting for a history refetch.
+  - Streams that finish in the background are persisted and pre-fetched, so the finished turn is already there on your next visit — no flash of a stale or empty conversation.
+  - The sidebar shows a spinning indicator on any topic with an active background stream (send or regenerate).
+- **Provider Disconnect on Client Cancel**: Refreshing the page or closing the tab now immediately severs the upstream provider connection instead of letting the server finish (and bill) a stream nobody can read. Partial replies are still persisted before disconnect, exactly as before.
+- **Streaming Render Performance**: High-frequency stream chunks are coalesced into ~20fps updates and message rows are memoized, so chatty providers can no longer force a full message-list re-render (and markdown re-parse) per chunk.
+
 ## [0.3.2] - 2026-10-20
 
 ### Highlights
