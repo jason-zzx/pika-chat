@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
-  DefaultChatTransport,
   parseJsonEventStream,
   readUIMessageStream,
   uiMessageChunkSchema,
@@ -16,7 +15,6 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   assistantKeys,
   useAssistantTree,
-  useGenerateTopicTitle,
   useSetAssistantDefaultModel,
 } from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
@@ -67,6 +65,16 @@ import Composer from "./Composer";
 import ErrorBlock from "./ErrorBlock";
 import MessageList, { type MessageListHandle } from "./MessageList";
 import SearchHitNav from "./SearchHitNav";
+import {
+  acquireChat,
+  attachChatView,
+  clearChatSeeded,
+  hasLiveChat,
+  markChatSeeded,
+  noteRegenFinished,
+  noteRegenStarted,
+  noteSendStarted,
+} from "./chat-pool";
 import {
   buildRegenPlaceholder,
   insertRegenPlaceholder,
@@ -213,8 +221,6 @@ export default function ChatView({
   const models = useAvailableModels();
   const modelPreferences = useModelPreferences();
   const setAssistantDefault = useSetAssistantDefaultModel();
-  const generateTitle = useGenerateTopicTitle();
-  const generateTitleMutateRef = useRef(generateTitle.mutate);
   const [createdTopicId, setCreatedTopicId] = useState<string | undefined>(
     undefined,
   );
@@ -226,7 +232,10 @@ export default function ChatView({
   const pathname = usePathname();
   const history = useChatHistory(activeTopicId);
   const topicDetail = useTopicDetail(activeTopicId);
-  const chatId = topicId ?? "draft";
+  // The chat pool keys a session-created topic under its real id (the pool
+  // migrates the "draft" entry on `data-topic`), so this view must ask for
+  // the same key or it would acquire a second, empty chat.
+  const chatId = topicId ?? createdTopicId ?? "draft";
   const [streamId, setStreamId] = useState<string | null>(null);
   const [regen, setRegen] = useState<{
     streamId: string | null;
@@ -282,23 +291,17 @@ export default function ChatView({
   // Set when stop is pressed before the regenerate POST has returned its
   // stream id; the id is stopped as soon as it arrives (B5).
   const regenStopRequestedRef = useRef(false);
-  const seededHistoryFor = useRef<string | null>(null);
   // Set once the replaceState'd URL of a session-created topic is visible to
   // the router (usePathname), so a later same-tree navigation away from it
   // can be told apart from the render before the patch applied.
   const urlShownForCreatedTopic = useRef<string | null>(null);
   const seededModel = useRef<string | null>(null);
-  const titleRequestedRef = useRef(new Set<string>());
   const latestRef = useRef<{
     assistantId: string;
     topicId: string | undefined;
-    shouldRequestTitle: boolean;
-    titlePick: ComposerModelPick | null;
   }>({
     assistantId: assistantId ?? "",
     topicId,
-    shouldRequestTitle: false,
-    titlePick: null,
   });
 
   const setDraft = useComposerStore((state) => state.setDraft);
@@ -368,19 +371,7 @@ export default function ChatView({
     ? `${headerModel.modelId} · ${headerModel.configName}`
     : null;
 
-  const [transport] = useState(
-    () =>
-      new DefaultChatTransport<ChatUIMessage>({
-        api: "/api/chat",
-        prepareSendMessagesRequest: ({ messages, body }) => ({
-          body: {
-            ...body,
-            message: messages[messages.length - 1],
-          },
-        }),
-      }),
-  );
-
+  const poolEntry = acquireChat(chatId);
   const {
     messages,
     status,
@@ -390,92 +381,77 @@ export default function ChatView({
     setMessages,
     clearError,
   } =
+    // The pooled Chat owns the stream: leaving the topic keeps it alive in
+    // the background, returning resubscribes to the still-accumulating
+    // messages and the live status. Stream side effects are dispatched
+    // two-level by the pool (see chat-pool.ts); this view registers its
+    // handlers below.
     useChat<ChatUIMessage>({
-      id: chatId,
-      transport,
+      chat: poolEntry.chat,
       // Coalesce high-frequency stream chunks into ~20fps state updates so a
       // chatty provider cannot force a re-render (and a Streamdown reparse of
-      // the streaming message) per chunk. `onData` is invoked per data part
-      // outside this throttle, so topic/title/URL side effects stay immediate.
+      // the streaming message) per chunk.
       throttle: 50,
-      onData: (part) => {
-        if (part.type !== "data-topic") {
-          return;
-        }
-        latestRef.current.topicId = part.data.topicId;
-        setCreatedTopicId(part.data.topicId);
-        // B8: the live local stream is newer than anything the just-enabled
-        // history query can return for the new topic; mark it as already
-        // seeded so the mid-session fetch cannot clobber the stream. Later
-        // explicit reseeds (regen/delete/select) clear this ref first.
-        seededHistoryFor.current = part.data.topicId;
-        setStreamId(part.data.streamId);
-        void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
-        const latest = latestRef.current;
-        const requested = titleRequestedRef.current;
-        if (
-          latest.shouldRequestTitle &&
-          latest.titlePick &&
-          !requested.has(part.data.topicId)
-        ) {
-          requested.add(part.data.topicId);
-          void generateTitleMutateRef.current({
-            id: part.data.topicId,
-            input: {
-              providerConfigId: latest.titlePick.configId,
-              modelId: latest.titlePick.modelId,
-            },
-          });
-        }
-        latest.shouldRequestTitle = false;
-        const assistant = latest.assistantId;
-        if (assistant.length === 0) {
-          return;
-        }
-        // Pass null, not window.history.state: Next's history patch treats
-        // state carrying its __NA marker as an internal call and skips
-        // syncing the router (canonicalUrl would stay on the draft URL and
-        // New topic would become a same-page no-op). With null the patch
-        // copies the internals over itself and adopts the topic URL.
-        window.history.replaceState(
-          null,
-          "",
-          assistantTopicHref(assistant, part.data.topicId),
-        );
-      },
-      onFinish: (event) => {
-        const pending = pendingSendAttachments.current;
-        if (pending && event.isError) {
-          restoreAttachments(pending.key, pending.attachments);
-        }
-        pendingSendAttachments.current = null;
-        const topic = latestRef.current.topicId;
-        void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
-        if (topic) {
-          // A failed turn is stamped locally so the failure shows at once, but
-          // the reason lives in the persisted row. Clearing the seed guard
-          // lets the refetch below replace it, so the live view shows the same
-          // error a reload would instead of the generic fallback. The server
-          // persists in its own onEnd, which runs before the response stream
-          // closes — by the time this fires the row is already there.
-          if (event.isError) {
-            seededHistoryFor.current = null;
-          }
-          void queryClient.invalidateQueries({
-            queryKey: chatKeys.history(topic),
-          });
-          // The send may have auto-compressed the history server-side (PRD
-          // R1); refresh the detail so the marker reflects the new boundary.
-          void queryClient.invalidateQueries({
-            queryKey: topicKeys.detail(topic),
-          });
-        }
-      },
     });
 
+  // View-level stream handlers, registered with the pool below. The stable
+  // wrappers always invoke the latest render's closure, so the registration
+  // effect only re-runs when the chat id changes.
+  const handlePoolData = useStableCallback(
+    (part: { type: string; data?: unknown }) => {
+      if (part.type !== "data-topic") {
+        return;
+      }
+      const { topicId: streamTopicId, streamId: newStreamId } = part.data as {
+        topicId: string;
+        streamId: string;
+      };
+      latestRef.current.topicId = streamTopicId;
+      setCreatedTopicId(streamTopicId);
+      // B8: the live local stream is newer than anything the just-enabled
+      // history query can return for the new topic; mark the pooled chat as
+      // already seeded so the mid-session fetch cannot clobber the stream.
+      // Later explicit reseeds (regen/delete/select) clear the marker first.
+      markChatSeeded(poolEntry, streamTopicId);
+      setStreamId(newStreamId);
+      const assistant = latestRef.current.assistantId;
+      if (assistant.length === 0) {
+        return;
+      }
+      // Pass null, not window.history.state: Next's history patch treats
+      // state carrying its __NA marker as an internal call and skips
+      // syncing the router (canonicalUrl would stay on the draft URL and
+      // New topic would become a same-page no-op). With null the patch
+      // copies the internals over itself and adopts the topic URL.
+      window.history.replaceState(
+        null,
+        "",
+        assistantTopicHref(assistant, streamTopicId),
+      );
+    },
+  );
+  const handlePoolFinish = useStableCallback((event: { isError: boolean }) => {
+    const pending = pendingSendAttachments.current;
+    if (pending && event.isError) {
+      restoreAttachments(pending.key, pending.attachments);
+    }
+    pendingSendAttachments.current = null;
+    // A failed turn is stamped locally so the failure shows at once, but
+    // the reason lives in the persisted row. Clearing the seed guard lets
+    // the pool's finish-time invalidation replace it, so the live view
+    // shows the same error a reload would instead of the generic
+    // fallback.
+    if (event.isError) {
+      clearChatSeeded(poolEntry);
+    }
+  });
+
   useEffect(() => {
-    generateTitleMutateRef.current = generateTitle.mutate;
-  }, [generateTitle.mutate]);
+    return attachChatView(chatId, {
+      onData: handlePoolData,
+      onFinish: handlePoolFinish,
+    });
+  }, [chatId, handlePoolData, handlePoolFinish]);
 
   useEffect(() => {
     if (assistantId) {
@@ -500,24 +476,31 @@ export default function ChatView({
     // New topic button, or deleting this topic and being routed to a fresh
     // draft — diffs to the same tree and does not remount this view. Reset
     // to a clean draft state instead of showing the old topic's messages.
+    // The old topic's chat keeps its own pooled messages (its stream may
+    // still be running); the fresh "draft" chat is what renders next.
     urlShownForCreatedTopic.current = null;
     setCreatedTopicId(undefined);
     setStreamId(null);
-    setMessages([]);
-    seededHistoryFor.current = null;
-  }, [pathname, createdTopicId, setMessages]);
+  }, [pathname, createdTopicId]);
 
   useEffect(() => {
     if (
       !activeTopicId ||
       !history.data ||
-      seededHistoryFor.current === activeTopicId
+      poolEntry.seededFor === activeTopicId
     ) {
       return;
     }
-    seededHistoryFor.current = activeTopicId;
+    if (hasLiveChat(chatId)) {
+      // A background stream/regen owns this chat's messages; seeding stale
+      // history would clobber them. The seed marker is deliberately NOT set:
+      // the finish-time invalidation updates history.data and this effect
+      // then reseeds once with the persisted (canonical) view.
+      return;
+    }
+    markChatSeeded(poolEntry, activeTopicId);
     setMessages(history.data.messages);
-  }, [history.data, setMessages, activeTopicId]);
+  }, [history.data, setMessages, activeTopicId, chatId, poolEntry]);
 
   /** Scroll to a message and flash it for 2s. Shared by the search-result
    * deep link and the in-topic hit navigator. */
@@ -805,9 +788,12 @@ export default function ChatView({
       // The server ends the stream; runRegeneration's teardown reseeds.
       return;
     }
-    if (streamId) {
+    // A resumed view never saw this stream's `data-topic`: the stream id
+    // state is empty, so fall back to the pool entry's record.
+    const activeStreamId = streamId ?? poolEntry.streamId;
+    if (activeStreamId) {
       try {
-        await stopChatStream(streamId);
+        await stopChatStream(activeStreamId);
       } catch {
         // Unknown or already finished streams are NOT_FOUND; still stop locally.
       }
@@ -818,12 +804,12 @@ export default function ChatView({
 
   /**
    * Resync the message list from the server. Must run only after any stream
-   * has fully ended (including server-side persistence): clearing
-   * seededHistoryFor re-arms the seed effect, and the next history refetch
+   * has fully ended (including server-side persistence): clearing the chat's
+   * seed marker re-arms the seed effect, and the next history refetch
    * replaces local messages with the persisted selected-version view.
    */
   function reseedHistory(topic: string) {
-    seededHistoryFor.current = null;
+    clearChatSeeded(poolEntry);
     void queryClient.invalidateQueries({ queryKey: chatKeys.history(topic) });
   }
 
@@ -868,6 +854,10 @@ export default function ChatView({
     plan: RegenPlaceholderPlan | null,
     edit?: RegenerationEdit,
   ) {
+    // Pool bookkeeping: the regen loop updates messages outside the Chat
+    // stream, so without this the entry could be evicted mid-regen and the
+    // sidebar icon would not show.
+    noteRegenStarted(topic);
     const failStart = (caught?: unknown) => {
       // The stream never started: nothing changed server-side, so put the
       // replaced version back instead of leaving an orphan placeholder (B5).
@@ -890,6 +880,7 @@ export default function ChatView({
           ? tErrors("actions.regenerate")
           : apiErrorMessage(caught, tErrors, "actions.regenerate"),
       );
+      noteRegenFinished(topic);
       reseedHistory(topic);
     };
     const selected = findAvailableModel(models.data, pick);
@@ -984,6 +975,7 @@ export default function ChatView({
     } finally {
       setRegen(null);
       regenStopRequestedRef.current = false;
+      noteRegenFinished(topic);
       void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
       reseedHistory(topic);
     }
@@ -1409,13 +1401,18 @@ export default function ChatView({
     latestRef.current = {
       assistantId: resolvedAssistantId,
       topicId: activeTopicId,
+    };
+    // Pool bookkeeping for the send: marks the sidebar streaming icon at
+    // once for an existing topic (drafts mark on `data-topic`) and parks
+    // the title-request context where the module-level handler can fire it
+    // even if this view navigates away first.
+    noteSendStarted(chatId, {
       shouldRequestTitle: shouldRequestTopicTitle({
         activeTopicId,
         displayedTitle: headerTitle,
-        requestedTopicIds: titleRequestedRef.current,
       }),
       titlePick: pickedModel,
-    };
+    });
     const text = draft.trim();
     // Image models without imageInput never send attachments (the server
     // rejects them); staged chips stay put so switching back to a chat model
@@ -1508,7 +1505,10 @@ export default function ChatView({
     );
   }
 
-  const historyPending = Boolean(topicId) && history.isPending;
+  // A resumed live chat already has its messages; the first history fetch
+  // must not veil them behind the loading state (its seed is skipped too).
+  const historyPending =
+    Boolean(topicId) && history.isPending && !hasLiveChat(chatId);
 
   return (
     <div

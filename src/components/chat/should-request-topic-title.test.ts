@@ -7,32 +7,25 @@ import { shouldRequestTopicTitle } from "./should-request-topic-title";
 const enDefaultTitle = DEFAULT_MESSAGES.en.topicTitle;
 
 describe("shouldRequestTopicTitle", () => {
+  // Firing a second request for the same topic is deduped by the chat pool
+  // (titleRequested), so this predicate only decides per-send intent.
   it("requests a title when this send creates a topic", () => {
     expect(
       shouldRequestTopicTitle({
         activeTopicId: undefined,
         displayedTitle: enDefaultTitle,
-        requestedTopicIds: new Set(),
       }),
     ).toBe(true);
   });
 
-  it("requests a title for an untitled topic once, in any locale", () => {
+  it("requests a title for an untitled topic, in any locale", () => {
     for (const displayedTitle of DEFAULT_TOPIC_TITLES) {
       expect(
         shouldRequestTopicTitle({
           activeTopicId: "topic-1",
           displayedTitle,
-          requestedTopicIds: new Set(),
         }),
       ).toBe(true);
-      expect(
-        shouldRequestTopicTitle({
-          activeTopicId: "topic-1",
-          displayedTitle,
-          requestedTopicIds: new Set(["topic-1"]),
-        }),
-      ).toBe(false);
     }
   });
 
@@ -41,7 +34,6 @@ describe("shouldRequestTopicTitle", () => {
       shouldRequestTopicTitle({
         activeTopicId: "topic-1",
         displayedTitle: "Lunch ideas",
-        requestedTopicIds: new Set(),
       }),
     ).toBe(false);
   });

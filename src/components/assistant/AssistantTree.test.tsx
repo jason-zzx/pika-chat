@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within, act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -12,6 +12,11 @@ import { setTopicFavorite } from "@/lib/api/topic";
 import type { Assistant } from "@/lib/schemas/assistant";
 import type { Topic } from "@/lib/schemas/topic";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
+import {
+  markTopicStreaming,
+  resetStreamingTopics,
+  unmarkTopicStreaming,
+} from "@/lib/streaming-topics";
 
 import AssistantTree from "./AssistantTree";
 
@@ -105,6 +110,7 @@ describe("AssistantTree", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    resetStreamingTopics();
   });
 
   it("opens the active topic's assistant pane and hides other assistants", async () => {
@@ -310,6 +316,29 @@ describe("AssistantTree", () => {
     expect(
       within(sectionContent("Favorite")).queryByRole("link", { name: "Plain" }),
     ).toBeNull();
+  });
+
+  it("marks a topic with a live background stream and clears the mark when it ends", async () => {
+    renderPane([
+      topic({ id: "t-streaming", title: "Busy" }),
+      topic({ id: "t-idle", title: "Idle" }),
+    ]);
+    const busyLink = await screen.findByRole("link", { name: "Busy" });
+    const idleLink = screen.getByRole("link", { name: "Idle" });
+
+    expect(busyLink.querySelector(".animate-spin")).toBeNull();
+
+    act(() => {
+      markTopicStreaming("t-streaming");
+    });
+    expect(busyLink.querySelector(".animate-spin")).not.toBeNull();
+    // Only the streaming topic carries the indicator.
+    expect(idleLink.querySelector(".animate-spin")).toBeNull();
+
+    act(() => {
+      unmarkTopicStreaming("t-streaming");
+    });
+    expect(busyLink.querySelector(".animate-spin")).toBeNull();
   });
 
   it("keeps the Topics label when every topic is favorited", async () => {

@@ -24,6 +24,7 @@ import {
 } from "@/test-utils/render-with-intl";
 
 import ChatView from "./ChatView";
+import { acquireChat, noteSendStarted, resetChatPool } from "./chat-pool";
 
 const nav = vi.hoisted(() => ({
   pathname: "/",
@@ -140,19 +141,79 @@ const captured = vi.hoisted(() => ({
   status: "ready" as "ready" | "submitted" | "streaming" | "error",
   error: undefined as Error | undefined,
   initialMessages: undefined as ChatUIMessage[] | undefined,
+  // Per-chat message store: the real Chat owns its messages, so switching
+  // the pooled chat (draft ↔ created topic ↔ other topic) swaps them.
+  chatMessages: new Map<object, ChatUIMessage[]>(),
 }));
 
 vi.mock("@ai-sdk/react", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
+  // Stand-in for the SDK's Chat: the pool constructs it directly, so the
+  // mock must export it alongside useChat.
+  class FakeChat {
+    id: string;
+    onData?: (part: TopicDataPart) => void;
+    onFinish?: (event: { isError: boolean }) => void;
+    onError?: (error: Error) => void;
+    constructor(options: {
+      id?: string;
+      onData?: (part: TopicDataPart) => void;
+      onFinish?: (event: { isError: boolean }) => void;
+      onError?: (error: Error) => void;
+    }) {
+      this.id = options.id ?? "test";
+      this.onData = options.onData;
+      this.onFinish = options.onFinish;
+      this.onError = options.onError;
+    }
+    get status() {
+      return captured.status;
+    }
+  }
   return {
-    useChat: (options: { onData?: (part: TopicDataPart) => void }) => {
-      const [messages, setMessages] = React.useState<ChatUIMessage[]>(
-        captured.initialMessages ?? [],
+    Chat: FakeChat,
+    useChat: (options: { chat?: FakeChat }) => {
+      const chat = options.chat;
+      const [messages, setMessagesState] = React.useState<ChatUIMessage[]>(
+        () => {
+          const initial =
+            (chat && captured.chatMessages.get(chat)) ??
+            captured.initialMessages ??
+            [];
+          // Record the initial messages as this chat's own, so the
+          // adoption effect below does not clobber them on mount.
+          if (chat) {
+            captured.chatMessages.set(chat, initial);
+          }
+          return initial;
+        },
       );
       const [error, setError] = React.useState<Error | undefined>(
         captured.error,
       );
-      captured.onData = options.onData;
+      // Swapping the pooled chat adopts that chat's messages, like the real
+      // hook subscribing to a different Chat instance.
+      React.useEffect(() => {
+        setMessagesState((chat && captured.chatMessages.get(chat)) ?? []);
+      }, [chat]);
+      captured.onData = (part) => chat?.onData?.(part);
+      // Stable per chat, like the real hook: an unstable setter would
+      // re-fire ChatView's seed effect every render.
+      const setMessages = React.useCallback<
+        Dispatch<SetStateAction<ChatUIMessage[]>>
+      >(
+        (update) => {
+          setMessagesState((current) => {
+            const next =
+              typeof update === "function" ? update(current) : update;
+            if (chat) {
+              captured.chatMessages.set(chat, next);
+            }
+            return next;
+          });
+        },
+        [chat],
+      );
       captured.setMessages = setMessages;
       // Mirrors the real hook: clearing is explicit, nothing else resets it.
       // Created once — the real `clearError` is a stable method, and a fresh
@@ -179,6 +240,13 @@ vi.mock("@ai-sdk/react", async () => {
       };
     },
   };
+});
+
+// The chat pool is module state: without a reset, chats (and their pooled
+// messages) leak across tests.
+beforeEach(() => {
+  captured.chatMessages.clear();
+  resetChatPool();
 });
 
 const attachmentMocks = vi.hoisted(() => ({
@@ -431,6 +499,55 @@ describe("ChatView session-created topic history (B8)", () => {
     await waitFor(() => {
       expect(screen.queryByText("first answer")).toBeNull();
       expect(screen.queryByText("question")).toBeNull();
+    });
+  });
+});
+
+describe("ChatView background stream resume", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    captured.status = "streaming";
+  });
+
+  afterEach(() => {
+    captured.status = "ready";
+  });
+
+  it("shows the pooled in-flight messages immediately, and a stale history fetch cannot clobber them", async () => {
+    // A stream for t1 is still running in the pool: its accumulated
+    // messages live on the pooled chat.
+    const pooled = acquireChat("t1");
+    captured.chatMessages.set(pooled.chat as unknown as object, [
+      userMessage("u1", "question"),
+      assistantDraft("srv-a1", "partial ans"),
+    ]);
+    noteSendStarted("t1", {
+      shouldRequestTitle: false,
+      titlePick: null,
+    });
+    // The history fetch for t1 lags behind the live stream.
+    let resolveHistory: ((data: ChatMessagesResponse) => void) | undefined;
+    vi.mocked(listTopicMessages).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveHistory = resolve;
+        }),
+    );
+
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+
+    // No loading veil over a live chat: the partial answer is already there.
+    expect(screen.getByText("partial ans")).toBeInTheDocument();
+    expect(screen.queryByText("Loading conversation…")).toBeNull();
+
+    // The belated history response (missing the in-flight answer) must not
+    // wipe the live messages.
+    await act(async () => {
+      resolveHistory?.({ messages: [userMessage("u1", "question")] });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("partial ans")).toBeInTheDocument();
     });
   });
 });

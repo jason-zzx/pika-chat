@@ -3,6 +3,7 @@
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
+  Loader2Icon,
   MoreHorizontalIcon,
   PlusIcon,
   StarIcon,
@@ -26,6 +27,7 @@ import SettingsNav from "@/components/layout/SettingsNav";
 import SidebarNavLink from "@/components/layout/SidebarNavLink";
 import DeleteTopicDialog from "@/components/topic/DeleteTopicDialog";
 import RenameTopicDialog from "@/components/topic/RenameTopicDialog";
+import { useStreamingTopics } from "@/lib/streaming-topics";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -394,6 +396,7 @@ function AssistantPane({
     topicSectionsSnapshot,
     topicSectionsServerSnapshot,
   );
+  const streamingTopics = useStreamingTopics();
 
   function toggleSection(key: keyof TopicSections) {
     setTopicSections({ ...sections, [key]: !sections[key] });
@@ -463,6 +466,7 @@ function AssistantPane({
                         topic={topic}
                         assistantId={assistant.id}
                         isActive={topic.id === activeTopicId}
+                        streaming={streamingTopics.has(topic.id)}
                         onRename={onRenameTopic}
                         onDelete={onDeleteTopic}
                       />
@@ -499,6 +503,7 @@ function AssistantPane({
                         topic={topic}
                         assistantId={assistant.id}
                         isActive={topic.id === activeTopicId}
+                        streaming={streamingTopics.has(topic.id)}
                         onRename={onRenameTopic}
                         onDelete={onDeleteTopic}
                       />
@@ -561,12 +566,14 @@ function TopicRow({
   topic,
   assistantId,
   isActive,
+  streaming,
   onRename,
   onDelete,
 }: {
   topic: Topic;
   assistantId: string;
   isActive: boolean;
+  streaming?: boolean;
   onRename: (topic: Topic) => void;
   onDelete: (topic: Topic) => void;
 }) {
@@ -587,6 +594,14 @@ function TopicRow({
         isActive={isActive}
       >
         <span className="truncate">{topic.title}</span>
+        {streaming ? (
+          // A background stream (send or regenerate) is still writing to
+          // this topic; decorative — the row link itself stays the action.
+          <Loader2Icon
+            aria-hidden="true"
+            className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+          />
+        ) : null}
         {/* Reserves room for the star action next to the "..." trigger. */}
         <span aria-hidden="true" className="w-6 shrink-0" />
       </SidebarNavLink>
