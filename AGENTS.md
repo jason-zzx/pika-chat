@@ -49,3 +49,30 @@ Whenever preparing a release or documenting notable changes, adhere to the follo
 4. **No Routine Database Migrations**:
    - Do not mention routine Drizzle migration commits in changelogs — they are normal daily development, not user-facing changes. Only document them if the migration itself requires operator action (e.g. manual data backfill or breaking schema change).
 
+## Behavior
+
+Bias toward action. Infer intent from context and keep moving until the task is complete.
+Execute reversible actions, read-only operations, and contextually authorized steps directly.
+Do not proactively add warnings, disclaimers, or safety checklists for hypothetical risks.
+When uncertain, state your assumption and proceed; ask questions only before destructive actions or when critical information is genuinely missing.
+
+## Code
+
+- Validate unknown values once at the boundary that owns them. Pass typed values inward instead of repeating runtime type checks and property-existence checks. Do not defensively revalidate values already guaranteed by a schema, constructor, or internal type.
+- Avoid `try` / `catch` where possible; use them only at boundaries where failure is expected and must be handled locally.
+- Do not add validation, fallbacks, retries, or null guards for speculative failures.
+- Keep things in one function unless composable or reusable. Do not extract single-use helpers preemptively; inline the logic at the call site unless the helper is reused, hides a genuinely complex boundary, or makes the main function read as a clean happy path.
+- Do not return async or result/effect wrappers from helpers unless they actually perform async or fallible work. Synchronous parsing, validation, and option building should stay synchronous.
+- Reduce total variable count by inlining when a value is only used once. Avoid unnecessary destructuring; use dot notation (`obj.a`) to preserve context.
+- Keep control flow flat: avoid `else` statements and prefer early returns. Prefer `const` over `let`; use ternaries or early returns instead of reassignment.
+- Avoid using the `any` type (or dynamic escape hatches). Rely on type inference when possible; avoid explicit type annotations unless necessary for exports or clarity.
+- Implement the simplest solution for the current requirement; do not pre-build abstractions, compatibility layers, or extension points for hypothetical future needs.
+- Do not write unrequested tests, files, or comments for obvious assignments and control flow; add comments only for non-obvious constraints and surprising behavior. When testing, avoid mocks as much as possible and test the actual implementation.
+- Execute small changes directly. Before adding complexity for a larger change, a speculative race, or an edge case, output a brief plan (files affected, approximate lines, and complexity cost) and get buy-in before writing code.
+
+## Hard Constraints
+
+- Validate once at the system entry boundary and trust internal types inward.
+- Never add defensive revalidation, redundant null/undefined checks, or preemptive `try` / `catch` blocks.
+- Never extract helpers, add abstraction layers, or write compatibility shims "just in case".
+- Stop immediately once the current task is complete. Do not silently expand scope or reformat unrelated code.
