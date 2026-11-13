@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -6,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codebuddy/hooks/session-start.py",
+            "command": "python3 .claude/hooks/session-start.py",
             "timeout": 30
           }
         ]
@@ -16,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codebuddy/hooks/session-start.py",
+            "command": "python3 .claude/hooks/session-start.py",
             "timeout": 30
           }
         ]
@@ -26,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codebuddy/hooks/session-start.py",
+            "command": "python3 .claude/hooks/session-start.py",
             "timeout": 30
           }
         ]
@@ -34,22 +37,22 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "task|Task",
+        "matcher": "Task",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codebuddy/hooks/inject-subagent-context.py",
+            "command": "python3 .claude/hooks/inject-subagent-context.py",
             "timeout": 30
           }
         ]
       },
       {
-        "matcher": "execute_command|Bash|PowerShell",
+        "matcher": "Agent",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codebuddy/hooks/inject-shell-session-context.py",
-            "timeout": 5
+            "command": "python3 .claude/hooks/inject-subagent-context.py",
+            "timeout": 30
           }
         ]
       }
@@ -59,11 +62,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codebuddy/hooks/inject-workflow-state.py",
+            "command": "python3 .claude/hooks/inject-workflow-state.py",
             "timeout": 15
           }
         ]
       }
     ]
+  },
+  "enabledPlugins": {},
+  "statusLine": {
+    "type": "command",
+    "command": "python3 .claude/hooks/statusline.py"
   }
 }
