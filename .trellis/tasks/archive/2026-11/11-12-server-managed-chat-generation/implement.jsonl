@@ -1,0 +1,14 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "服务端边界、鉴权与持久化权威约束"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "客户端服务端状态分工与交互约束"}
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "恢复消息身份、版本选择和顺序不可变"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "快照需保留完整消息metadata与终态"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "任务领取、事务、迁移及用户归属"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "任务属于账号且连接建立时鉴权"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "流失败不可只信SDK outcome；终态与取消边界"}
+{"file": ".trellis/spec/backend/image-generation.md", "reason": "独立图片分支、批次提交与文件清理"}
+{"file": ".trellis/spec/backend/chat-history-compression.md", "reason": "后台历史快照和压缩边界保真"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "服务端任务权威与TanStack Query客户端状态"}
+{"file": ".trellis/spec/backend/chat-search-tools.md", "reason": "工具状态恢复及任务取消传播"}
+{"file": ".trellis/tasks/11-12-server-managed-chat-generation/research/open-source-generation-lifecycle.md", "reason": "开源固定提交证据：优先独立生产者+现有SDK增量恢复，不默认重写前端/改202/加Redis"}
+{"file": ".trellis/tasks/11-12-server-managed-chat-generation/research/sdk-upgrade-decision.md", "reason": "SDK升级依据与最小G1当前状态恢复实验"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "已落地生命周期合同、单次admission/可信写入、连接时鉴权与启动恢复边界"}
