@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AppShell
       defaultSidebarOpen={defaultSidebarOpen}
-      user={{ name: actor.name, role: actor.role }}
+      user={{ name: actor.name, role: actor.role, isGuest: actor.isGuest === true }}
       themePreference={themePreference}
     >
       {children}

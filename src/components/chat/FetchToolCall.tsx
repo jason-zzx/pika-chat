@@ -140,6 +140,11 @@ function FetchToolBody({
     return <p className="text-muted-foreground">{t("fetchNoOutput")}</p>;
   }
   if ("error" in output) {
+    if (output.error === "limit_reached") {
+      return (
+        <p className="text-muted-foreground">{t("fetchLimitReached")}</p>
+      );
+    }
     const attempted = output.attemptedProviders
       .map((provider) => searchProviderLabel(provider))
       .join(", ");

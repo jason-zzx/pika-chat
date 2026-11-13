@@ -4,7 +4,7 @@ import {
   searchProviderSchema,
   upsertSearchProviderSchema,
 } from "@/lib/schemas/search-provider";
-import { requireActor } from "@/server/auth/actor";
+import { requireMember } from "@/server/auth/actor";
 import {
   deleteSearchProviderSetting,
   upsertSearchProviderSetting,
@@ -23,7 +23,7 @@ async function providerParam(context: RouteContext) {
 }
 
 export const PUT = withErrorHandling(async (request, context) => {
-  const actor = await requireActor(request.headers);
+  const actor = await requireMember(request.headers);
   const provider = await providerParam(context);
   const input = upsertSearchProviderSchema.parse(await request.json());
   const setting = await upsertSearchProviderSetting(provider, input, actor);
@@ -31,7 +31,7 @@ export const PUT = withErrorHandling(async (request, context) => {
 });
 
 export const DELETE = withErrorHandling(async (request, context) => {
-  const actor = await requireActor(request.headers);
+  const actor = await requireMember(request.headers);
   const provider = await providerParam(context);
   await deleteSearchProviderSetting(provider, actor);
   return new Response(null, { status: 204 });

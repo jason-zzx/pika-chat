@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { toast } from "@/components/ui/toast";
+import { useIsGuest } from "@/hooks/use-is-guest";
 import type { ActorRole } from "@/lib/auth-hierarchy";
 import { signOutAndReset } from "@/lib/sign-out";
 
@@ -25,6 +26,7 @@ type SidebarUserMenuProps = {
 
 export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
   const { setOpenMobile } = useSidebar();
+  const isGuest = useIsGuest();
   const t = useTranslations("Layout");
   const tAuth = useTranslations("Auth");
 
@@ -55,13 +57,19 @@ export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
         <DropdownMenuContent side="top" align="start" className="min-w-56">
           <DropdownMenuGroup>
             <DropdownMenuLabel>
-              {name} · {role === "super_admin" ? t("userMenu.superAdmin") : role}
+              {isGuest
+                ? `${name} · ${t("userMenu.guestBadge")}`
+                : `${name} · ${role === "super_admin" ? t("userMenu.superAdmin") : role}`}
             </DropdownMenuLabel>
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void onSignOut()}>
-            {t("userMenu.signOut")}
-          </DropdownMenuItem>
+          {!isGuest ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void onSignOut()}>
+                {t("userMenu.signOut")}
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
       <SidebarMenuButton

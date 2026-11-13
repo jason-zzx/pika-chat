@@ -140,6 +140,23 @@ describe("FetchToolCall", () => {
     );
   });
 
+  it("shows the limit-reached message when demo quota is exhausted", () => {
+    renderWithIntl(
+      <FetchToolCall
+        part={donePart({
+          error: "limit_reached",
+          attemptedProviders: [],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: TOGGLE_NAME }));
+
+    expect(
+      screen.getByText("Daily demo web lookup limit reached."),
+    ).toBeInTheDocument();
+  });
+
   it("shows the error text for an errored tool call", () => {
     const part: FetchPageToolPart = {
       type: "tool-fetchPage",

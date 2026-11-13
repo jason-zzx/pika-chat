@@ -16,6 +16,12 @@ function isBanned(user: Record<string, unknown>): boolean {
   return user.banned === true;
 }
 
+// The anonymous plugin is registered only in demo mode, so its `isAnonymous`
+// field is not part of the inferred session type.
+function isAnonymousUser(user: Record<string, unknown>): boolean {
+  return user.isAnonymous === true;
+}
+
 function actorName(user: { username?: unknown; email?: unknown }): string {
   if (typeof user.username === "string" && user.username.length > 0) {
     return user.username;
@@ -39,6 +45,7 @@ export async function resolveActor(
   return {
     userId: session.user.id,
     role: parseActorRole(session.user.role),
+    isGuest: isAnonymousUser(session.user),
     name: actorName(session.user),
   };
 }
@@ -47,6 +54,14 @@ export async function requireActor(headers: Headers): Promise<ResolvedActor> {
   const actor = await resolveActor(headers);
   if (!actor) {
     throw new AppError("UNAUTHENTICATED", 401, "auth.required");
+  }
+  return actor;
+}
+
+export async function requireMember(headers: Headers): Promise<ResolvedActor> {
+  const actor = await requireActor(headers);
+  if (actor.isGuest) {
+    throw new AppError("FORBIDDEN", 403, "auth.guestForbidden");
   }
   return actor;
 }

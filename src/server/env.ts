@@ -54,9 +54,42 @@ const envSchema = z.object({
   // "0"/"false"/unset keeps the server-side relay. Requires S3_BUCKET —
   // enforced in instrumentation.ts.
   S3_DIRECT_ACCESS: emptyToUndefined(booleanFlag),
+  // Public demo site mode. When enabled, visitors enter through an anonymous
+  // guest session with operator-provided models, daily quotas, and 7-day
+  // inactivity retention. Requires CLIENT_IP_HEADER — enforced in
+  // instrumentation.ts.
+  DEMO_MODE: emptyToUndefined(booleanFlag),
+  DEMO_DAILY_MODEL_CALLS: emptyToUndefined(
+    z.coerce.number().int().positive().default(10),
+  ),
+  DEMO_DAILY_SEARCH_CALLS: emptyToUndefined(
+    z.coerce.number().int().positive().default(10),
+  ),
+  DEMO_DAILY_UPLOADS: emptyToUndefined(
+    z.coerce.number().int().positive().default(5),
+  ),
+  DEMO_GUEST_STORAGE_MB: emptyToUndefined(
+    z.coerce.number().int().nonnegative().default(20),
+  ),
+  DEMO_GUESTS_PER_IP_DAILY: emptyToUndefined(
+    z.coerce.number().int().positive().default(5),
+  ),
+  DEMO_GLOBAL_DAILY_MODEL_CALLS: emptyToUndefined(
+    z.coerce.number().int().positive().default(2000),
+  ),
+  DEMO_MAX_OUTPUT_TOKENS: emptyToUndefined(
+    z.coerce.number().int().positive().default(16384),
+  ),
+  // Single-value header the reverse proxy overwrites with the peer address
+  // (e.g. `x-real-ip`, `cf-connecting-ip`). Required when DEMO_MODE is set.
+  CLIENT_IP_HEADER: emptyToUndefined(z.string().trim().min(1).optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+export function isDemoMode(): boolean {
+  return getEnv().DEMO_MODE !== undefined;
+}
 
 let cached: Env | undefined;
 

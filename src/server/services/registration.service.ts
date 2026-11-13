@@ -12,12 +12,16 @@ import {
   assertUsernameAvailable,
   throwIfAccountCreateFailed,
 } from "@/server/services/account-create";
+import { isDemoMode } from "@/server/env";
 
 export async function registerUser(input: CredentialsInput): Promise<{
   userId: string;
   email: string;
   username: string;
 }> {
+  if (isDemoMode()) {
+    throw new AppError("FORBIDDEN", 403, "registration.disabled");
+  }
   const db = getDb();
   const rows = await db
     .select({ allowRegistration: appSettings.allowRegistration })

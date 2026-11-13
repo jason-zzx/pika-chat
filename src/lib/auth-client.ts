@@ -2,6 +2,7 @@
 
 import {
   adminClient,
+  anonymousClient,
   twoFactorClient,
   usernameClient,
 } from "better-auth/client/plugins";
@@ -19,5 +20,10 @@ export const authClient = createAuthClient({
   // No `twoFactorPage` and no `onTwoFactorRedirect`: `SignInForm` branches to
   // the challenge page itself, which avoids the client plugin's
   // `window.location.href` full reload.
-  plugins: [usernameClient(), adminClient(), twoFactorClient()],
+  plugins: [
+    usernameClient(),
+    adminClient(),
+    twoFactorClient(),
+    anonymousClient(),
+  ],
 });

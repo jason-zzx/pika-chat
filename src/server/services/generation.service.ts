@@ -20,8 +20,10 @@ import {
   chatGenerations,
   chatMessages,
   topics,
+  users,
   type ChatGenerationInput,
 } from "@/server/db/schema";
+import { consumeGuestModelTurnQuota } from "@/server/services/demo-usage.service";
 import { insertWithShortId } from "@/server/db/short-id-insert";
 import { isUniqueViolation } from "@/server/db/unique-violation";
 import { AppError } from "@/server/errors";
@@ -81,6 +83,8 @@ export type PreparedTurn = {
   /** Actor role captured at admission so the background turn resolves the
    * same model set without a request-scoped session. */
   actorRole: ActorRole;
+  /** True when admitted by an anonymous demo guest. */
+  actorIsGuest?: boolean;
   /** Digest of the canonical request, used to tell a retry from a collision. */
   requestHash: string;
   /** Request locale, captured so the background turn can localize errors. */
@@ -378,6 +382,7 @@ async function acceptTurn(
     defaultTopicTitle: prepared.defaultTopicTitle,
     titleCandidate: prepared.titleCandidate,
     actorRole: prepared.actorRole,
+    actorIsGuest: prepared.actorIsGuest,
     ...(prepared.locale === undefined ? {} : { locale: prepared.locale }),
     ...(prepared.systemPrompt === undefined
       ? {}
@@ -476,6 +481,30 @@ async function acceptTurn(
         if (active.length > 0) {
           throw new AppError("CONFLICT", 409, "generation.topicBusy");
         }
+      }
+
+      if (actor.isGuest) {
+        // Serialize concurrent sends across a guest's topics and enforce
+        // at most one active generation per guest + daily/global quotas.
+        await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, actor.userId))
+          .for("update");
+        const guestActive = await tx
+          .select({ id: chatGenerations.id })
+          .from(chatGenerations)
+          .where(
+            and(
+              eq(chatGenerations.userId, actor.userId),
+              inArray(chatGenerations.status, [...ACTIVE_GENERATION_STATUSES]),
+            ),
+          )
+          .limit(1);
+        if (guestActive.length > 0) {
+          throw new AppError("CONFLICT", 409, "demo.busy");
+        }
+        await consumeGuestModelTurnQuota(actor.userId, tx);
       }
 
       if (prepared.userMessage) {
@@ -973,11 +1002,12 @@ export async function purgeTerminalGenerations(
   return deleted.length;
 }
 
-/** Actor for a background turn: identity + role captured at admission. */
+/** Actor for a background turn: identity + role + guest flag captured at admission. */
 export function generationActor(row: GenerationRow): Actor {
   return {
     userId: row.userId,
     role: (row.input?.actorRole ?? "user") as ActorRole,
+    isGuest: row.input?.actorIsGuest === true,
   };
 }
 

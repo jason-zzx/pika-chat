@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { useState, useSyncExternalStore } from "react";
 
 import { useSearchProviders } from "@/components/search/use-search-providers";
+import { useIsGuest } from "@/hooks/use-is-guest";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -70,8 +71,12 @@ export default function SearchModePicker({
   const t = useTranslations("Chat.Pickers");
   const mode = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const setSearchMode = useComposerStore((state) => state.setSearchMode);
-  const providers = useSearchProviders();
-  const toolAvailable = (providers.data?.providers.length ?? 0) > 0;
+  const isGuest = useIsGuest();
+  const providers = useSearchProviders(!isGuest);
+  // Guests inherit the operator's search providers, which `/api/search-providers`
+  // does not expose to them (403); the backend gracefully degrades to tool-less
+  // if the operator has none configured.
+  const toolAvailable = isGuest || (providers.data?.providers.length ?? 0) > 0;
   const [open, setOpen] = useState(false);
   const modeLabel = t(
     SEARCH_MODE_OPTIONS.find((option) => option.value === mode)?.labelKey ??

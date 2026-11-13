@@ -8,6 +8,7 @@ import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsRow from "@/components/settings/SettingsRow";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import { useIsGuest } from "@/hooks/use-is-guest";
 import {
   useModelPreferences,
   useUpdateModelPreferences,
@@ -51,6 +52,8 @@ export default function ModelPreferencesScreen() {
   const tErrors = useTranslations("Errors");
   const preferences = useModelPreferences();
   const update = useUpdateModelPreferences();
+  const isGuest = useIsGuest();
+  const rows = isGuest ? ROWS.filter((row) => row.purpose === "chat") : ROWS;
 
   function save(next: ModelPreferences) {
     update.mutate(next, {
@@ -76,7 +79,7 @@ export default function ModelPreferencesScreen() {
     <>
       <SettingsCard>
         <div className="flex flex-col divide-y divide-border">
-          {ROWS.map((row) => (
+          {rows.map((row) => (
             <SettingsRow
               key={row.purpose}
               label={t(row.labelKey)}

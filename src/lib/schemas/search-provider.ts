@@ -80,7 +80,7 @@ export const searchWebToolOutputSchema = z.union([
     results: z.array(searchWebResultSchema),
   }),
   z.object({
-    error: z.literal("search_failed"),
+    error: z.enum(["search_failed", "limit_reached"]),
     attemptedProviders: z.array(searchProviderSchema),
   }),
 ]);
@@ -119,7 +119,7 @@ export const fetchPageToolOutputSchema = z.union([
     num: z.number().int().positive().optional(),
   }),
   z.object({
-    error: z.literal("fetch_failed"),
+    error: z.enum(["fetch_failed", "limit_reached"]),
     attemptedProviders: z.array(searchProviderSchema),
   }),
 ]);

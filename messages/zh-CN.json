@@ -25,7 +25,8 @@
       "accountMenu": "{name} 的账户菜单",
       "superAdmin": "超级管理员",
       "signOut": "退出登录",
-      "settings": "设置"
+      "settings": "设置",
+      "guestBadge": "演示访客"
     },
     "theme": {
       "light": "浅色",
@@ -101,7 +102,21 @@
       "password": "密码"
     },
     "signOut": "退出登录",
-    "signOutFailed": "退出登录失败，请重试。"
+    "signOutFailed": "退出登录失败，请重试。",
+    "demo": {
+      "title": "体验 Pika chat",
+      "description": "以临时访客身份立即试用站内已配置的大模型，无需注册账号。",
+      "enter": "进入演示",
+      "entering": "正在进入演示…",
+      "enterFailed": "无法启动演示会话，请重试。",
+      "ipLimitReached": "当前网络今日创建的演示会话已达上限。",
+      "ipUnavailable": "暂时无法启动演示会话。",
+      "banner": "当前为演示模式：你的对话与附件仅对当前浏览器可见，连续 7 天无活动将被自动删除。请勿输入敏感或隐私数据。",
+      "usageTitle": "今日演示额度",
+      "usageModels": "消息额度：剩余 {remaining} / {limit}",
+      "usageSearch": "联网检索：剩余 {remaining} / {limit}",
+      "usageUploads": "文件上传：剩余 {remaining} / {limit}"
+    }
   },
   "Account": {
     "title": "账户",
@@ -252,6 +267,7 @@
       "searchNoOutput": "没有搜索输出记录。",
       "searchFailed": "搜索失败。",
       "searchFailedWithProviders": "搜索失败。已尝试：{providers}。",
+      "searchLimitReached": "今日演示联网检索额度已用完。",
       "searchNoResults": "未找到结果。",
       "searchVia": "来自",
       "fetchRunning": "正在读取页面",
@@ -264,6 +280,7 @@
       "fetchNoOutput": "没有抓取输出记录。",
       "fetchFailed": "抓取失败。",
       "fetchFailedWithProviders": "抓取失败。已尝试：{providers}。",
+      "fetchLimitReached": "今日演示联网检索额度已用完。",
       "fetchNoText": "页面未返回文本。",
       "fetchTruncated": "页面内容已为模型截断。"
     },
@@ -593,10 +610,18 @@
     "auth": {
       "required": "需要登录",
       "adminRequired": "需要管理员权限",
+      "guestForbidden": "演示模式下不支持此操作",
       "userNotFound": "用户不存在",
       "targetNotAllowed": "你无法管理该用户",
       "signInFailed": "用户名、邮箱或密码无效",
       "invalidTwoFactorCode": "该验证码不正确"
+    },
+    "demo": {
+      "notFound": "未找到",
+      "modelLimit": "今日演示消息额度已用完，请明天（UTC）再来。",
+      "globalLimit": "今日演示站全局额度已满，请明天（UTC）再试。",
+      "uploadLimit": "今日演示文件上传额度已用完，请明天（UTC）再来。",
+      "busy": "请等待当前回复完成后再发送下一条消息。"
     },
     "account": {
       "usernameTaken": "用户名已被占用",

@@ -17,6 +17,9 @@ export default async function SettingsProvidersPage() {
   if (!actor) {
     redirect("/sign-in");
   }
+  if (actor.isGuest) {
+    redirect("/settings/general");
+  }
   const t = await getTranslations("Settings.Providers");
 
   return (

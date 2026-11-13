@@ -540,12 +540,13 @@ describe("auth", () => {
     expect(id?.[14]).toBe("7");
   });
 
-  it("GET /api/instance returns only needsSetup and allowRegistration", async () => {
+  it("GET /api/instance returns only needsSetup, allowRegistration and demo", async () => {
     const empty = await getInstance(jsonRequest("/api/instance"));
     expect(empty.status).toBe(200);
     expect(await readJson(empty)).toEqual({
       needsSetup: true,
       allowRegistration: false,
+      demo: false,
     });
 
     await setupAdmin();
@@ -553,6 +554,7 @@ describe("auth", () => {
     expect(await readJson(ready)).toEqual({
       needsSetup: false,
       allowRegistration: false,
+      demo: false,
     });
   });
 
@@ -896,5 +898,13 @@ describe("auth", () => {
       .from(users)
       .where(eq(users.id, secondId));
     expect(again[0]?.role).toBe("user");
+  });
+
+  it("returns 404 for /api/auth/sign-in/anonymous when DEMO_MODE is unset", async () => {
+    await setupAdmin();
+    const res = await authPost(
+      jsonRequest("/api/auth/sign-in/anonymous", { body: {} }),
+    );
+    expect(res.status).toBe(404);
   });
 });

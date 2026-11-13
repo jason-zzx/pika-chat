@@ -1,8 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import { demoUsageKeys } from "@/hooks/use-demo-usage";
 import { fileKeys } from "@/hooks/use-file-limits";
 import {
   DEFAULT_FILE_LIMITS,
@@ -92,6 +93,7 @@ export function useComposerAttachments(draftKey: string, imageInputMax = 0) {
   // chat mode keeps the plain per-message cap.
   const attachmentLimit = attachmentLimitFor(imageInputMax);
 
+  const queryClient = useQueryClient();
   const upload = useCallback(
     (localId: string, file: File) => {
       // Direct upload when the server advertises it: presign → browser→S3 →
@@ -102,6 +104,7 @@ export function useComposerAttachments(draftKey: string, imageInputMax = 0) {
         : uploadChatFile(file);
       void request.then(
         (uploaded) => {
+          void queryClient.invalidateQueries({ queryKey: demoUsageKeys.all });
           updateAttachments(draftKey, (current) =>
             current.map((entry) =>
               entry.id === localId
@@ -130,7 +133,7 @@ export function useComposerAttachments(draftKey: string, imageInputMax = 0) {
         },
       );
     },
-    [draftKey, limits.directUpload, updateAttachments],
+    [draftKey, limits.directUpload, queryClient, updateAttachments],
   );
 
   const addFiles = useCallback(

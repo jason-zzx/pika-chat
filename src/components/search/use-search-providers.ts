@@ -19,10 +19,11 @@ export const searchProviderKeys = {
   list: () => [...searchProviderKeys.all, "list"] as const,
 };
 
-export function useSearchProviders() {
+export function useSearchProviders(enabled = true) {
   return useQuery({
     queryKey: searchProviderKeys.list(),
     queryFn: listSearchProviders,
+    enabled,
   });
 }
 

@@ -13,6 +13,7 @@ import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { users } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
+import { resolveOperatorId } from "@/server/services/operator.service";
 
 const PURPOSES: ModelPreferencePurpose[] = [
   "chat",
@@ -58,6 +59,14 @@ export async function updateModelPreferences(
   input: ModelPreferences,
   actor: Actor,
 ): Promise<ModelPreferences> {
+  if (
+    actor.isGuest &&
+    (input.title !== undefined ||
+      input.compression !== undefined ||
+      input.translation !== undefined)
+  ) {
+    throw new AppError("FORBIDDEN", 403, "auth.guestForbidden");
+  }
   const available = await resolveAvailableModels(actor);
   for (const purpose of PURPOSES) {
     const pair = input[purpose];
@@ -85,8 +94,14 @@ export async function resolveModelPreference(
   actor: Actor,
   purpose: ModelPreferencePurpose,
 ): Promise<ModelPair | null> {
-  const preferences = await getModelPreferences(actor.userId);
-  const pair = preferences[purpose];
+  // Guests use the operator's non-chat slots, but the pair is still checked
+  // against the guest's own (shared-only) availability: callers resolve the
+  // handle as the guest, so an operator-private model must fall back.
+  const ownerId =
+    actor.isGuest && purpose !== "chat"
+      ? await resolveOperatorId()
+      : actor.userId;
+  const pair = (await getModelPreferences(ownerId))[purpose];
   if (!pair) {
     return null;
   }

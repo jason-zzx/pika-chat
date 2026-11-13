@@ -138,6 +138,11 @@ function SearchToolBody({
     return <p className="text-muted-foreground">{t("searchNoOutput")}</p>;
   }
   if ("error" in output) {
+    if (output.error === "limit_reached") {
+      return (
+        <p className="text-muted-foreground">{t("searchLimitReached")}</p>
+      );
+    }
     const attempted = output.attemptedProviders
       .map((provider) => searchProviderLabel(provider))
       .join(", ");

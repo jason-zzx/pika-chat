@@ -25,6 +25,11 @@ export async function register(): Promise<void> {
         "S3_DIRECT_ACCESS is enabled but S3_BUCKET is not configured: direct S3 access requires S3-compatible storage",
       );
     }
+    if (env.DEMO_MODE !== undefined && !env.CLIENT_IP_HEADER) {
+      throw new Error(
+        "DEMO_MODE is enabled but CLIENT_IP_HEADER is not configured: demo mode requires a single-value proxy IP header",
+      );
+    }
     getFileStorage();
 
     const { startGenerationRunner } = await import(
