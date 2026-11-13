@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 
 import AssistantTree from "@/components/assistant/AssistantTree";
+import DemoUsageCard from "@/components/layout/DemoUsageCard";
 import SidebarUserMenu from "@/components/layout/SidebarUserMenu";
 import ThemeControl from "@/components/layout/ThemeControl";
 import {
@@ -30,6 +31,7 @@ export default function AppSidebar({
     <Sidebar collapsible="icon" aria-label={t("sidebar.main")}>
       <AssistantTree showUsers={isStaffRole(role)} />
       <SidebarFooter>
+        <DemoUsageCard />
         <SidebarMenu>
           <SidebarMenuItem>
             <ThemeControl

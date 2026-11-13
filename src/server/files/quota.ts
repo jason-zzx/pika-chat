@@ -2,6 +2,7 @@ import "server-only";
 
 import { eq, sql } from "drizzle-orm";
 
+import { BYTES_PER_MB } from "@/lib/files/constants";
 import { formatBytes } from "@/lib/files/format";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
@@ -11,6 +12,7 @@ import {
   files,
   users,
 } from "@/server/db/schema";
+import { getEnv } from "@/server/env";
 import { AppError } from "@/server/errors";
 
 /**
@@ -38,6 +40,9 @@ export async function usageBytes(userId: string): Promise<number> {
 export async function effectiveQuotaBytes(
   actor: Actor,
 ): Promise<number | null> {
+  if (actor.isGuest) {
+    return getEnv().DEMO_GUEST_STORAGE_MB * BYTES_PER_MB;
+  }
   const db = getDb();
   const userRow = (
     await db

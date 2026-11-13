@@ -16,6 +16,7 @@ import { searchProviderSettings } from "@/server/db/schema";
 import { isUniqueViolation } from "@/server/db/unique-violation";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
+import { resolveOperatorId } from "@/server/services/operator.service";
 
 type SettingRow = typeof searchProviderSettings.$inferSelect;
 
@@ -40,19 +41,19 @@ function toSetting(row: SettingRow): SearchProviderSetting {
   };
 }
 
-async function listRows(actor: Actor): Promise<SettingRow[]> {
+async function listRows(userId: string): Promise<SettingRow[]> {
   const db = getDb();
   return db
     .select()
     .from(searchProviderSettings)
-    .where(eq(searchProviderSettings.userId, actor.userId))
+    .where(eq(searchProviderSettings.userId, userId))
     .orderBy(asc(searchProviderSettings.position));
 }
 
 export async function listSearchProviderSettings(
   actor: Actor,
 ): Promise<SearchProviderSetting[]> {
-  const rows = await listRows(actor);
+  const rows = await listRows(actor.userId);
   return rows.map(toSetting);
 }
 
@@ -261,7 +262,9 @@ export async function reorderSearchProviders(
 export async function resolveSearchProviderCredentials(
   actor: Actor,
 ): Promise<SearchProviderCredential[]> {
-  const rows = await listRows(actor);
+  const rows = await listRows(
+    actor.isGuest ? await resolveOperatorId() : actor.userId,
+  );
   return rows.map((row) => ({
     provider: row.provider,
     apiKey: decryptSecret(row.encryptedApiKey),

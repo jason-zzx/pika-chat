@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   displayUsername: text("display_username"),
   role: text("role").notNull().default("user"),
+  isAnonymous: boolean("is_anonymous").notNull().default(false),
   // Per-user attachment storage quota override; NULL means follow the
   // instance-wide default (`app_settings.file_storage_quota_bytes`).
   fileQuotaBytes: bigint("file_quota_bytes", { mode: "number" }),

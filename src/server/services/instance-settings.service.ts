@@ -13,6 +13,7 @@ import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { APP_SETTINGS_ROW_ID, appSettings, users } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
+import { isDemoMode } from "@/server/env";
 import { logger } from "@/server/logger";
 
 type SettingsRow = {
@@ -54,9 +55,11 @@ export async function getInstanceState(): Promise<InstanceState> {
     readSettingsRow(),
     db.select({ value: count() }).from(users),
   ]);
+  const demo = isDemoMode();
   return {
     needsSetup: (userCount[0]?.value ?? 0) === 0,
-    allowRegistration: settings.allowRegistration,
+    allowRegistration: !demo && settings.allowRegistration,
+    demo,
   };
 }
 

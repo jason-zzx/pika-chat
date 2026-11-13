@@ -13,7 +13,7 @@ export default async function SignUpPage() {
   if (state.needsSetup) {
     redirect("/setup");
   }
-  if (!state.allowRegistration) {
+  if (!state.allowRegistration || state.demo) {
     redirect("/sign-in");
   }
   const t = await getTranslations("Auth");

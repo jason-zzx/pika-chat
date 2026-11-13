@@ -20,6 +20,15 @@ const MANAGED = [
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY",
   "FILE_STORAGE_DIR",
+  "DEMO_MODE",
+  "DEMO_DAILY_MODEL_CALLS",
+  "DEMO_DAILY_SEARCH_CALLS",
+  "DEMO_DAILY_UPLOADS",
+  "DEMO_GUEST_STORAGE_MB",
+  "DEMO_GUESTS_PER_IP_DAILY",
+  "DEMO_GLOBAL_DAILY_MODEL_CALLS",
+  "DEMO_MAX_OUTPUT_TOKENS",
+  "CLIENT_IP_HEADER",
   "NEXT_RUNTIME",
   "APP_URL",
   "APP_TRUSTED_ORIGINS",
@@ -97,6 +106,25 @@ describe("S3_DIRECT_ACCESS", () => {
   });
 });
 
+describe("DEMO_* limits", () => {
+  it.each([undefined, ""])("defaults when %j", async (value) => {
+    if (value !== undefined) {
+      process.env.DEMO_DAILY_MODEL_CALLS = value;
+      process.env.DEMO_GUEST_STORAGE_MB = value;
+    }
+    const { getEnv } = await loadEnvModule();
+    expect(getEnv()).toMatchObject({
+      DEMO_DAILY_MODEL_CALLS: 10,
+      DEMO_DAILY_SEARCH_CALLS: 10,
+      DEMO_DAILY_UPLOADS: 5,
+      DEMO_GUEST_STORAGE_MB: 20,
+      DEMO_GUESTS_PER_IP_DAILY: 5,
+      DEMO_GLOBAL_DAILY_MODEL_CALLS: 2000,
+      DEMO_MAX_OUTPUT_TOKENS: 16384,
+    });
+  });
+});
+
 describe("optional variable empty-string normalization", () => {
   it.each([
     "FILE_STORAGE_DIR",
@@ -120,6 +148,23 @@ describe("register boot guard", () => {
     vi.resetModules();
     const { register } = await import("@/instrumentation");
     await expect(register()).rejects.toThrow(/S3_DIRECT_ACCESS/);
+  });
+
+  it("refuses DEMO_MODE without CLIENT_IP_HEADER", async () => {
+    process.env.NEXT_RUNTIME = "nodejs";
+    process.env.DEMO_MODE = "1";
+    vi.resetModules();
+    const { register } = await import("@/instrumentation");
+    await expect(register()).rejects.toThrow(/CLIENT_IP_HEADER/);
+  });
+
+  it("boots when DEMO_MODE and CLIENT_IP_HEADER are both configured", async () => {
+    process.env.NEXT_RUNTIME = "nodejs";
+    process.env.DEMO_MODE = "1";
+    process.env.CLIENT_IP_HEADER = "x-real-ip";
+    vi.resetModules();
+    const { register } = await import("@/instrumentation");
+    await expect(register()).resolves.toBeUndefined();
   });
 
   it("boots when direct access is off", async () => {

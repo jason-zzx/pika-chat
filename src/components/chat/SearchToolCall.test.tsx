@@ -119,6 +119,23 @@ describe("SearchToolCall", () => {
     );
   });
 
+  it("shows the limit-reached message when demo quota is exhausted", () => {
+    renderWithIntl(
+      <SearchToolCall
+        part={donePart({
+          error: "limit_reached",
+          attemptedProviders: [],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Searched the web/ }));
+
+    expect(
+      screen.getByText("Daily demo web lookup limit reached."),
+    ).toBeInTheDocument();
+  });
+
   it("shows the error text for an errored tool call", () => {
     const part: SearchWebToolPart = {
       type: "tool-searchWeb",

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { IsGuestContext } from "@/hooks/use-is-guest";
 import {
   getModelPreferences,
   updateModelPreferences,
@@ -156,5 +157,23 @@ describe("ModelPreferencesScreen", () => {
     expect(
       screen.getByRole("button", { name: "全部重置" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows only the chat row when rendered for a demo guest", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderWithIntl(
+      <QueryClientProvider client={client}>
+        <IsGuestContext.Provider value>
+          <ModelPreferencesScreen />
+        </IsGuestContext.Provider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Default chat model")).toBeInTheDocument();
+    expect(screen.queryByText("Title generation model")).toBeNull();
+    expect(screen.queryByText("Context compression model")).toBeNull();
+    expect(screen.queryByText("Translation model")).toBeNull();
   });
 });

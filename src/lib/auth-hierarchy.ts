@@ -3,6 +3,7 @@ export type ActorRole = "super_admin" | "admin" | "user";
 export type Actor = {
   userId: string;
   role: ActorRole;
+  isGuest?: boolean;
 };
 
 export type AdminAction =

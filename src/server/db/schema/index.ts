@@ -14,6 +14,7 @@ export {
   chatMessages,
   type ChatGenerationInput,
 } from "./chat";
+export { demoUsageCounters } from "./demo";
 export {
   fileExtractionStatus,
   files,

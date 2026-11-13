@@ -25,6 +25,7 @@ import {
   useActiveGenerations,
 } from "@/hooks/use-active-generations";
 import { useAccountUserId } from "@/hooks/use-account-user";
+import { demoUsageKeys } from "@/hooks/use-demo-usage";
 import { useModelPreferences } from "@/hooks/use-model-preferences";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import {
@@ -500,6 +501,7 @@ export default function ChatView({
     if (event.isError) {
       clearChatSeeded(poolEntry);
     }
+    void queryClient.invalidateQueries({ queryKey: demoUsageKeys.all });
   });
 
   useEffect(() => {
@@ -1182,6 +1184,7 @@ export default function ChatView({
       regenStopRequestedRef.current = false;
       noteRegenFinished(topic);
       void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
+      void queryClient.invalidateQueries({ queryKey: demoUsageKeys.all });
       reseedHistory(topic);
     }
   }

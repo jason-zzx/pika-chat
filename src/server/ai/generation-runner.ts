@@ -31,7 +31,9 @@ import {
 } from "@/server/ai/generation-registry";
 import { deleteFile } from "@/server/files/file.service";
 import { stripMarkupFromTextParts } from "@/server/ai/search/markup-sanitizer";
+import { isDemoMode } from "@/server/env";
 import { messageVersionMetadata } from "@/server/services/message.service";
+import { purgeInactiveGuests } from "@/server/services/demo-cleanup.service";
 import { logger } from "@/server/logger";
 import { AppError } from "@/server/errors";
 import {
@@ -212,6 +214,9 @@ async function sweepQueued(state: RunnerState): Promise<void> {
       const purged = await purgeTerminalGenerations();
       if (purged > 0) {
         logger.info({ purged }, "expired generation receipts purged");
+      }
+      if (isDemoMode()) {
+        await purgeInactiveGuests();
       }
     }
   } catch (error) {

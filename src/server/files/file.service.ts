@@ -51,6 +51,7 @@ import type {
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
 import { chatMessages, files } from "@/server/db/schema";
+import { getEnv } from "@/server/env";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 
@@ -60,6 +61,7 @@ import {
   deleteProviderFileReferences,
   processDeleteRetries,
 } from "./provider-delete";
+import { consumeDemoQuota } from "@/server/services/demo-usage.service";
 import { assertUploadQuota, quotaExceededError, usageBytes } from "./quota";
 import { getFileStorage, type FileStorage } from "./storage";
 
@@ -316,6 +318,20 @@ export async function uploadFile(
   // Checked before the bytes reach storage, so a rejected upload leaves no
   // object behind (and no row, which is only written after the put).
   await assertUploadQuota(actor, sizeBytes);
+  // Generated images pass skipSizeLimit and do not consume the daily user
+  // upload counter (they are already counted against the model-call quota and
+  // still count toward the guest's storage quota above).
+  if (
+    actor.isGuest &&
+    !options?.skipSizeLimit &&
+    !(await consumeDemoQuota({
+      subject: actor.userId,
+      kind: "upload",
+      limit: getEnv().DEMO_DAILY_UPLOADS,
+    }))
+  ) {
+    throw new AppError("RATE_LIMITED", 429, "demo.uploadLimit");
+  }
 
   const mediaType = storedMediaType(input.mediaType, filename);
   const id = newId();
@@ -463,6 +479,17 @@ export async function completeFile(
   if (rejection) {
     await discardRejectedDirectUpload(storage, file.storageKey, fileId);
     throw rejection;
+  }
+  if (
+    actor.isGuest &&
+    !(await consumeDemoQuota({
+      subject: actor.userId,
+      kind: "upload",
+      limit: getEnv().DEMO_DAILY_UPLOADS,
+    }))
+  ) {
+    await discardRejectedDirectUpload(storage, file.storageKey, fileId);
+    throw new AppError("RATE_LIMITED", 429, "demo.uploadLimit");
   }
 
   await getDb()

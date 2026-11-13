@@ -1,7 +1,7 @@
 import { withErrorHandling } from "@/app/api/_lib/with-error-handling";
 import { updateProviderConfigSchema } from "@/lib/schemas/provider";
 import { AppError } from "@/server/errors";
-import { requireActor } from "@/server/auth/actor";
+import { requireMember } from "@/server/auth/actor";
 import {
   deleteProviderConfig,
   updateProviderConfig,
@@ -18,7 +18,7 @@ async function providerId(
 }
 
 export const PATCH = withErrorHandling(async (request, context) => {
-  const actor = await requireActor(request.headers);
+  const actor = await requireMember(request.headers);
   const input = updateProviderConfigSchema.parse(await request.json());
   const config = await updateProviderConfig(
     await providerId(context),
@@ -29,7 +29,7 @@ export const PATCH = withErrorHandling(async (request, context) => {
 });
 
 export const DELETE = withErrorHandling(async (request, context) => {
-  const actor = await requireActor(request.headers);
+  const actor = await requireMember(request.headers);
   await deleteProviderConfig(await providerId(context), actor);
   return new Response(null, { status: 204 });
 });

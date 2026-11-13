@@ -25,7 +25,8 @@
       "accountMenu": "Account menu for {name}",
       "superAdmin": "super admin",
       "signOut": "Sign out",
-      "settings": "Settings"
+      "settings": "Settings",
+      "guestBadge": "Demo guest"
     },
     "theme": {
       "light": "Light",
@@ -101,7 +102,21 @@
       "password": "Password"
     },
     "signOut": "Sign out",
-    "signOutFailed": "Sign out failed. Please try again."
+    "signOutFailed": "Sign out failed. Please try again.",
+    "demo": {
+      "title": "Try Pika chat",
+      "description": "Explore the workspace as a temporary guest using the operator's configured models. No sign-up required.",
+      "enter": "Enter demo",
+      "entering": "Starting demo…",
+      "enterFailed": "Unable to start demo session. Please try again.",
+      "ipLimitReached": "Too many demo sessions created from this network today.",
+      "ipUnavailable": "Unable to start a demo session right now.",
+      "banner": "Demo mode: your conversations and files are private to this browser and automatically deleted after 7 days of inactivity. Please do not enter sensitive data.",
+      "usageTitle": "Today's demo quota",
+      "usageModels": "Messages: {remaining} / {limit}",
+      "usageSearch": "Web lookups: {remaining} / {limit}",
+      "usageUploads": "Uploads: {remaining} / {limit}"
+    }
   },
   "Account": {
     "title": "Account",
@@ -252,6 +267,7 @@
       "searchNoOutput": "No search output recorded.",
       "searchFailed": "Search failed.",
       "searchFailedWithProviders": "Search failed. Tried: {providers}.",
+      "searchLimitReached": "Daily demo web lookup limit reached.",
       "searchNoResults": "No results found.",
       "searchVia": "via",
       "fetchRunning": "Reading page",
@@ -264,6 +280,7 @@
       "fetchNoOutput": "No fetch output recorded.",
       "fetchFailed": "Fetch failed.",
       "fetchFailedWithProviders": "Fetch failed. Tried: {providers}.",
+      "fetchLimitReached": "Daily demo web lookup limit reached.",
       "fetchNoText": "The page returned no text.",
       "fetchTruncated": "Page content truncated for the model."
     },
@@ -593,10 +610,18 @@
     "auth": {
       "required": "Authentication required",
       "adminRequired": "Admin access required",
+      "guestForbidden": "This action is not available in demo mode",
       "userNotFound": "User not found",
       "targetNotAllowed": "You cannot manage this user",
       "signInFailed": "Invalid username, email, or password",
       "invalidTwoFactorCode": "That code was not accepted"
+    },
+    "demo": {
+      "notFound": "Not found",
+      "modelLimit": "Daily demo message limit reached. Come back tomorrow (UTC).",
+      "globalLimit": "Demo daily capacity reached. Please try again tomorrow (UTC).",
+      "uploadLimit": "Daily demo upload limit reached. Come back tomorrow (UTC).",
+      "busy": "Finish your current reply before starting another one."
     },
     "account": {
       "usernameTaken": "Username is already taken",

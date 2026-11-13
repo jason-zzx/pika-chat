@@ -4,7 +4,7 @@ import {
   updateProviderModelSchema,
 } from "@/lib/schemas/provider";
 import { AppError } from "@/server/errors";
-import { requireActor } from "@/server/auth/actor";
+import { requireMember } from "@/server/auth/actor";
 import {
   addProviderModel,
   removeProviderModel,
@@ -12,7 +12,7 @@ import {
 } from "@/server/services/provider.service";
 
 export const POST = withErrorHandling(async (request, context) => {
-  const actor = await requireActor(request.headers);
+  const actor = await requireMember(request.headers);
   const id = (await context?.params)?.id;
   if (!id) {
     throw new AppError("NOT_FOUND", 404, "provider.notFound");
@@ -23,7 +23,7 @@ export const POST = withErrorHandling(async (request, context) => {
 });
 
 export const PATCH = withErrorHandling(async (request, context) => {
-  const actor = await requireActor(request.headers);
+  const actor = await requireMember(request.headers);
   const id = (await context?.params)?.id;
   const modelId = new URL(request.url).searchParams.get("modelId");
   if (!id || !modelId) {
@@ -35,7 +35,7 @@ export const PATCH = withErrorHandling(async (request, context) => {
 });
 
 export const DELETE = withErrorHandling(async (request, context) => {
-  const actor = await requireActor(request.headers);
+  const actor = await requireMember(request.headers);
   const id = (await context?.params)?.id;
   const modelId = new URL(request.url).searchParams.get("modelId");
   if (!id || !modelId) {

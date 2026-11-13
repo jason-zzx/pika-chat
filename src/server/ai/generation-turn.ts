@@ -267,6 +267,7 @@ export async function prepareSendTurn(
     defaultTopicTitle: input.defaultTopicTitle,
     titleCandidate,
     actorRole: input.actorRole,
+    actorIsGuest: actor.isGuest,
     locale: input.locale,
     systemPrompt,
     summary,
@@ -417,6 +418,7 @@ export async function prepareRegenerateTurn(
     // title; a user rename wins (chat task §7).
     titleCandidate: isDefaultTopicTitle(topicContext.topic.title),
     actorRole: input.actorRole,
+    actorIsGuest: actor.isGuest,
     locale: input.locale,
     systemPrompt: topicContext.assistant.systemPrompt,
     summary,
@@ -582,7 +584,7 @@ async function runTextTurn(
   if (searchMode === "tool") {
     const credentials = await resolveSearchProviderCredentials(actor);
     if (credentials.length > 0) {
-      searchTools = buildSearchTools(credentials);
+      searchTools = buildSearchTools(credentials, actor.isGuest ? { guestUserId: actor.userId } : undefined);
     } else {
       logger.info(
         { userId: actor.userId, generationId: row.id },
@@ -715,7 +717,7 @@ async function runTextTurn(
     abortSignal: hooks.signal,
     // One retry, not the SDK default of two: the backoff doubles otherwise.
     maxRetries: 1,
-    maxOutputTokens: resolvedMaxOutputTokens(selected),
+    maxOutputTokens: resolvedMaxOutputTokens(selected, actor.isGuest),
     providerOptions:
       reasoningEffort === undefined
         ? undefined

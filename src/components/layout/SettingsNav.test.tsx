@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Sidebar, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { IsGuestContext } from "@/hooks/use-is-guest";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import SettingsNav from "./SettingsNav";
@@ -82,5 +83,29 @@ describe("SettingsNav", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("hides account, providers, and search tabs for demo guests", () => {
+    renderWithIntl(
+      <TooltipProvider>
+        <SidebarProvider>
+          <Sidebar>
+            <IsGuestContext.Provider value>
+              <SettingsNav showUsers={false} />
+            </IsGuestContext.Provider>
+          </Sidebar>
+        </SidebarProvider>
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByRole("link", { name: "General" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Default models" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Files" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Account" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Providers" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Search" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
   });
 });

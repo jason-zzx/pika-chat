@@ -122,6 +122,8 @@ export type ChatGenerationInput = {
   /** Role captured at admission: the background turn resolves the same model
    * set as the request that admitted it, without a request-scoped session. */
   actorRole: string;
+  /** True when admitted by an anonymous demo guest. */
+  actorIsGuest?: boolean;
   /** Request locale captured at admission (background error text). */
   locale?: string;
   /**

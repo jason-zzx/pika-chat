@@ -183,6 +183,13 @@
       "when": 1794492814651,
       "tag": "0025_steady_sway",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794562487361,
+      "tag": "0026_crazy_texas_twister",
+      "breakpoints": true
     }
   ]
 }

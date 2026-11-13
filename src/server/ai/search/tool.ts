@@ -15,6 +15,8 @@ import {
   isFetchCapable,
 } from "@/server/ai/search/providers";
 import type { SearchProviderCredential } from "@/server/services/search-provider.service";
+import { consumeDemoQuota } from "@/server/services/demo-usage.service";
+import { getEnv } from "@/server/env";
 import { logger } from "@/server/logger";
 
 /**
@@ -106,9 +108,9 @@ export function toolTurnStepSettings() {
  */
 export function createSearchWebTool(
   credentials: SearchProviderCredential[],
-  options: { hasFetchPage?: boolean; numbering: SourceNumbering },
+  options: { hasFetchPage?: boolean; numbering: SourceNumbering; guestUserId?: string },
 ) {
-  const { numbering } = options;
+  const { numbering, guestUserId } = options;
   return tool({
     description:
       "Search the web for current information. Use when the answer depends on recent events, facts, or sources you may not know. Returns titles, links, and content snippets. Some results carry a publishedDate — for time-sensitive questions, weigh how recent a source is." +
@@ -117,6 +119,19 @@ export function createSearchWebTool(
         : ""),
     inputSchema: searchWebToolInputSchema,
     execute: async ({ query }, { abortSignal }): Promise<SearchWebToolOutput> => {
+      if (guestUserId) {
+        const allowed = await consumeDemoQuota({
+          subject: guestUserId,
+          kind: "search",
+          limit: getEnv().DEMO_DAILY_SEARCH_CALLS,
+        });
+        if (!allowed) {
+          return {
+            error: "limit_reached",
+            attemptedProviders: [],
+          };
+        }
+      }
       // The turn's abort signal reaches the HTTP call itself: an explicit stop
       // or a deleted topic cancels the in-flight provider request instead of
       // only preventing the next fallback.
@@ -159,14 +174,27 @@ export function createSearchWebTool(
  */
 export function createFetchPageTool(
   credentials: SearchProviderCredential[],
-  options: { numbering: SourceNumbering },
+  options: { numbering: SourceNumbering; guestUserId?: string },
 ) {
-  const { numbering } = options;
+  const { numbering, guestUserId } = options;
   return tool({
     description:
       "Fetch and read the full text content of a specific web page by URL. Use after searchWeb when you need to read one of its results in depth; searchWeb finds information, fetchPage reads one page.",
     inputSchema: fetchPageToolInputSchema,
     execute: async ({ url }, { abortSignal }): Promise<FetchPageToolOutput> => {
+      if (guestUserId) {
+        const allowed = await consumeDemoQuota({
+          subject: guestUserId,
+          kind: "search",
+          limit: getEnv().DEMO_DAILY_SEARCH_CALLS,
+        });
+        if (!allowed) {
+          return {
+            error: "limit_reached",
+            attemptedProviders: [],
+          };
+        }
+      }
       const chain = credentials
         .filter((credential) => isFetchCapable(credential.provider))
         .flatMap((credential) => {
@@ -210,6 +238,7 @@ export function createFetchPageTool(
  */
 export function buildSearchTools(
   credentials: SearchProviderCredential[],
+  options?: { guestUserId?: string },
 ): ToolSet {
   const hasFetchPage = credentials.some((credential) =>
     isFetchCapable(credential.provider),
@@ -217,11 +246,19 @@ export function buildSearchTools(
   // One counter shared by both tools keeps citation nums unique across all
   // tool calls of the turn (R14).
   const numbering = createSourceNumbering();
+  const guestUserId = options?.guestUserId;
   const tools: ToolSet = {
-    searchWeb: createSearchWebTool(credentials, { hasFetchPage, numbering }),
+    searchWeb: createSearchWebTool(credentials, {
+      hasFetchPage,
+      numbering,
+      guestUserId,
+    }),
   };
   if (hasFetchPage) {
-    tools.fetchPage = createFetchPageTool(credentials, { numbering });
+    tools.fetchPage = createFetchPageTool(credentials, {
+      numbering,
+      guestUserId,
+    });
   }
   return tools;
 }
