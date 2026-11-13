@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "backend quality bar"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "frontend quality bar"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "verify guest guards"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "env -> auth -> service -> UI flag consistency"}
