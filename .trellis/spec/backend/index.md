@@ -80,6 +80,7 @@ review blocker, not a style nit.
 | [Provider Configs](./provider-configs.md) | Endpoint `apiFormat` (openai-compatible / claude / google), the api-key requirement rule, per-format provider construction + discovery, `addProviderModel` optional metadata overrides vs catalog fill, `metadataSource` marking, `vendorKey` null-vs-undefined |
 | [Topic Favorites](./topic-favorites.md) | `topics.is_favorite` column, PATCH favorite endpoint, `topics.updatedAt` last-active semantics (which mutations may bump it) |
 | [Search](./search.md) | Sidebar full-text search: ILIKE literal semantics, text-part-only match scope, selected-version filter, snippet duality, `?m=` navigation anchor |
+| [Demo Mode](./demo-mode.md) | `DEMO_MODE` gating rule (process vs `actor.isGuest`), anonymous guests + IP cap, atomic daily counters, operator inheritance, 7-day guest purge |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logs, levels, redaction |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, types, tests, forbidden patterns |
 
