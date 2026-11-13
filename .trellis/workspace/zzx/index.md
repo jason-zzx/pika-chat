@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 38
-- **Last Active**: 2026-10-21
+- **Total Sessions**: 39
+- **Last Active**: 2026-11-13
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1071 | Active |
+| `journal-1.md` | ~1094 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 39 | 2026-11-13 | Server-managed chat generation & stream recovery | `721cb1d`, `9848536` | `main` |
 | 38 | 2026-10-21 | 流式恢复：客户端 Chat 池 + 断连即断 provider | `c70a919`, `2292dc5` | `main` |
 | 36 | 2026-10-19 | 用户消息就地编辑并重新生成 | `e672155` | `feat/edit-user-message-regenerate` |
 | 35 | 2026-10-07 | Search command palette modal + in-topic hit navigation | `628e14d`, `fd9fd54` | `main` |

@@ -1069,3 +1069,26 @@ Replaced inline sidebar search with a global command-palette dialog (Ctrl/Cmd+K,
 ### Status
 
 [OK] **Completed**
+
+
+## Session 39: Server-managed chat generation & stream recovery
+<!-- trellis-session: v=2 fp=17492a7b48264d84 -->
+
+**Date**: 2026-11-13
+**Task**: Server-managed chat generation & stream recovery
+**Branch**: `main`
+
+### Summary
+
+Implemented single-instance server-managed chat generation and SSE current-state stream recovery across send, regenerate, edit-and-regenerate, and image turns; upgraded AI SDK to ai@7.0.170 / @ai-sdk/react@4.0.174; added chat_generations schema/migration, 10s crash checkpoints, request deduplication receipts, account-scoped query/pool boundaries, and lifecycle specs; executed two rounds of complexity simplification and verified unit, integration, and Next build/restart gates.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `721cb1d` | docs: add behavior and code guidelines to AGENTS.md |
+| `9848536` | feat(chat): support server-managed generation and stream recovery |
+
+### Status
+
+[OK] **Completed**
