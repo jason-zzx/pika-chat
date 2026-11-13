@@ -100,7 +100,8 @@
       "email": "邮箱",
       "password": "密码"
     },
-    "signOut": "退出登录"
+    "signOut": "退出登录",
+    "signOutFailed": "退出登录失败，请重试。"
   },
   "Account": {
     "title": "账户",
@@ -617,7 +618,8 @@
     "topic": {
       "notFound": "话题不存在",
       "createFailed": "创建话题失败",
-      "nothingToCompress": "没有可压缩的历史消息"
+      "nothingToCompress": "没有可压缩的历史消息",
+      "compressionMoved": "总结期间对话内容发生了变化，请重试"
     },
     "message": {
       "notFound": "消息不存在",
@@ -673,6 +675,19 @@
     },
     "stream": {
       "notFound": "流不存在"
+    },
+    "generation": {
+      "notFound": "未找到该生成任务",
+      "targetDeleted": "该对话已被删除",
+      "requestConflict": "该请求 ID 已用于另一条不同的请求",
+      "requestExpired": "该请求已过期，无法重试（服务器时间 {serverTime}）",
+      "requestClockAhead": "该请求的时间戳晚于服务器时间（服务器时间 {serverTime}）",
+      "invalidRequestId": "请求 ID 无效",
+      "topicBusy": "该对话仍在生成回复",
+      "contextChanged": "对话内容在回复开始前发生了变化，请重试",
+      "createFailed": "无法开始生成回复",
+      "interrupted": "生成因服务器重启而中断",
+      "notRunning": "该回复尚未在本服务器上运行，请稍后重试"
     },
     "file": {
       "tooLarge": "文件超过 {limit} 上限",

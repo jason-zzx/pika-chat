@@ -1,8 +1,8 @@
 import "server-only";
 
-import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
+import { createUIMessageStream } from "ai";
 
-import type { ErrorsTranslator } from "@/lib/api/error-contract";
+
 import { fileIdFromUrl } from "@/lib/files/media-types";
 import {
   imageCapabilityFor,
@@ -22,7 +22,6 @@ import {
   type GeneratedImage,
 } from "@/server/ai/image/generate";
 import { createStreamFailureTracker } from "@/server/ai/stream-failure";
-import { registerStream, releaseStream } from "@/server/ai/stream-registry";
 import type { Actor } from "@/server/auth/actor";
 import { AppError } from "@/server/errors";
 import {
@@ -33,8 +32,10 @@ import {
 } from "@/server/files/file.service";
 import { getFileStorage } from "@/server/files/storage";
 import { logger } from "@/server/logger";
-import { appendAssistantMessage } from "@/server/services/message.service";
-import { touchTopicUpdatedAt } from "@/server/services/topic.service";
+import type {
+  TurnFinalizeInput,
+  TurnHooks,
+} from "@/server/ai/generation-turn";
 
 /** First offending image parameter, or null when the request is usable. */
 function invalidImageParam(
@@ -150,65 +151,60 @@ const GENERATED_IMAGE_EXTENSIONS: Record<string, string> = {
  * complete assistant message delivered over the UI message stream protocol so
  * the client's consumption path is unchanged.
  *
- * The two callers differ only in framing: /api/chat announces the (possibly
- * freshly created) topic via a `data-topic` chunk, while the regenerate route
- * carries the stream id in the `x-pika-stream-id` response header and joins
- * the target version group via `groupId`.
+ * Runs as a background turn like the text path (chat task R1): the produced
+ * chunks go to the runner, which fans them out to whatever subscribers exist
+ * and persists the result through `hooks.finalize`. A failed or stopped batch
+ * still commits nothing and reclaims the images it uploaded.
  */
-export async function createImageGenerationResponse({
-  actor,
-  handle,
-  t,
-  providerConfigId,
-  modelId,
-  image,
-  prompt,
-  references,
-  topicId,
-  groupId,
-  groupCreatedAt,
-  announceTopic,
-}: {
-  actor: Actor;
-  handle: ChatModelHandle;
-  t: ErrorsTranslator;
-  providerConfigId: string;
-  modelId: string;
-  image: ImageGenerationParams | undefined;
-  prompt: string;
-  /** Reference images resolved from the user message's file parts. */
-  references?: GeneratedImage[];
-  topicId: string;
-  /** Existing version group to add the answer to; omit for a new group. */
-  groupId?: string;
-  /** Position anchor for a NEW group (see appendAssistantMessage). */
-  groupCreatedAt?: Date;
-  /** /api/chat emits a data-topic chunk; regenerate uses the header instead. */
-  announceTopic: boolean;
-}): Promise<Response> {
-  const streamId = newId();
-  const abortSignal = registerStream(streamId, actor.userId);
+export async function runImageTurn(
+  {
+    actor,
+    handle,
+    providerConfigId,
+    modelId,
+    image,
+    prompt,
+    references,
+    topicId,
+    messageId,
+    signal,
+  }: {
+    actor: Actor;
+    handle: ChatModelHandle;
+    providerConfigId: string;
+    modelId: string;
+    image: ImageGenerationParams | undefined;
+    prompt: string;
+    /** Reference images resolved from the user message's file parts. */
+    references?: GeneratedImage[];
+    topicId: string;
+    /** Pre-allocated assistant row this turn fills. */
+    messageId: string;
+    signal: AbortSignal;
+  },
+  hooks: TurnHooks,
+): Promise<void> {
+  const abortSignal = signal;
+  const t = hooks.t;
   const failure = createStreamFailureTracker(handle.describeError, t);
   // Captured before generation so the persisted createdAt matches the
   // finish metadata, like streamStartedAt on the streaming path.
   const generatedAt = new Date();
-  const messageId = newId();
 
   logger.info(
     { userId: actor.userId, topicId, model: modelId, providerConfigId },
     "image generation started",
   );
 
-  // Parts accumulated in execute; onEnd persists them on success only, so
+  // Parts accumulated in execute; finalization persists them on success only, so
   // a failed or stopped turn never leaves half-written images behind.
   const generatedParts: ChatUIMessage["parts"] = [];
 
   const stream = createUIMessageStream<ChatUIMessage>({
+    generateId: newId,
     execute: async ({ writer }) => {
-      if (announceTopic) {
-        writer.write({ type: "data-topic", data: { topicId, streamId } });
-      }
-      // The start chunk carries the id onEnd persists (B6).
+      // The start chunk carries the assistant row id, so a reconnecting
+      // client replays into that same message (B6 + chat task §6).
       writer.write({ type: "start", messageId });
       const result = await generateImageForEndpoint(
         handle.endpoint,
@@ -311,42 +307,30 @@ export async function createImageGenerationResponse({
       });
     },
     onError: (error: unknown) => failure.describe(error),
-    onEnd: async ({ isAborted }) => {
-      try {
-        const stopped = isAborted || abortSignal.aborted;
-        const failed = !stopped && failure.sawFailure;
-        const outcome: ChatMessageOutcome = stopped
-          ? "stopped"
-          : failed
-            ? "failed"
-            : "completed";
-        await appendAssistantMessage(
-          {
-            topicId,
-            message: {
-              id: messageId,
-              role: "assistant",
-              parts: outcome === "completed" ? generatedParts : [],
-            },
-            outcome,
-            errorMessage: failed ? failure.message : null,
-            providerConfigId,
-            modelId,
-            createdAt: generatedAt,
-            ...(groupId ? { groupId } : {}),
-            ...(groupCreatedAt ? { groupCreatedAt } : {}),
-          },
-          actor,
-        );
-        await touchTopicUpdatedAt(topicId, actor);
-      } finally {
-        releaseStream(streamId);
-      }
-    },
   });
 
-  return createUIMessageStreamResponse({
-    stream,
-    ...(announceTopic ? {} : { headers: { "x-pika-stream-id": streamId } }),
-  });
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      hooks.onChunk(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const outcome: ChatMessageOutcome = abortSignal.aborted
+    ? "stopped"
+    : failure.sawFailure ? "failed" : "completed";
+  const final: TurnFinalizeInput = {
+    parts: outcome === "completed" ? generatedParts : [],
+    outcome,
+    errorMessage: outcome === "failed" ? failure.message : null,
+    generatedFileUrls: generatedParts.flatMap((part) =>
+      part.type === "file" ? [part.url] : [],
+    ),
+  };
+  await hooks.finalize(final);
 }

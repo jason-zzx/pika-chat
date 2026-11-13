@@ -10,7 +10,7 @@ import {
 } from "@/lib/schemas/topic";
 import { newTopicId } from "@/lib/id";
 import type { Actor } from "@/server/auth/actor";
-import { getDb } from "@/server/db/client";
+import { getDb, type DbTransaction } from "@/server/db/client";
 import { assistants, chatMessages, topicColumns, topics } from "@/server/db/schema";
 import { insertWithShortId } from "@/server/db/short-id-insert";
 import { AppError } from "@/server/errors";
@@ -20,6 +20,7 @@ import {
   fileIdsFromParts,
 } from "@/server/files/file.service";
 import { requireOwnedAssistant } from "@/server/services/assistant.service";
+import { markGenerationsForDeletedTopics } from "@/server/services/generation-target.service";
 
 function ownedAssistantIds(actor: Actor) {
   const db = getDb();
@@ -111,19 +112,44 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
     eq(topics.id, id),
     inArray(topics.assistantId, ownedAssistantIds(actor)),
   );
-  // Collect attachment references before the topic's messages cascade away.
-  const messageRows = await db
-    .select({ parts: chatMessages.parts })
-    .from(chatMessages)
-    .innerJoin(topics, eq(topics.id, chatMessages.topicId))
-    .where(owned);
-  const deleted = await db
-    .delete(topics)
-    .where(owned)
-    .returning({ id: topics.id });
+  // Deleting a topic cancels its generation (chat task §8): the transaction
+  // takes the parent row lock first, marks every generation of the topic as
+  // target-deleted (active ones stop), and only then removes the rows, so a
+  // concurrent finalize either loses the race (and discards its output) or
+  // commits before the delete removes it. `deleteTopic` is the only writer of
+  // this row, and the message cascade is the child side.
+  let messageRows: { parts: unknown }[] = [];
+  const deleted = await db.transaction(async (tx) => {
+    const locked = await tx
+      .select({ id: topics.id })
+      .from(topics)
+      .where(owned)
+      .for("update");
+    if (locked.length === 0) {
+      throw new AppError("NOT_FOUND", 404, "topic.notFound");
+    }
+    // Attachment references are read AFTER the lock, so a finalize that
+    // committed its images just before this transaction is visible here and
+    // its files are cleaned. A finalize that loses the lock writes nothing and
+    // reclaims its own files (chat task §8 — no orphaned generated images).
+    messageRows = await tx
+      .select({ parts: chatMessages.parts })
+      .from(chatMessages)
+      .where(eq(chatMessages.topicId, id));
+    await markGenerationsForDeletedTopics(tx, [id]);
+    return tx.delete(topics).where(owned).returning({ id: topics.id });
+  });
   if (!deleted[0]) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
+  // After the commit (the deletion is durable), drop the local producer's
+  // content and subscriptions and abort it, so it neither keeps calling the
+  // provider for a topic nobody can read nor hands late chunks to a client
+  // that is still attached (chat task §8).
+  const { discardGenerationsForTopic } = await import(
+    "@/server/ai/generation-runner"
+  );
+  discardGenerationsForTopic(id);
   // References are gone now; drop whatever no other message still needs.
   await deleteFilesIfUnreferenced(
     messageRows.flatMap((row) => fileIdsFromParts(row.parts)),
@@ -184,8 +210,9 @@ export type TopicContext = {
 export async function findTopicContextForActor(
   id: string,
   actor: Actor,
+  options?: { tx?: DbTransaction },
 ): Promise<TopicContext | null> {
-  const db = getDb();
+  const db = options?.tx ?? getDb();
   const rows = await db
     .select({
       topicId: topics.id,

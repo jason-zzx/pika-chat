@@ -176,6 +176,13 @@
       "when": 1792428491715,
       "tag": "0024_young_natasha_romanoff",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794492814651,
+      "tag": "0025_steady_sway",
+      "breakpoints": true
     }
   ]
 }

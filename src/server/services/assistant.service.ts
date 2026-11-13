@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import {
   DEFAULT_ASSISTANT_ICON,
@@ -13,11 +13,16 @@ import { newAssistantId } from "@/lib/id";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { assistants, topicColumns, topics } from "@/server/db/schema";
+import { assistants, chatMessages, topicColumns, topics } from "@/server/db/schema";
 import { insertWithShortId } from "@/server/db/short-id-insert";
 import { isUniqueViolation } from "@/server/db/unique-violation";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
+import { deleteFilesIfUnreferenced, fileIdsFromParts } from "@/server/files/file.service";
+import {
+  markGenerationsForDeletedTopics,
+  topicIdsForAssistant,
+} from "@/server/services/generation-target.service";
 
 type AssistantRow = typeof assistants.$inferSelect;
 
@@ -315,6 +320,8 @@ export async function updateAssistant(
 
 export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
   const db = getDb();
+  let deletedTopicIds: string[] = [];
+  let messageRows: { parts: unknown }[] = [];
   await db.transaction(async (tx) => {
     const owned = await tx
       .select({ id: assistants.id })
@@ -334,11 +341,34 @@ export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
       );
     }
 
+    // Deleting an assistant deletes its topics (cascade), which must cancel
+    // their generations in the same transaction (chat task §8): mark them
+    // target-deleted, then let the cascade remove the rows.
+    const topicIds = await topicIdsForAssistant(tx, id);
+    // Read after locking the topics: a final save that committed first must
+    // be included, just as in deleteTopic. Otherwise newly generated images
+    // disappear from the transcript but keep consuming the user's quota.
+    if (topicIds.length > 0) {
+      messageRows = await tx.select({ parts: chatMessages.parts })
+        .from(chatMessages).where(inArray(chatMessages.topicId, topicIds));
+    }
+    await markGenerationsForDeletedTopics(tx, topicIds);
     await tx
       .delete(assistants)
       .where(
         and(eq(assistants.id, id), eq(assistants.ownerId, actor.userId)),
       );
+    deletedTopicIds = topicIds;
   });
+  const { discardGenerationsForTopic } = await import(
+    "@/server/ai/generation-runner"
+  );
+  for (const topicId of deletedTopicIds) {
+    discardGenerationsForTopic(topicId);
+  }
+  await deleteFilesIfUnreferenced(
+    messageRows.flatMap(row => fileIdsFromParts(row.parts)),
+    actor,
+  );
   logger.info({ userId: actor.userId, assistantId: id }, "assistant deleted");
 }

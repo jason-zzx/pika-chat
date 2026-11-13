@@ -341,7 +341,7 @@ describe("message.service versions", () => {
     expect(selectedRows.map((row) => row.id).sort()).toEqual(["m1", "m2"]);
   });
 
-  it("returns NOT_FOUND for foreign or unknown messages", async () => {
+  it("returns NOT_FOUND for foreign or unknown messages, including public writers with an explicit tx", async () => {
     const { actor, otherActor, topicId } = await setupTopic();
     await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
 
@@ -350,6 +350,51 @@ describe("message.service versions", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       selectMessageVersion({ topicId, messageId: "m2" }, otherActor),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      db.transaction((tx) =>
+        appendUserMessage(
+          { topicId, message: userMessage("m-foreign-u", "nope") },
+          otherActor,
+          { tx },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      db.transaction((tx) =>
+        appendUserMessageVersion(
+          { topicId, groupId: "m1", message: userMessage("m-foreign-uv", "nope") },
+          otherActor,
+          { tx },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      db.transaction((tx) =>
+        appendAssistantMessage(
+          {
+            topicId,
+            message: assistantMessage("m-foreign-a", "nope"),
+            outcome: "completed",
+            providerConfigId: "cfg-1",
+            modelId: "gpt-4o",
+          },
+          otherActor,
+          { tx },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const { insertAssistantPlaceholder } = await import(
+      "@/server/services/message.service"
+    );
+    await expect(
+      db.transaction((tx) =>
+        insertAssistantPlaceholder(
+          { topicId, id: "m-foreign-p" },
+          otherActor,
+          { tx },
+        ),
+      ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       deleteMessage({ topicId, messageId: "nope" }, actor),

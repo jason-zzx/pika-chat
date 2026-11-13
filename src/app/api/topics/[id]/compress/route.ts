@@ -28,7 +28,13 @@ export const POST = withErrorHandling(async (request, context) => {
   // the caller may actually use.
   const { handle } = await requireModelForActor(pair, actor);
 
-  const result = await compressTopicHistory({ topicId, handle }, actor);
+  // `exclusive`: the topic lock is held across the summary model call and the
+  // write, so a request admitted in between cannot change the history that is
+  // being summarized (chat task §8).
+  const result = await compressTopicHistory(
+    { topicId, handle, exclusive: true },
+    actor,
+  );
   return Response.json({
     summaryUpToMessageId: result.summaryUpToMessageId,
     compressedCount: result.compressedCount,

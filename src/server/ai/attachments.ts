@@ -165,6 +165,15 @@ function mediaUnsupported(
   return !allowed.has(normalizeMediaType(mediaType));
 }
 
+function modalitySupport(caps: AttachmentCapabilities): ModalitySupport {
+  return {
+    image: caps.inputModalities.includes("image"),
+    pdf: caps.inputModalities.includes("pdf"),
+    audio: caps.inputModalities.includes("audio"),
+    video: caps.inputModalities.includes("video"),
+  };
+}
+
 /** Routes a single attachment by format against the model's capabilities. */
 function planAttachment(
   file: FileRecord,
@@ -244,6 +253,35 @@ function toDataUrl(file: FileRecord, data: Buffer): string {
  * endpoint format cannot carry, or a corrupt file stops the turn rather than
  * silently sending an empty context.
  */
+/**
+ * Capability-only pre-flight with exactly the rejection rules of
+ * `resolveAttachmentsForModel`, minus the byte reads and provider Files API
+ * uploads.
+ *
+ * Admission calls this before writing anything (chat task §4 step 3): an
+ * attachment the selected model cannot consume must fail the request without
+ * leaving a topic, a user message or a task behind. The executor then performs
+ * the real routing, which re-checks the same rules.
+ */
+export async function assertAttachmentsRoutable(
+  messages: ChatUIMessage[],
+  caps: AttachmentCapabilities,
+): Promise<void> {
+  const fileIds = collectFileIds(messages);
+  if (fileIds.length === 0) {
+    return;
+  }
+  const rows = await getFilesByIds(fileIds);
+  const support = modalitySupport(caps);
+  for (const fileId of fileIds) {
+    const file = rows.get(fileId);
+    if (!file) {
+      throw new AppError("NOT_FOUND", 404, "file.notFound");
+    }
+    planAttachment(file, support, caps.apiFormat);
+  }
+}
+
 export async function resolveAttachmentsForModel(
   messages: ChatUIMessage[],
   caps: AttachmentCapabilities,
@@ -264,12 +302,7 @@ export async function resolveAttachmentsForModel(
   // native file and a storage read only for the ones that still need bytes.
   const rows =
     fileIds.length > 0 ? await getFilesByIds(fileIds) : new Map<string, FileRecord>();
-  const support: ModalitySupport = {
-    image: caps.inputModalities.includes("image"),
-    pdf: caps.inputModalities.includes("pdf"),
-    audio: caps.inputModalities.includes("audio"),
-    video: caps.inputModalities.includes("video"),
-  };
+  const support = modalitySupport(caps);
 
   const plans = new Map<string, AttachmentPlan>();
   for (const fileId of fileIds) {

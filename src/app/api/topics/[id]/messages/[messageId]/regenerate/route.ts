@@ -1,428 +1,76 @@
-import {
-  createUIMessageStream,
-  createUIMessageStreamResponse,
-  streamText,
-  toUIMessageStream,
-  type ToolSet,
-} from "ai";
+import { getLocale, getTranslations } from "next-intl/server";
 
+import { respondWithGeneration } from "@/app/api/chat/_lib/generation-response";
 import { requireParam } from "@/app/api/_lib/route-params";
 import { withErrorHandling } from "@/app/api/_lib/with-error-handling";
-import { newId } from "@/lib/id";
+import { regenerateMessageRequestSchema } from "@/lib/schemas/chat";
 import {
-  regenerateMessageRequestSchema,
-  type ChatMessageOutcome,
-  type ChatUIMessage,
-} from "@/lib/schemas/chat";
-import { requireModelForActor } from "@/server/ai/require-model";
-import { resolveAttachmentsForModel } from "@/server/ai/attachments";
-import {
-  assertImageGenerationSupported,
-  createImageGenerationResponse,
-  resolveImageReferences,
-} from "@/server/ai/image/turn";
-import { replayModelMessages } from "@/server/ai/model-messages";
-import { resolvedMaxOutputTokens } from "@/server/ai/output-budget";
-import { resolvedReasoningEffort } from "@/server/ai/reasoning-effort";
-import {
-  createReasoningTimer,
-  withReasoningDurations,
-} from "@/server/ai/reasoning-timer";
-import {
-  stripMarkupFromTextParts,
-  stripToolCallMarkupTransform,
-} from "@/server/ai/search/markup-sanitizer";
-import {
-  buildSearchTools,
-  toolTurnStepSettings,
-} from "@/server/ai/search/tool";
-import { buildChatInstructions } from "@/server/ai/instructions";
-import { createStreamFailureTracker } from "@/server/ai/stream-failure";
-import { registerStream, releaseStream, abortStream } from "@/server/ai/stream-registry";
-import { withDisconnectAbort } from "@/server/ai/disconnect-abort";
+  prepareRegenerateTurn,
+  regenerateRequestHash,
+} from "@/server/ai/generation-turn";
 import { requireActor } from "@/server/auth/actor";
-import { AppError } from "@/server/errors";
-import { resolveOwnedFileParts } from "@/server/files/file.service";
 import { logger } from "@/server/logger";
-import { getTranslations } from "next-intl/server";
-import {
-  boundaryFromSummaryState,
-  getTopicSummaryState,
-  messagesAfterBoundary,
-} from "@/server/services/compression.service";
-import {
-  appendAssistantMessage,
-  appendUserMessageVersion,
-  resolveRegenerateTarget,
-  textFromMessage,
-} from "@/server/services/message.service";
-import { resolveSearchProviderCredentials } from "@/server/services/search-provider.service";
-import {
-  findTopicContextForActor,
-  touchTopicUpdatedAt,
-} from "@/server/services/topic.service";
-
-function partsHaveText(message: ChatUIMessage): boolean {
-  return message.parts.some(
-    (part) => part.type === "text" && part.text.length > 0,
-  );
-}
+import { admitTurn } from "@/server/services/generation.service";
 
 /**
- * Streams a new version for the answer at `messageId`. Same skeleton as
- * /api/chat (model availability → handle → registerStream → streamText →
- * createUIMessageStream → onEnd persists), minus topic creation, user-message
- * append, and title generation. The stream contains only the new assistant
- * message; the stream id travels in the x-pika-stream-id response header so
- * the client (which consumes the stream manually, not via useChat) can stop it.
+ * Streams a new version for the answer at `messageId` (or the answer that
+ * follows an edited user message).
+ *
+ * Same admission/executor split as `/api/chat` (chat task §6): the response is
+ * a subscriber, the generation outlives it. The response keeps its legacy
+ * `x-pika-stream-id` header — it now carries the durable generation id, which
+ * is what `/api/chat/stop` accepts — and, as before, adds no `data-topic`.
  */
 export const POST = withErrorHandling(async (request, context) => {
   const actor = await requireActor(request.headers);
-  // Request-scoped translator for the streaming path (see /api/chat).
-  const t = await getTranslations("Errors");
+  const tChat = await getTranslations("Chat");
+  const locale = await getLocale();
   const topicId = await requireParam(context, "id", "topic.notFound");
-  const messageId = await requireParam(context, "messageId", "message.notFound");
+  const messageId = await requireParam(
+    context,
+    "messageId",
+    "message.notFound",
+  );
   const input = regenerateMessageRequestSchema.parse(await request.json());
 
-  const { selected, handle } = await requireModelForActor(
-    {
-      providerConfigId: input.providerConfigId,
-      modelId: input.modelId,
-    },
-    actor,
-    { builtinSearch: input.searchMode === "builtin" },
-  );
+  // Receipt lookup runs before preparation (chat task §4): a retry of an
+  // accepted edit/regenerate must find its task even when the model or the
+  // edited message would no longer validate.
+  const requestHash = regenerateRequestHash({ topicId, messageId, request: input });
 
-  const topicContext = await findTopicContextForActor(topicId, actor);
-  if (!topicContext) {
-    throw new AppError("NOT_FOUND", 404, "topic.notFound");
-  }
-
-  const resolved = await resolveRegenerateTarget(
-    { topicId, messageId },
-    actor,
-  );
-  let targetGroupId = resolved.targetGroupId;
-  let history = resolved.history;
-  // Anchor for the new group when the answer slot was deleted empty
-  // (targetGroupId null): the clicked message's group anchor keeps the
-  // regenerated answer at the slot's position instead of the topic's end.
-  let detachedGroupAnchor = resolved.target.groupCreatedAt;
-
-  // Edit-and-regenerate: persist the edited user message as a new selected
-  // version of its group BEFORE streaming, then re-resolve so the history
-  // carries the edited content. Attachment ownership is validated ahead of
-  // any write, so a forged or foreign file id 4xxes with nothing persisted.
-  if (input.edit) {
-    if (resolved.target.role !== "user") {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        400,
-        "message.editTargetNotUser",
-      );
-    }
-    const normalizedFileParts = await resolveOwnedFileParts(
-      input.edit.parts.filter((part) => part.type === "file"),
-      actor,
-    );
-    const normalizedTextParts = input.edit.parts.filter(
-      (part) => part.type === "text",
-    );
-    // Files first, then the text — the same ordering /api/chat persists.
-    await appendUserMessageVersion(
-      {
-        topicId,
-        groupId: resolved.target.groupId,
-        message: {
-          id: input.edit.id,
-          role: "user",
-          parts: [...normalizedFileParts, ...normalizedTextParts],
+  const { generation, duplicate } = await admitTurn(
+    { requestId: input.requestId, requestHash },
+    () =>
+      prepareRegenerateTurn(
+        {
+          topicId,
+          messageId,
+          request: input,
+          defaultTopicTitle: tChat("newTopic"),
+          actorRole: actor.role,
+          locale,
         },
-        // App-side clock, the same single-clock rule as appendUserMessage.
-        createdAt: new Date(),
-      },
-      actor,
-    );
-    // Re-resolve against the new version id: the selected-version history
-    // now contains the edited message, and the answer slot derives from it.
-    const reResolved = await resolveRegenerateTarget(
-      { topicId, messageId: input.edit.id },
-      actor,
-    );
-    targetGroupId = reResolved.targetGroupId;
-    history = reResolved.history;
-    detachedGroupAnchor = reResolved.target.groupCreatedAt;
-  }
-
-  // Image-generation bypass (same contract as /api/chat): an image-output
-  // model regenerates with one non-streaming call — no history, compression,
-  // tools, or attachment routing — and the new answer joins the target
-  // version group. The prompt is the text of the last user message in the
-  // target history; the stream id travels in the response header as usual.
-  if (selected.outputModalities.includes("image")) {
-    const promptMessage = [...history]
-      .reverse()
-      .find((message) => message.role === "user");
-    // Reference images re-resolve from the source user message's file parts
-    // through the same flow as /api/chat (design §3.4); a deleted reference
-    // surfaces resolveOwnedFileParts' NOT_FOUND, which is correct.
-    const { references } = await resolveImageReferences(
-      promptMessage?.parts.filter((part) => part.type === "file") ?? [],
-      actor,
-      input.modelId,
-    );
-    assertImageGenerationSupported(handle.apiFormat, input.modelId, input.image);
-    return createImageGenerationResponse({
-      actor,
-      handle,
-      t,
-      providerConfigId: input.providerConfigId,
-      modelId: input.modelId,
-      image: input.image,
-      prompt: promptMessage ? textFromMessage(promptMessage) : "",
-      references,
-      topicId,
-      groupId: targetGroupId ?? undefined,
-      groupCreatedAt: targetGroupId ? undefined : detachedGroupAnchor,
-      announceTopic: false,
-    });
-  }
-
-  const reasoningEffort = resolvedReasoningEffort(
-    selected,
-    input.reasoningEffort,
+        actor,
+      ),
+    actor,
   );
-
-  // Tool mode: resolve the caller's search credentials once per request. With
-  // none configured the turn degrades gracefully to a tool-less run.
-  const searchMode = input.searchMode ?? "off";
-  let searchTools: ReturnType<typeof buildSearchTools> | null = null;
-  if (searchMode === "tool") {
-    const credentials = await resolveSearchProviderCredentials(actor);
-    if (credentials.length > 0) {
-      searchTools = buildSearchTools(credentials);
-    } else {
-      logger.info(
-        { userId: actor.userId },
-        "search mode 'tool' requested without configured providers; running without tools",
-      );
-    }
-  }
-
-  // Align with /api/chat: reuse the topic's persisted summary — clip the
-  // history to the compression boundary and carry the summary into the
-  // instructions. No new compression is triggered here (AC1b).
-  const summaryState = await getTopicSummaryState(topicId, actor);
-  const historySummary = summaryState?.summaryText ?? null;
-  const modelHistory = messagesAfterBoundary(
-    history,
-    boundaryFromSummaryState(summaryState),
-  );
-  // Regeneration runs on the composer's current model, so historical
-  // attachments are re-routed here: switching to a text-only model degrades a
-  // PDF to its cached extraction, switching to a vision model inlines images.
-  const modelMessages = await replayModelMessages(
-    await resolveAttachmentsForModel(modelHistory, {
-      inputModalities: selected.inputModalities,
-      apiFormat: handle.apiFormat,
-      providerConfigId: handle.providerConfigId,
-      filesApi: handle.filesApi,
-    }),
-  );
-
-  const streamId = newId();
-  const abortSignal = registerStream(streamId, actor.userId);
 
   logger.info(
     {
       userId: actor.userId,
+      generationId: generation.id,
       topicId,
       messageId,
-      targetGroupId,
-      model: input.modelId,
-      providerConfigId: input.providerConfigId,
+      kind: generation.kind,
+      duplicate,
     },
-    "chat regeneration started",
+    "chat regeneration accepted",
   );
 
-  let accumulatedText = "";
-  // Captured before the model call so the persisted assistant createdAt
-  // matches what a history reload will return.
-  const streamStartedAt = new Date();
-  const reasoningTimer = createReasoningTimer();
-  // Count of phase durations already announced via early message-metadata;
-  // each newly closed reasoning phase re-emits the cumulative list.
-  let emittedReasoningPhaseCount = 0;
-  // Assigned from the UI stream's execute closure, where the writer exists.
-  let emitReasoningMetadata: (() => void) | null = null;
-  // Decides the turn outcome from what we observe, not from what the SDK
-  // declares — see stream-failure.ts.
-  const failure = createStreamFailureTracker(handle.describeError, t);
-
-  const result = streamText({
-    model: handle.model,
-    messages: modelMessages,
-    // Current date + tool-mode directives (see ai/instructions.ts).
-    instructions: buildChatInstructions({
-      systemPrompt: topicContext.assistant.systemPrompt,
-      searchEnabled: searchTools !== null,
-      timeZone: input.timeZone,
-      historySummary,
-    }),
-    abortSignal,
-    // One retry, not the SDK default of two: the backoff doubles otherwise.
-    maxRetries: 1,
-    maxOutputTokens: resolvedMaxOutputTokens(selected),
-    providerOptions:
-      reasoningEffort === undefined
-        ? undefined
-        : {
-            openaiCompatible: { reasoningEffort },
-          },
-    ...(searchTools
-      ? {
-          tools: searchTools,
-          ...toolTurnStepSettings(),
-          // R9 sanitization: strip Hermes-style tool-call markup weak
-          // models leak as plain text (the forced answer step especially).
-          experimental_transform: stripToolCallMarkupTransform(),
-        }
-      : {}),
-    onError: ({ error }) => {
-      logger.error(
-        {
-          topicId,
-          errorName: error instanceof Error ? error.name : undefined,
-        },
-        "streamText failed",
-      );
-    },
-    onChunk: ({ chunk }) => {
-      if (chunk.type === "text-delta") {
-        accumulatedText += chunk.text;
-      }
-      reasoningTimer.onChunk(chunk);
-      emitReasoningMetadata?.();
-    },
-  });
-
-  void result.consumeStream();
-
-  const stream = createUIMessageStream<ChatUIMessage>({
-    generateId: newId,
-    execute: ({ writer }) => {
-      emitReasoningMetadata = () => {
-        const reasoningDurations = reasoningTimer.durations();
-        if (reasoningDurations.length === emittedReasoningPhaseCount) {
-          return;
-        }
-        emittedReasoningPhaseCount = reasoningDurations.length;
-        writer.write({
-          type: "message-metadata",
-          messageMetadata: { reasoningDurations },
-        });
-      };
-      writer.merge(
-        toUIMessageStream<ToolSet, ChatUIMessage>({
-          stream: result.stream,
-          generateMessageId: newId,
-          // sendStart must stay enabled so the streamed message id matches
-          // the row onEnd persists (see /api/chat; B6).
-          sendStart: true,
-          sendReasoning: true,
-          // Without this the client receives the SDK's own "An error occurred."
-          // and the provider detail never leaves the server, even though we
-          // computed it for the persisted row.
-          onError: (error: unknown) => failure.describe(error),
-          messageMetadata: ({ part }) => {
-            if (part.type !== "finish") {
-              return undefined;
-            }
-            return {
-              providerConfigId: input.providerConfigId,
-              modelId: input.modelId,
-              totalTokens: part.totalUsage.totalTokens,
-              finishReason: part.finishReason,
-              createdAt: streamStartedAt.toISOString(),
-              reasoningMs: reasoningTimer.measure(),
-              ...(reasoningTimer.durations().length > 0
-                ? { reasoningDurations: reasoningTimer.durations() }
-                : {}),
-            };
-          },
-        }),
-      );
-    },
-    onError: (error: unknown) => failure.describe(error),
-    onEnd: async ({ responseMessage, outcome, isAborted }) => {
-      try {
-        const withText = partsHaveText(responseMessage)
-          ? responseMessage
-          : accumulatedText.length > 0
-            ? {
-                ...responseMessage,
-                parts: [{ type: "text" as const, text: accumulatedText }],
-              }
-            : responseMessage;
-        // R9 persistence safety net: the live transform already strips
-        // leaked tool-call markup; re-run it here and drop text parts that
-        // sanitize to nothing so markup never reaches the DB.
-        const cleaned = searchTools
-          ? { ...withText, parts: stripMarkupFromTextParts(withText.parts) }
-          : withText;
-        // Zip per-phase reasoning durations into the reasoning parts so the
-        // per-step Thought durations survive reloads (parts jsonb, no
-        // dedicated column); the reasoningMs column keeps the total.
-        const persisted = {
-          ...cleaned,
-          parts: withReasoningDurations(
-            cleaned.parts,
-            reasoningTimer.durations(),
-          ),
-        };
-
-        let turnOutcome: ChatMessageOutcome = "completed";
-        let errorMessage: string | null = null;
-        if (isAborted) {
-          turnOutcome = "stopped";
-        } else if (failure.sawFailure || outcome.status === "failed") {
-          turnOutcome = "failed";
-          errorMessage =
-            failure.message ??
-            (outcome.status === "failed"
-              ? failure.describe(outcome.error)
-              : null);
-        }
-
-        await appendAssistantMessage(
-          {
-            topicId,
-            message: persisted,
-            outcome: turnOutcome,
-            errorMessage,
-            providerConfigId: input.providerConfigId,
-            modelId: input.modelId,
-            reasoningMs: reasoningTimer.measure(),
-            createdAt: streamStartedAt,
-            groupId: targetGroupId ?? undefined,
-            groupCreatedAt: targetGroupId ? undefined : detachedGroupAnchor,
-          },
-          actor,
-        );
-        await touchTopicUpdatedAt(topicId, actor);
-      } finally {
-        releaseStream(streamId);
-      }
-    },
-  });
-
-  return createUIMessageStreamResponse({
-    // A cancelled response means the client disconnected (refresh/tab close;
-    // SPA navigations keep the fetch alive for resume): stop paying for the
-    // provider stream nobody can read.
-    stream: withDisconnectAbort(stream, () =>
-      abortStream(streamId, actor.userId),
-    ),
-    headers: { "x-pika-stream-id": streamId },
+  return respondWithGeneration({
+    generationId: generation.id,
+    actor,
+    mode: "follow",
+    headers: { "x-pika-stream-id": generation.id },
   });
 });

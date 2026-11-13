@@ -87,6 +87,14 @@ Endpoints: `POST /api/topics/[id]/compress` (manual) →
 
 ### 3. Contracts
 
+- **Server-managed turns**: automatic compression consumes the generation's
+  frozen selected-history prefix and summary through the internal summary
+  path, without calling the public manual-compression guard or holding a
+  topic lock during inference. Manual compression rejects active topics with
+  409 `generation.topicBusy`; using that entry point from an active turn
+  would reject/deadlock its own work. Task cancellation propagates into the
+  summary request and does not take the ordinary failure fallback. See
+  [Chat Generation Lifecycle](./chat-generation-lifecycle.md).
 - **Threshold**: auto-compression fires when
   `estimateMessagesTokens([...modelHistory, userMessage]) >
   contextTokens * 0.8`. `estimateMessagesTokens` is chars/2 for text,

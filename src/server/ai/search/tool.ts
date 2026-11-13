@@ -116,13 +116,18 @@ export function createSearchWebTool(
         ? " To read one specific page in depth, use the fetchPage tool with its URL."
         : ""),
     inputSchema: searchWebToolInputSchema,
-    execute: async ({ query }): Promise<SearchWebToolOutput> => {
+    execute: async ({ query }, { abortSignal }): Promise<SearchWebToolOutput> => {
+      // The turn's abort signal reaches the HTTP call itself: an explicit stop
+      // or a deleted topic cancels the in-flight provider request instead of
+      // only preventing the next fallback.
       const chain = credentials.map((credential) => ({
         provider: credential.provider,
-        call: createSearchAdapter(credential),
+        call: createSearchAdapter(credential, { signal: abortSignal }),
       }));
       try {
-        const { provider, value } = await runChain(chain, query);
+        const { provider, value } = await runChain(chain, query, {
+          signal: abortSignal,
+        });
         return {
           provider,
           query,
@@ -161,17 +166,21 @@ export function createFetchPageTool(
     description:
       "Fetch and read the full text content of a specific web page by URL. Use after searchWeb when you need to read one of its results in depth; searchWeb finds information, fetchPage reads one page.",
     inputSchema: fetchPageToolInputSchema,
-    execute: async ({ url }): Promise<FetchPageToolOutput> => {
+    execute: async ({ url }, { abortSignal }): Promise<FetchPageToolOutput> => {
       const chain = credentials
         .filter((credential) => isFetchCapable(credential.provider))
         .flatMap((credential) => {
-          const fetchPage = createFetchAdapter(credential);
+          const fetchPage = createFetchAdapter(credential, {
+            signal: abortSignal,
+          });
           return fetchPage
             ? [{ provider: credential.provider, call: fetchPage }]
             : [];
         });
       try {
-        const { provider, value } = await runChain(chain, url);
+        const { provider, value } = await runChain(chain, url, {
+          signal: abortSignal,
+        });
         return { provider, num: numbering.next(), ...value };
       } catch (error) {
         if (error instanceof ChainError) {

@@ -156,13 +156,20 @@ stop lands *between* generation and the upload loop (the loop checks
 `abortSignal.aborted` before each upload) — an abort during generation itself
 throws and is caught by the same path.
 
-**Persistence is all-or-nothing.** Parts accumulate in the stream's `execute`
-closure and `onEnd` persists them only on `completed`: a failed turn persists
-`outcome: "failed"` + scrubbed `errorMessage` (same shape as a streaming
-failure, via the shared `createStreamFailureTracker`), an aborted turn
-persists `outcome: "stopped"` — never half-written images. `Stop` works
-through the same `stream-registry`: `registerStream`/`releaseStream` wrap the
-call and `POST /api/chat/stop` aborts it.
+**Persistence is all-or-nothing.** `executeImageTurn` runs under the generation
+runner and supplies its completed parts/generated file URLs to the common
+finalizer. Failed turns persist `outcome: "failed"` + scrubbed `errorMessage`;
+stopped image turns persist `outcome: "stopped"` without a partial image batch.
+`POST /api/chat/stop` targets the durable generation ID; browser disconnect
+only unsubscribes, never cancels the image request.
+
+**Unresolved terminal writes are not failed batches.** Retain uploaded files
+while finalization retries. A transaction that committed but lost its response
+must keep the already-referenced images. Cleanup follows the authoritative
+stop/delete/failure decision, not the local DB exception. Deletion winning
+against finalization cannot recreate messages. See
+[Chat Generation Lifecycle](./chat-generation-lifecycle.md); regression cases
+live in `generation-execution.integration.test.ts`.
 
 **Provider dispatch.** `FORMAT_ADAPTERS` is a
 `Record<ProviderApiFormat, ImageAdapter | null>` keyed exhaustively like

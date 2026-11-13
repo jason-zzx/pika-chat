@@ -196,12 +196,20 @@ resumable disconnect, not a cancellation, and the persisted message must
 survive it. Explicit user cancellation is a separate, deliberate signal — a
 dedicated stop endpoint — not an inferred one.
 
-This distinction is what makes later stream-resumption work possible. Getting
-it wrong now means a mobile user loses every answer they switch away from.
+[Chat Generation Lifecycle](./chat-generation-lifecycle.md) owns this split:
+HTTP connections subscribe to an independent producer. The runner, not a
+browser callback or route-local append, persists the preallocated assistant
+row and task terminal state in one transaction before sending finish/abort/error.
 
-Persist the assistant message on stream completion **server-side**, in the
-`onFinish` callback — not from a client callback. The client may be gone.
+**A terminal DB exception is not a model failure.** Retain accumulated content
+and image references; retry only finalization, not inference. When a commit
+acknowledgement is lost, the transaction's authoritative status determines the
+client signal: completed → finish, stopped → abort, failed/interrupted → error.
+Never close a failed/stopped stream silently or discard its only live answer
+while its DB row still says running. In-flight checkpoints must settle before
+the terminal write so an older save cannot overwrite the answer.
 
-Topic titles are a separate `POST /api/topics/:id/title` request. Do not
-await title generation in the chat stream `onEnd` — that couples Stop and
-`inFlight` to titling. A slow or failed title call must not fail the turn.
+Title generation is a server-owned best-effort post-turn task. It must work
+without a browser and must not delay reply completion or make a turn fail.
+The separate title endpoint remains available, but normal chat completion no
+longer depends on the client calling it.

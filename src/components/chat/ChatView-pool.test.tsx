@@ -13,7 +13,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AccountUserIdContext } from "@/hooks/use-account-user";
+import type { GenerationSummary } from "@/lib/schemas/generation";
+import {
+  listPendingGenerationRequests,
+  rememberPendingGenerationRequest,
+} from "@/lib/pending-generation-requests";
 import { listTopicMessages } from "@/lib/api/chat";
+import { generationKeys } from "@/lib/api/generation";
 import { chatKeys } from "./use-chat-history";
 import { useComposerStore } from "@/stores/composer-store";
 import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
@@ -21,19 +28,25 @@ import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 import ChatPoolBridge from "@/components/providers/ChatPoolBridge";
 
 import ChatView from "./ChatView";
-import { resetChatPool } from "./chat-pool";
+import { acquireChat, attachChatView, reconnectTargetFor, resetChatPool } from "./chat-pool";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
 
-/** The app tree for a route; one shared QueryClient, like the real SPA. */
+/**
+ * The app tree for a route; one shared QueryClient, like the real SPA.
+ * The account context is what enables the server-owned generation discovery
+ * (its query keys are account-scoped), so every case renders signed in.
+ */
 function app(topicId: string | undefined, strict = false) {
   nav.pathname = topicId ? `/assistant/a1/${topicId}` : "/assistant/a1";
   const tree = (
     <QueryClientProvider client={queryClient}>
-      <ChatPoolBridge />
-      <ChatView assistantId="a1" topicId={topicId} />
+      <AccountUserIdContext.Provider value="account-a">
+        <ChatPoolBridge />
+        <ChatView assistantId="a1" topicId={topicId} />
+      </AccountUserIdContext.Provider>
     </QueryClientProvider>
   );
   return wrapWithIntl(strict ? <StrictMode>{tree}</StrictMode> : tree);
@@ -173,6 +186,18 @@ function storedMessage(id: string, role: "user" | "assistant", text: string) {
   };
 }
 
+/**
+ * Drains the SDK's serial job queue. With ai 7.0.170 the send request and the
+ * first chunk application are chained as microtasks, so a synchronous
+ * `act(() => push())` leaves them pending until something yields.
+ */
+async function drainStreamJobs() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 /** A fetch response whose SSE body the test controls chunk by chunk. */
 function controllableStream() {
   let controller: ReadableStreamDefaultController<string>;
@@ -186,11 +211,72 @@ function controllableStream() {
     push(chunk: object) {
       controller.enqueue(`data: ${JSON.stringify(chunk)}\n\n`);
     },
+    fail(error: Error) {
+      controller.error(error);
+    },
     close() {
       controller.enqueue("data: [DONE]\n\n");
       controller.close();
     },
   };
+}
+
+/**
+ * Routes the two network surfaces the view uses: the chat SSE stream itself
+ * and the server-owned generation discovery query (which must answer with an
+ * empty list, otherwise its JSON parse would consume the SSE body).
+ */
+function stubChatFetch(
+  server: { stream: ReadableStream<string> },
+  generations?: {
+    /** Active list the discovery query sees (re-read on every refetch). */
+    active: () => GenerationSummary[];
+    /** The reconnect GET: a live prefix stream, or a 204. */
+    resume: () => Response;
+  },
+) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : String(input);
+      if (generations && url.endsWith("/stream")) {
+        return generations.resume();
+      }
+      if (url.includes("/api/chat/generations")) {
+        return new Response(
+          JSON.stringify({ generations: generations?.active() ?? [] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return streamResponse(server.stream);
+    }),
+  );
+}
+
+/** A running generation of topic t1, as the discovery query reports it. */
+function runningGeneration(
+  overrides: Partial<GenerationSummary> = {},
+): GenerationSummary {
+  const now = new Date().toISOString();
+  return {
+    id: "gen-9",
+    topicId: "t1",
+    assistantId: "a1",
+    assistantMessageId: "srv-a2",
+    kind: "send",
+    status: "running",
+    targetDeleted: false,
+    errorMessage: null,
+    createdAt: now,
+    updatedAt: now,
+    startedAt: now,
+    finishedAt: null,
+    ...overrides,
+  };
+}
+
+function jsonGenerationStreamUrl(generationId: string): string {
+  return `/api/chat/generations/${generationId}/stream`;
 }
 
 function streamResponse(body: ReadableStream<string>): Response {
@@ -205,6 +291,26 @@ function streamResponse(body: ReadableStream<string>): Response {
 
 
 describe("ChatView pool resume (real AI SDK)", () => {
+  it("keeps the reconnect target after the SDK runs both disconnect callbacks", async () => {
+    const server = controllableStream();
+    stubChatFetch(server);
+    const entry = acquireChat("disconnect-topic");
+    const detach = attachChatView("disconnect-topic", {
+      onData: () => undefined,
+      onFinish: () => undefined,
+    });
+    const sending = entry.chat.sendMessage({ text: "hi" });
+    server.push({ type: "data-topic", data: { topicId: "disconnect-topic", streamId: "gen-disconnect" } });
+    server.push({ type: "start", messageId: "answer" });
+    server.push({ type: "text-start", id: "text" });
+    server.push({ type: "text-delta", id: "text", delta: "partial" });
+    await waitFor(() => expect(entry.chat.status).toBe("streaming"));
+    server.fail(new TypeError("network connection lost"));
+    await sending;
+    expect(entry.chat.status).toBe("error");
+    expect(reconnectTargetFor("disconnect-topic")).toBe("gen-disconnect");
+    detach();
+  });
   // Flipped when A's stream finishes: the server has persisted the reply by
   // then, so the history mock starts returning it.
   let aReplyPersisted = false;
@@ -212,6 +318,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetChatPool();
+    window.sessionStorage.clear();
     aReplyPersisted = false;
     useComposerStore.setState({
       pickedModel: { configId: "c1", modelId: "m1" },
@@ -244,10 +351,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
 
   it("shows each topic's own messages when navigating away and back around a live stream", async () => {
     const server = controllableStream();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => streamResponse(server.stream)),
-    );
+    stubChatFetch(server);
 
     const view = renderWithIntl(app("t1"));
     // Topic A seeded from history.
@@ -268,6 +372,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
       server.push({ type: "text-start", id: "txt1" });
       server.push({ type: "text-delta", id: "txt1", delta: "partial" });
     });
+    await drainStreamJobs();
     expect(await screen.findByText("partial")).toBeInTheDocument();
 
     // Switch to B mid-stream: B's own history must render.
@@ -302,10 +407,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
 
   async function runDraftRoundTrip(strict: boolean) {
     const server = controllableStream();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => streamResponse(server.stream)),
-    );
+    stubChatFetch(server);
 
     // Start on the assistant draft and send: the topic is created
     // mid-stream (data-topic), exactly like the reported bug.
@@ -331,6 +433,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
       server.push({ type: "text-start", id: "txt1" });
       server.push({ type: "text-delta", id: "txt1", delta: "partial" });
     });
+    await drainStreamJobs();
     expect(await screen.findByText("partial")).toBeInTheDocument();
 
     // The stream finishes while the (created) topic is viewed.
@@ -370,10 +473,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
     // only marks it stale. Returning used to seed that stale cache (missing
     // the finished turn) and the seed guard then blocked the fresh refetch.
     const server = controllableStream();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => streamResponse(server.stream)),
-    );
+    stubChatFetch(server);
 
     const view = renderWithIntl(app("t1"));
     expect(await screen.findByText("A answer")).toBeInTheDocument();
@@ -391,6 +491,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
       server.push({ type: "text-start", id: "txt1" });
       server.push({ type: "text-delta", id: "txt1", delta: "partial" });
     });
+    await drainStreamJobs();
     expect(await screen.findByText("partial")).toBeInTheDocument();
 
     // Leave mid-stream; the stream finishes while topic B is viewed.
@@ -407,7 +508,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
     await waitFor(() => {
       expect(
         queryClient.getQueryData<{ messages: unknown[] }>(
-          chatKeys.history("t1"),
+          chatKeys.history("account-a", "t1"),
         )?.messages,
       ).toHaveLength(4);
     });
@@ -416,5 +517,291 @@ describe("ChatView pool resume (real AI SDK)", () => {
     view.rerender(app("t1"));
     expect(await screen.findByText("partial")).toBeInTheDocument();
     expect(screen.getByText("A answer")).toBeInTheDocument();
+  });
+});
+
+describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetChatPool();
+    // The app shares one QueryClient across these tests; a cached history from
+    // another case would seed before this case's fetch and the seed guard would
+    // then block it.
+    queryClient.clear();
+    window.sessionStorage.clear();
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+      drafts: {},
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useComposerStore.setState({ pickedModel: null, drafts: {} });
+  });
+
+  /** History of a topic whose answer is still being produced server-side. */
+  function historyWithPlaceholder(answer: string) {
+    return {
+      messages: [
+        storedMessage("u1", "user", "A question"),
+        storedMessage("a1", "assistant", "A answer"),
+        storedMessage("u2", "user", "hello"),
+        storedMessage("srv-a2", "assistant", answer),
+      ],
+    };
+  }
+
+  function expectOrderBefore(first: string, second: string) {
+    const text = document.body.textContent ?? "";
+    const firstIndex = text.indexOf(first);
+    const secondIndex = text.indexOf(second);
+    expect(firstIndex).toBeGreaterThanOrEqual(0);
+    expect(secondIndex).toBeGreaterThanOrEqual(0);
+    expect(firstIndex).toBeLessThan(secondIndex);
+  }
+
+  it("seeds the conversation first, then updates the resumed answer in place", async () => {
+    vi.mocked(listTopicMessages).mockResolvedValue(
+      historyWithPlaceholder("partial"),
+    );
+    const resume = controllableStream();
+    stubChatFetch({ stream: new ReadableStream<string>() }, {
+      active: () => [runningGeneration()],
+      resume: () => streamResponse(resume.stream),
+    });
+
+    renderWithIntl(app("t1"));
+
+    // The persisted conversation is on screen before any reconnect opens...
+    expect(await screen.findByText("A answer")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        jsonGenerationStreamUrl("gen-9"),
+        expect.anything(),
+      );
+    });
+
+    // ...and the replayed prefix lands on the placeholder's own row.
+    act(() => {
+      resume.push({ type: "start", messageId: "srv-a2" });
+      resume.push({ type: "text-start", id: "txt-resume" });
+      resume.push({ type: "text-delta", id: "txt-resume", delta: "resumed" });
+    });
+    await drainStreamJobs();
+
+    expect(await screen.findByText(/resumed/)).toBeInTheDocument();
+    // History was not replaced by the live turn, and the answer did not move
+    // to the end of the conversation.
+    expect(screen.getByText("A answer")).toBeInTheDocument();
+    expectOrderBefore("A answer", "resumed");
+  });
+
+  it("retries a failed reconnect after discovery refreshes the unchanged task", async () => {
+    vi.mocked(listTopicMessages).mockResolvedValue(historyWithPlaceholder("partial"));
+    const generation = runningGeneration();
+    const resumed = controllableStream();
+    const resume = vi.fn(() => {
+      if (resume.mock.calls.length === 1) throw new TypeError("offline");
+      return streamResponse(resumed.stream);
+    });
+    stubChatFetch({ stream: new ReadableStream<string>() }, {
+      active: () => [generation],
+      resume,
+    });
+    renderWithIntl(app("t1"));
+    await waitFor(() => expect(acquireChat("t1").chat.status).toBe("error"));
+    expect(resume).toHaveBeenCalledTimes(1);
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6_000);
+    try {
+      await act(async () => {
+        await queryClient.refetchQueries({ queryKey: generationKeys.active("account-a") });
+      });
+      await waitFor(() => expect(resume).toHaveBeenCalledTimes(2));
+      act(() => {
+        resumed.push({ type: "start", messageId: "srv-a2" });
+        resumed.push({ type: "text-start", id: "text" });
+        resumed.push({ type: "text-delta", id: "text", delta: "reconnected" });
+      });
+      await drainStreamJobs();
+      expect(await screen.findByText("reconnected")).toBeInTheDocument();
+      expect(screen.getByText("A answer")).toBeInTheDocument();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("refreshes canonical history when the reconnect answers 204", async () => {
+    // Server state at mount: the turn is still listed as running and history
+    // holds only the placeholder. Between discovery and the reconnect the turn
+    // settles (204), and history then carries the persisted answer.
+    let messages = historyWithPlaceholder("partial").messages;
+    let active: GenerationSummary[] = [runningGeneration()];
+    vi.mocked(listTopicMessages).mockImplementation(async () => ({ messages }));
+    stubChatFetch({ stream: new ReadableStream<string>() }, {
+      active: () => active,
+      resume: () => {
+        active = [];
+        messages = [
+          storedMessage("u1", "user", "A question"),
+          storedMessage("a1", "assistant", "A answer"),
+          storedMessage("u2", "user", "hello"),
+          storedMessage("srv-a2", "assistant", "final answer"),
+        ];
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    renderWithIntl(app("t1"));
+    expect(await screen.findByText("A answer")).toBeInTheDocument();
+
+    // A missed terminal chunk must not leave the view on the partial text:
+    // the 204 path refetches discovery and the history reseed lands.
+    expect(await screen.findByText("final answer")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("partial")).toBeNull();
+    });
+    expect(screen.getByText("A answer")).toBeInTheDocument();
+  });
+});
+
+describe("lost confirmation recovery (reload looks the receipt up)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetChatPool();
+    queryClient.clear();
+    window.sessionStorage.clear();
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+      drafts: {},
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useComposerStore.setState({ pickedModel: null, drafts: {} });
+  });
+
+  function summary(overrides: Partial<GenerationSummary> = {}): GenerationSummary {
+    const now = new Date().toISOString();
+    return {
+      id: "gen-9",
+      topicId: "t1",
+      assistantId: "a1",
+      assistantMessageId: "srv-a2",
+      kind: "send",
+      status: "completed",
+      targetDeleted: false,
+      errorMessage: null,
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      ...overrides,
+    };
+  }
+
+  function stubReceiptFetch(
+    answer: (requestId: string) => Response,
+  ): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : String(input);
+      const requestId = new URL(url, "http://localhost").searchParams.get(
+        "requestId",
+      );
+      if (requestId !== null) {
+        return answer(requestId);
+      }
+      if (url.includes("/api/chat/generations")) {
+        return new Response(JSON.stringify({ generations: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("unexpected", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock as unknown as ReturnType<typeof vi.fn>;
+  }
+
+  it("adopts the task found by request id and retires the receipt", async () => {
+    rememberPendingGenerationRequest({
+      requestId: "0190a5c0-0000-7000-8000-000000000001",
+      userId: "account-a",
+    });
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        storedMessage("u1", "user", "A question"),
+        storedMessage("srv-a2", "assistant", "final answer"),
+      ],
+    });
+    const fetchMock = stubReceiptFetch(() =>
+      new Response(JSON.stringify({ generation: summary() }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    renderWithIntl(app("t1"));
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some((call) =>
+          String(call[0]).includes("requestId="),
+        ),
+      ).toBe(true);
+    });
+    // The receipt resolved into a task: it is retired, and the topic's history
+    // is refreshed so the finished answer appears.
+    await waitFor(() => {
+      expect(listPendingGenerationRequests("account-a")).toEqual([]);
+    });
+    expect(await screen.findByText("final answer")).toBeInTheDocument();
+    // Recovery NEVER re-POSTs: that would be a second model call.
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST"))
+      .toBe(false);
+  });
+
+  it("keeps a pending receipt when the lookup returns a server error envelope", async () => {
+    const requestId = "0190a5c0-0000-7000-8000-000000000003";
+    rememberPendingGenerationRequest({ requestId, userId: "account-a" });
+    const fetchMock = stubReceiptFetch(() => new Response(JSON.stringify({
+      error: { code: "INTERNAL", messageKey: "unexpected" },
+    }), { status: 500, headers: { "content-type": "application/json" } }));
+    renderWithIntl(app("t1"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(call => String(call[0]).includes("requestId="))).toBe(true));
+    await drainStreamJobs();
+    expect(listPendingGenerationRequests("account-a")).toEqual([
+      expect.objectContaining({ requestId }),
+    ]);
+  });
+
+  it("retires a receipt the server no longer knows, without re-sending", async () => {
+    rememberPendingGenerationRequest({
+      requestId: "0190a5c0-0000-7000-8000-000000000002",
+      userId: "account-a",
+    });
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        storedMessage("u1", "user", "A question"),
+        storedMessage("a1", "assistant", "A answer"),
+      ],
+    });
+    stubReceiptFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            error: { code: "NOT_FOUND", messageKey: "generation.notFound" },
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        ),
+    );
+
+    renderWithIntl(app("t1"));
+    expect(await screen.findByText("A answer")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(listPendingGenerationRequests("account-a")).toEqual([]);
+    });
   });
 });

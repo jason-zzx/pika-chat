@@ -1,851 +1,247 @@
-import { convertArrayToReadableStream, MockLanguageModelV3 } from "ai/test";
-import { APICallError } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * Regeneration is the same admission/executor pair as /api/chat, with two
+ * route-level differences worth pinning: it keeps the legacy
+ * `x-pika-stream-id` header (now carrying the generation id) and it must
+ * forward the edit payload untouched to `prepareRegenerateTurn`, which owns
+ * every validation that has to happen before a write.
+ */
 
 const {
   requireActor,
-  resolveAvailableModels,
-  createChatModelHandle,
-  resolveAttachmentsForModel,
-  resolveRegenerateTarget,
-  appendAssistantMessage,
-  appendUserMessageVersion,
-  findTopicContextForActor,
-  touchTopicUpdatedAt,
-  resolveSearchProviderCredentials,
-  getTopicSummaryState,
-  generateImageForEndpoint,
-  uploadFile,
-  deleteFile,
-  resolveOwnedFileParts,
-  getFilesByIds,
-  getFileStorage,
+  prepareRegenerateTurn,
+  regenerateRequestHash,
+  admitTurn,
+  findGenerationForActor,
+  ensureGenerationRunning,
+  subscribeToGeneration,
+  finishedGenerationChunks,
+  loadMessagesByIds,
+  getTranslations,
+  getLocale,
 } = vi.hoisted(() => ({
   requireActor: vi.fn(),
-  resolveAvailableModels: vi.fn(),
-  createChatModelHandle: vi.fn(),
-  resolveAttachmentsForModel: vi.fn(),
-  resolveRegenerateTarget: vi.fn(),
-  appendAssistantMessage: vi.fn(),
-  appendUserMessageVersion: vi.fn(),
-  findTopicContextForActor: vi.fn(),
-  touchTopicUpdatedAt: vi.fn(),
-  resolveSearchProviderCredentials: vi.fn(),
-  getTopicSummaryState: vi.fn(),
-  generateImageForEndpoint: vi.fn(),
-  uploadFile: vi.fn(),
-  deleteFile: vi.fn(),
-  resolveOwnedFileParts: vi.fn(),
-  getFilesByIds: vi.fn(),
-  getFileStorage: vi.fn(),
+  prepareRegenerateTurn: vi.fn(),
+  regenerateRequestHash: vi.fn(),
+  admitTurn: vi.fn(),
+  findGenerationForActor: vi.fn(),
+  ensureGenerationRunning: vi.fn(),
+  subscribeToGeneration: vi.fn(),
+  finishedGenerationChunks: vi.fn(),
+  loadMessagesByIds: vi.fn(),
+  getTranslations: vi.fn(),
+  getLocale: vi.fn(),
 }));
 
-vi.mock("next-intl/server", () => ({
-  getTranslations: vi.fn(async () => (key: string) => key),
-}));
 vi.mock("@/server/auth/actor", () => ({ requireActor }));
-vi.mock("@/server/ai/model-resolution", () => ({ resolveAvailableModels }));
-vi.mock("@/server/ai/chat-model", () => ({ createChatModelHandle }));
-vi.mock("@/server/ai/image/generate", () => ({ generateImageForEndpoint }));
-vi.mock("@/server/ai/attachments", () => ({ resolveAttachmentsForModel }));
-vi.mock("@/server/ai/model-messages", () => ({
-  replayModelMessages: vi.fn(async (messages: unknown) => messages),
+vi.mock("@/server/ai/generation-turn", () => ({
+  prepareRegenerateTurn,
+  regenerateRequestHash,
 }));
-vi.mock("@/server/ai/output-budget", () => ({
-  resolvedMaxOutputTokens: vi.fn(() => 1000),
+vi.mock("@/server/services/generation.service", () => ({
+  admitTurn,
+  findGenerationForActor,
 }));
-vi.mock("@/server/ai/reasoning-effort", () => ({
-  resolvedReasoningEffort: vi.fn(() => undefined),
+vi.mock("@/server/ai/generation-runner", () => ({
+  ensureGenerationRunning,
+  subscribeToGeneration,
+  finishedGenerationChunks,
 }));
-vi.mock("@/server/ai/provider-error", () => ({
-  // Faithful passthrough so the test can assert the text the user sees.
-  providerErrorText: vi.fn(
-    (description: { kind: string; messageKey?: string; message?: string }) =>
-      description.kind === "verbatim"
-        ? description.message
-        : description.messageKey,
-  ),
-}));
-vi.mock("@/server/ai/search/tool", () => ({
-  buildSearchTools: vi.fn(),
-  toolTurnStepSettings: vi.fn(() => ({})),
-}));
-vi.mock("@/server/ai/search/markup-sanitizer", () => ({
-  stripMarkupFromTextParts: vi.fn((parts: unknown) => parts),
-  stripToolCallMarkupTransform: vi.fn(() => undefined),
-}));
-vi.mock("@/server/ai/reasoning-timer", () => ({
-  createReasoningTimer: vi.fn(() => ({
-    onChunk: vi.fn(),
-    durations: () => [],
-    measure: () => 0,
-  })),
-  withReasoningDurations: vi.fn((parts: unknown) => parts),
-}));
-vi.mock("@/server/services/message.service", () => ({
-  appendAssistantMessage,
-  appendUserMessageVersion,
-  resolveRegenerateTarget,
-  // Faithful stand-in: the image bypass derives the prompt from it.
-  textFromMessage: (message: {
-    parts: Array<{ type: string; text?: string }>;
-  }) =>
-    message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join(""),
-}));
-vi.mock("@/server/files/file.service", () => ({
-  uploadFile,
-  deleteFile,
-  resolveOwnedFileParts,
-  getFilesByIds,
-}));
-vi.mock("@/server/files/storage", () => ({ getFileStorage }));
-vi.mock("@/server/services/topic.service", () => ({
-  findTopicContextForActor,
-  touchTopicUpdatedAt,
-}));
-vi.mock("@/server/services/search-provider.service", () => ({
-  resolveSearchProviderCredentials,
-}));
-// Keep the real boundary-clip logic; stub only the database read.
-vi.mock("@/server/services/compression.service", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/server/services/compression.service")>();
-  return { ...actual, getTopicSummaryState };
-});
-const streamTextOptions = vi.hoisted(() => ({
-  current: undefined as unknown,
-}));
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return {
-    ...actual,
-    streamText: (options: Parameters<typeof actual.streamText>[0]) => {
-      streamTextOptions.current = options;
-      return actual.streamText(options);
-    },
-  };
-});
-vi.mock("@/server/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+vi.mock("@/server/services/message.service", () => ({ loadMessagesByIds }));
+vi.mock("next-intl/server", () => ({ getTranslations, getLocale }));
 
-import { POST } from "./route";
-import { AppError } from "@/server/errors";
+const { POST } = await import("./route");
 
-const ACTOR = { userId: "user-1", role: "user" as const };
-const PROVIDER_MESSAGE = "insufficient_quota: you exceeded your current quota";
+const actor = { userId: "user-1", role: "user" as const };
 
-const CONTEXT = { params: Promise.resolve({ id: "topic-1", messageId: "m-1" }) };
-
-/** The clicked message the resolver hands back; only the edit flow cares
- * about role/groupId, but the route always reads the group anchor. */
-const TARGET = {
-  role: "user" as const,
-  groupId: "group-u1",
-  groupCreatedAt: new Date("2026-01-01T00:00:00.000Z"),
+const generation = {
+  id: "gen-9",
+  userId: "user-1",
+  requestId: null,
+  requestHash: "hash",
+  requestExpiresAt: null,
+  kind: "regenerate" as const,
+  status: "queued" as const,
+  topicId: "t1",
+  assistantMessageId: "m2",
+  targetDeletedAt: null,
+  input: null,
+  errorMessage: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  startedAt: null,
+  finishedAt: null,
 };
 
-function regenerateRequest(body: Record<string, unknown> = {}): Request {
-  return new Request(
-    "http://localhost/api/topics/topic-1/messages/m-1/regenerate",
-    {
+function call(body: Record<string, unknown> = {}) {
+  return POST(
+    new Request("http://localhost/api/topics/t1/messages/m2/regenerate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        providerConfigId: "cfg-1",
-        modelId: "model-1",
-        ...body,
-      }),
-    },
-  );
-}
-
-/** A model whose provider call fails after the stream has opened. */
-function failingModel(error: unknown) {
-  return new MockLanguageModelV3({
-    doStream: async () => ({
-      stream: new ReadableStream({
-        start(controller) {
-          controller.enqueue({ type: "stream-start", warnings: [] });
-          controller.error(error);
-        },
-      }),
+      body: JSON.stringify({ providerConfigId: "c1", modelId: "m1", ...body }),
     }),
-  });
+    { params: Promise.resolve({ id: "t1", messageId: "m2" }) },
+  );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireActor.mockResolvedValue(ACTOR);
-  getTopicSummaryState.mockResolvedValue(null);
-  resolveAvailableModels.mockResolvedValue([
-    {
-      configId: "cfg-1",
-      modelId: "model-1",
-      inputModalities: ["text"],
-      outputModalities: ["text"],
-      reasoning: false,
-      reasoningOptions: [],
+  requireActor.mockResolvedValue(actor);
+  getTranslations.mockResolvedValue((key: string) => key);
+  getLocale.mockResolvedValue("en");
+  prepareRegenerateTurn.mockResolvedValue({
+    kind: "regenerate",
+    assistantId: "a1",
+    topicId: "t1",
+    targetMessageId: "m2",
+    requestHash: "hash",
+    historyMessageIds: [],
+    assistantMessageId: "m2",
+    actorRole: "user",
+  });
+  regenerateRequestHash.mockReturnValue("hash");
+  // Default admission behaviour: run the preparation thunk (as the real
+  // `admitTurn` does once a receipt lookup misses).
+  admitTurn.mockImplementation(
+    async (_input: unknown, prepare: () => Promise<unknown>) => {
+      await prepare();
+      return { generation, duplicate: false };
     },
-  ]);
-  resolveAttachmentsForModel.mockResolvedValue([]);
-  resolveOwnedFileParts.mockResolvedValue([]);
-  resolveSearchProviderCredentials.mockResolvedValue([]);
-  findTopicContextForActor.mockResolvedValue({
-    assistant: { systemPrompt: null },
-  });
-  resolveRegenerateTarget.mockResolvedValue({
-    targetGroupId: "group-1",
-    history: [],
-    target: TARGET,
-  });
-  appendAssistantMessage.mockResolvedValue(undefined);
-  touchTopicUpdatedAt.mockResolvedValue(undefined);
-  createChatModelHandle.mockResolvedValue({
-    model: failingModel(
-      new APICallError({
-        message: "Too Many Requests",
-        url: "https://provider.test/v1/chat/completions",
-        requestBodyValues: {},
-        statusCode: 429,
-        responseBody: JSON.stringify({
-          error: {
-            message: "you exceeded your current quota",
-            code: "insufficient_quota",
-          },
-        }),
-      }),
-    ),
-    describeError: () => ({
-      code: "RATE_LIMITED",
-      kind: "verbatim",
-      message: PROVIDER_MESSAGE,
+  );
+  findGenerationForActor.mockResolvedValue({ ...generation, status: "running" });
+  ensureGenerationRunning.mockResolvedValue({ state: {} });
+  loadMessagesByIds.mockResolvedValue([]);
+  subscribeToGeneration.mockReturnValue(
+    new ReadableStream<string>({
+      start(controller) {
+        controller.enqueue(
+          `data: ${JSON.stringify({ type: "start", messageId: "m2" })}\n\n`,
+        );
+        controller.enqueue("data: [DONE]\n\n");
+        controller.close();
+      },
     }),
-    apiFormat: "openai-compatible",
-    providerConfigId: "cfg-1",
-    filesApi: null,
-  });
+  );
 });
 
-// Regression: this route shared the send path's bug — a fatal stream error
-// arrives at onEnd as `{ status: "unknown" }`, so keying on
-// `outcome.status === "failed"` persisted the new version as `completed` with
-// no error message and no text. The regenerated bubble then rendered blank and
-// the reason was unrecoverable on reload.
-describe("POST regenerate provider failure", () => {
-  it("persists the failed version with the provider error", async () => {
-    const response = await POST(regenerateRequest(), CONTEXT);
-    const body = await response.text();
+describe("POST regenerate", () => {
+  it("streams the accepted regeneration under the legacy header name", async () => {
+    const response = await call();
 
-    expect(appendAssistantMessage).toHaveBeenCalledWith(
+    expect(response.status).toBe(200);
+    // Same header the old inline route used; the value is the durable
+    // generation id that /api/chat/stop accepts.
+    expect(response.headers.get("x-pika-stream-id")).toBe("gen-9");
+    // No data-topic: the view already knows the topic it is regenerating in.
+    expect(await response.text()).not.toContain("data-topic");
+  });
+
+  it("forwards the edit payload to preparation, which validates before writing", async () => {
+    await call({
+      edit: {
+        id: "u1",
+        role: "user",
+        parts: [{ type: "text", text: "edited" }],
+      },
+    });
+
+    expect(prepareRegenerateTurn).toHaveBeenCalledWith(
       expect.objectContaining({
-        topicId: "topic-1",
-        outcome: "failed",
-        errorMessage: PROVIDER_MESSAGE,
-        groupId: "group-1",
+        topicId: "t1",
+        messageId: "m2",
+        defaultTopicTitle: "newTopic",
+        locale: "en",
       }),
-      ACTOR,
-    );
-    expect(body).toContain(PROVIDER_MESSAGE);
-    expect(body).not.toContain("An error occurred.");
-  });
-
-  it("anchors a detached regenerate to the clicked message's group", async () => {
-    // The answer slot was deleted empty: the resolver returns no group, and
-    // the new group must inherit the clicked message's anchor so it lands
-    // back at the slot's position instead of the topic's end.
-    resolveRegenerateTarget.mockResolvedValue({
-      targetGroupId: null,
-      history: [],
-      target: TARGET,
-    });
-
-    const response = await POST(regenerateRequest(), CONTEXT);
-    await response.text();
-
-    expect(appendAssistantMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        topicId: "topic-1",
-        groupCreatedAt: TARGET.groupCreatedAt,
-      }),
-      ACTOR,
-    );
-    expect(
-      vi.mocked(appendAssistantMessage).mock.calls[0]?.[0]?.groupId,
-    ).toBeUndefined();
-  });
-});
-
-const STREAM_USAGE = {
-  inputTokens: {
-    total: 1,
-    noCache: 1,
-    cacheRead: undefined,
-    cacheWrite: undefined,
-  },
-  outputTokens: { total: 1, text: 1, reasoning: undefined },
-};
-
-/** A model that streams a one-word answer and finishes cleanly. */
-function okModel() {
-  return new MockLanguageModelV3({
-    doStream: async () => ({
-      stream: convertArrayToReadableStream([
-        { type: "text-start", id: "t1" },
-        { type: "text-delta", id: "t1", delta: "ok" },
-        { type: "text-end", id: "t1" },
-        {
-          type: "finish",
-          finishReason: { unified: "stop", raw: undefined },
-          usage: STREAM_USAGE,
-        },
-      ]),
-    }),
-  });
-}
-
-// AC1b: regenerating inside a compressed topic must see the same trimmed
-// context the chat route would — summary in the instructions, only
-// post-boundary messages in the payload — without triggering compression.
-describe("POST regenerate with a compressed topic", () => {
-  const HISTORY = [
-    { id: "h-1", role: "user", parts: [{ type: "text", text: "old turn" }] },
-    {
-      id: "h-2",
-      role: "assistant",
-      parts: [{ type: "text", text: "old answer" }],
-    },
-    { id: "h-3", role: "user", parts: [{ type: "text", text: "new turn" }] },
-  ];
-
-  beforeEach(() => {
-    resolveAttachmentsForModel.mockImplementation(
-      async (messages: unknown) => messages,
-    );
-    resolveRegenerateTarget.mockResolvedValue({
-      targetGroupId: "group-1",
-      history: HISTORY,
-      target: TARGET,
-    });
-    createChatModelHandle.mockResolvedValue({
-      model: okModel(),
-      describeError: () => ({ kind: "key", key: "generic" }),
-      apiFormat: "openai-compatible",
-      providerConfigId: "cfg-1",
-      filesApi: null,
-    });
-  });
-
-  it("carries the persisted summary in the instructions and only sends post-boundary messages", async () => {
-    getTopicSummaryState.mockResolvedValue({
-      summaryText: "early chat summary",
-      summaryUpToMessageId: "h-1",
-      summaryUpToGroupId: "h-1",
-    });
-
-    const response = await POST(regenerateRequest(), CONTEXT);
-    await response.text();
-
-    const options = streamTextOptions.current as { instructions: string };
-    expect(options.instructions).toContain("early chat summary");
-    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({ id: "h-2" }),
-        expect.objectContaining({ id: "h-3" }),
-      ],
-      expect.anything(),
+      actor,
     );
   });
 
-  it("clips by boundary group after the boundary group's selected version switched", async () => {
-    getTopicSummaryState.mockResolvedValue({
-      summaryText: "early chat summary",
-      summaryUpToMessageId: "h-1",
-      summaryUpToGroupId: "group-h1",
+  it("passes the request id and the payload digest as the dedupe key", async () => {
+    await call({ requestId: "0190a5c0-0000-7000-8000-000000000000" });
+    expect(regenerateRequestHash).toHaveBeenCalledWith({
+      topicId: "t1",
+      messageId: "m2",
+      request: expect.objectContaining({ providerConfigId: "c1" }),
     });
-    // The persisted boundary row h-1 is no longer the selected one; its group
-    // now selects h-1b, so id-only matching would revert to the full history.
-    resolveRegenerateTarget.mockResolvedValue({
-      targetGroupId: "group-1",
-      history: [
-        {
-          id: "h-1b",
-          role: "assistant",
-          parts: [{ type: "text", text: "old answer v2" }],
-          metadata: { groupId: "group-h1" },
-        },
-        { id: "h-3", role: "user", parts: [{ type: "text", text: "new turn" }] },
-      ],
-      target: TARGET,
-    });
-
-    const response = await POST(regenerateRequest(), CONTEXT);
-    await response.text();
-
-    const options = streamTextOptions.current as { instructions: string };
-    expect(options.instructions).toContain("early chat summary");
-    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
-      [expect.objectContaining({ id: "h-3" })],
-      expect.anything(),
-    );
-  });
-
-  it("keeps the full history and no summary when the topic was never compressed", async () => {
-    const response = await POST(regenerateRequest(), CONTEXT);
-    await response.text();
-
-    const options = streamTextOptions.current as { instructions: string };
-    expect(options.instructions).not.toContain(
-      "Summary of the earlier conversation",
-    );
-    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({ id: "h-1" }),
-        expect.objectContaining({ id: "h-2" }),
-        expect.objectContaining({ id: "h-3" }),
-      ],
-      expect.anything(),
-    );
-  });
-});
-
-const IMAGE_MODEL = {
-  configId: "cfg-1",
-  modelId: "gpt-image-1",
-  inputModalities: ["text"],
-  outputModalities: ["image", "text"],
-  reasoning: false,
-  reasoningOptions: [],
-};
-
-function imageHandle(overrides: Record<string, unknown> = {}) {
-  return {
-    model: {},
-    describeError: () => ({ kind: "key", key: "generic" }),
-    apiFormat: "openai-compatible",
-    providerConfigId: "cfg-1",
-    filesApi: null,
-    endpoint: {
-      apiFormat: "openai-compatible",
-      baseUrl: "https://api.test/v1",
-      apiKey: "test-key",
-    },
-    ...overrides,
-  };
-}
-
-// The prompt is the last user message of the target history; the assistant
-// answer being regenerated carries the previously generated image.
-const IMAGE_HISTORY = [
-  { id: "u-1", role: "user", parts: [{ type: "text", text: "draw a cat" }] },
-  {
-    id: "a-1",
-    role: "assistant",
-    parts: [
-      { type: "file", url: "/api/files/old-1", mediaType: "image/png" },
-    ],
-  },
-];
-
-describe("POST regenerate image generation bypass", () => {
-  beforeEach(() => {
-    resolveAvailableModels.mockResolvedValue([IMAGE_MODEL]);
-    createChatModelHandle.mockResolvedValue(imageHandle());
-    resolveRegenerateTarget.mockResolvedValue({
-      targetGroupId: "group-1",
-      history: IMAGE_HISTORY,
-      target: TARGET,
-    });
-    generateImageForEndpoint.mockResolvedValue({
-      images: [{ bytes: Buffer.from("png-bytes"), mediaType: "image/png" }],
-    });
-    uploadFile.mockImplementation(
-      async (input: { mediaType: string; data: Buffer }) => ({
-        id: "img-1",
-        url: "/api/files/img-1",
-        filename: "generated.png",
-        mediaType: input.mediaType,
-        sizeBytes: input.data.byteLength,
-        extraction: { status: "none", truncated: false },
-      }),
-    );
-  });
-
-  it("generates a new version into the target group without touching the text pipeline", async () => {
-    const response = await POST(
-      regenerateRequest({ modelId: "gpt-image-1", image: { size: "1024x1024" } }),
-      CONTEXT,
-    );
-    const body = await response.text();
-
-    // None of the streaming-path machinery runs.
-    expect(resolveAttachmentsForModel).not.toHaveBeenCalled();
-    expect(getTopicSummaryState).not.toHaveBeenCalled();
-
-    // Prompt comes from the last user message of the target history.
-    expect(generateImageForEndpoint).toHaveBeenCalledWith(
-      expect.objectContaining({ baseUrl: "https://api.test/v1" }),
-      "gpt-image-1",
-      { prompt: "draw a cat", n: 1, size: "1024x1024" },
-      expect.any(AbortSignal),
-    );
-
-    // The new version joins the target group.
-    expect(appendAssistantMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        topicId: "topic-1",
-        outcome: "completed",
-        groupId: "group-1",
-        providerConfigId: "cfg-1",
-        modelId: "gpt-image-1",
-        message: expect.objectContaining({
-          role: "assistant",
-          parts: [
-            {
-              type: "file",
-              url: "/api/files/img-1",
-              mediaType: "image/png",
-              filename: "generated.png",
-              sizeBytes: 9,
-            },
-          ],
-        }),
-      }),
-      ACTOR,
-    );
-
-    // Regenerate framing: stream id in the header, no data-topic chunk.
-    expect(response.headers.get("x-pika-stream-id")).toBeTruthy();
-    expect(body).not.toContain("data-topic");
-  });
-
-  it("re-resolves reference images from the source user message's file parts", async () => {
-    const referencePart = {
-      type: "file",
-      url: "/api/files/ref-1",
-      mediaType: "image/png",
-      filename: "ref.png",
-    };
-    resolveRegenerateTarget.mockResolvedValue({
-      targetGroupId: "group-1",
-      history: [
-        {
-          id: "u-1",
-          role: "user",
-          parts: [referencePart, { type: "text", text: "edit this" }],
-        },
-        IMAGE_HISTORY[1],
-      ],
-      target: TARGET,
-    });
-    resolveOwnedFileParts.mockResolvedValue([referencePart]);
-    getFilesByIds.mockResolvedValue(
-      new Map([
-        [
-          "ref-1",
-          { id: "ref-1", storageKey: "user-1/ref-1.png", mediaType: "image/png" },
-        ],
-      ]),
-    );
-    const storageGet = vi.fn().mockResolvedValue(Buffer.from([7]));
-    getFileStorage.mockReturnValue({ get: storageGet });
-
-    const response = await POST(
-      regenerateRequest({ modelId: "gpt-image-1" }),
-      CONTEXT,
-    );
-    await response.text();
-
-    expect(resolveOwnedFileParts).toHaveBeenCalledWith([referencePart], ACTOR);
-    expect(storageGet).toHaveBeenCalledWith("user-1/ref-1.png");
-    expect(generateImageForEndpoint).toHaveBeenCalledWith(
-      expect.objectContaining({ baseUrl: "https://api.test/v1" }),
-      "gpt-image-1",
+    expect(admitTurn).toHaveBeenCalledWith(
       {
-        prompt: "edit this",
-        n: 1,
-        references: [{ bytes: Buffer.from([7]), mediaType: "image/png" }],
+        requestId: "0190a5c0-0000-7000-8000-000000000000",
+        requestHash: "hash",
       },
-      expect.any(AbortSignal),
-    );
-    expect(appendAssistantMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ groupId: "group-1", outcome: "completed" }),
-      ACTOR,
+      expect.any(Function),
+      actor,
     );
   });
 
-  it("fails the regenerate when a source reference image is gone", async () => {
-    resolveRegenerateTarget.mockResolvedValue({
-      targetGroupId: "group-1",
-      history: [
-        {
-          id: "u-1",
-          role: "user",
-          parts: [
-            {
-              type: "file",
-              url: "/api/files/gone-1",
-              mediaType: "image/png",
-              filename: "gone.png",
-            },
-            { type: "text", text: "edit this" },
-          ],
-        },
-        IMAGE_HISTORY[1],
-      ],
-      target: TARGET,
-    });
-    resolveOwnedFileParts.mockRejectedValue(
-      new AppError("NOT_FOUND", 404, "file.notFound"),
-    );
+  it("does not prepare the turn when a receipt already answers the request", async () => {
+    admitTurn.mockResolvedValue({ generation, duplicate: true });
 
-    const response = await POST(
-      regenerateRequest({ modelId: "gpt-image-1" }),
-      CONTEXT,
-    );
+    await call({ requestId: "0190a5c0-0000-7000-8000-000000000000" });
 
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { messageKey: "file.notFound" },
-    });
-    expect(generateImageForEndpoint).not.toHaveBeenCalled();
-    expect(appendAssistantMessage).not.toHaveBeenCalled();
+    // A retry of an accepted edit/regenerate must not re-run validation that
+    // may now fail (disabled model, deleted attachment).
+    expect(prepareRegenerateTurn).not.toHaveBeenCalled();
   });
 
-  it("rejects an image model on the claude format before any persistence", async () => {
-    createChatModelHandle.mockResolvedValue(
-      imageHandle({
-        apiFormat: "claude",
-        endpoint: {
-          apiFormat: "claude",
-          baseUrl: "https://api.test/v1",
-          apiKey: "test-key",
-        },
-      }),
+  it("maps a preparation failure to its status and opens no stream", async () => {
+    const { AppError } = await import("@/server/errors");
+    admitTurn.mockRejectedValue(
+      new AppError("VALIDATION_FAILED", 400, "image.invalidParams"),
     );
 
-    const response = await POST(
-      regenerateRequest({ modelId: "gpt-image-1" }),
-      CONTEXT,
-    );
+    const response = await call();
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { messageKey: "model.imageUnsupported" },
+    expect(ensureGenerationRunning).not.toHaveBeenCalled();
+    expect(subscribeToGeneration).not.toHaveBeenCalled();
+  });
+
+  it("rejects a busy topic with 409", async () => {
+    const { AppError } = await import("@/server/errors");
+    admitTurn.mockRejectedValue(
+      new AppError("CONFLICT", 409, "generation.topicBusy"),
+    );
+
+    expect((await call()).status).toBe(409);
+  });
+
+  it("replays a finished regeneration instead of re-running it", async () => {
+    admitTurn.mockResolvedValue({
+      generation: { ...generation, status: "completed" },
+      duplicate: true,
     });
-    expect(generateImageForEndpoint).not.toHaveBeenCalled();
-    expect(appendAssistantMessage).not.toHaveBeenCalled();
-  });
-
-  it("rejects a size outside the model's tiers, naming the parameter", async () => {
-    const response = await POST(
-      regenerateRequest({ modelId: "gpt-image-1", image: { size: "999x999" } }),
-      CONTEXT,
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { messageKey: "image.invalidParams", params: { param: "size" } },
+    findGenerationForActor.mockResolvedValue({
+      ...generation,
+      status: "completed",
     });
-    expect(generateImageForEndpoint).not.toHaveBeenCalled();
-    expect(appendAssistantMessage).not.toHaveBeenCalled();
-  });
-
-  it("persists a failed version with the error text when generation fails", async () => {
-    createChatModelHandle.mockResolvedValue(
-      imageHandle({
-        describeError: () => ({ kind: "verbatim", message: "provider boom" }),
-      }),
-    );
-    generateImageForEndpoint.mockRejectedValue(new Error("provider boom"));
-
-    const response = await POST(
-      regenerateRequest({ modelId: "gpt-image-1" }),
-      CONTEXT,
-    );
-    const body = await response.text();
-
-    expect(body).toContain("provider boom");
-    expect(appendAssistantMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        topicId: "topic-1",
-        outcome: "failed",
-        errorMessage: "provider boom",
-        groupId: "group-1",
-        message: expect.objectContaining({ role: "assistant", parts: [] }),
-      }),
-      ACTOR,
-    );
-    expect(uploadFile).not.toHaveBeenCalled();
-  });
-});
-
-// Edit-and-regenerate: the edit payload is validated and persisted as a new
-// selected user version BEFORE the stream, then the target is re-resolved so
-// the model history carries the edited content.
-describe("POST regenerate with an edit payload", () => {
-  const FILE_PART = {
-    type: "file",
-    url: "/api/files/f-1",
-    mediaType: "application/pdf",
-    filename: "a.pdf",
-  };
-  const NORMALIZED_FILE_PART = { ...FILE_PART, sizeBytes: 1234 };
-  const EDIT = {
-    id: "u-1v2",
-    role: "user",
-    parts: [FILE_PART, { type: "text", text: "edited question" }],
-  };
-  const EDITED_HISTORY = [
-    { id: "u-1v2", role: "user", parts: EDIT.parts },
-  ];
-
-  beforeEach(() => {
-    createChatModelHandle.mockResolvedValue({
-      model: okModel(),
-      describeError: () => ({ kind: "key", key: "generic" }),
-      apiFormat: "openai-compatible",
-      providerConfigId: "cfg-1",
-      filesApi: null,
-    });
-    resolveAttachmentsForModel.mockImplementation(
-      async (messages: unknown) => messages,
-    );
-    resolveOwnedFileParts.mockResolvedValue([NORMALIZED_FILE_PART]);
-    appendUserMessageVersion.mockResolvedValue({
-      id: "u-1v2",
-      role: "user",
-      parts: EDIT.parts,
-    });
-    // First resolution validates the clicked message; the second (against
-    // the new version id) feeds the edited history to the stream.
-    resolveRegenerateTarget
-      .mockResolvedValueOnce({
-        targetGroupId: "group-a1",
-        history: [],
-        target: {
-          role: "user",
-          groupId: "group-u1",
-          groupCreatedAt: TARGET.groupCreatedAt,
-        },
-      })
-      .mockResolvedValueOnce({
-        targetGroupId: "group-a1",
-        history: EDITED_HISTORY,
-        target: {
-          role: "user",
-          groupId: "group-u1",
-          groupCreatedAt: TARGET.groupCreatedAt,
-        },
-      });
-  });
-
-  it("persists the edited version, then regenerates from the re-resolved history", async () => {
-    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
-    await response.text();
-
-    // Ownership validation runs before any write.
-    expect(resolveOwnedFileParts).toHaveBeenCalledWith([FILE_PART], ACTOR);
-    expect(
-      resolveOwnedFileParts.mock.invocationCallOrder[0],
-    ).toBeLessThan(appendUserMessageVersion.mock.invocationCallOrder[0]!);
-
-    // The new version joins the clicked message's own group, files first.
-    expect(appendUserMessageVersion).toHaveBeenCalledWith(
-      expect.objectContaining({
-        topicId: "topic-1",
-        groupId: "group-u1",
-        createdAt: expect.any(Date),
-        message: {
-          id: "u-1v2",
-          role: "user",
-          parts: [
-            NORMALIZED_FILE_PART,
-            { type: "text", text: "edited question" },
-          ],
-        },
-      }),
-      ACTOR,
-    );
-
-    // The target is re-resolved against the new version id and its history
-    // (carrying the edited message) is what reaches the model.
-    expect(resolveRegenerateTarget).toHaveBeenNthCalledWith(
-      2,
-      { topicId: "topic-1", messageId: "u-1v2" },
-      ACTOR,
-    );
-    expect(resolveAttachmentsForModel).toHaveBeenCalledWith(
-      [expect.objectContaining({ id: "u-1v2" })],
-      expect.anything(),
-    );
-    // The assistant version lands in the re-resolved answer group. (The
-    // mocked replayModelMessages passthrough means the stream itself always
-    // errors in this harness, so the persisted outcome is not asserted here —
-    // that path is covered by the provider-failure test above.)
-    expect(appendAssistantMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ topicId: "topic-1", groupId: "group-a1" }),
-      ACTOR,
-    );
-  });
-
-  it("rejects an edit targeting an assistant message before any write", async () => {
-    resolveRegenerateTarget.mockReset();
-    resolveRegenerateTarget.mockResolvedValue({
-      targetGroupId: "group-a1",
-      history: [],
-      target: {
+    loadMessagesByIds.mockResolvedValue([
+      {
+        id: "m2",
         role: "assistant",
-        groupId: "group-a1",
-        groupCreatedAt: TARGET.groupCreatedAt,
+        parts: [{ type: "text", text: "replayed" }],
+        metadata: { outcome: "completed" },
       },
-    });
+    ]);
+    finishedGenerationChunks.mockReturnValue([
+      { type: "start", messageId: "m2" },
+      { type: "finish" },
+    ]);
 
-    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
+    const response = await call();
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { messageKey: "message.editTargetNotUser" },
-    });
-    expect(resolveOwnedFileParts).not.toHaveBeenCalled();
-    expect(appendUserMessageVersion).not.toHaveBeenCalled();
-    expect(appendAssistantMessage).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(ensureGenerationRunning).not.toHaveBeenCalled();
+    expect(finishedGenerationChunks).toHaveBeenCalled();
   });
 
-  it("rejects a forged file id before any write", async () => {
-    resolveOwnedFileParts.mockRejectedValue(
-      new AppError("NOT_FOUND", 404, "file.notFound"),
+  it("requires authentication", async () => {
+    const { AppError } = await import("@/server/errors");
+    requireActor.mockRejectedValue(
+      new AppError("UNAUTHENTICATED", 401, "auth.required"),
     );
 
-    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
-
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { messageKey: "file.notFound" },
-    });
-    expect(appendUserMessageVersion).not.toHaveBeenCalled();
-    expect(appendAssistantMessage).not.toHaveBeenCalled();
-    // The target is never re-resolved for the edited version.
-    expect(resolveRegenerateTarget).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects an edit inside the compressed zone without any write", async () => {
-    resolveRegenerateTarget.mockReset();
-    resolveRegenerateTarget.mockRejectedValue(
-      new AppError("CONFLICT", 409, "message.compressedLocked"),
-    );
-
-    const response = await POST(regenerateRequest({ edit: EDIT }), CONTEXT);
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { messageKey: "message.compressedLocked" },
-    });
-    expect(resolveOwnedFileParts).not.toHaveBeenCalled();
-    expect(appendUserMessageVersion).not.toHaveBeenCalled();
-    expect(appendAssistantMessage).not.toHaveBeenCalled();
+    expect((await call()).status).toBe(401);
+    expect(prepareRegenerateTurn).not.toHaveBeenCalled();
   });
 });

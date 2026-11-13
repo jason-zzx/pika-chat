@@ -193,6 +193,54 @@ describe("titleTopicFromFirstMessage", () => {
     );
   });
 
+  it("stops before calling the model when the topic owns an aborted signal", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+    createChatModelHandle.mockResolvedValue({ model: "handle" });
+    const controller = new AbortController();
+    controller.abort();
+
+    // Deleting the topic (or shutting down) aborts the post-turn task; the
+    // naming request must not even start, let alone run to completion.
+    await expect(
+      titleTopicFromFirstMessage(
+        {
+          topicId: untitled.id,
+          providerConfigId: "cfg-client",
+          modelId: "client-model",
+          signal: controller.signal,
+        },
+        actor,
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it("hands the topic signal to the title model call", async () => {
+    findTopicForActor.mockResolvedValue(untitled);
+    listTopicMessages.mockResolvedValue([userMessage]);
+    createChatModelHandle.mockResolvedValue({ model: "handle" });
+    generateText.mockResolvedValue({ text: "Onsen towns" });
+    const controller = new AbortController();
+
+    await titleTopicFromFirstMessage(
+      {
+        topicId: untitled.id,
+        providerConfigId: "cfg-client",
+        modelId: "client-model",
+        signal: controller.signal,
+      },
+      actor,
+    );
+
+    const call = generateText.mock.calls[0]?.[0] as { abortSignal?: AbortSignal };
+    expect(call.abortSignal).toBeDefined();
+    // Combined with the 15s timeout: aborting the topic aborts the request.
+    expect(call.abortSignal?.aborted).toBe(false);
+    controller.abort();
+    expect(call.abortSignal?.aborted).toBe(true);
+  });
+
   it("uses the truncated-text title when no pair is available at all", async () => {
     findTopicForActor.mockResolvedValue(untitled);
     listTopicMessages.mockResolvedValue([userMessage]);

@@ -6,9 +6,13 @@ export {
 } from "./app-settings";
 export { accounts, sessions, twoFactors, users, verifications } from "./auth";
 export {
+  chatGenerationKind,
+  chatGenerationStatus,
+  chatGenerations,
   chatMessageOutcome,
   chatMessageRole,
   chatMessages,
+  type ChatGenerationInput,
 } from "./chat";
 export {
   fileExtractionStatus,

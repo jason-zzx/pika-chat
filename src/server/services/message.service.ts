@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { newId } from "@/lib/id";
 import {
@@ -10,13 +10,14 @@ import {
   type ChatUIMessage,
 } from "@/lib/schemas/chat";
 import type { Actor } from "@/server/auth/actor";
-import { getDb } from "@/server/db/client";
+import { getDb, type DbTransaction } from "@/server/db/client";
 import { chatMessages, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import {
   deleteFilesIfUnreferenced,
   fileIdsFromParts,
 } from "@/server/files/file.service";
+import { lockTopicAndAssertIdle } from "@/server/services/generation-target.service";
 import { findTopicContextForActor } from "@/server/services/topic.service";
 
 type ChatMessageRow = typeof chatMessages.$inferSelect;
@@ -60,6 +61,8 @@ export function metadataFromRow(row: {
   providerConfigId: ChatMessageRow["providerConfigId"];
   modelId: ChatMessageRow["modelId"];
   reasoningMs: ChatMessageRow["reasoningMs"];
+  totalTokens?: ChatMessageRow["totalTokens"];
+  finishReason?: ChatMessageRow["finishReason"];
   translations: ChatMessageRow["translations"];
   createdAt: ChatMessageRow["createdAt"];
   parts?: unknown;
@@ -77,6 +80,14 @@ export function metadataFromRow(row: {
     createdAt: row.createdAt.toISOString(),
     reasoningMs: row.reasoningMs ?? undefined,
     reasoningDurations: reasoningDurationsFromParts(row.parts),
+    // Persisted usage/finish feedback (chat task R7): without these a reload
+    // loses the "truncated by output limit" hint the live stream announced.
+    ...(row.totalTokens === null || row.totalTokens === undefined
+      ? {}
+      : { totalTokens: row.totalTokens }),
+    ...(row.finishReason === null || row.finishReason === undefined
+      ? {}
+      : { finishReason: row.finishReason }),
     translations,
   };
 }
@@ -116,8 +127,9 @@ export function textFromMessage(message: ChatUIMessage): string {
 async function requireOwnedTopic(
   topicId: string,
   actor: Actor,
+  tx?: DbTransaction,
 ): Promise<void> {
-  const context = await findTopicContextForActor(topicId, actor);
+  const context = await findTopicContextForActor(topicId, actor, { tx });
   if (!context) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
@@ -183,6 +195,28 @@ function versionInfoOf(
     versionCount: group.length,
     versionIds,
   };
+}
+
+/**
+ * Version metadata of one message, read by the executor when it starts a turn.
+ *
+ * A live answer replaces the placeholder row on the client, so the state it
+ * announces must carry the same group/version identity the seeded history had;
+ * otherwise the resumed message loses its position anchor and version switcher
+ * (the message list is keyed by `groupId`). No ownership check: the ids come
+ * from the generation row the executor already resolved.
+ */
+export async function messageVersionMetadata(
+  topicId: string,
+  messageId: string,
+): Promise<VersionInfo | null> {
+  const rows = await listTopicRows(topicId);
+  const target = rows.find((row) => row.id === messageId);
+  if (!target) {
+    return null;
+  }
+  const group = rows.filter((row) => row.groupId === target.groupId);
+  return versionInfoOf(group, target);
 }
 
 async function listTopicRows(topicId: string): Promise<ChatMessageRow[]> {
@@ -253,12 +287,60 @@ export async function listTopicMessages(
   });
 }
 
-export async function appendUserMessage(
-  input: { topicId: string; message: ChatUIMessage; createdAt?: Date },
+/**
+ * Loads specific message versions in the given order. Admission freezes the
+ * ids of the selected-version history a turn runs against, so the executor
+ * reads exactly that context later even if the user has meanwhile switched
+ * versions (the frozen ids are the contract, R6).
+ */
+export async function loadMessagesByIds(
+  input: { topicId: string; ids: string[] },
   actor: Actor,
-): Promise<ChatUIMessage> {
+): Promise<ChatUIMessage[]> {
   await requireOwnedTopic(input.topicId, actor);
+  if (input.ids.length === 0) {
+    return [];
+  }
   const db = getDb();
+  const rows = await db
+    .select()
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.topicId, input.topicId),
+        inArray(chatMessages.id, input.ids),
+      ),
+    );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return input.ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [rowToChatUIMessage(row)] : [];
+  });
+}
+
+type UserMessageInsertInput = {
+  topicId: string;
+  message: ChatUIMessage;
+  createdAt?: Date;
+};
+
+type UserMessageVersionInsertInput = {
+  topicId: string;
+  /** Existing USER group the new version joins. */
+  groupId: string;
+  message: ChatUIMessage;
+  createdAt?: Date;
+};
+
+/**
+ * Shared underlying user-message writer (no topic ownership check).
+ * Callers must establish topic ownership before invoking this writer:
+ * the public wrapper uses `requireOwnedTopic`; admission uses `prepare*`.
+ */
+export async function insertUserMessageRow(
+  executor: DbTransaction | ReturnType<typeof getDb>,
+  input: UserMessageInsertInput,
+): Promise<ChatUIMessage> {
   const id = input.message.id.length > 0 ? input.message.id : newId();
   // Attachments ride along in the persisted parts so the history keeps the
   // file references the UI renders; the model payload is routed separately at
@@ -266,7 +348,7 @@ export async function appendUserMessage(
   const parts = input.message.parts.filter(
     (part) => part.type === "text" || part.type === "file",
   );
-  const inserted = await db
+  const inserted = await executor
     .insert(chatMessages)
     .values({
       id,
@@ -293,26 +375,26 @@ export async function appendUserMessage(
   return rowToChatUIMessage(row);
 }
 
-/**
- * Edit-and-regenerate: appends a new SELECTED version to an existing user
- * group. The deselect and the insert share one transaction so the partial
- * unique index (`chat_messages_selected_version_idx`) never sees two selected
- * versions of the group — the same contract as appendAssistantMessage's group
- * branch.
- */
-export async function appendUserMessageVersion(
-  input: {
-    topicId: string;
-    /** Existing USER group the new version joins. */
-    groupId: string;
-    message: ChatUIMessage;
-    createdAt?: Date;
-  },
+export async function appendUserMessage(
+  input: UserMessageInsertInput,
   actor: Actor,
+  options?: { tx?: DbTransaction },
 ): Promise<ChatUIMessage> {
-  await requireOwnedTopic(input.topicId, actor);
-  const db = getDb();
-  const groupRows = await db
+  await requireOwnedTopic(input.topicId, actor, options?.tx);
+  return insertUserMessageRow(options?.tx ?? getDb(), input);
+}
+
+/**
+ * Shared underlying user-version writer (no topic ownership check).
+ * Validates that the target group is a user group, deselects siblings and
+ * inserts the new selected version in one transaction. Callers must establish
+ * topic ownership before invoking this writer.
+ */
+export async function insertUserMessageVersionRow(
+  executor: DbTransaction | ReturnType<typeof getDb>,
+  input: UserMessageVersionInsertInput,
+): Promise<ChatUIMessage> {
+  const groupRows = await executor
     .select({
       role: chatMessages.role,
       groupCreatedAt: chatMessages.groupCreatedAt,
@@ -334,7 +416,7 @@ export async function appendUserMessageVersion(
   const parts = input.message.parts.filter(
     (part) => part.type === "text" || part.type === "file",
   );
-  const row = await db.transaction(async (tx) => {
+  const row = await executor.transaction(async (tx) => {
     await tx
       .update(chatMessages)
       .set({ isSelected: false })
@@ -367,47 +449,82 @@ export async function appendUserMessageVersion(
   return rowToChatUIMessage(row);
 }
 
-export async function appendAssistantMessage(
-  input: {
-    topicId: string;
-    message: ChatUIMessage;
-    outcome: ChatMessageOutcome;
-    errorMessage?: string | null;
-    providerConfigId: string;
-    modelId: string;
-    reasoningMs?: number;
-    createdAt?: Date;
-    /** Existing group to add a version to; omit for a new single-version group. */
-    groupId?: string;
-    /**
-     * Position anchor for a NEW group (ignored when `groupId` joins an
-     * existing group, which always inherits the group's own anchor). The
-     * regenerate route passes the clicked message's group anchor when the
-     * answer slot was deleted empty, so the new group lands back at the
-     * slot's position instead of sorting to the end of the topic.
-     */
-    groupCreatedAt?: Date;
-  },
+/**
+ * Edit-and-regenerate: appends a new SELECTED version to an existing user
+ * group. The deselect and the insert share one transaction so the partial
+ * unique index (`chat_messages_selected_version_idx`) never sees two selected
+ * versions of the group — the same contract as appendAssistantMessage's group
+ * branch.
+ */
+export async function appendUserMessageVersion(
+  input: UserMessageVersionInsertInput,
   actor: Actor,
+  options?: { tx?: DbTransaction },
 ): Promise<ChatUIMessage> {
-  await requireOwnedTopic(input.topicId, actor);
-  const db = getDb();
-  const id = input.message.id.length > 0 ? input.message.id : newId();
+  await requireOwnedTopic(input.topicId, actor, options?.tx);
+  return insertUserMessageVersionRow(options?.tx ?? getDb(), input);
+}
+
+type AssistantMessageInsert = {
+  topicId: string;
+  /** Pre-allocated row id (the generation's assistant message identity). */
+  id: string;
+  parts: ChatUIMessage["parts"];
+  /** null while the answer is still being generated (placeholder row). */
+  outcome: ChatMessageOutcome | null;
+  errorMessage?: string | null;
+  providerConfigId?: string;
+  modelId?: string;
+  reasoningMs?: number;
+  totalTokens?: number;
+  finishReason?: string;
+  createdAt?: Date;
+  /** Existing group to add a version to; omit for a new single-version group. */
+  groupId?: string;
+  /**
+   * Position anchor for a NEW group (ignored when `groupId` joins an existing
+   * group, which always inherits the group's own anchor). Regeneration passes
+   * the clicked message's group anchor when the answer slot was deleted empty,
+   * so the new group lands back at the slot's position instead of sorting to
+   * the end of the topic.
+   */
+  groupCreatedAt?: Date;
+};
+
+/**
+ * Inserts one assistant row, handling the version-group rules:
+ *
+ * - joining an existing group deselects its siblings and inherits the group's
+ *   position anchor in the same transaction (partial unique index on
+ *   `is_selected`);
+ * - opening a new group anchors it to the explicit override or the row's own
+ *   createdAt (one app-side clock per topic).
+ *
+ * Both the placeholder written at admission and the final answer written at
+ * finalize go through here, so the row identity never changes mid-turn.
+ * Callers must establish topic ownership before invoking this writer.
+ */
+export async function insertAssistantRow(
+  executor: DbTransaction | ReturnType<typeof getDb>,
+  input: AssistantMessageInsert,
+): Promise<ChatUIMessage> {
   const values = {
-    id,
+    id: input.id,
     topicId: input.topicId,
     role: "assistant" as const,
-    parts: input.message.parts,
+    parts: input.parts,
     outcome: input.outcome,
     errorMessage: input.errorMessage ?? null,
     providerConfigId: input.providerConfigId,
     modelId: input.modelId,
     // Undefined falls back to the column default (null / defaultNow());
-    // createdAt is the stream-start time so a reloaded history shows the
-    // same value the live stream announced.
+    // createdAt is the turn-start time so a reloaded history shows the same
+    // value the live stream announced.
     reasoningMs: input.reasoningMs,
+    totalTokens: input.totalTokens,
+    finishReason: input.finishReason,
     createdAt: input.createdAt,
-    groupId: input.groupId ?? id,
+    groupId: input.groupId ?? input.id,
     // New group: anchor to the explicit override, else the row's own
     // createdAt (undefined lets both fall back to the same statement's
     // now() default). The existing-group branch overwrites this below.
@@ -417,7 +534,7 @@ export async function appendAssistantMessage(
   const row = existingGroupId
     ? // New version of an existing group: deselect siblings and insert the
       // new selected version atomically (partial unique index on the group).
-      await db.transaction(async (tx) => {
+      await executor.transaction(async (tx) => {
         await tx
           .update(chatMessages)
           .set({ isSelected: false })
@@ -452,11 +569,146 @@ export async function appendAssistantMessage(
           .returning();
         return inserted[0];
       })
-    : (await db.insert(chatMessages).values(values).returning())[0];
+    : (await executor.insert(chatMessages).values(values).returning())[0];
   if (!row) {
     throw new AppError("INTERNAL", 500, "message.storeFailed");
   }
   return rowToChatUIMessage(row);
+}
+
+export async function appendAssistantMessage(
+  input: {
+    topicId: string;
+    message: ChatUIMessage;
+    outcome: ChatMessageOutcome;
+    errorMessage?: string | null;
+    providerConfigId: string;
+    modelId: string;
+    reasoningMs?: number;
+    totalTokens?: number;
+    finishReason?: string;
+    createdAt?: Date;
+    groupId?: string;
+    groupCreatedAt?: Date;
+  },
+  actor: Actor,
+  options?: { tx?: DbTransaction },
+): Promise<ChatUIMessage> {
+  await requireOwnedTopic(input.topicId, actor, options?.tx);
+  return insertAssistantRow(options?.tx ?? getDb(), {
+    topicId: input.topicId,
+    id: input.message.id.length > 0 ? input.message.id : newId(),
+    parts: input.message.parts,
+    outcome: input.outcome,
+    errorMessage: input.errorMessage,
+    providerConfigId: input.providerConfigId,
+    modelId: input.modelId,
+    reasoningMs: input.reasoningMs,
+    totalTokens: input.totalTokens,
+    finishReason: input.finishReason,
+    createdAt: input.createdAt,
+    groupId: input.groupId,
+    groupCreatedAt: input.groupCreatedAt,
+  });
+}
+
+/**
+ * Admission-time assistant placeholder (chat task §3): the row that owns the
+ * answer exists before the model is called, so the version/group slot, its
+ * selected state and the message identity are fixed for the whole turn. The
+ * executor later UPDATEs this same row with the produced parts.
+ */
+export async function insertAssistantPlaceholder(
+  input: {
+    topicId: string;
+    id: string;
+    createdAt?: Date;
+    groupId?: string;
+    groupCreatedAt?: Date;
+  },
+  actor: Actor,
+  options?: { tx?: DbTransaction },
+): Promise<ChatUIMessage> {
+  await requireOwnedTopic(input.topicId, actor, options?.tx);
+  return insertAssistantRow(options?.tx ?? getDb(), {
+    topicId: input.topicId,
+    id: input.id,
+    parts: [],
+    outcome: null,
+    createdAt: input.createdAt,
+    groupId: input.groupId,
+    groupCreatedAt: input.groupCreatedAt,
+  });
+}
+
+/**
+ * Content of an admitted turn written onto its placeholder row — the periodic
+ * checkpoint (partial content) and the terminal write share this shape.
+ *
+ * `parts` is omitted by a terminal write that must keep whatever content was
+ * already persisted (a queued turn stopped before it produced anything, or a
+ * recovery that only closes the row).
+ */
+export type AssistantTurnWrite = {
+  topicId: string;
+  messageId: string;
+  parts?: ChatUIMessage["parts"];
+  outcome?: ChatMessageOutcome | null;
+  errorMessage?: string | null;
+  providerConfigId?: string | null;
+  modelId?: string | null;
+  reasoningMs?: number;
+  totalTokens?: number;
+  finishReason?: string | null;
+};
+
+/**
+ * Writes current/final content onto the placeholder row of an admitted turn.
+ *
+ * Runs on the caller's executor so the terminal write can join the generation
+ * state transition in ONE transaction (chat task §5/§8). Deliberately does no
+ * ownership/topic-activity work: the generation service owns the task identity
+ * (the ids came from its own row) and decides whether `topics.updatedAt`
+ * moves — a checkpoint must not reorder the sidebar, a terminal write may.
+ *
+ * Returns false when the row no longer exists (topic/message deleted while the
+ * turn ran); the caller must then discard its output instead of re-creating it.
+ */
+export async function writeAssistantTurnRow(
+  executor: DbTransaction | ReturnType<typeof getDb>,
+  input: AssistantTurnWrite,
+): Promise<boolean> {
+  const updated = await executor
+    .update(chatMessages)
+    .set({
+      ...(input.parts === undefined ? {} : { parts: input.parts }),
+      ...(input.outcome === undefined ? {} : { outcome: input.outcome }),
+      ...(input.errorMessage === undefined
+        ? {}
+        : { errorMessage: input.errorMessage }),
+      ...(input.providerConfigId === undefined
+        ? {}
+        : { providerConfigId: input.providerConfigId }),
+      ...(input.modelId === undefined ? {} : { modelId: input.modelId }),
+      ...(input.reasoningMs === undefined
+        ? {}
+        : { reasoningMs: input.reasoningMs }),
+      ...(input.totalTokens === undefined
+        ? {}
+        : { totalTokens: input.totalTokens }),
+      ...(input.finishReason === undefined
+        ? {}
+        : { finishReason: input.finishReason }),
+    })
+    .where(
+      and(
+        eq(chatMessages.id, input.messageId),
+        eq(chatMessages.topicId, input.topicId),
+        eq(chatMessages.role, "assistant"),
+      ),
+    )
+    .returning({ id: chatMessages.id });
+  return updated.length > 0;
 }
 
 export async function deleteMessage(
@@ -469,6 +721,9 @@ export async function deleteMessage(
   // transaction so the post-commit cleanup sees the reference already gone.
   let releasedFileIds: string[] = [];
   const result = await db.transaction(async (tx) => {
+    // A running turn owns the topic's context: deleting a message under it
+    // would generate against a history that no longer exists (chat task §8).
+    await lockTopicAndAssertIdle(tx, input.topicId);
     const targets = await tx
       .select()
       .from(chatMessages)
@@ -522,6 +777,7 @@ export async function selectMessageVersion(
   await requireOwnedTopic(input.topicId, actor);
   const db = getDb();
   await db.transaction(async (tx) => {
+    await lockTopicAndAssertIdle(tx, input.topicId);
     const targets = await tx
       .select({ id: chatMessages.id, groupId: chatMessages.groupId })
       .from(chatMessages)

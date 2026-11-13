@@ -25,3 +25,9 @@ export function getDb() {
 
   return db;
 }
+
+/** The pooled client, as a type (services accept `tx` to join a transaction). */
+export type DbClient = ReturnType<typeof getDb>;
+export type DbTransaction = Parameters<
+  Parameters<DbClient["transaction"]>[0]
+>[0];

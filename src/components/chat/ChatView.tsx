@@ -20,6 +20,11 @@ import {
 import EmptyState from "@/components/common/EmptyState";
 import InsetHeader from "@/components/layout/InsetHeader";
 import { useAvailableModels } from "@/components/provider/use-available-models";
+import {
+  activeGenerationForTopic,
+  useActiveGenerations,
+} from "@/hooks/use-active-generations";
+import { useAccountUserId } from "@/hooks/use-account-user";
 import { useModelPreferences } from "@/hooks/use-model-preferences";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import {
@@ -41,6 +46,10 @@ import {
   parseAssistantPath,
 } from "@/lib/assistant-path";
 import { newId } from "@/lib/id";
+import {
+  forgetPendingGenerationRequest,
+  rememberPendingGenerationRequest,
+} from "@/lib/pending-generation-requests";
 import type {
   ChatFilePart,
   ChatHistoryData,
@@ -70,10 +79,12 @@ import {
   attachChatView,
   clearChatSeeded,
   hasLiveChat,
+  isFollowingGeneration,
   markChatSeeded,
   noteRegenFinished,
   noteRegenStarted,
   noteSendStarted,
+  resumeGeneration,
 } from "./chat-pool";
 import {
   buildRegenPlaceholder,
@@ -92,13 +103,19 @@ import {
 import { reasoningEffortRequestValue } from "./reasoning-effort";
 import { imageRequestParams } from "./image-params";
 import { resolveComposerModel } from "./resolve-composer-model";
-import { shouldRequestTopicTitle } from "./should-request-topic-title";
 import {
   chatKeys,
   topicKeys,
   useChatHistory,
   useTopicDetail,
 } from "./use-chat-history";
+
+/**
+ * Minimum spacing between reconnect attempts for one generation. A dropped
+ * connection reports a local error each time, so this is what keeps the retry
+ * from spinning while the network is down (chat task §6: no retry framework).
+ */
+const RESUME_RETRY_INTERVAL_MS = 5_000;
 
 // Stable fallback for drafts with no image params yet: a fresh `{}` per
 // selector call would re-render on every unrelated store change.
@@ -213,6 +230,7 @@ export default function ChatView({
   assistantDefaultModelId,
 }: ChatViewProps) {
   const queryClient = useQueryClient();
+  const userId = useAccountUserId();
   const t = useTranslations("Chat.MessageList");
   const tChat = useTranslations("Chat");
   const tFiles = useTranslations("Files");
@@ -230,8 +248,20 @@ export default function ChatView({
   // that needs the effective topic off activeTopicId instead.
   const activeTopicId = topicId ?? createdTopicId;
   const pathname = usePathname();
-  const history = useChatHistory(activeTopicId);
-  const topicDetail = useTopicDetail(activeTopicId);
+  const history = useChatHistory(userId, activeTopicId);
+  const topicDetail = useTopicDetail(userId, activeTopicId);
+  // Server-owned turns (chat task §6): the task identity, not this view's
+  // local stream state, decides whether a reply is still being generated. The
+  // query is scoped to the account, so a document that outlived an account
+  // change can never read the previous account's active turns from cache.
+  const activeGenerations = useActiveGenerations(
+    userId,
+    Boolean(activeTopicId),
+  );
+  const serverGeneration = activeGenerationForTopic(
+    activeGenerations.data?.generations,
+    activeTopicId,
+  );
   // The chat pool keys a session-created topic under its real id (the pool
   // migrates the "draft" entry on `data-topic`), so this view must ask for
   // the same key or it would acquire a second, empty chat.
@@ -349,6 +379,10 @@ export default function ChatView({
     key: string;
     attachments: StagedAttachment[];
   } | null>(null);
+  // One idempotency key per send action (chat task §4/G2): minted on send,
+  // held in sessionStorage so a lost confirmation can be resolved by request
+  // id after a reload, and retired once the server confirmed the turn.
+  const pendingSendRequestIdRef = useRef<string | null>(null);
   const resolvedAssistant = assistants.find((row) => row.id === resolvedAssistantId);
   // Once a session-created topic exists the topic's assistant is fixed; the
   // picker only belongs on a fresh draft. createdTopicId resets when the URL
@@ -394,6 +428,22 @@ export default function ChatView({
       throttle: 50,
     });
 
+  /**
+   * Retire this send's pending receipt. Called once the outcome is known —
+   * either the durable generation id arrived (data-topic) or the turn ended.
+   * A failure keeps it: the server may still have accepted the request.
+   */
+  function forgetSendReceipt(): void {
+    const requestId = pendingSendRequestIdRef.current;
+    if (requestId === null) {
+      return;
+    }
+    pendingSendRequestIdRef.current = null;
+    if (userId !== null) {
+      forgetPendingGenerationRequest(userId, requestId);
+    }
+  }
+
   // View-level stream handlers, registered with the pool below. The stable
   // wrappers always invoke the latest render's closure, so the registration
   // effect only re-runs when the chat id changes.
@@ -408,6 +458,9 @@ export default function ChatView({
       };
       latestRef.current.topicId = streamTopicId;
       setCreatedTopicId(streamTopicId);
+      // The server's confirmation arrived, so the pending receipt has done its
+      // job: the durable generation id is the recovery handle from here on.
+      forgetSendReceipt();
       // B8: the live local stream is newer than anything the just-enabled
       // history query can return for the new topic; mark the pooled chat as
       // already seeded so the mid-session fetch cannot clobber the stream.
@@ -436,6 +489,9 @@ export default function ChatView({
       restoreAttachments(pending.key, pending.attachments);
     }
     pendingSendAttachments.current = null;
+    if (!event.isError) {
+      forgetSendReceipt();
+    }
     // A failed turn is stamped locally so the failure shows at once, but
     // the reason lives in the persisted row. Clearing the seed guard lets
     // the pool's finish-time invalidation replace it, so the live view
@@ -452,6 +508,15 @@ export default function ChatView({
       onFinish: handlePoolFinish,
     });
   }, [chatId, handlePoolData, handlePoolFinish]);
+
+  const serverGenerationId = serverGeneration?.id;
+  // The stop handle is DERIVED, never mirrored into state: the server's active
+  // list is the authority for "is this topic still generating?", and copying it
+  // into local state would need a setState-in-effect and could go stale. It
+  // also outranks this view's remembered id, which can name a turn that already
+  // ended while another one (another tab) is now running.
+  const effectiveStreamId =
+    serverGeneration?.id ?? streamId ?? poolEntry.generationId ?? null;
 
   useEffect(() => {
     if (assistantId) {
@@ -501,6 +566,107 @@ export default function ChatView({
     markChatSeeded(poolEntry, activeTopicId);
     setMessages(history.data.messages);
   }, [history.data, setMessages, activeTopicId, chatId, poolEntry]);
+
+  // Seed BEFORE resume (chat task §6). A reconnecting view must start from the
+  // persisted history — including the placeholder row the server's prefix will
+  // update in place — otherwise the resumed answer replaces the conversation
+  // with just the live turn. `poolEntry.seededFor` is written by the seed
+  // effect above, so this effect only runs after that seed in the same commit.
+  const historySeeded =
+    activeTopicId !== undefined && poolEntry.seededFor === activeTopicId;
+  const manualRegen = regen !== null;
+  const refetchActiveGenerations = activeGenerations.refetch;
+  // A successful discovery refresh must retry a failed reconnect even when
+  // structural sharing preserves the same generation id/status. Reuse the
+  // existing visible-page polling/focus events; no extra retry timer.
+  const discoveryUpdatedAt = activeGenerations.dataUpdatedAt;
+  // Reconnect attempts per generation, rate-limited: a down network makes the
+  // SDK report a local error each time, and without this the retry would spin.
+  const lastResumeAttemptRef = useRef<{ id: string; at: number } | null>(null);
+  useEffect(() => {
+    if (!activeTopicId || !serverGenerationId || !historySeeded) {
+      return;
+    }
+    if (manualRegen) {
+      // The manual regeneration loop owns this turn's messages; opening the
+      // SDK reconnect as well would consume the same answer twice.
+      return;
+    }
+    if (
+      isFollowingGeneration(chatId, serverGenerationId) &&
+      status !== "error"
+    ) {
+      // Already attached (or still mid-reconnect). A local error — a dropped
+      // connection, not a failed turn — falls through and re-attempts: the
+      // generation target survived the error for exactly this.
+      return;
+    }
+    const previousAttempt = lastResumeAttemptRef.current;
+    if (
+      previousAttempt?.id === serverGenerationId &&
+      Date.now() - previousAttempt.at < RESUME_RETRY_INTERVAL_MS
+    ) {
+      return;
+    }
+    lastResumeAttemptRef.current = {
+      id: serverGenerationId,
+      at: Date.now(),
+    };
+    let cancelled = false;
+    void resumeGeneration(chatId, serverGenerationId).then((outcome) => {
+      if (cancelled || outcome !== "empty") {
+        return;
+      }
+      // 204: nothing is live any more (the turn settled between discovery and
+      // the reconnect). Refresh the authoritative list; the effect below then
+      // loads the canonical history.
+      void refetchActiveGenerations();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeTopicId,
+    serverGenerationId,
+    historySeeded,
+    manualRegen,
+    chatId,
+    status,
+    refetchActiveGenerations,
+    discoveryUpdatedAt,
+  ]);
+
+  // A turn we were following is gone from the server's active list: it
+  // finished, failed or was stopped while this view was not reading its
+  // stream. Reseed the canonical history so a missed terminal chunk cannot
+  // leave a partial answer on screen.
+  const lastServerGenerationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = lastServerGenerationIdRef.current;
+    if (serverGenerationId) {
+      lastServerGenerationIdRef.current = serverGenerationId;
+      return;
+    }
+    if (previous === null || !activeTopicId) {
+      return;
+    }
+    lastServerGenerationIdRef.current = null;
+    if (hasLiveChat(chatId)) {
+      // The local stream is still finishing; its teardown reseeds.
+      return;
+    }
+    clearChatSeeded(poolEntry);
+    void queryClient.invalidateQueries({
+      queryKey: chatKeys.history(userId, activeTopicId),
+    });
+  }, [
+    serverGenerationId,
+    activeTopicId,
+    chatId,
+    poolEntry,
+    queryClient,
+    userId,
+  ]);
 
   /** Scroll to a message and flash it for 2s. Shared by the search-result
    * deep link and the in-topic hit navigator. */
@@ -698,8 +864,15 @@ export default function ChatView({
     }
   }, [error, failureShownInTranscript, clearError]);
 
+  // The server's active turn is authoritative (R3): after a reload, or while a
+  // reconnect is still opening, the composer must already show Stop and refuse
+  // context mutations instead of trusting only this view's local stream state.
+  const serverActive = serverGeneration !== undefined;
   const inFlight =
-    status === "submitted" || status === "streaming" || regen !== null;
+    status === "submitted" ||
+    status === "streaming" ||
+    manualRegen ||
+    serverActive;
   // Only `ready` attachments are sent; while anything is uploading (or failed)
   // sending is held back so the user never silently drops an attachment.
   const readyAttachments = attachments.filter(
@@ -789,8 +962,8 @@ export default function ChatView({
       return;
     }
     // A resumed view never saw this stream's `data-topic`: the stream id
-    // state is empty, so fall back to the pool entry's record.
-    const activeStreamId = streamId ?? poolEntry.streamId;
+    // state is empty, so fall back to the task identity discovery handed us.
+    const activeStreamId = effectiveStreamId ?? poolEntry.generationId;
     if (activeStreamId) {
       try {
         await stopChatStream(activeStreamId);
@@ -799,7 +972,17 @@ export default function ChatView({
       }
     }
     await stop();
-    setMessages((current) => markLastAssistant(current, "stopped"));
+    // Mark the row the server said it is producing: after a reload that is a
+    // mid-list answer, not the tail.
+    const stopMessageId = serverGeneration?.assistantMessageId;
+    setMessages((current) =>
+      stopMessageId
+        ? markAssistantOutcome(current, stopMessageId, "stopped")
+        : markLastAssistant(current, "stopped"),
+    );
+    // The server has the authoritative answer to "did it stop?" — refresh the
+    // discovery query so a still-running turn cannot reappear as active.
+    void activeGenerations.refetch();
   }
 
   /**
@@ -810,14 +993,16 @@ export default function ChatView({
    */
   function reseedHistory(topic: string) {
     clearChatSeeded(poolEntry);
-    void queryClient.invalidateQueries({ queryKey: chatKeys.history(topic) });
+    void queryClient.invalidateQueries({
+      queryKey: chatKeys.history(userId, topic),
+    });
   }
 
   /** Fresh (never cached) history for the B6 persistence-race guard. */
   function fetchFreshHistoryMessages(topic: string) {
     return queryClient
       .fetchQuery({
-        queryKey: chatKeys.history(topic),
+        queryKey: chatKeys.history(userId, topic),
         queryFn: () => fetchTopicMessages(topic),
       })
       .then((response) => response.messages);
@@ -898,6 +1083,12 @@ export default function ChatView({
           pick.modelId,
         )
       : undefined;
+    // One idempotency key for this regenerate/edit action (G2): kept for the
+    // receipt lookup if the confirmation never reaches this tab.
+    const requestId = newId();
+    if (userId !== null) {
+      rememberPendingGenerationRequest({ requestId, userId });
+    }
     let response: Response;
     try {
       response = await regenerateTopicMessage(
@@ -908,6 +1099,7 @@ export default function ChatView({
         // the new version id used for local folding.
         edit?.requestMessageId ?? target.id,
         {
+          requestId,
           providerConfigId: pick.configId,
           modelId: pick.modelId,
           ...(effort === undefined ? {} : { reasoningEffort: effort }),
@@ -926,10 +1118,23 @@ export default function ChatView({
       return;
     }
     const regenStreamId = response.headers.get("x-pika-stream-id");
+    if (regenStreamId && userId !== null) {
+      // Confirmed: the durable generation id is the recovery handle now, so the
+      // receipt has done its job.
+      forgetPendingGenerationRequest(userId, requestId);
+    }
+    if (regenStreamId) {
+      // Register the task this loop consumes: discovery must not open an SDK
+      // consumer of the same answer in parallel (chat task §5/R6).
+      noteRegenStarted(topic, regenStreamId);
+    }
     setRegen({
       streamId: regenStreamId,
       streamingId: plan?.placeholder.id ?? "",
     });
+    // Same submit-time refresh as a send: the loop, not the SDK, consumes this
+    // turn, so discovery must catch up on its own.
+    void activeGenerations.refetch();
     if (regenStopRequestedRef.current) {
       regenStopRequestedRef.current = false;
       if (regenStreamId) {
@@ -1187,7 +1392,7 @@ export default function ChatView({
       current.map((entry) => mergeTranslation(entry, message.id)),
     );
     queryClient.setQueryData<ChatHistoryData | undefined>(
-      chatKeys.history(topic),
+      chatKeys.history(userId, topic),
       (data) =>
         data
           ? {
@@ -1309,7 +1514,7 @@ export default function ChatView({
       // Awaited on purpose — clearing the in-flight shimmer first would leave a
       // visible gap where the divider has not arrived yet.
       await queryClient.invalidateQueries({
-        queryKey: topicKeys.detail(activeTopicId),
+        queryKey: topicKeys.detail(userId, activeTopicId),
       });
     } catch (caught) {
       setActionError(apiErrorMessage(caught, tErrors, "actions.compress"));
@@ -1403,16 +1608,8 @@ export default function ChatView({
       topicId: activeTopicId,
     };
     // Pool bookkeeping for the send: marks the sidebar streaming icon at
-    // once for an existing topic (drafts mark on `data-topic`) and parks
-    // the title-request context where the module-level handler can fire it
-    // even if this view navigates away first.
-    noteSendStarted(chatId, {
-      shouldRequestTitle: shouldRequestTopicTitle({
-        activeTopicId,
-        displayedTitle: headerTitle,
-      }),
-      titlePick: pickedModel,
-    });
+    // once for an existing topic (drafts mark on `data-topic`).
+    noteSendStarted(chatId);
     const text = draft.trim();
     // Image models without imageInput never send attachments (the server
     // rejects them); staged chips stay put so switching back to a chat model
@@ -1453,9 +1650,22 @@ export default function ChatView({
     const image = imageMode
       ? imageRequestParams(imageParams, pickedModel.modelId)
       : undefined;
+    // One idempotency key for this send action (G2). It rides in the body, so
+    // the transport cannot re-mint it on a retry of the same action; the
+    // receipt is stored per account so a lost confirmation can be looked up
+    // after a reload instead of re-sending the model call.
+    const requestId = newId();
+    if (userId !== null) {
+      rememberPendingGenerationRequest({
+        requestId,
+        userId,
+      });
+    }
+    pendingSendRequestIdRef.current = requestId;
     const body = {
       assistantId: resolvedAssistantId,
       topicId: activeTopicId,
+      requestId,
       providerConfigId: pickedModel.configId,
       modelId: pickedModel.modelId,
       ...(effort === undefined ? {} : { reasoningEffort: effort }),
@@ -1478,6 +1688,10 @@ export default function ChatView({
     } else {
       void sendMessage({ files: outgoingFiles, metadata }, { body });
     }
+    // A submit is one of the moments the authoritative task list is refreshed
+    // (chat task §7): until the response's own `data-topic` arrives, discovery
+    // is what tells the sidebar/view that this topic is generating.
+    void activeGenerations.refetch();
   }
 
   // Stable callback identities for MessageList: with MessageItem memoized,
@@ -1532,9 +1746,15 @@ export default function ChatView({
           <MessageList
             ref={messageListRef}
             messages={messages}
-            streaming={status === "streaming" || regen !== null}
+            streaming={status === "streaming" || manualRegen || serverActive}
             streamingMessageId={
-              regen && regen.streamingId.length > 0 ? regen.streamingId : undefined
+              // A regeneration anchors its own placeholder; a resumed turn
+              // anchors the message the server named, which for a mid-list
+              // regeneration is NOT the tail — that keeps the shimmer and the
+              // auto-scroll contract on the right row (chat task R3/R7).
+              regen && regen.streamingId.length > 0
+                ? regen.streamingId
+                : (serverGeneration?.assistantMessageId ?? undefined)
             }
             sendSignal={sendSignal}
             assistantName={resolvedAssistant?.name}

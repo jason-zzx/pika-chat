@@ -8,16 +8,24 @@ import {
   attachChatView,
   configureChatPool,
   hasLiveChat,
+  isFollowingGeneration,
   noteRegenFinished,
   noteRegenStarted,
   noteSendStarted,
+  reconnectTargetFor,
   resetChatPool,
+  resumeGeneration,
 } from "./chat-pool";
 
 type TopicPart = { type: string; data: { topicId: string; streamId: string } };
 
 const chatControl = vi.hoisted(() => ({
   status: "ready" as "ready" | "submitted" | "streaming" | "error",
+  // Reconnect behaviour the test drives: "stream" (a live prefix arrives and
+  // ends with onFinish), "empty" (204: resumeStream resolves with nothing),
+  // "fail" (network error).
+  resume: "stream" as "stream" | "empty" | "fail",
+  resumeCalls: [] as string[],
   // Constructor options of the most recently created FakeChat.
   options: undefined as
     | {
@@ -55,6 +63,19 @@ vi.mock("@ai-sdk/react", () => ({
     get status() {
       return chatControl.status;
     }
+    async resumeStream() {
+      chatControl.resumeCalls.push(this.id);
+      if (chatControl.resume === "fail") {
+        throw new Error("network down");
+      }
+      if (chatControl.resume === "empty") {
+        // The transport answered 204: the SDK reports no stream to read.
+        return;
+      }
+      // A live reconnect: the server's prefix streams to its end.
+      chatControl.status = "streaming";
+      chatControl.options?.onFinish?.({ isError: false });
+    }
   },
 }));
 
@@ -71,6 +92,8 @@ beforeEach(() => {
   resetChatPool();
   chatControl.status = "ready";
   chatControl.options = undefined;
+  chatControl.resume = "stream";
+  chatControl.resumeCalls = [];
   chatControl.byId.clear();
 });
 
@@ -115,10 +138,7 @@ describe("chat pool lifecycle", () => {
     // cleanup, then the view re-attaches under "t1" — the live chat must
     // survive that cleanup.
     const draft = acquireChat("draft");
-    noteSendStarted("draft", {
-      shouldRequestTitle: false,
-      titlePick: null,
-    });
+    noteSendStarted("draft");
     const detachDraft = attachChatView("draft", {
       onData: vi.fn(),
       onFinish: vi.fn(),
@@ -143,10 +163,7 @@ describe("chat pool streaming status", () => {
     acquireChat("t1");
     chatControl.status = "streaming";
     act(() => {
-      noteSendStarted("t1", {
-        shouldRequestTitle: false,
-        titlePick: null,
-      });
+      noteSendStarted("t1");
     });
     expect(result.current.has("t1")).toBe(true);
 
@@ -160,10 +177,7 @@ describe("chat pool streaming status", () => {
   it("marks a draft's topic when data-topic arrives, and clears a pre-stream error", () => {
     const { result } = streamingTopics();
     acquireChat("draft");
-    noteSendStarted("draft", {
-      shouldRequestTitle: false,
-      titlePick: null,
-    });
+    noteSendStarted("draft");
     // Nothing to mark yet: the draft has no topic id.
     expect(result.current.size).toBe(0);
 
@@ -207,18 +221,14 @@ describe("chat pool streaming status", () => {
 });
 
 describe("chat pool module-level side effects", () => {
-  it("invalidates and requests the title even with no view attached", () => {
+  it("invalidates the tree and the topic history even with no view attached", () => {
     const bridge = {
       invalidateTree: vi.fn(),
       invalidateAfterFinish: vi.fn(),
-      requestTitle: vi.fn(),
     };
     const dispose = configureChatPool(bridge);
     acquireChat("draft");
-    noteSendStarted("draft", {
-      shouldRequestTitle: true,
-      titlePick: { configId: "cfg-1", modelId: "m1" },
-    });
+    noteSendStarted("draft");
 
     act(() => {
       chatControl.options?.onData?.({
@@ -228,10 +238,8 @@ describe("chat pool module-level side effects", () => {
     });
 
     expect(bridge.invalidateTree).toHaveBeenCalled();
-    expect(bridge.requestTitle).toHaveBeenCalledWith("t1", {
-      configId: "cfg-1",
-      modelId: "m1",
-    });
+    // The generation id from the server is what Stop and reconnect use.
+    expect(acquireChat("t1").generationId).toBe("s1");
 
     act(() => {
       chatControl.options?.onFinish?.({ isError: false });
@@ -259,5 +267,133 @@ describe("chat pool module-level side effects", () => {
       chatControl.options?.onFinish?.({ isError: true });
     });
     expect(view.onFinish).toHaveBeenCalledWith({ isError: true });
+  });
+});
+
+describe("chat pool generation target", () => {
+  it("keeps concurrent draft-created chats on their own reconnect targets", async () => {
+    type Transport = { reconnectToStream: (options: { chatId: string }) => Promise<unknown> };
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      acquireChat("draft");
+      const first = chatControl.options!;
+      first.onData?.({ type: "data-topic", data: { topicId: "t1", streamId: "gen-a" } });
+      acquireChat("draft");
+      const second = chatControl.options!;
+      second.onData?.({ type: "data-topic", data: { topicId: "t2", streamId: "gen-b" } });
+      const firstTransport = (first as unknown as { transport: Transport }).transport;
+      const secondTransport = (second as unknown as { transport: Transport }).transport;
+      await firstTransport.reconnectToStream({ chatId: "draft" });
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/chat/generations/gen-a/stream", expect.anything());
+      first.onFinish?.({ isError: false });
+      await secondTransport.reconnectToStream({ chatId: "draft" });
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/chat/generations/gen-b/stream", expect.anything());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the reconnect target addressable after a draft entry migrates to its topic", () => {
+    // The SDK reconnects by the Chat's own id, which stays "draft" even after
+    // the entry is re-keyed to the created topic. Looking the target up by
+    // entry key would find nothing and reconnect to /api/chat instead.
+    const draft = acquireChat("draft");
+    noteSendStarted("draft");
+    act(() => {
+      chatControl.options?.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "gen-9" },
+      });
+    });
+
+    expect(acquireChat("t1")).toBe(draft);
+    expect(draft.chatId).toBe("draft");
+    expect(reconnectTargetFor("draft")).toBe("gen-9");
+    expect(reconnectTargetFor("t1")).toBe("gen-9");
+  });
+
+  it("retains the generation target when the connection drops", () => {
+    // A network error says nothing about the server-side turn: keeping the
+    // target is what lets discovery re-attach instead of losing it.
+    acquireChat("t1");
+    act(() => {
+      chatControl.options?.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "gen-9" },
+      });
+    });
+    act(() => {
+      chatControl.options?.onError?.(new Error("network"));
+    });
+
+    expect(reconnectTargetFor("t1")).toBe("gen-9");
+    expect(isFollowingGeneration("t1", "gen-9")).toBe(true);
+  });
+
+  it("clears the target when the turn finishes", () => {
+    acquireChat("t1");
+    act(() => {
+      chatControl.options?.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "gen-9" },
+      });
+    });
+    act(() => {
+      chatControl.options?.onFinish?.({ isError: false });
+    });
+    expect(reconnectTargetFor("t1")).toBeNull();
+  });
+
+  it("registers a manual regeneration's task so discovery does not open a second consumer", () => {
+    const entry = acquireChat("t1");
+    act(() => {
+      noteRegenStarted("t1", "gen-9");
+    });
+    expect(isFollowingGeneration("t1", "gen-9")).toBe(true);
+    expect(reconnectTargetFor("t1")).toBe("gen-9");
+
+    act(() => {
+      noteRegenFinished("t1");
+    });
+    // The loop no longer follows it; discovery can re-adopt a turn that is
+    // still running (the loop can die from a network error).
+    expect(entry.regenActive).toBe(false);
+    expect(reconnectTargetFor("t1")).toBeNull();
+  });
+});
+
+describe("chat pool resume outcomes", () => {
+  it("reports a finished reconnect and clears the target", async () => {
+    acquireChat("t1");
+    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("finished");
+    expect(chatControl.resumeCalls).toEqual(["t1"]);
+    expect(reconnectTargetFor("t1")).toBeNull();
+  });
+
+  it("reports the 204 case as empty so the view reseeds canonical history", async () => {
+    chatControl.resume = "empty";
+    acquireChat("t1");
+    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("empty");
+    // Nothing is live any more: the target must not keep discovery looping.
+    expect(reconnectTargetFor("t1")).toBeNull();
+  });
+
+  it("keeps the target after a failed reconnect so it can be retried", async () => {
+    chatControl.resume = "fail";
+    acquireChat("t1");
+    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("failed");
+    expect(reconnectTargetFor("t1")).toBe("gen-9");
+  });
+
+  it("never opens two reconnects for the same entry", async () => {
+    chatControl.resume = "empty";
+    acquireChat("t1");
+    const first = resumeGeneration("t1", "gen-9");
+    // A second attempt while the first is open is refused, so a burst of
+    // discovery refetches cannot race two streams into one chat.
+    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("busy");
+    await first;
+    expect(chatControl.resumeCalls).toHaveLength(1);
   });
 });

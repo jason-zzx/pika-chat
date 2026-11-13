@@ -100,7 +100,8 @@
       "email": "Email",
       "password": "Password"
     },
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "signOutFailed": "Sign out failed. Please try again."
   },
   "Account": {
     "title": "Account",
@@ -617,7 +618,8 @@
     "topic": {
       "notFound": "Topic not found",
       "createFailed": "Failed to create topic",
-      "nothingToCompress": "There is no earlier history to compress"
+      "nothingToCompress": "There is no earlier history to compress",
+      "compressionMoved": "The conversation changed while it was being summarized; try again"
     },
     "message": {
       "notFound": "Message not found",
@@ -673,6 +675,19 @@
     },
     "stream": {
       "notFound": "Stream not found"
+    },
+    "generation": {
+      "notFound": "Generation not found",
+      "targetDeleted": "This conversation was deleted",
+      "requestConflict": "This request id was already used for a different request",
+      "requestExpired": "This request is too old to retry (server time {serverTime})",
+      "requestClockAhead": "This request's timestamp is ahead of the server (server time {serverTime})",
+      "invalidRequestId": "Invalid request id",
+      "topicBusy": "This conversation is still generating a reply",
+      "contextChanged": "This conversation changed while the reply was starting; try again",
+      "createFailed": "Failed to start the reply",
+      "interrupted": "Generation was interrupted by a server restart",
+      "notRunning": "The reply is not running on this server; retry in a moment"
     },
     "file": {
       "tooLarge": "File is larger than the {limit} limit",
