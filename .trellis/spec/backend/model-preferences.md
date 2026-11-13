@@ -47,7 +47,9 @@ the whole set; a `null` slot clears it.
   only when it is still in the caller's available-models list, else `null` —
   and the caller takes its own fallback path. Never re-inline this check.
 - **Preferences are user-level only.** Every read/write filters by the
-  current actor; there is deliberately no instance-level default.
+  current actor; there is deliberately no instance-level default. Exception:
+  demo guests read the operator's non-`chat` slots, still validated against
+  the guest's own available models (see [Demo Mode](./demo-mode.md)).
 
 ### 4. Fallback matrix (what "silent fallback" means per consumer)
 

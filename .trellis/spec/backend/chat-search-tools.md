@@ -20,7 +20,7 @@ parts → UI — change them together.
   `userId` FK cascade, `provider` pgEnum (`tavily`/`exa`/`firecrawl`/`brave`),
   `encryptedApiKey` + `apiKeyLastFour`, nullable `baseUrl`, `position`
   integer; unique `(userId, provider)`, index `(userId, position)`. No
-  `visibility` — private-only by design.
+  `visibility` — private-only by design. Exception: demo guests resolve the operator's credentials (see [Demo Mode](./demo-mode.md)).
 - Service (`src/server/services/search-provider.service.ts`):
   `listSearchProviderSettings(actor)` (position-ordered),
   `upsertSearchProviderSetting(input, actor)` (create requires `apiKey`;
