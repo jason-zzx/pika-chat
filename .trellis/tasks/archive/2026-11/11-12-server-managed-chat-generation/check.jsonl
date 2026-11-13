@@ -1,0 +1,14 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "服务端边界、鉴权与持久化权威约束"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "客户端服务端状态分工与交互约束"}
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "恢复消息身份、版本选择和顺序不可变"}
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "快照需保留完整消息metadata与终态"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "服务端验证门禁"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端回归与质量门禁"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "流失败不可只信SDK outcome；终态与取消边界"}
+{"file": ".trellis/spec/backend/image-generation.md", "reason": "独立图片分支、批次提交与文件清理"}
+{"file": ".trellis/spec/backend/chat-history-compression.md", "reason": "后台历史快照和压缩边界保真"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "服务端任务权威与TanStack Query客户端状态"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "恢复不得破坏滚动、定位与触屏交互"}
+{"file": ".trellis/tasks/11-12-server-managed-chat-generation/research/open-source-generation-lifecycle.md", "reason": "检查恢复交接、显式停止、版本差异；不得把源码研究当运行时通过"}
+{"file": ".trellis/tasks/11-12-server-managed-chat-generation/research/sdk-upgrade-decision.md", "reason": "最小G1当前状态接活跃增量已通过；核对中段稳定ID、reasoning/tool/metadata"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "已落地生命周期合同、单次admission/可信写入、连接时鉴权与启动恢复验证边界"}
