@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/11-13-demo-site-mode/research/integration-points.md", "reason": "Integration point map with file:line anchors"}
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "better-auth config, hooks, actor guards"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "drizzle schema + migration conventions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError codes and localized message keys"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "acceptTurn tx, runner sweep"}
+{"file": ".trellis/spec/backend/chat-search-tools.md", "reason": "search/fetch tool execution and error outputs"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "upload paths, quota, blob deletion"}
+{"file": ".trellis/spec/backend/model-preferences.md", "reason": "preference slots and resolution"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "en + zh-CN message catalogs"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "sign-in, banner, settings UI"}
