@@ -27,10 +27,10 @@ them together or the live and reloaded views disagree.
   **per role**: user rows get `{ createdAt, translations? }`, assistant rows
   get the full set. (`translations` is a per-version language→text map added
   for lazy translation — see
-  [chat-message-translation.md](./chat-message-translation.md).) `appendAssistantMessage` takes persistable fields (e.g.
-  `reasoningMs`, `createdAt?: Date`) and spreads them into `.values(...)`
-  (`...(input.createdAt ? { createdAt: input.createdAt } : {})` so omitted
-  fields fall back to column defaults).
+  [chat-message-translation.md](./chat-message-translation.md).) Server-managed
+  turns insert an assistant placeholder at admission; checkpoint/finalization
+  updates that same row, including `totalTokens` and `finishReason`. Message
+  timestamps come from the app clock, never an omitted-value DB default.
 - Live metadata: route `messageMetadata: ({ part }) => part.type === "finish"
   ? {...} : undefined` inside `toUIMessageStream` — it runs on `start` and
   `finish`; returning `undefined` for start keeps it effectively finish-only.
@@ -38,8 +38,11 @@ them together or the live and reloaded views disagree.
   the server-generated message id the client needs for follow-up actions
   (regenerate/delete/select). Do not set `sendStart: false` — with it the
   client invents its own id and the server 404s on that id (B6).
-- Persistence input: `appendAssistantMessage({ topicId, message, outcome,
-  errorMessage, providerConfigId, modelId, reasoningMs, createdAt }, actor)`.
+- Generation persistence: `checkpointContentOf`/`persistedMetadataOf` in
+  `generation-runner.ts` derive persisted fields from the same `applyChunk`
+  accumulator used for live/reconnected state. Finalization waits for any
+  in-flight checkpoint and atomically writes message + task outcome. See
+  [Chat Generation Lifecycle](./chat-generation-lifecycle.md).
 
 ### 3. Contracts
 
@@ -51,7 +54,9 @@ them together or the live and reloaded views disagree.
 - Early emission (UI feedback before the stream ends): write a
   `message-metadata` chunk from the `createUIMessageStream` `execute({ writer
   })` closure — `writer.write({ type: "message-metadata", messageMetadata: {
-  reasoningMs } })`; `useChat` merges it into the current assistant message.
+  reasoningMs } })`. The runner merges accumulated identity/metadata and
+  publishes the complete object: the SDK replaces, rather than merges,
+  message metadata.
   Wire it to a signal observed in `streamText`'s `onChunk`
   (`createReasoningTimer` + `emitReasoningMetadata?.()`), emit-once.
   Multi-step tool turns (R6): `createReasoningTimer` measures **every**
@@ -63,11 +68,11 @@ them together or the live and reloaded views disagree.
   `message-metadata` write **replaces the whole metadata object** client-side
   — every mid-stream emit must carry all currently-relevant fields, and any
   future mid-stream field must be included in every emit (the finish chunk
-  always carries the full authoritative object). At `onEnd` the
-  durations are zipped into the reasoning parts via `withReasoningDurations`
-  (`durationMs` on the reasoning variant of `chatStoredPartSchema` — no new
-  column); `metadataFromRow` derives `reasoningDurations` from the parts on
-  history load so live and reloaded views converge.
+  always carries the full authoritative object). The accumulator applies
+  durations to reasoning parts (`durationMs` on `chatStoredPartSchema`, no new
+  column), including crash checkpoints. `metadataFromRow` derives
+  `reasoningDurations` from those parts on history load so live, resumed and
+  reloaded views converge.
 - Optimistic user message: `sendMessage({ text, metadata: { createdAt: new
   Date().toISOString() } })` (`CreateUIMessage` carries metadata). The server
   persists its own app-clock `turnStartedAt` (captured before
@@ -79,8 +84,8 @@ them together or the live and reloaded views disagree.
   (`streamStartedAt` / image `generatedAt`) and a drifting DB clock
   (Docker/WSL2) can invert the `createdAt, id` list ordering
   (09-23-message-clock-skew). For assistant messages there is no skew: the
-  route persists `createdAt: streamStartedAt` (captured before
-  `streamText`), matching the finish metadata.
+  admission inserts an app-timestamped placeholder; its timestamp is carried
+  in live/replayed metadata and retained during checkpoints/finalization.
 - Timestamps/durations are metadata, **not** message parts — never stuff them
   into `parts` (per-item zod union would need new variants).
 
@@ -111,7 +116,7 @@ them together or the live and reloaded views disagree.
 ### 6. Tests Required
 
 - Service (`message.service.test.ts`): insert shape for every persisted field
-  (explicit value AND defaultNow fallback paths), `metadataFromRow` output per
+  (explicit and omitted-input app-clock paths), `metadataFromRow` output per
   role, `rowToChatUIMessage` ISO string round-trip.
 - Server helper unit tests (`reasoning-timer.test.ts`): start/end on the
   documented chunk types, answer-text close, finish fallback, no-reasoning →
@@ -147,7 +152,7 @@ if (row.role !== "assistant") {
 
 // Early emit once from the execute closure, driven by onChunk observations;
 // finish metadata still carries the value as the authoritative fallback.
-writer.write({ type: "message-metadata", messageMetadata: { reasoningMs } });
+writer.write({ type: "message-metadata", messageMetadata: { ...metadata, reasoningMs } });
 ```
 
 ## Scenario: a failed turn
@@ -160,9 +165,10 @@ reads it back from the row, so the row is the only source of truth.
 
 ### 2. Signatures
 
-- `outcome: "failed"` + `errorMessage` are written by the streaming routes'
-  `onEnd` through `appendAssistantMessage`; the column is
-  `chat_messages.error_message`, rebuilt by `metadataFromRow`.
+- `outcome: "failed"` + `errorMessage` are written to the preallocated
+  assistant row by the runner's terminal transaction before publishing its
+  error chunk. The column is `chat_messages.error_message`, rebuilt by
+  `metadataFromRow`.
 - `errorMessage` holds the **upstream `error` field**, scrubbed and formatted
   (objects arrive as indented JSON). It is not our catalog copy unless the
   provider body was empty. See `src/server/ai/provider-error.ts`.
@@ -179,8 +185,9 @@ reads it back from the row, so the row is the only source of truth.
   stream carries the same sanitized string the server persists, so nothing
   renders the generic fallback in between), then clears the `seededHistoryFor`
   guard on the erroring `onFinish` so the refetch replaces it with the persisted
-  row. The server persists in its own `onEnd`, which runs before the response
-  stream closes, so the row is already there.
+  row. The runner holds terminal error/abort/finish chunks until the durable
+  finalization decision, so the row is already there. Persistence failure
+  retains content and retries the DB, not the model.
 - Two failure kinds must stay distinguishable on the client, and
   `isApiErrorEnvelope` is the test: our JSON envelope means the request failed
   **before a stream opened** (no message to attach it to → the composer banner

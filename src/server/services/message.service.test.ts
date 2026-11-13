@@ -43,6 +43,8 @@ function row(overrides: Partial<ChatMessageRow>): ChatMessageRow {
     providerConfigId: null,
     modelId: null,
     reasoningMs: null,
+    totalTokens: null,
+    finishReason: null,
     translations: null,
     groupId: "msg-1",
     isSelected: true,

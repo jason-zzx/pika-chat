@@ -95,8 +95,11 @@ the only path that may.
 
 ## Cookie cache stays off
 
-Do not enable `session.cookieCache`. Ban immediacy depends on session rows
-being deleted; a cached cookie would keep authorizing the banned user.
+Do not enable `session.cookieCache`. Ban immediacy for new requests depends on
+session rows being deleted; a cached cookie would keep authorizing the banned
+user. Existing chat SSE responses are authorized on connection only, without
+periodic session checks; revocation rejects new requests/reconnects but need not
+close a previously authorized stream. See [Chat Generation Lifecycle](./chat-generation-lifecycle.md).
 
 ## Disabled public sign-up
 

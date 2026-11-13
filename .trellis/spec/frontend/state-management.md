@@ -120,11 +120,22 @@ live `useChat` messages — those belong to another conversation. Do not PATCH
 from the seed effect. Optimistic-update the assistant tree on that write so a
 new topic opened before invalidate returns does not reseed empty.
 
-**Topic titles.** Server state. After `data-topic`, `POST /api/topics/:id/title`
-and patch the assistant tree from the JSON. Do not store a title in Zustand,
-and do not wait for titling inside `useChat` — Stop/`inFlight` follow the
-chat stream only. Request a title once per untitled topic; already-named
-topics skip the LLM on the server.
+**Topic titles.** Server state. The generation runner triggers best-effort
+titling after a completed turn, even without a browser. `ChatPoolBridge`
+invalidates the tree; it no longer requests a title from `onFinish` or
+`data-topic`. Do not store titles in Zustand or couple Stop/`inFlight` to
+titling. The title service preserves manual names.
+
+**Active generation and recovery.** Server task identity/status is authoritative;
+`useChat` and the chat pool own live rendering, Query owns persisted history
+and task discovery. Seed history before `resumeStreamIsReplay` reconnect;
+204 means refetch/reseed canonical history, not append a saved reply. Keep
+healthy SPA subscriptions and deduplicate reconnects. History/detail/task
+query keys include user ID. Confirmed account changes or successful sign-out
+destroy document-owned state; auth loading/network errors do not. Pending
+request IDs are looked up with GET after reload, never automatically POSTed.
+See [Chat Generation Lifecycle](../backend/chat-generation-lifecycle.md) for
+wire shapes, failure behavior and verification requirements.
 
 **Composer drafts.** Client state, keyed `topic:${topicId}` or
 `draft:${assistantId}` (`none` if the assistant is unresolved). Switching

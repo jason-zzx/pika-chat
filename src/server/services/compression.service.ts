@@ -1,12 +1,13 @@
 import "server-only";
 
 import { generateText } from "ai";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 import type { ChatModelHandle } from "@/server/ai/chat-model";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
+import { lockTopicAndAssertIdle } from "@/server/services/generation-target.service";
 import { assistants, chatMessages, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import { listTopicMessages } from "@/server/services/message.service";
@@ -197,28 +198,92 @@ export type CompressionResult = {
 };
 
 /**
- * Compresses the topic's history up to its current last message: merges the
- * not-yet-summarized selected-version messages into the rolling summary with
- * the caller's chat model, then persists summary + boundary on the topic.
- * Original messages are never modified (PRD R4). The boundary only moves
- * forward across runs (PRD R5).
+ * Compresses the topic's history: merges the not-yet-summarized messages into
+ * the rolling summary with the caller's chat model, then persists summary +
+ * boundary on the topic. Original messages are never modified (PRD R4). The
+ * boundary only moves forward across runs (PRD R5).
+ *
+ * Two callers with different locking contracts (chat task §7/§8):
+ *
+ * - the AUTO path (`history` + `exceptGenerationId`) runs inside its own turn.
+ *   It summarizes exactly the frozen pre-turn history it was planned against —
+ *   never the turn's own user message or empty placeholder — and its own active
+ *   generation row is allowed to exist while it does. The model call happens
+ *   outside any lock; the summary write then fails if the boundary moved
+ *   underneath it, so two compactions can never disagree.
+ * - the MANUAL path (`exclusive`) holds the topic lock across the model call
+ *   and the write, so a request admitted in between cannot change the history
+ *   that is being summarized.
  *
  * Throws `topic.nothingToCompress` when there is no unsummarized history —
  * the auto-compression caller catches every failure and continues
  * uncompressed; the manual endpoint surfaces it as a 400.
  */
 export async function compressTopicHistory(
-  input: { topicId: string; handle: ChatModelHandle },
+  input: {
+    topicId: string;
+    handle: ChatModelHandle;
+    signal?: AbortSignal;
+    /** Auto path: frozen pre-turn history to summarize. */
+    history?: ChatUIMessage[];
+    /** Auto path: the turn allowed to stay active during compaction. */
+    exceptGenerationId?: string;
+    /** Manual path: keep the topic lock for the whole operation. */
+    exclusive?: boolean;
+  },
   actor: Actor,
 ): Promise<CompressionResult> {
   const topic = await findTopicForActor(input.topicId, actor);
   if (!topic) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
+  const db = getDb();
+  if (input.exclusive) {
+    return db.transaction(async (tx) => {
+      await lockTopicAndAssertIdle(tx, input.topicId);
+      const plan = await planCompression(input, actor);
+      await writeSummary(tx, input.topicId, actor, plan);
+      return plan.result;
+    });
+  }
+  // Auto: assert the topic is idle EXCEPT for the turn asking for the summary,
+  // then summarize without holding a lock (the model call must not block other
+  // topics or this topic's own terminal write).
+  await db.transaction(async (tx) => {
+    await lockTopicAndAssertIdle(tx, input.topicId, {
+      exceptGenerationId: input.exceptGenerationId,
+    });
+  });
+  const plan = await planCompression(input, actor);
+  await writeSummary(db, input.topicId, actor, plan);
+  return plan.result;
+}
+
+type CompressionPlan = {
+  summaryText: string;
+  boundary: { id: string; groupId: string };
+  /** Boundary the plan was computed from; the write is conditional on it. */
+  previousBoundaryId: string | null;
+  result: CompressionResult;
+};
+
+/** Reads the history, calls the summary model, and returns what to persist. */
+async function planCompression(
+  input: {
+    topicId: string;
+    handle: ChatModelHandle;
+    signal?: AbortSignal;
+    history?: ChatUIMessage[];
+  },
+  actor: Actor,
+): Promise<CompressionPlan> {
+  input.signal?.throwIfAborted();
   const state = await getTopicSummaryState(input.topicId, actor);
-  // listTopicMessages already returns the selected version of each group, so
-  // the summary is built from exactly what the model would have seen.
-  const messages = await listTopicMessages({ topicId: input.topicId }, actor);
+  // The auto path supplies the frozen history it is actually sending; the
+  // manual path summarizes what the topic currently selects.
+  const messages =
+    input.history ??
+    (await listTopicMessages({ topicId: input.topicId }, actor));
   const uncovered = messagesAfterBoundary(
     messages,
     boundaryFromSummaryState(state),
@@ -241,37 +306,67 @@ export async function compressTopicHistory(
     instructions: SUMMARY_INSTRUCTIONS,
     prompt,
     maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
-    abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
+    // The turn's signal (explicit stop / deleted topic) wins over the summary
+    // timeout: a cancelled generation must not keep compressing (chat task §7).
+    abortSignal: input.signal
+      ? AbortSignal.any([AbortSignal.timeout(SUMMARY_TIMEOUT_MS), input.signal])
+      : AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
   });
   const summaryText = result.text.trim();
   if (summaryText.length === 0) {
     throw new AppError("PROVIDER_ERROR", 502, "provider.unexpectedResponse");
   }
+  input.signal?.throwIfAborted();
 
-  const db = getDb();
-  await db
+  const boundaryId = boundary.id;
+  const boundaryGroupId = boundary.metadata?.groupId ?? boundary.id;
+  return {
+    summaryText,
+    boundary: { id: boundaryId, groupId: boundaryGroupId },
+    previousBoundaryId: state?.summaryUpToMessageId ?? null,
+    result: {
+      summaryText,
+      summaryUpToMessageId: boundaryId,
+      summaryUpToGroupId: boundaryGroupId,
+      compressedCount: uncovered.length,
+    },
+  };
+}
+
+/**
+ * Persists the summary, conditional on the boundary it was computed from: if
+ * another compaction committed in the meantime the write matches no row and the
+ * caller must not pretend the newer summary is its own.
+ */
+async function writeSummary(
+  executor: ReturnType<typeof getDb> | Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+  topicId: string,
+  actor: Actor,
+  plan: CompressionPlan,
+): Promise<void> {
+  const updated = await executor
     .update(topics)
     .set({
-      summaryText,
-      summaryUpToMessageId: boundary.id,
+      summaryText: plan.summaryText,
+      summaryUpToMessageId: plan.boundary.id,
     })
     .where(
       and(
-        eq(topics.id, input.topicId),
+        eq(topics.id, topicId),
+        plan.previousBoundaryId === null
+          ? isNull(topics.summaryUpToMessageId)
+          : eq(topics.summaryUpToMessageId, plan.previousBoundaryId),
         inArray(
           topics.assistantId,
-          db
+          executor
             .select({ id: assistants.id })
             .from(assistants)
             .where(eq(assistants.ownerId, actor.userId)),
         ),
       ),
-    );
-
-  return {
-    summaryText,
-    summaryUpToMessageId: boundary.id,
-    summaryUpToGroupId: boundary.metadata?.groupId ?? boundary.id,
-    compressedCount: uncovered.length,
-  };
+    )
+    .returning({ id: topics.id });
+  if (updated.length === 0) {
+    throw new AppError("CONFLICT", 409, "topic.compressionMoved");
+  }
 }

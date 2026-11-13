@@ -60,14 +60,27 @@ async function fetchJson(
   url: string,
   init: RequestInit,
   operation: "search" | "fetch" = "search",
+  signal?: AbortSignal,
 ): Promise<unknown> {
+  // The turn's lifecycle signal (explicit stop / deleted topic) races the
+  // provider timeout: whichever fires first aborts the HTTP request itself, so
+  // a cancelled answer never keeps a search/fetch call in flight.
+  const timeout = AbortSignal.timeout(SEARCH_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(url, {
       ...init,
-      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
     });
   } catch (error) {
+    // A cancelled turn must surface as an abort, not as a provider failure:
+    // the fallback chain would otherwise treat it as "try the next provider".
+    if (
+      signal?.aborted ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      throw error;
+    }
     const reason = error instanceof Error ? error.name : "network error";
     throw new Error(`${provider} ${operation} request failed (${reason})`);
   }
@@ -158,6 +171,7 @@ const braveResponseSchema = z.object({
 async function searchTavily(
   credential: SearchProviderCredential,
   query: string,
+  signal?: AbortSignal,
 ): Promise<SearchWebResult[]> {
   const payload = await fetchJson(
     credential.provider,
@@ -170,6 +184,8 @@ async function searchTavily(
       },
       body: JSON.stringify({ query, max_results: MAX_RESULTS }),
     },
+    "search",
+    signal,
   );
   return parseWith(credential.provider, tavilyResponseSchema, payload).results.map(
     (item) => ({
@@ -184,6 +200,7 @@ async function searchTavily(
 async function searchExa(
   credential: SearchProviderCredential,
   query: string,
+  signal?: AbortSignal,
 ): Promise<SearchWebResult[]> {
   const payload = await fetchJson(
     credential.provider,
@@ -200,6 +217,8 @@ async function searchExa(
         contents: { text: { maxCharacters: 500 } },
       }),
     },
+    "search",
+    signal,
   );
   return parseWith(credential.provider, exaResponseSchema, payload).results.map(
     (item) => ({
@@ -214,6 +233,7 @@ async function searchExa(
 async function searchFirecrawl(
   credential: SearchProviderCredential,
   query: string,
+  signal?: AbortSignal,
 ): Promise<SearchWebResult[]> {
   const payload = await fetchJson(
     credential.provider,
@@ -226,6 +246,8 @@ async function searchFirecrawl(
       },
       body: JSON.stringify({ query, limit: MAX_RESULTS }),
     },
+    "search",
+    signal,
   );
   return parseWith(
     credential.provider,
@@ -241,19 +263,26 @@ async function searchFirecrawl(
 async function searchBrave(
   credential: SearchProviderCredential,
   query: string,
+  signal?: AbortSignal,
 ): Promise<SearchWebResult[]> {
   const url = new URL(endpoint(credential, "/res/v1/llm/context"));
   url.searchParams.set("q", query);
   url.searchParams.set("count", String(MAX_RESULTS));
   url.searchParams.set("maximum_number_of_urls", String(BRAVE_MAX_URLS));
   url.searchParams.set("maximum_number_of_tokens", String(BRAVE_MAX_TOKENS));
-  const payload = await fetchJson(credential.provider, url.toString(), {
-    method: "GET",
-    headers: {
-      accept: "application/json",
-      "x-subscription-token": credential.apiKey,
+  const payload = await fetchJson(
+    credential.provider,
+    url.toString(),
+    {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "x-subscription-token": credential.apiKey,
+      },
     },
-  });
+    "search",
+    signal,
+  );
   return parseWith(
     credential.provider,
     braveResponseSchema,
@@ -270,6 +299,7 @@ const ADAPTER_SEARCH: Record<
   (
     credential: SearchProviderCredential,
     query: string,
+    signal?: AbortSignal,
   ) => Promise<SearchWebResult[]>
 > = {
   tavily: searchTavily,
@@ -278,11 +308,17 @@ const ADAPTER_SEARCH: Record<
   brave: searchBrave,
 };
 
+/**
+ * One search adapter for one provider. The optional `signal` is the turn's
+ * lifecycle signal: it aborts the in-flight HTTP request, not just the next
+ * fallback attempt.
+ */
 export function createSearchAdapter(
   credential: SearchProviderCredential,
+  options: { signal?: AbortSignal } = {},
 ): SearchAdapter {
   const search = ADAPTER_SEARCH[credential.provider];
-  return (query) => search(credential, query);
+  return (query) => search(credential, query, options.signal);
 }
 
 // --- fetchPage adapters (R11) ---------------------------------------------
@@ -337,6 +373,7 @@ const firecrawlScrapeResponseSchema = z.object({
 async function fetchTavily(
   credential: SearchProviderCredential,
   url: string,
+  signal?: AbortSignal,
 ): Promise<FetchPageResult> {
   const payload = await fetchJson(
     credential.provider,
@@ -350,6 +387,7 @@ async function fetchTavily(
       body: JSON.stringify({ urls: [url] }),
     },
     "fetch",
+    signal,
   );
   const parsed = parseWith(
     credential.provider,
@@ -377,6 +415,7 @@ async function fetchTavily(
 async function fetchExa(
   credential: SearchProviderCredential,
   url: string,
+  signal?: AbortSignal,
 ): Promise<FetchPageResult> {
   const payload = await fetchJson(
     credential.provider,
@@ -393,6 +432,7 @@ async function fetchExa(
       }),
     },
     "fetch",
+    signal,
   );
   const parsed = parseWith(
     credential.provider,
@@ -420,6 +460,7 @@ async function fetchExa(
 async function fetchFirecrawl(
   credential: SearchProviderCredential,
   url: string,
+  signal?: AbortSignal,
 ): Promise<FetchPageResult> {
   const payload = await fetchJson(
     credential.provider,
@@ -433,6 +474,7 @@ async function fetchFirecrawl(
       body: JSON.stringify({ url, formats: ["markdown"] }),
     },
     "fetch",
+    signal,
   );
   const parsed = parseWith(
     credential.provider,
@@ -457,6 +499,7 @@ const ADAPTER_FETCH: Partial<
     (
       credential: SearchProviderCredential,
       url: string,
+      signal?: AbortSignal,
     ) => Promise<FetchPageResult>
   >
 > = {
@@ -468,7 +511,10 @@ const ADAPTER_FETCH: Partial<
 /** Returns null for providers without a URL-fetch capability (brave). */
 export function createFetchAdapter(
   credential: SearchProviderCredential,
+  options: { signal?: AbortSignal } = {},
 ): FetchAdapter | null {
   const fetchPage = ADAPTER_FETCH[credential.provider];
-  return fetchPage ? (url) => fetchPage(credential, url) : null;
+  return fetchPage
+    ? (url) => fetchPage(credential, url, options.signal)
+    : null;
 }

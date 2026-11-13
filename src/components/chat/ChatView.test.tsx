@@ -7,8 +7,11 @@ import {
   listTopicMessages,
   deleteTopicMessage,
   regenerateTopicMessage,
+  stopChatStream,
   translateMessage,
 } from "@/lib/api/chat";
+import { AccountUserIdContext } from "@/hooks/use-account-user";
+import { listPendingGenerationRequests } from "@/lib/pending-generation-requests";
 import { defaultModelMetadata } from "@/lib/schemas/provider";
 import type {
   ChatMessagesResponse,
@@ -56,6 +59,7 @@ const composerProps = vi.hoisted(() => ({
         showAssistantPicker?: boolean;
         canSend?: boolean;
         onSend?: () => void;
+        onStop?: () => void;
         onCompress?: () => void;
         compressDisabled?: boolean;
       }
@@ -66,6 +70,7 @@ const composerProps = vi.hoisted(() => ({
 vi.mock("./Composer", () => ({
   default: (props: {
     showAssistantPicker?: boolean;
+    onStop?: () => void;
     onCompress?: () => void;
     compressDisabled?: boolean;
   }) => {
@@ -141,6 +146,7 @@ const captured = vi.hoisted(() => ({
   status: "ready" as "ready" | "submitted" | "streaming" | "error",
   error: undefined as Error | undefined,
   initialMessages: undefined as ChatUIMessage[] | undefined,
+  resumeStream: vi.fn(async () => undefined),
   // Per-chat message store: the real Chat owns its messages, so switching
   // the pooled chat (draft ↔ created topic ↔ other topic) swaps them.
   chatMessages: new Map<object, ChatUIMessage[]>(),
@@ -169,6 +175,9 @@ vi.mock("@ai-sdk/react", async () => {
     get status() {
       return captured.status;
     }
+    // The real SDK's reconnect entry point. Tests assert whether discovery
+    // opened one (and that a manual regeneration did not).
+    resumeStream = captured.resumeStream;
   }
   return {
     Chat: FakeChat,
@@ -247,6 +256,8 @@ vi.mock("@ai-sdk/react", async () => {
 beforeEach(() => {
   captured.chatMessages.clear();
   resetChatPool();
+  captured.resumeStream.mockClear();
+  window.sessionStorage.clear();
 });
 
 const attachmentMocks = vi.hoisted(() => ({
@@ -315,13 +326,26 @@ function assistantDraft(id: string, text: string): StoredMessage {
   };
 }
 
-function renderChatView(props?: { assistantId?: string; topicId?: string }) {
+function renderChatView(
+  props?: { assistantId?: string; topicId?: string },
+  options?: { userId?: string | null },
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const view = renderWithIntl(
     <QueryClientProvider client={client}>
-      <ChatView {...props} />
+      {options?.userId ? (
+        // Only tests about account-scoped discovery opt in: wrapping
+        // unconditionally would change the tree shape, and the tests that
+        // re-render the app by hand would then remount ChatView and lose its
+        // session-created topic state.
+        <AccountUserIdContext.Provider value={options.userId}>
+          <ChatView {...props} />
+        </AccountUserIdContext.Provider>
+      ) : (
+        <ChatView {...props} />
+      )}
     </QueryClientProvider>,
   );
   return { client, ...view };
@@ -522,10 +546,7 @@ describe("ChatView background stream resume", () => {
       userMessage("u1", "question"),
       assistantDraft("srv-a1", "partial ans"),
     ]);
-    noteSendStarted("t1", {
-      shouldRequestTitle: false,
-      titlePick: null,
-    });
+    noteSendStarted("t1");
     // The history fetch for t1 lags behind the live stream.
     let resolveHistory: ((data: ChatMessagesResponse) => void) | undefined;
     vi.mocked(listTopicMessages).mockImplementation(
@@ -1657,6 +1678,301 @@ describe("ChatView search-result deep link (?m=)", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("1 / 2")).toBeNull();
+    });
+  });
+});
+
+describe("ChatView server-owned generation (B3/B4/B5 client)", () => {
+  const textModel = {
+    configId: "c1",
+    configName: "Test provider",
+    modelId: "m1",
+    provenance: "own" as const,
+    ownerName: null,
+    ...defaultModelMetadata(),
+    outputModalities: ["text"],
+  };
+
+  function generationSummary(overrides: Record<string, unknown> = {}) {
+    const now = new Date().toISOString();
+    return {
+      id: "gen-9",
+      topicId: "t1",
+      assistantId: "a1",
+      assistantMessageId: "srv-a2",
+      kind: "send",
+      status: "running",
+      targetDeleted: false,
+      errorMessage: null,
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: null,
+      ...overrides,
+    };
+  }
+
+  /** Discovery answers with the given active list; nothing else is fetched. */
+  function stubGenerationDiscovery(generations: () => unknown[]) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : String(input);
+        if (url.includes("/api/chat/generations")) {
+          return new Response(JSON.stringify({ generations: generations() }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    captured.resumeStream.mockClear();
+    nav.pathname = "/assistant/a1/t1";
+    availableModelsMock.data = [textModel];
+    topicApiMocks.getTopic.mockResolvedValue({
+      id: "t1",
+      title: "Topic",
+      isFavorite: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      summaryUpToMessageId: null,
+    });
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "question"),
+        {
+          id: "srv-a1",
+          role: "assistant",
+          parts: [{ type: "text", text: "answer" }],
+          metadata: {
+            createdAt: new Date().toISOString(),
+            providerConfigId: "c1",
+            modelId: "m1",
+          },
+        },
+      ],
+    });
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+      drafts: { "topic:t1": "hello" },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    availableModelsMock.data = [];
+    useComposerStore.setState({ pickedModel: null, drafts: {} });
+  });
+
+  it("sends one stable request id per action and retires its receipt on confirmation", async () => {
+    renderChatView({ assistantId: "a1", topicId: "t1" }, { userId: "account-a" });
+    await screen.findByRole("article", { name: "Assistant" });
+
+    act(() => composerProps.latest?.onSend?.());
+
+    const sendCall = (
+      captured.sendMessage as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls[0];
+    const requestId = (sendCall?.[1] as { body?: { requestId?: string } })
+      ?.body?.requestId;
+    expect(requestId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    // Stored per account, so a reload can look the task up instead of
+    // re-sending the model call.
+    expect(
+      listPendingGenerationRequests("account-a").map((entry) => entry.requestId),
+    ).toContain(requestId);
+
+    // The server's confirmation carries the durable generation id: the receipt
+    // has done its job.
+    act(() => {
+      captured.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "gen-9" },
+      });
+    });
+    expect(listPendingGenerationRequests("account-a")).toEqual([]);
+  });
+
+  it("keeps the composer busy and Stop available while the server lists an active turn", async () => {
+    stubGenerationDiscovery(() => [generationSummary()]);
+
+    renderChatView({ assistantId: "a1", topicId: "t1" }, { userId: "account-a" });
+    await screen.findByRole("article", { name: "Assistant" });
+
+    // Not from this view's local stream state: the turn is server-owned, so a
+    // reloaded tab must already refuse a second send and show the stop path.
+    await waitFor(() => {
+      expect(composerProps.latest?.canSend).toBe(false);
+    });
+    expect(captured.resumeStream).toHaveBeenCalled();
+  });
+
+  it("re-attempts the reconnect after a dropped connection, keeping the turn", async () => {
+    stubGenerationDiscovery(() => [generationSummary()]);
+
+    const view = renderChatView(
+      { assistantId: "a1", topicId: "t1" },
+      { userId: "account-a" },
+    );
+    await screen.findByRole("article", { name: "Assistant" });
+    await waitFor(() => {
+      expect(captured.resumeStream).toHaveBeenCalledTimes(1);
+    });
+
+    // The reconnect dropped (network). The turn is untouched server-side and
+    // still listed as active, so the view must re-attach instead of leaving
+    // the answer frozen on its partial content. Retries are rate-limited (a
+    // down network reports an error per attempt), so step the clock past it.
+    const now = Date.now();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    act(() => {
+      captured.status = "error";
+    });
+    nowSpy.mockReturnValue(now + 6_000);
+    view.rerender(
+      wrapWithIntl(
+        <QueryClientProvider client={view.client}>
+          <AccountUserIdContext.Provider value="account-a">
+            <ChatView assistantId="a1" topicId="t1" />
+          </AccountUserIdContext.Provider>
+        </QueryClientProvider>,
+      ),
+    );
+
+    await waitFor(() => {
+      expect(captured.resumeStream.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    act(() => {
+      captured.status = "ready";
+    });
+    nowSpy.mockRestore();
+  });
+
+  it("stops the answer the server named, not the tail of the conversation", async () => {
+    // A resumed mid-list regeneration ("partial" answers an earlier question,
+    // later messages follow): the stop affordance and the stopped stamp must
+    // target that row, which is where the server is writing.
+    stubGenerationDiscovery(() => [generationSummary()]);
+    vi.mocked(listTopicMessages).mockResolvedValue({
+      messages: [
+        userMessage("u1", "first question"),
+        {
+          id: "srv-a2",
+          role: "assistant",
+          parts: [{ type: "text", text: "partial" }],
+          metadata: {
+            createdAt: new Date().toISOString(),
+            providerConfigId: "c1",
+            modelId: "m1",
+          },
+        },
+        userMessage("u2", "second question"),
+        {
+          id: "a2",
+          role: "assistant",
+          parts: [{ type: "text", text: "later answer" }],
+          metadata: {
+            createdAt: new Date().toISOString(),
+            providerConfigId: "c1",
+            modelId: "m1",
+          },
+        },
+      ],
+    });
+
+    renderChatView({ assistantId: "a1", topicId: "t1" }, { userId: "account-a" });
+    expect(await screen.findByText("later answer")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(composerProps.latest?.canSend).toBe(false);
+    });
+
+    await act(async () => {
+      composerProps.latest?.onStop?.();
+    });
+
+    expect(stopChatStream).toHaveBeenCalledWith("gen-9");
+    const messages = [...captured.chatMessages.values()].find((entries) =>
+      entries.some((entry) => entry.id === "a2"),
+    );
+    expect(
+      messages?.find((entry) => entry.id === "srv-a2")?.metadata?.outcome,
+    ).toBe("stopped");
+    // The later answer was never touched.
+    expect(
+      messages?.find((entry) => entry.id === "a2")?.metadata?.outcome,
+    ).toBeUndefined();
+  });
+
+  it("does not open an SDK reconnect while a manual regeneration owns the turn", async () => {
+    // The regeneration loop consumes the answer itself; a parallel SDK
+    // reconnect would apply the same chunks to the same message twice.
+    let active: unknown[] = [];
+    stubGenerationDiscovery(() => active);
+    let closeRegen: (() => void) | null = null;
+    vi.mocked(regenerateTopicMessage).mockImplementation(async () => {
+      active = [generationSummary({ kind: "regenerate", id: "gen-regen" })];
+      // A stream that stays open: the loop is still consuming this turn, which
+      // is exactly when a second consumer must not attach.
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: ${JSON.stringify({ type: "start", messageId: "srv-a2" })}\n\n`,
+            ),
+          );
+          closeRegen = () => controller.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "content-type": "text/event-stream",
+          "x-pika-stream-id": "gen-regen",
+        },
+      });
+    });
+
+    renderChatView({ assistantId: "a1", topicId: "t1" }, { userId: "account-a" });
+    const article = await screen.findByRole("article", { name: "Assistant" });
+    fireEvent.click(
+      within(article).getByRole("button", { name: "More actions" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Regenerate" }));
+
+    await waitFor(() => {
+      expect(regenerateTopicMessage).toHaveBeenCalledWith(
+        "t1",
+        "srv-a1",
+        expect.objectContaining({
+          requestId: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          ),
+        }),
+      );
+    });
+    // The submit refreshed discovery, which now reports the regeneration as
+    // the topic's active turn...
+    await waitFor(() => {
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.filter((call) =>
+            String(call[0]).includes("/api/chat/generations?active=true"),
+          ).length,
+      ).toBeGreaterThanOrEqual(2);
+    });
+    // ...and its consumer is the loop, so no reconnect was opened.
+    expect(captured.resumeStream).not.toHaveBeenCalled();
+
+    await act(async () => {
+      closeRegen?.();
     });
   });
 });

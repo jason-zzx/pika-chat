@@ -1,19 +1,24 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
+import { toast } from "@/components/ui/toast";
+import { signOutAndReset } from "@/lib/sign-out";
 
 export default function SignOutButton() {
-  const router = useRouter();
   const t = useTranslations("Auth");
 
   async function onClick() {
-    await authClient.signOut();
-    router.push("/sign-in");
-    router.refresh();
+    // Full document replace: the previous account's caches, chat pool and
+    // upload callbacks must not survive into the next session (chat task §7).
+    // A failed sign-out must not look like one, so the error is surfaced and
+    // the document stays where it is.
+    try {
+      await signOutAndReset();
+    } catch {
+      toast.add({ type: "error", title: t("signOutFailed") });
+    }
   }
 
   return (

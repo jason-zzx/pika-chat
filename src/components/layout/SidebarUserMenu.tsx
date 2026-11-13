@@ -2,7 +2,6 @@
 
 import { CircleUserRoundIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import {
@@ -15,8 +14,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
-import { authClient } from "@/lib/auth-client";
+import { toast } from "@/components/ui/toast";
 import type { ActorRole } from "@/lib/auth-hierarchy";
+import { signOutAndReset } from "@/lib/sign-out";
 
 type SidebarUserMenuProps = {
   name: string;
@@ -24,15 +24,20 @@ type SidebarUserMenuProps = {
 };
 
 export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
-  const router = useRouter();
   const { setOpenMobile } = useSidebar();
   const t = useTranslations("Layout");
+  const tAuth = useTranslations("Auth");
 
   async function onSignOut() {
-    await authClient.signOut();
     setOpenMobile(false);
-    router.push("/sign-in");
-    router.refresh();
+    // Last action of this document: the old account's query cache, chat pool
+    // and in-flight subscriptions are discarded by the full page load. A
+    // failed sign-out leaves the document (and the session) intact and says so.
+    try {
+      await signOutAndReset();
+    } catch {
+      toast.add({ type: "error", title: tAuth("signOutFailed") });
+    }
   }
 
   return (

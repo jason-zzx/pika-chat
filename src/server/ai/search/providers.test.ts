@@ -490,3 +490,58 @@ describe("fetch content truncation", () => {
     expect(result?.content).toHaveLength(8000);
   });
 });
+
+/**
+ * Cancellation (chat task §7, review B8): a stop or a deleted topic must abort
+ * the HTTP request that is in flight, not merely prevent the next fallback.
+ * Previously the adapters only carried a timeout, so the provider kept working
+ * for up to 10s after the user stopped the answer.
+ */
+describe("adapter cancellation", () => {
+  it("aborts the running search request with the turn signal", async () => {
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    const calls = stubFetch((_url, init) => {
+      received = init?.signal ?? undefined;
+      // Never settles: the abort has to come from the caller's signal.
+      return new Promise<Response>((_resolve, reject) => {
+        received?.addEventListener("abort", () => {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          reject(error);
+        });
+      }) as never;
+    });
+    const search = createSearchAdapter(credential(), {
+      signal: controller.signal,
+    });
+
+    const pending = search("pika");
+    expect(calls).toHaveLength(1);
+    expect(received).toBeDefined();
+    // The timeout and the turn signal are combined into one request signal.
+    expect(received?.aborted).toBe(false);
+
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("surfaces a caller abort as an abort instead of a provider failure", async () => {
+    const controller = new AbortController();
+    stubFetch(() => {
+      controller.abort();
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      return Promise.reject(error) as never;
+    });
+    const fetchPage = createFetchAdapter(credential(), {
+      signal: controller.signal,
+    });
+
+    // Abort must not be wrapped into the retryable "provider failed" error the
+    // fallback chain would otherwise walk past.
+    await expect(fetchPage!("https://a.example")).rejects.toMatchObject({
+      name: "AbortError",
+    });
+  });
+});

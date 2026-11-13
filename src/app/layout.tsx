@@ -77,7 +77,7 @@ export default async function RootLayout({
             props: locale/messages/now/timeZone/formats are inherited from
             src/i18n/request.ts. */}
         <NextIntlClientProvider>
-          <AppProviders>
+          <AppProviders userId={actor?.userId ?? null}>
             <ThemeSync initialPreference={preference} />
             {children}
           </AppProviders>

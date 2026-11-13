@@ -79,31 +79,25 @@ getting the invariants wrong corrupts what the model sees as context.
   `topicId` in every WHERE; foreign id → `NOT_FOUND`):
   - `DELETE /api/topics/[id]/messages/[messageId]` → 204
   - `POST .../select` → 204
-  - `POST .../regenerate` → UI message stream; mirrors the `/api/chat`
-    skeleton (availability check → `createChatModelHandle` →
-    `registerStream` → `streamText` → `createUIMessageStream` → `onEnd`
-    persists with `groupId`). **No** topic creation or title trigger.
-    Stopped/failed outcomes persist as versions too. Optional `edit`
-    payload (`chatRequestMessageSchema`) turns it into an
-    edit-and-regenerate (below); without `edit` no user-message row is
-    written.
-- **Edit-and-regenerate** (user messages only): the regenerate request
-  body may carry `edit: { id, parts }` — the edited content of the target
-  user message. Contract and ordering, all before any DB write:
-  model availability check → `resolveRegenerateTarget` (includes the
-  compressed-zone assertion) → target must be a user row (else
-  `VALIDATION_FAILED` `message.editTargetNotUser`) →
-  `resolveOwnedFileParts` on the edit's file parts (ownership +
-  canonicalization, same rule as `/api/chat`) →
-  `appendUserMessageVersion` persists the edit (transaction: deselect
-  siblings, then insert the new selected row into the same `group_id`;
-  `createdAt` comes from the app clock, single-clock rule) →
-  `resolveRegenerateTarget` re-runs on the new id so the history carries
-  the edited version → the ordinary regenerate flow streams a new
-  assistant version into the following answer group (or a fresh slot).
-  The edit is persisted before streaming and is **never rolled back**: a
-  failed stream lands a failed assistant version, same as plain
-  regeneration.
+  - `POST .../regenerate` → UI message stream; the same admission/runner
+    lifecycle as `/api/chat`, with no topic creation or `data-topic` chunk.
+    The assistant version is preallocated with its `groupId` before execution;
+    checkpoints and finalization update that row. Stopped/failed outcomes
+    remain versions. Optional `edit` (`chatRequestMessageSchema`) selects
+    edit-and-regenerate; without it no user-message row is written.
+- **Edit-and-regenerate** (user messages only): body may carry
+  `edit: { id, parts }`. First look up a matching request receipt, then run
+  model/target/compressed-zone and attachment ownership/routability preflight
+  without business writes. Admission locks the topic, verifies the prepared
+  context, and atomically inserts the selected edited user version, assistant
+  placeholder and queued generation. Deselect siblings before insertion;
+  preserve group anchors and use app-clock timestamps. Frozen model context
+  contains the edit exactly once, replacing the previously selected version
+  (even when the clicked target was an older version). An accepted edit is
+  **not rolled back** on inference failure; the assistant version becomes
+  failed. See [Chat Generation Lifecycle](./chat-generation-lifecycle.md).
+- Active topics reject generate/edit/delete-message/select/manual-compress
+  across tabs and API callers with 409; different topics remain independent.
 - The regenerate stream carries no `data-topic` chunk: the client reads
   the stream id from the `x-pika-stream-id` response header instead.
   Stop reuses `POST /api/chat/stop`.
@@ -115,15 +109,16 @@ getting the invariants wrong corrupts what the model sees as context.
   `parseJsonEventStream` + `uiMessageChunkSchema` + `readUIMessageStream`
   and folds frames in via `setMessages`: replace-in-place for assistant
   targets, insert-after for user targets.
-- **Message-id contract (B6)**: both streaming routes run with
-  `sendStart: true` so the streamed assistant message id equals the row
-  `onEnd` persists. Follow-up actions (regenerate/delete/select) reference
-  that id. A stop/abort can still release the client before persistence
-  finishes, so every action first runs `resolveServerMessageId`
-  (`sync-message.ts`): fetch fresh (never cached) history, retry once
-  after 400ms, and surface a retryable "still being saved" error instead
-  of POSTing a doomed id. User messages skip this entirely (client-chosen
-  ids, persisted before streaming). Genuinely unknown ids still 404.
+- **Message-id contract (B6)**: the initial/resume `start` chunk uses the
+  preallocated assistant row's ID. Turn streams retain `sendStart: true`;
+  never let the SDK invent a different ID. Follow-up actions retain
+  `resolveServerMessageId` (`sync-message.ts`): fresh history, one 400ms retry,
+  then a retryable error instead of posting an unknown ID. User messages use
+  their accepted client ID. Genuinely unknown IDs still 404.
+- **Server-owned recovery**: pool/task identity survives view remounts; seed
+  history before SDK replay resume, preserving middle-of-history placement.
+  Terminal GET 204 triggers canonical reseed. Local regen state is not the
+  authority for whether a topic is generating or can be stopped.
 - **Immediate thinking shimmer (R7)**: on regenerate click the answer slot
   is swapped for an empty placeholder assistant message *before* the POST
   (`buildRegenPlaceholder`/`insertRegenPlaceholder` in

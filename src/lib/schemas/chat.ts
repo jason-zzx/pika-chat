@@ -99,6 +99,10 @@ export type ImageGenerationParams = z.infer<typeof imageGenerationParamsSchema>;
 
 export const chatRequestSchema = z.object({
   assistantId: z.string().min(1),
+  // Optional idempotency key (UUIDv7 from the client). Same id + same request
+  // returns the same generation instead of a second model call; a differing
+  // request under the same id is a conflict (chat task §4, G2).
+  requestId: z.string().min(1).max(64).optional(),
   topicId: z.string().min(1).optional(),
   providerConfigId: z.string().min(1),
   modelId: z.string().min(1),
@@ -115,6 +119,7 @@ export const stopChatRequestSchema = z.object({
 });
 
 export const regenerateMessageRequestSchema = z.object({
+  requestId: z.string().min(1).max(64).optional(),
   providerConfigId: z.string().min(1),
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),

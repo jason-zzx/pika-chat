@@ -21,6 +21,7 @@ import { resolveModelPreference } from "@/server/services/model-preferences.serv
 import { findTopicForActor } from "@/server/services/topic.service";
 
 export const TITLE_MAX_LENGTH = 60;
+const TITLE_TIMEOUT_MS = 15_000;
 const GENERATED_TOO_LONG = 200;
 
 export function sanitizeGeneratedTitle(raw: string): string | null {
@@ -57,9 +58,16 @@ export async function titleTopicFromFirstMessage(
     topicId: string;
     providerConfigId?: string;
     modelId?: string;
+    /**
+     * Lifecycle signal of the topic that asked for the title (chat task §7):
+     * a deleted topic or a shutting-down process cancels the in-flight naming
+     * request instead of letting it run to completion.
+     */
+    signal?: AbortSignal;
   },
   actor: Actor,
 ): Promise<Topic> {
+  input.signal?.throwIfAborted();
   const topic = await findTopicForActor(input.topicId, actor);
   if (!topic) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
@@ -105,7 +113,12 @@ export async function titleTopicFromFirstMessage(
               "Write a short conversation title from the user's message. Reply with the title only, no quotes, at most 8 words.",
             prompt: text,
             maxOutputTokens: 40,
-            abortSignal: AbortSignal.timeout(15_000),
+            abortSignal: input.signal
+              ? AbortSignal.any([
+                  AbortSignal.timeout(TITLE_TIMEOUT_MS),
+                  input.signal,
+                ])
+              : AbortSignal.timeout(TITLE_TIMEOUT_MS),
           });
           generated = sanitizeGeneratedTitle(result.text);
         } catch {
