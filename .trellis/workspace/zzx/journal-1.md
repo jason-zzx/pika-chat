@@ -1092,3 +1092,26 @@ Implemented single-instance server-managed chat generation and SSE current-state
 ### Status
 
 [OK] **Completed**
+
+
+## Session 40: Demo site mode
+<!-- trellis-session: v=2 fp=ea7cba0fbd52f1d3 -->
+
+**Date**: 2026-11-13
+**Task**: Demo site mode
+**Branch**: `main`
+
+### Summary
+
+Planned and checked env-gated DEMO_MODE: per-device anonymous guests via better-auth anonymous plugin, operator-inherited models/search, atomic daily counters (model 10, search+fetch 10, uploads 5, 20MB storage, 16k output, 5 guests/IP, 2000 global), CLIENT_IP_HEADER boot check, 7-day inactive guest purge. Implementation by another model; check pass fixed operator-private model fallback for guests and IP-slot burn on repeat sign-in; ponytail simplification -77 lines; full suite 1595 passing. Added backend spec demo-mode.md.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7fb068a` | feat(demo): add env-gated public demo mode with guest quotas and retention |
+| `1481555` | docs(spec): add demo mode contract |
+
+### Status
+
+[OK] **Completed**
