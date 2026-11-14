@@ -46,14 +46,24 @@ describe("resolvedVendorKey", () => {
 
 describe("vendorKeyFromCatalogProvider", () => {
   it("maps the zhipu family coding-plan providers to zhipuai", () => {
-    expect(vendorKeyFromCatalogProvider("zhipuai-coding-plan", "gpt-4o")).toBe(
-      "zhipuai",
-    );
-    expect(vendorKeyFromCatalogProvider("zai-coding-plan", "gpt-4o")).toBe(
+    expect(
+      vendorKeyFromCatalogProvider("zhipuai-coding-plan", "opaque-model"),
+    ).toBe("zhipuai");
+    expect(vendorKeyFromCatalogProvider("zai-coding-plan", "opaque-model")).toBe(
       "zhipuai",
     );
     expect(isCatalogFirstPartyProvider("zhipuai-coding-plan")).toBe(true);
     expect(isCatalogFirstPartyProvider("zai-coding-plan")).toBe(true);
+  });
+
+  it("prefers the model id's lab over a first-party host of another lab", () => {
+    expect(vendorKeyFromCatalogProvider("azure", "grok-4.6")).toBe("xai");
+    expect(
+      vendorKeyFromCatalogProvider("google-vertex", "claude-opus-4@20250514"),
+    ).toBe("anthropic");
+    expect(vendorKeyFromCatalogProvider("sensenova", "deepseek-v4.1-flash")).toBe(
+      "deepseek",
+    );
   });
 });
 

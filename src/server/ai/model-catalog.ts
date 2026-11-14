@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import {
+  catalogProviderVendor,
   isCatalogFirstPartyProvider,
   vendorKeyFromCatalogProvider,
   vendorKeyFromModelId,
@@ -158,14 +159,10 @@ function matchScore(
   if (isCatalogFirstPartyProvider(providerId)) {
     score += 80;
   }
-  if (
-    queryVendor !== null &&
-    vendorKeyFromCatalogProvider(providerId, query) === queryVendor
-  ) {
-    // Several providers can host the same model id with equal base scores
-    // (e.g. glm-5.2 on sensenova, zai, alibaba, zhipuai). Prefer the one
-    // whose vendor matches what the model id itself implies, so the stored
-    // vendor key and icon stay deterministic regardless of JSON key order.
+  if (queryVendor !== null && catalogProviderVendor(providerId) === queryVendor) {
+    // Several first-party providers can host the same model id with equal
+    // base scores (e.g. glm-5.2 on sensenova, zai, alibaba, zhipuai). Prefer
+    // the model's own lab so its metadata wins regardless of JSON key order.
     score += 30;
   }
   if (!catalogId.includes("/")) {
