@@ -21,9 +21,8 @@ type TopicPart = { type: string; data: { topicId: string; streamId: string } };
 const chatControl = vi.hoisted(() => ({
   status: "ready" as "ready" | "submitted" | "streaming" | "error",
   // Reconnect behaviour the test drives: "stream" (a live prefix arrives and
-  // ends with onFinish), "empty" (204: resumeStream resolves with nothing),
-  // "fail" (network error).
-  resume: "stream" as "stream" | "empty" | "fail",
+  // ends with onFinish) or "empty" (204: resumeStream resolves with nothing).
+  resume: "stream" as "stream" | "empty",
   resumeCalls: [] as string[],
   // Constructor options of the most recently created FakeChat.
   options: undefined as
@@ -64,9 +63,6 @@ vi.mock("@ai-sdk/react", () => ({
     }
     async resumeStream() {
       chatControl.resumeCalls.push(this.id);
-      if (chatControl.resume === "fail") {
-        throw new Error("network down");
-      }
       if (chatControl.resume === "empty") {
         // The transport answered 204: the SDK reports no stream to read.
         return;
@@ -335,20 +331,13 @@ describe("chat pool generation target", () => {
 });
 
 describe("chat pool resume outcomes", () => {
-  it("keeps the target after a failed reconnect so it can be retried", async () => {
-    chatControl.resume = "fail";
-    acquireChat("t1");
-    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("failed");
-    expect(reconnectTargetFor("t1")).toBe("gen-9");
-  });
-
   it("never opens two reconnects for the same entry", async () => {
     chatControl.resume = "empty";
     acquireChat("t1");
     const first = resumeGeneration("t1", "gen-9");
     // A second attempt while the first is open is refused, so a burst of
     // discovery refetches cannot race two streams into one chat.
-    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("busy");
+    await expect(resumeGeneration("t1", "gen-9")).resolves.toBeUndefined();
     await first;
     expect(chatControl.resumeCalls).toHaveLength(1);
   });

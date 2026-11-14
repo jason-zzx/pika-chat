@@ -1,7 +1,7 @@
 "use client";
 
 import { Chat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { APICallError, DefaultChatTransport } from "ai";
 
 import { newId } from "@/lib/id";
 import { generationStreamUrl } from "@/lib/api/generation";
@@ -321,16 +321,15 @@ export function noteRegenFinished(chatId: string): void {
   maybeEvict(entry);
 }
 
-/** Why a reconnect attempt did not end in a live attachment. */
-export type ResumeOutcome =
-  /** The turn streamed to its end (the finish handlers already ran). */
-  | "finished"
-  /** The server answered 204: nothing is live, refresh canonical history. */
-  | "empty"
-  /** The reconnect failed (network/HTTP); the target is kept for a retry. */
-  | "failed"
-  /** Another reconnect for this entry is already open. */
-  | "busy";
+/**
+ * What a reconnect attempt asks of its caller. "empty": the server answered
+ * 204, nothing is live; "refused": the server rejected the reconnect
+ * (401/403/404/410), so the generation must not be retried. Anything else
+ * (finished, busy, network failure with the target kept) resolves undefined.
+ */
+export type ResumeOutcome = "empty" | "refused";
+
+const REFUSED_RECONNECT_STATUSES = new Set([401, 403, 404, 410]);
 
 /**
  * Attaches this view to a generation the server is already running, and asks
@@ -338,17 +337,18 @@ export type ResumeOutcome =
  * seeded (the placeholder row is in it), so the replayed state lands in that
  * row in place.
  *
- * The reconnect target is kept on failure — a dropped connection says nothing
- * about the turn — and only one reconnect per entry is open at a time, so the
- * discovery query can re-attempt safely.
+ * The reconnect target is kept on a network failure — a dropped connection
+ * says nothing about the turn — and only one reconnect per entry is open at a
+ * time, so the discovery query can re-attempt safely. `resumeStream` never
+ * throws: the SDK records failures as `status === "error"` with `error` set.
  */
 export async function resumeGeneration(
   chatId: string,
   generationId: string,
-): Promise<ResumeOutcome> {
+): Promise<ResumeOutcome | undefined> {
   const entry = acquireChat(chatId);
   if (entry.resumeInFlight) {
-    return "busy";
+    return;
   }
   entry.generationId = generationId;
   if (entry.topicId !== null) {
@@ -357,24 +357,34 @@ export async function resumeGeneration(
   entry.resumeInFlight = true;
   try {
     await entry.chat.resumeStream();
-  } catch {
-    return "failed";
   } finally {
     entry.resumeInFlight = false;
   }
   if (entry.chat.status === "error") {
-    return "failed";
-  }
-  if (entry.generationId === generationId) {
-    // No finish chunk arrived and the SDK reported nothing to read: the
-    // server had no live turn (204). Nothing was replayed.
+    const error = entry.chat.error;
+    if (
+      !APICallError.isInstance(error) ||
+      error.statusCode === undefined ||
+      !REFUSED_RECONNECT_STATUSES.has(error.statusCode)
+    ) {
+      return;
+    }
     entry.generationId = null;
     if (entry.topicId !== null) {
       unmarkTopicStreaming(entry.topicId);
     }
-    return "empty";
+    return "refused";
   }
-  return "finished";
+  if (entry.generationId !== generationId) {
+    return;
+  }
+  // No finish chunk arrived and the SDK reported nothing to read: the server
+  // had no live turn (204). Nothing was replayed.
+  entry.generationId = null;
+  if (entry.topicId !== null) {
+    unmarkTopicStreaming(entry.topicId);
+  }
+  return "empty";
 }
 
 /** True when this chat already follows the given generation. */

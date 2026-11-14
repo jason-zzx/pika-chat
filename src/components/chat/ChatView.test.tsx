@@ -411,14 +411,7 @@ describe("ChatView session-created topic history (B8)", () => {
     expect(screen.getByText("first answer")).toBeInTheDocument();
 
     // A message action (delete here stands in for the post-regenerate
-    // reseed) resolves the server id from fresh history, then the teardown
-    // reseed delivers the persisted version metadata.
-    vi.mocked(listTopicMessages).mockResolvedValueOnce({
-      messages: [
-        userMessage("u1", "question"),
-        assistantVersion("srv-a1", "first answer", 1, ["srv-a1", "srv-a2"]),
-      ],
-    });
+    // reseed): the teardown reseed delivers the persisted version metadata.
     vi.mocked(listTopicMessages).mockResolvedValue({
       messages: [
         userMessage("u1", "question"),
@@ -598,8 +591,6 @@ describe("ChatView message delete", () => {
     vi.mocked(listTopicMessages)
       // Initial history seed.
       .mockResolvedValueOnce({ messages: [userMessage("u1", "question"), v1] })
-      // ensureServerMessageId's fresh fetch (pre-delete).
-      .mockResolvedValueOnce({ messages: [userMessage("u1", "question"), v1] })
       // The delete teardown reseed: held back so the mid-flight state is
       // observable.
       .mockImplementationOnce(
@@ -636,9 +627,6 @@ describe("ChatView message delete", () => {
   it("removes the row at once when the deleted version was the group's last one", async () => {
     const only = assistantVersion("srv-a1", "only answer", 1, ["srv-a1"]);
     vi.mocked(listTopicMessages)
-      .mockResolvedValueOnce({
-        messages: [userMessage("u1", "question"), only],
-      })
       .mockResolvedValueOnce({
         messages: [userMessage("u1", "question"), only],
       })

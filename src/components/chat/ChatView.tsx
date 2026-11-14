@@ -30,7 +30,6 @@ import { useModelPreferences } from "@/hooks/use-model-preferences";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import {
   deleteTopicMessage,
-  listTopicMessages as fetchTopicMessages,
   regenerateTopicMessage,
   selectMessageVersion,
   stopChatStream,
@@ -95,7 +94,6 @@ import {
   type RegenPlaceholderPlan,
   type RegenerateTargetRef,
 } from "./regenerate-stream";
-import { resolveServerMessageId } from "./sync-message";
 import {
   findAvailableModel,
   pairFromIds,
@@ -585,6 +583,9 @@ export default function ChatView({
   // Reconnect attempts per generation, rate-limited: a down network makes the
   // SDK report a local error each time, and without this the retry would spin.
   const lastResumeAttemptRef = useRef<{ id: string; at: number } | null>(null);
+  // Generations whose reconnect the server refused (401/403/404/410): never
+  // re-attempted, however often discovery still lists them.
+  const refusedGenerationIdsRef = useRef(new Set<string>());
   useEffect(() => {
     if (!activeTopicId || !serverGenerationId || !historySeeded) {
       return;
@@ -603,6 +604,9 @@ export default function ChatView({
       // generation target survived the error for exactly this.
       return;
     }
+    if (refusedGenerationIdsRef.current.has(serverGenerationId)) {
+      return;
+    }
     const previousAttempt = lastResumeAttemptRef.current;
     if (
       previousAttempt?.id === serverGenerationId &&
@@ -616,12 +620,16 @@ export default function ChatView({
     };
     let cancelled = false;
     void resumeGeneration(chatId, serverGenerationId).then((outcome) => {
-      if (cancelled || outcome !== "empty") {
+      if (outcome === "refused") {
+        refusedGenerationIdsRef.current.add(serverGenerationId);
+      }
+      if (cancelled || outcome === undefined) {
         return;
       }
-      // 204: nothing is live any more (the turn settled between discovery and
-      // the reconnect). Refresh the authoritative list; the effect below then
-      // loads the canonical history.
+      // 204 or refused: nothing is live for us any more (the turn settled
+      // between discovery and the reconnect, or the target is gone/forbidden).
+      // Refresh the authoritative list; the effect below then loads the
+      // canonical history.
       void refetchActiveGenerations();
     });
     return () => {
@@ -1000,39 +1008,6 @@ export default function ChatView({
     });
   }
 
-  /** Fresh (never cached) history for the B6 persistence-race guard. */
-  function fetchFreshHistoryMessages(topic: string) {
-    return queryClient
-      .fetchQuery({
-        queryKey: chatKeys.history(userId, topic),
-        queryFn: () => fetchTopicMessages(topic),
-      })
-      .then((response) => response.messages);
-  }
-
-  /**
-   * B6: a freshly streamed reply may still be mid-persistence server-side
-   * (stop/abort releases the client before onEnd finishes); confirm the id
-   * is known before acting so the action cannot hit a spurious 404. On
-   * failure, surface a retryable error and reseed from the server; the
-   * caller handles any site-specific cleanup on the null path.
-   */
-  async function ensureServerMessageId(
-    message: ChatUIMessage,
-    topic: string,
-  ): Promise<string | null> {
-    const serverId = await resolveServerMessageId({
-      message,
-      fetchHistory: () => fetchFreshHistoryMessages(topic),
-    });
-    if (!serverId) {
-      setActionError(t("stillSaving"));
-      reseedHistory(topic);
-      return null;
-    }
-    return serverId;
-  }
-
   async function runRegeneration(
     topic: string,
     target: RegenerateTargetRef,
@@ -1210,21 +1185,7 @@ export default function ChatView({
     }
     regenStopRequestedRef.current = false;
     setRegen({ streamId: null, streamingId: plan?.placeholder.id ?? "" });
-    const serverId = await ensureServerMessageId(message, topic);
-    if (!serverId) {
-      if (plan) {
-        setMessages((current) => removeRegenPlaceholder(current, plan));
-      }
-      setRegen(null);
-      return;
-    }
-    await runRegeneration(
-      topic,
-      { id: serverId, role: target.role },
-      index,
-      pick,
-      plan,
-    );
+    await runRegeneration(topic, target, index, pick, plan);
   }
 
   /**
@@ -1299,12 +1260,8 @@ export default function ChatView({
       return;
     }
     setActionError(null);
-    const serverId = await ensureServerMessageId(message, activeTopicId);
-    if (!serverId) {
-      return;
-    }
     try {
-      await deleteTopicMessage(activeTopicId, serverId);
+      await deleteTopicMessage(activeTopicId, message.id);
     } catch (caught) {
       setActionError(apiErrorMessage(caught, tErrors, "actions.deleteMessage"));
       return;
@@ -1347,24 +1304,20 @@ export default function ChatView({
     setActionError(null);
     const topic = activeTopicId;
     const pick = pickedModel;
-    const serverId = await ensureServerMessageId(message, topic);
-    if (!serverId) {
-      return;
-    }
     // Cleared only when it still describes this request: a second translation
     // started meanwhile must keep its own placeholder. React batches this
     // with the merge below, so there is no gap between placeholder and text.
     const clearTranslating = () =>
       setTranslating((current) =>
-        current?.messageId === serverId && current.targetLang === targetLang
+        current?.messageId === message.id && current.targetLang === targetLang
           ? null
           : current,
       );
-    setTranslating({ messageId: serverId, targetLang });
+    setTranslating({ messageId: message.id, targetLang });
     let translation: string;
     try {
       ({ translation } = await translateMessage({
-        messageId: serverId,
+        messageId: message.id,
         targetLang,
         providerConfigId: pick.configId,
         modelId: pick.modelId,
@@ -1400,7 +1353,7 @@ export default function ChatView({
         data
           ? {
               messages: data.messages.map((entry) =>
-                mergeTranslation(entry, serverId),
+                mergeTranslation(entry, message.id),
               ),
             }
           : data,
@@ -1415,10 +1368,6 @@ export default function ChatView({
       return;
     }
     setActionError(null);
-    const serverId = await ensureServerMessageId(message, activeTopicId);
-    if (!serverId) {
-      return;
-    }
     try {
       await selectMessageVersion(activeTopicId, versionId);
     } catch (caught) {
@@ -1465,14 +1414,8 @@ export default function ChatView({
         }
       }
     }
-    // B6 guard, as in handleRegenerate: confirm the delete target is known
-    // server-side before mutating.
-    const serverId = await ensureServerMessageId(message, topic);
-    if (!serverId) {
-      return;
-    }
     try {
-      await deleteTopicMessage(topic, serverId);
+      await deleteTopicMessage(topic, message.id);
     } catch (caught) {
       setActionError(apiErrorMessage(caught, tErrors, "actions.deleteMessage"));
       return;

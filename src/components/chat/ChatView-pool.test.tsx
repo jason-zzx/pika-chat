@@ -582,6 +582,30 @@ describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
     expect(screen.getByText("A answer")).toBeInTheDocument();
   });
 
+  it("stops reconnecting once the server refuses the stream with 410", async () => {
+    vi.mocked(listTopicMessages).mockResolvedValue(historyWithPlaceholder("partial"));
+    const generation = generationSummary();
+    const resume = vi.fn(() => new Response(null, { status: 410 }));
+    stubChatFetch({ stream: new ReadableStream<string>() }, {
+      active: () => [generation],
+      resume,
+    });
+    renderWithIntl(app("t1"));
+    await waitFor(() => expect(acquireChat("t1").chat.status).toBe("error"), {
+      timeout: 5_000,
+    });
+    expect(resume).toHaveBeenCalledTimes(1);
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+    vi.setSystemTime(Date.now() + 6_000);
+    // Discovery still lists the task, exactly as in the retry case above.
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: generationKeys.active("account-a") });
+    });
+    // One macrotask lets a re-attempt reach fetch if the effect started one.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes canonical history when the reconnect answers 204", async () => {
     // Server state at mount: the turn is still listed as running and history
     // holds only the placeholder. Between discovery and the reconnect the turn

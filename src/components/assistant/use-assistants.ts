@@ -10,7 +10,6 @@ import {
 } from "@/lib/api/assistant";
 import {
   deleteTopic,
-  generateTopicTitle,
   renameTopic,
   setTopicFavorite,
 } from "@/lib/api/topic";
@@ -20,10 +19,8 @@ import type {
   UpdateAssistantInput,
 } from "@/lib/schemas/assistant";
 import type {
-  GenerateTopicTitleInput,
   RenameTopicInput,
   SetTopicFavoriteInput,
-  Topic,
 } from "@/lib/schemas/topic";
 
 export const assistantKeys = {
@@ -202,56 +199,6 @@ export function useSetTopicFavorite() {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: assistantKeys.all });
-    },
-  });
-}
-
-function applyTitledTopic(
-  previous: AssistantTree | undefined,
-  topic: Topic,
-): { tree: AssistantTree | undefined; found: boolean } {
-  if (!previous) {
-    return { tree: previous, found: false };
-  }
-  let found = false;
-  const tree: AssistantTree = {
-    ...previous,
-    assistants: previous.assistants.map((assistant) => ({
-      ...assistant,
-      topics: assistant.topics.map((row) => {
-        if (row.id !== topic.id) {
-          return row;
-        }
-        found = true;
-        return { ...row, ...topic };
-      }),
-    })),
-  };
-  return { tree: found ? tree : previous, found };
-}
-
-export function useGenerateTopicTitle() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      id,
-      input,
-    }: {
-      id: string;
-      input: GenerateTopicTitleInput;
-    }) => {
-      const topic = await generateTopicTitle(id, input);
-      await queryClient.cancelQueries({ queryKey: assistantKeys.tree() });
-      const previous = queryClient.getQueryData<AssistantTree>(
-        assistantKeys.tree(),
-      );
-      const { tree, found } = applyTitledTopic(previous, topic);
-      if (found && tree) {
-        queryClient.setQueryData(assistantKeys.tree(), tree);
-      } else {
-        void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
-      }
-      return topic;
     },
   });
 }

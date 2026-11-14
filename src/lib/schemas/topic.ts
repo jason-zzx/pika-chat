@@ -44,4 +44,3 @@ export const generateTopicTitleSchema = z.object({
   providerConfigId: z.string().min(1).optional(),
   modelId: z.string().min(1).optional(),
 });
-export type GenerateTopicTitleInput = z.infer<typeof generateTopicTitleSchema>;

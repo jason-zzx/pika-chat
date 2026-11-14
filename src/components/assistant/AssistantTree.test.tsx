@@ -45,7 +45,6 @@ vi.mock("@/lib/api/topic", () => ({
   renameTopic: vi.fn(),
   deleteTopic: vi.fn(),
   setTopicFavorite: vi.fn(),
-  generateTopicTitle: vi.fn(),
 }));
 
 function topic(partial: Partial<Topic> & Pick<Topic, "id" | "title">): Topic {
