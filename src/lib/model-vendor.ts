@@ -83,15 +83,20 @@ export function vendorKeyFromModelId(modelId: string): ModelVendorKey | null {
   return null;
 }
 
+export function catalogProviderVendor(
+  providerId: string,
+): ModelVendorKey | null {
+  return CATALOG_PROVIDER_ALIASES[providerId.toLowerCase()] ?? null;
+}
+
+// First-party catalog providers also host other labs' models (azure serves
+// claude/grok, google-vertex serves llama, sensenova serves deepseek), so the
+// model id decides the vendor and the host only fills in when the id is opaque.
 export function vendorKeyFromCatalogProvider(
   providerId: string,
   modelId: string,
 ): ModelVendorKey | null {
-  const mapped = CATALOG_PROVIDER_ALIASES[providerId.toLowerCase()];
-  if (mapped) {
-    return mapped;
-  }
-  return vendorKeyFromModelId(modelId);
+  return vendorKeyFromModelId(modelId) ?? catalogProviderVendor(providerId);
 }
 
 export function resolvedVendorKey(

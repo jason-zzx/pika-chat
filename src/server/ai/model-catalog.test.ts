@@ -235,6 +235,30 @@ describe("fillMetadataForModelId", () => {
     });
   });
 
+  it("keeps the model's own lab when only another lab's first-party host lists it", async () => {
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse({
+        sensenova: {
+          id: "sensenova",
+          models: {
+            "deepseek-v4.1-flash": {
+              modalities: { input: ["text"], output: ["text"] },
+              limit: { context: 1000000, output: 384000 },
+            },
+          },
+        },
+      }),
+    );
+
+    await expect(
+      fillMetadataForModelId("deepseek-v4.1-flash"),
+    ).resolves.toMatchObject({
+      contextTokens: 1000000,
+      vendorKey: "deepseek",
+      metadataSource: "catalog",
+    });
+  });
+
   it("matches a bare id to a slashed catalog key and maps the lab vendor", async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({

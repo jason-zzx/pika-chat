@@ -190,6 +190,13 @@
       "when": 1794562487361,
       "tag": "0026_crazy_texas_twister",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794686897143,
+      "tag": "0027_fix_hosted_vendor_keys",
+      "breakpoints": true
     }
   ]
 }
