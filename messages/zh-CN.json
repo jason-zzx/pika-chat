@@ -192,8 +192,7 @@
       "scrollToLatest": "滚动到最新",
       "loading": "正在加载对话…",
       "loadFailedTitle": "无法加载对话",
-      "loadFailedDescription": "刷新页面重试。",
-      "stillSaving": "消息仍在保存中，请稍后重试。"
+      "loadFailedDescription": "刷新页面重试。"
     },
     "Compression": {
       "compress": "压缩上下文",

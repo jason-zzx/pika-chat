@@ -3,7 +3,6 @@ import {
   topicDetailSchema,
   topicSchema,
   type CompressTopicInput,
-  type GenerateTopicTitleInput,
   type RenameTopicInput,
   type SetTopicFavoriteInput,
   type Topic,
@@ -54,21 +53,6 @@ export async function setTopicFavorite(
     `/api/topics/${encodeURIComponent(id)}/favorite`,
     {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    },
-  );
-  return parseJson(response, (data) => topicSchema.parse(data));
-}
-
-export async function generateTopicTitle(
-  id: string,
-  input: GenerateTopicTitleInput,
-): Promise<Topic> {
-  const response = await fetch(
-    `/api/topics/${encodeURIComponent(id)}/title`,
-    {
-      method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
     },

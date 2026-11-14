@@ -192,8 +192,7 @@
       "scrollToLatest": "Scroll to latest",
       "loading": "Loading conversation…",
       "loadFailedTitle": "Unable to load conversation",
-      "loadFailedDescription": "Refresh the page to try again.",
-      "stillSaving": "The message is still being saved. Try again in a moment."
+      "loadFailedDescription": "Refresh the page to try again."
     },
     "Compression": {
       "compress": "Compress context",
