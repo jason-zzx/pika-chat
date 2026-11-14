@@ -4,7 +4,7 @@ import SearchDialog from "@/components/assistant/SearchDialog";
 import AppSidebar from "@/components/layout/AppSidebar";
 import DemoBanner from "@/components/layout/DemoBanner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { IsGuestContext } from "@/hooks/use-is-guest";
+import { IsGuestProvider } from "@/hooks/use-is-guest";
 import type { ActorRole } from "@/lib/auth-hierarchy";
 import type { ThemePreference } from "@/lib/theme";
 
@@ -26,7 +26,7 @@ export default function AppShell({
   themePreference,
 }: AppShellProps) {
   return (
-    <IsGuestContext.Provider value={user.isGuest}>
+    <IsGuestProvider value={user.isGuest}>
       <SidebarProvider
         defaultOpen={defaultSidebarOpen}
         className="h-svh overflow-hidden"
@@ -46,6 +46,6 @@ export default function AppShell({
             routes where the sidebar tree is not rendered. */}
         <SearchDialog />
       </SidebarProvider>
-    </IsGuestContext.Provider>
+    </IsGuestProvider>
   );
 }
