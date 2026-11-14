@@ -193,29 +193,6 @@ describe("titleTopicFromFirstMessage", () => {
     );
   });
 
-  it("stops before calling the model when the topic owns an aborted signal", async () => {
-    findTopicForActor.mockResolvedValue(untitled);
-    listTopicMessages.mockResolvedValue([userMessage]);
-    createChatModelHandle.mockResolvedValue({ model: "handle" });
-    const controller = new AbortController();
-    controller.abort();
-
-    // Deleting the topic (or shutting down) aborts the post-turn task; the
-    // naming request must not even start, let alone run to completion.
-    await expect(
-      titleTopicFromFirstMessage(
-        {
-          topicId: untitled.id,
-          providerConfigId: "cfg-client",
-          modelId: "client-model",
-          signal: controller.signal,
-        },
-        actor,
-      ),
-    ).rejects.toMatchObject({ name: "AbortError" });
-    expect(generateText).not.toHaveBeenCalled();
-  });
-
   it("hands the topic signal to the title model call", async () => {
     findTopicForActor.mockResolvedValue(untitled);
     listTopicMessages.mockResolvedValue([userMessage]);

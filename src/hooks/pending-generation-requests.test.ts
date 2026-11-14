@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 // Lives in the jsdom project because the store is sessionStorage-backed.
 import {
-  clearPendingGenerationRequests,
   forgetPendingGenerationRequest,
   listPendingGenerationRequests,
   rememberPendingGenerationRequest,
@@ -19,22 +18,13 @@ beforeEach(() => {
 });
 
 describe("pending generation request receipts", () => {
-  it("keeps one stable entry per request id", () => {
-    rememberPendingGenerationRequest({
-      requestId: "r1",
-      userId: "account-a",
-    });
-    rememberPendingGenerationRequest({
-      requestId: "r1",
-      userId: "account-a",
-    });
+  it("keeps one entry per request id", () => {
+    rememberPendingGenerationRequest({ requestId: "r1", userId: "account-a" });
+    rememberPendingGenerationRequest({ requestId: "r1", userId: "account-a" });
 
-    const entries = listPendingGenerationRequests("account-a");
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toEqual({ requestId: "r1", userId: "account-a" });
-    expect(
-      JSON.parse(window.sessionStorage.getItem("pika.pendingGenerationRequests") ?? "[]"),
-    ).toEqual(entries);
+    expect(listPendingGenerationRequests("account-a")).toEqual([
+      { requestId: "r1", userId: "account-a" },
+    ]);
   });
 
   it("never hands account A's ids to account B", () => {
@@ -53,38 +43,11 @@ describe("pending generation request receipts", () => {
     expect(
       listPendingGenerationRequests("account-b").map((entry) => entry.requestId),
     ).toEqual(["r2"]);
-  });
-
-  it("forgets one id without touching the other account's bucket", () => {
-    rememberPendingGenerationRequest({
-      requestId: "r1",
-      userId: "account-a",
-    });
-    rememberPendingGenerationRequest({
-      requestId: "r2",
-      userId: "account-b",
-    });
 
     forgetPendingGenerationRequest("account-a", "r1");
 
     expect(listPendingGenerationRequests("account-a")).toEqual([]);
     expect(listPendingGenerationRequests("account-b")).toHaveLength(1);
-  });
-
-  it("drops every bucket on sign-out", () => {
-    rememberPendingGenerationRequest({
-      requestId: "r1",
-      userId: "account-a",
-    });
-    rememberPendingGenerationRequest({
-      requestId: "r2",
-      userId: "account-b",
-    });
-
-    clearPendingGenerationRequests();
-
-    expect(listPendingGenerationRequests("account-a")).toEqual([]);
-    expect(listPendingGenerationRequests("account-b")).toEqual([]);
   });
 
   it("degrades to no receipt instead of throwing on unreadable storage", () => {

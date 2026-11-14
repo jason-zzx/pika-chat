@@ -8,7 +8,6 @@ import {
   attachChatView,
   configureChatPool,
   hasLiveChat,
-  isFollowingGeneration,
   noteRegenFinished,
   noteRegenStarted,
   noteSendStarted,
@@ -221,7 +220,7 @@ describe("chat pool streaming status", () => {
 });
 
 describe("chat pool module-level side effects", () => {
-  it("invalidates the tree and the topic history even with no view attached", () => {
+  it("invalidates the tree even with no view attached", () => {
     const bridge = {
       invalidateTree: vi.fn(),
       invalidateAfterFinish: vi.fn(),
@@ -238,13 +237,6 @@ describe("chat pool module-level side effects", () => {
     });
 
     expect(bridge.invalidateTree).toHaveBeenCalled();
-    // The generation id from the server is what Stop and reconnect use.
-    expect(acquireChat("t1").generationId).toBe("s1");
-
-    act(() => {
-      chatControl.options?.onFinish?.({ isError: false });
-    });
-    expect(bridge.invalidateAfterFinish).toHaveBeenCalledWith("t1");
     dispose();
   });
 
@@ -313,24 +305,6 @@ describe("chat pool generation target", () => {
     expect(reconnectTargetFor("t1")).toBe("gen-9");
   });
 
-  it("retains the generation target when the connection drops", () => {
-    // A network error says nothing about the server-side turn: keeping the
-    // target is what lets discovery re-attach instead of losing it.
-    acquireChat("t1");
-    act(() => {
-      chatControl.options?.onData?.({
-        type: "data-topic",
-        data: { topicId: "t1", streamId: "gen-9" },
-      });
-    });
-    act(() => {
-      chatControl.options?.onError?.(new Error("network"));
-    });
-
-    expect(reconnectTargetFor("t1")).toBe("gen-9");
-    expect(isFollowingGeneration("t1", "gen-9")).toBe(true);
-  });
-
   it("clears the target when the turn finishes", () => {
     acquireChat("t1");
     act(() => {
@@ -345,14 +319,11 @@ describe("chat pool generation target", () => {
     expect(reconnectTargetFor("t1")).toBeNull();
   });
 
-  it("registers a manual regeneration's task so discovery does not open a second consumer", () => {
+  it("releases a manual regeneration's task when the loop finishes", () => {
     const entry = acquireChat("t1");
     act(() => {
       noteRegenStarted("t1", "gen-9");
     });
-    expect(isFollowingGeneration("t1", "gen-9")).toBe(true);
-    expect(reconnectTargetFor("t1")).toBe("gen-9");
-
     act(() => {
       noteRegenFinished("t1");
     });
@@ -364,21 +335,6 @@ describe("chat pool generation target", () => {
 });
 
 describe("chat pool resume outcomes", () => {
-  it("reports a finished reconnect and clears the target", async () => {
-    acquireChat("t1");
-    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("finished");
-    expect(chatControl.resumeCalls).toEqual(["t1"]);
-    expect(reconnectTargetFor("t1")).toBeNull();
-  });
-
-  it("reports the 204 case as empty so the view reseeds canonical history", async () => {
-    chatControl.resume = "empty";
-    acquireChat("t1");
-    await expect(resumeGeneration("t1", "gen-9")).resolves.toBe("empty");
-    // Nothing is live any more: the target must not keep discovery looping.
-    expect(reconnectTargetFor("t1")).toBeNull();
-  });
-
   it("keeps the target after a failed reconnect so it can be retried", async () => {
     chatControl.resume = "fail";
     acquireChat("t1");

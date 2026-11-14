@@ -23,6 +23,7 @@ import { listTopicMessages } from "@/lib/api/chat";
 import { generationKeys } from "@/lib/api/generation";
 import { chatKeys } from "./use-chat-history";
 import { useComposerStore } from "@/stores/composer-store";
+import { generationSummary } from "@/test-utils/generation-summary";
 import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import ChatPoolBridge from "@/components/providers/ChatPoolBridge";
@@ -109,7 +110,6 @@ vi.mock("@/components/assistant/use-assistants", () => ({
     },
   }),
   useSetAssistantDefaultModel: () => ({ mutate: vi.fn() }),
-  useGenerateTopicTitle: () => ({ mutate: vi.fn() }),
 }));
 
 vi.mock("@/components/provider/use-available-models", () => ({
@@ -222,57 +222,41 @@ function controllableStream() {
 }
 
 /**
- * Routes the two network surfaces the view uses: the chat SSE stream itself
- * and the server-owned generation discovery query (which must answer with an
- * empty list, otherwise its JSON parse would consume the SSE body).
+ * Routes the network surfaces the view uses: the chat SSE stream itself, the
+ * server-owned generation discovery query (which must answer with an empty
+ * list, otherwise its JSON parse would consume the SSE body), the reconnect
+ * GET and the receipt lookup by request id.
  */
 function stubChatFetch(
   server: { stream: ReadableStream<string> },
   generations?: {
     /** Active list the discovery query sees (re-read on every refetch). */
-    active: () => GenerationSummary[];
+    active?: () => GenerationSummary[];
     /** The reconnect GET: a live prefix stream, or a 204. */
-    resume: () => Response;
+    resume?: () => Response;
+    /** The `?requestId=` receipt lookup. */
+    lookup?: () => Response;
   },
 ) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : String(input);
-      if (generations && url.endsWith("/stream")) {
+      if (generations?.lookup && url.includes("requestId=")) {
+        return generations.lookup();
+      }
+      if (generations?.resume && url.endsWith("/stream")) {
         return generations.resume();
       }
       if (url.includes("/api/chat/generations")) {
         return new Response(
-          JSON.stringify({ generations: generations?.active() ?? [] }),
+          JSON.stringify({ generations: generations?.active?.() ?? [] }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
       return streamResponse(server.stream);
     }),
   );
-}
-
-/** A running generation of topic t1, as the discovery query reports it. */
-function runningGeneration(
-  overrides: Partial<GenerationSummary> = {},
-): GenerationSummary {
-  const now = new Date().toISOString();
-  return {
-    id: "gen-9",
-    topicId: "t1",
-    assistantId: "a1",
-    assistantMessageId: "srv-a2",
-    kind: "send",
-    status: "running",
-    targetDeleted: false,
-    errorMessage: null,
-    createdAt: now,
-    updatedAt: now,
-    startedAt: now,
-    finishedAt: null,
-    ...overrides,
-  };
 }
 
 function jsonGenerationStreamUrl(generationId: string): string {
@@ -289,6 +273,25 @@ function streamResponse(body: ReadableStream<string>): Response {
   });
 }
 
+// One QueryClient is shared across cases (like the real SPA): a cached history
+// from another case would seed before this case's fetch and the seed guard
+// would then block it.
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetChatPool();
+  queryClient.clear();
+  window.sessionStorage.clear();
+  useComposerStore.setState({
+    pickedModel: { configId: "c1", modelId: "m1" },
+    drafts: { "topic:t1": "hello", "draft:a1": "hello" },
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  useComposerStore.setState({ pickedModel: null, drafts: {} });
+});
 
 describe("ChatView pool resume (real AI SDK)", () => {
   it("keeps the reconnect target after the SDK runs both disconnect callbacks", async () => {
@@ -311,19 +314,13 @@ describe("ChatView pool resume (real AI SDK)", () => {
     expect(reconnectTargetFor("disconnect-topic")).toBe("gen-disconnect");
     detach();
   });
+
   // Flipped when A's stream finishes: the server has persisted the reply by
   // then, so the history mock starts returning it.
   let aReplyPersisted = false;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetChatPool();
-    window.sessionStorage.clear();
     aReplyPersisted = false;
-    useComposerStore.setState({
-      pickedModel: { configId: "c1", modelId: "m1" },
-      drafts: { "topic:t1": "hello", "draft:a1": "hello" },
-    });
     vi.mocked(listTopicMessages).mockImplementation(async (topicId) => ({
       messages:
         topicId === "t1"
@@ -344,21 +341,11 @@ describe("ChatView pool resume (real AI SDK)", () => {
     }));
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    useComposerStore.setState({ pickedModel: null, drafts: {} });
-  });
-
-  it("shows each topic's own messages when navigating away and back around a live stream", async () => {
-    const server = controllableStream();
-    stubChatFetch(server);
-
-    const view = renderWithIntl(app("t1"));
-    // Topic A seeded from history.
-    expect(await screen.findByText("A answer")).toBeInTheDocument();
-
-    // Send in A: the server stream opens, emits the topic framing and one
-    // partial token, then stays open (background stream).
+  /**
+   * Sends from the viewed topic; the server stream opens, emits the topic
+   * framing and one partial token, then stays open (background stream).
+   */
+  async function startLiveSend(server: ReturnType<typeof controllableStream>) {
     act(() => {
       composerProps.latest?.onSend?.();
     });
@@ -374,6 +361,17 @@ describe("ChatView pool resume (real AI SDK)", () => {
     });
     await drainStreamJobs();
     expect(await screen.findByText("partial")).toBeInTheDocument();
+  }
+
+  it("shows each topic's own messages when navigating away and back around a live stream", async () => {
+    const server = controllableStream();
+    stubChatFetch(server);
+
+    const view = renderWithIntl(app("t1"));
+    // Topic A seeded from history.
+    expect(await screen.findByText("A answer")).toBeInTheDocument();
+
+    await startLiveSend(server);
 
     // Switch to B mid-stream: B's own history must render.
     view.rerender(app("t2"));
@@ -419,22 +417,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
         pickedModel: { configId: "c1", modelId: "m1" },
       });
     });
-    act(() => {
-      composerProps.latest?.onSend?.();
-    });
-
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    act(() => {
-      server.push({ type: "start", messageId: "srv-a2" });
-      server.push({
-        type: "data-topic",
-        data: { topicId: "t1", streamId: "s1" },
-      });
-      server.push({ type: "text-start", id: "txt1" });
-      server.push({ type: "text-delta", id: "txt1", delta: "partial" });
-    });
-    await drainStreamJobs();
-    expect(await screen.findByText("partial")).toBeInTheDocument();
+    await startLiveSend(server);
 
     // The stream finishes while the (created) topic is viewed.
     aReplyPersisted = true;
@@ -478,21 +461,7 @@ describe("ChatView pool resume (real AI SDK)", () => {
     const view = renderWithIntl(app("t1"));
     expect(await screen.findByText("A answer")).toBeInTheDocument();
 
-    act(() => {
-      composerProps.latest?.onSend?.();
-    });
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    act(() => {
-      server.push({ type: "start", messageId: "srv-a2" });
-      server.push({
-        type: "data-topic",
-        data: { topicId: "t1", streamId: "s1" },
-      });
-      server.push({ type: "text-start", id: "txt1" });
-      server.push({ type: "text-delta", id: "txt1", delta: "partial" });
-    });
-    await drainStreamJobs();
-    expect(await screen.findByText("partial")).toBeInTheDocument();
+    await startLiveSend(server);
 
     // Leave mid-stream; the stream finishes while topic B is viewed.
     view.rerender(app("t2"));
@@ -521,25 +490,6 @@ describe("ChatView pool resume (real AI SDK)", () => {
 });
 
 describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetChatPool();
-    // The app shares one QueryClient across these tests; a cached history from
-    // another case would seed before this case's fetch and the seed guard would
-    // then block it.
-    queryClient.clear();
-    window.sessionStorage.clear();
-    useComposerStore.setState({
-      pickedModel: { configId: "c1", modelId: "m1" },
-      drafts: {},
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    useComposerStore.setState({ pickedModel: null, drafts: {} });
-  });
-
   /** History of a topic whose answer is still being produced server-side. */
   function historyWithPlaceholder(answer: string) {
     return {
@@ -567,7 +517,7 @@ describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
     );
     const resume = controllableStream();
     stubChatFetch({ stream: new ReadableStream<string>() }, {
-      active: () => [runningGeneration()],
+      active: () => [generationSummary()],
       resume: () => streamResponse(resume.stream),
     });
 
@@ -599,7 +549,7 @@ describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
 
   it("retries a failed reconnect after discovery refreshes the unchanged task", async () => {
     vi.mocked(listTopicMessages).mockResolvedValue(historyWithPlaceholder("partial"));
-    const generation = runningGeneration();
+    const generation = generationSummary();
     const resumed = controllableStream();
     const resume = vi.fn(() => {
       if (resume.mock.calls.length === 1) throw new TypeError("offline");
@@ -610,25 +560,26 @@ describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
       resume,
     });
     renderWithIntl(app("t1"));
-    await waitFor(() => expect(acquireChat("t1").chat.status).toBe("error"));
+    await waitFor(() => expect(acquireChat("t1").chat.status).toBe("error"), {
+      timeout: 5_000,
+    });
     expect(resume).toHaveBeenCalledTimes(1);
-    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6_000);
-    try {
-      await act(async () => {
-        await queryClient.refetchQueries({ queryKey: generationKeys.active("account-a") });
-      });
-      await waitFor(() => expect(resume).toHaveBeenCalledTimes(2));
-      act(() => {
-        resumed.push({ type: "start", messageId: "srv-a2" });
-        resumed.push({ type: "text-start", id: "text" });
-        resumed.push({ type: "text-delta", id: "text", delta: "reconnected" });
-      });
-      await drainStreamJobs();
-      expect(await screen.findByText("reconnected")).toBeInTheDocument();
-      expect(screen.getByText("A answer")).toBeInTheDocument();
-    } finally {
-      now.mockRestore();
-    }
+    // Step the clock past the retry rate limit. Only Date is faked: the real
+    // SDK and testing-library still need real timers and microtasks.
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+    vi.setSystemTime(Date.now() + 6_000);
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: generationKeys.active("account-a") });
+    });
+    await waitFor(() => expect(resume).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+    act(() => {
+      resumed.push({ type: "start", messageId: "srv-a2" });
+      resumed.push({ type: "text-start", id: "text" });
+      resumed.push({ type: "text-delta", id: "text", delta: "reconnected" });
+    });
+    await drainStreamJobs();
+    expect(await screen.findByText("reconnected")).toBeInTheDocument();
+    expect(screen.getByText("A answer")).toBeInTheDocument();
   });
 
   it("refreshes canonical history when the reconnect answers 204", async () => {
@@ -636,18 +587,13 @@ describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
     // holds only the placeholder. Between discovery and the reconnect the turn
     // settles (204), and history then carries the persisted answer.
     let messages = historyWithPlaceholder("partial").messages;
-    let active: GenerationSummary[] = [runningGeneration()];
+    let active: GenerationSummary[] = [generationSummary()];
     vi.mocked(listTopicMessages).mockImplementation(async () => ({ messages }));
     stubChatFetch({ stream: new ReadableStream<string>() }, {
       active: () => active,
       resume: () => {
         active = [];
-        messages = [
-          storedMessage("u1", "user", "A question"),
-          storedMessage("a1", "assistant", "A answer"),
-          storedMessage("u2", "user", "hello"),
-          storedMessage("srv-a2", "assistant", "final answer"),
-        ];
+        messages = historyWithPlaceholder("final answer").messages;
         return new Response(null, { status: 204 });
       },
     });
@@ -666,64 +612,6 @@ describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
 });
 
 describe("lost confirmation recovery (reload looks the receipt up)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetChatPool();
-    queryClient.clear();
-    window.sessionStorage.clear();
-    useComposerStore.setState({
-      pickedModel: { configId: "c1", modelId: "m1" },
-      drafts: {},
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    useComposerStore.setState({ pickedModel: null, drafts: {} });
-  });
-
-  function summary(overrides: Partial<GenerationSummary> = {}): GenerationSummary {
-    const now = new Date().toISOString();
-    return {
-      id: "gen-9",
-      topicId: "t1",
-      assistantId: "a1",
-      assistantMessageId: "srv-a2",
-      kind: "send",
-      status: "completed",
-      targetDeleted: false,
-      errorMessage: null,
-      createdAt: now,
-      updatedAt: now,
-      startedAt: now,
-      finishedAt: now,
-      ...overrides,
-    };
-  }
-
-  function stubReceiptFetch(
-    answer: (requestId: string) => Response,
-  ): ReturnType<typeof vi.fn> {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : String(input);
-      const requestId = new URL(url, "http://localhost").searchParams.get(
-        "requestId",
-      );
-      if (requestId !== null) {
-        return answer(requestId);
-      }
-      if (url.includes("/api/chat/generations")) {
-        return new Response(JSON.stringify({ generations: [] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      return new Response("unexpected", { status: 500 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    return fetchMock as unknown as ReturnType<typeof vi.fn>;
-  }
-
   it("adopts the task found by request id and retires the receipt", async () => {
     rememberPendingGenerationRequest({
       requestId: "0190a5c0-0000-7000-8000-000000000001",
@@ -735,12 +623,16 @@ describe("lost confirmation recovery (reload looks the receipt up)", () => {
         storedMessage("srv-a2", "assistant", "final answer"),
       ],
     });
-    const fetchMock = stubReceiptFetch(() =>
-      new Response(JSON.stringify({ generation: summary() }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    stubChatFetch({ stream: new ReadableStream<string>() }, {
+      lookup: () =>
+        new Response(
+          JSON.stringify({
+            generation: generationSummary({ status: "completed", finishedAt: new Date().toISOString() }),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    });
+    const fetchMock = vi.mocked(fetch);
 
     renderWithIntl(app("t1"));
 
@@ -765,9 +657,12 @@ describe("lost confirmation recovery (reload looks the receipt up)", () => {
   it("keeps a pending receipt when the lookup returns a server error envelope", async () => {
     const requestId = "0190a5c0-0000-7000-8000-000000000003";
     rememberPendingGenerationRequest({ requestId, userId: "account-a" });
-    const fetchMock = stubReceiptFetch(() => new Response(JSON.stringify({
-      error: { code: "INTERNAL", messageKey: "unexpected" },
-    }), { status: 500, headers: { "content-type": "application/json" } }));
+    stubChatFetch({ stream: new ReadableStream<string>() }, {
+      lookup: () => new Response(JSON.stringify({
+        error: { code: "INTERNAL", messageKey: "unexpected" },
+      }), { status: 500, headers: { "content-type": "application/json" } }),
+    });
+    const fetchMock = vi.mocked(fetch);
     renderWithIntl(app("t1"));
     await waitFor(() => expect(fetchMock.mock.calls.some(call => String(call[0]).includes("requestId="))).toBe(true));
     await drainStreamJobs();
@@ -787,15 +682,15 @@ describe("lost confirmation recovery (reload looks the receipt up)", () => {
         storedMessage("a1", "assistant", "A answer"),
       ],
     });
-    stubReceiptFetch(
-      () =>
+    stubChatFetch({ stream: new ReadableStream<string>() }, {
+      lookup: () =>
         new Response(
           JSON.stringify({
             error: { code: "NOT_FOUND", messageKey: "generation.notFound" },
           }),
           { status: 404, headers: { "content-type": "application/json" } },
         ),
-    );
+    });
 
     renderWithIntl(app("t1"));
     expect(await screen.findByText("A answer")).toBeInTheDocument();

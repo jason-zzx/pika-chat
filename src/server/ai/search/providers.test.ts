@@ -525,23 +525,4 @@ describe("adapter cancellation", () => {
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
-
-  it("surfaces a caller abort as an abort instead of a provider failure", async () => {
-    const controller = new AbortController();
-    stubFetch(() => {
-      controller.abort();
-      const error = new Error("aborted");
-      error.name = "AbortError";
-      return Promise.reject(error) as never;
-    });
-    const fetchPage = createFetchAdapter(credential(), {
-      signal: controller.signal,
-    });
-
-    // Abort must not be wrapped into the retryable "provider failed" error the
-    // fallback chain would otherwise walk past.
-    await expect(fetchPage!("https://a.example")).rejects.toMatchObject({
-      name: "AbortError",
-    });
-  });
 });

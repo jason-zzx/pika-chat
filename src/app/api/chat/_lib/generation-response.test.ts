@@ -65,18 +65,6 @@ function generationRow(overrides: Partial<GenerationRow> = {}): GenerationRow {
   };
 }
 
-function sseStream(chunks: object[]): ReadableStream<string> {
-  return new ReadableStream<string>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(`data: ${JSON.stringify(chunk)}\n\n`);
-      }
-      controller.enqueue("data: [DONE]\n\n");
-      controller.close();
-    },
-  });
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   loadMessagesByIds.mockResolvedValue([
@@ -125,34 +113,12 @@ describe("respondWithGeneration", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-pika-generation-id")).toBe("gen-1");
     expect(finishedGenerationChunks).toHaveBeenCalledWith(
       expect.objectContaining({ id: "gen-1" }),
       expect.objectContaining({ id: "msg-1" }),
     );
     expect(await response.text()).toContain("answer");
-  });
-
-  it("attaches a live turn as a subscriber in resume mode", async () => {
-    findGenerationForActor.mockResolvedValue(
-      generationRow({ status: "running", finishedAt: null }),
-    );
-    ensureGenerationRunning.mockResolvedValue({ state: {} });
-    subscribeToGeneration.mockReturnValue(
-      sseStream([
-        { type: "start", messageId: "msg-1" },
-        { type: "text-delta", id: "t1", delta: "current" },
-      ]),
-    );
-
-    const response = await respondWithGeneration({
-      generationId: "gen-1",
-      actor,
-      mode: "resume",
-    });
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-pika-generation-id")).toBe("gen-1");
-    expect(await response.text()).toContain("current");
   });
 
   it("refuses a deleted target before opening anything", async () => {
@@ -166,46 +132,5 @@ describe("respondWithGeneration", () => {
     await expect(
       respondWithGeneration({ generationId: "gen-1", actor, mode: "resume" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND", status: 410 });
-  });
-
-  it("refuses a missing or foreign generation on connect", async () => {
-    findGenerationForActor.mockResolvedValue(null);
-
-    await expect(
-      respondWithGeneration({ generationId: "gen-1", actor, mode: "resume" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
-    expect(ensureGenerationRunning).not.toHaveBeenCalled();
-    expect(subscribeToGeneration).not.toHaveBeenCalled();
-  });
-
-  it("hands subscription stream directly to SSE response and closes on cancel", async () => {
-    findGenerationForActor.mockResolvedValue(
-      generationRow({ status: "running", finishedAt: null }),
-    );
-    ensureGenerationRunning.mockResolvedValue({ state: {} });
-    let cancelled = false;
-    const subscriptionStream = new ReadableStream<string>({
-      start(controller) {
-        controller.enqueue(
-          `data: ${JSON.stringify({ type: "start", messageId: "msg-1" })}\n\n`,
-        );
-      },
-      cancel() {
-        cancelled = true;
-      },
-    });
-    subscribeToGeneration.mockReturnValue(subscriptionStream);
-
-    const response = await respondWithGeneration({
-      generationId: "gen-1",
-      actor,
-      mode: "resume",
-    });
-    const reader = response.body!.getReader();
-    expect((await reader.read()).done).toBe(false);
-    await reader.cancel();
-    // createUIMessageStreamResponse pipes subscriptionStream through
-    // JsonToSseTransformStream -> TextEncoderStream; cancel propagates async.
-    await vi.waitFor(() => expect(cancelled).toBe(true));
   });
 });

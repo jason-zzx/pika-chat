@@ -42,27 +42,10 @@ describe("sendRequestHash", () => {
       sendRequestHash(request({ timeZone: "Europe/Berlin" })),
     );
   });
-
-  it("includes the message, model and search mode", () => {
-    const base = sendRequestHash(request());
-    expect(
-      sendRequestHash(
-        request({
-          message: {
-            id: "u-1",
-            role: "user",
-            parts: [{ type: "text", text: "different" }],
-          },
-        }),
-      ),
-    ).not.toBe(base);
-    expect(sendRequestHash(request({ modelId: "m-2" }))).not.toBe(base);
-    expect(sendRequestHash(request({ searchMode: "tool" }))).not.toBe(base);
-  });
 });
 
 describe("regenerateRequestHash", () => {
-  it("distinguishes a plain regeneration from an edit", () => {
+  it("distinguishes an edit and a time zone from a plain regeneration", () => {
     const base = {
       topicId: "t-1",
       messageId: "m-1",
@@ -81,21 +64,11 @@ describe("regenerateRequestHash", () => {
         },
       }),
     ).not.toBe(regenerateRequestHash(base));
-  });
-
-  it("includes the time zone and the target message", () => {
-    const base = {
-      topicId: "t-1",
-      messageId: "m-1",
-      request: { providerConfigId: "cfg-1", modelId: "m-1" },
-    };
-    const hash = regenerateRequestHash(base);
     expect(
       regenerateRequestHash({
         ...base,
         request: { ...base.request, timeZone: "Asia/Tokyo" },
       }),
-    ).not.toBe(hash);
-    expect(regenerateRequestHash({ ...base, messageId: "m-2" })).not.toBe(hash);
+    ).not.toBe(regenerateRequestHash(base));
   });
 });

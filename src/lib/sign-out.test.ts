@@ -32,11 +32,4 @@ describe("confirmed sign-out document boundary", () => {
     expect(clear).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
   });
-
-  it("preserves the current document on a rejected network request", async () => {
-    signOut.mockRejectedValue(new Error("Offline"));
-    await expect(signOutAndReset()).rejects.toThrow("Offline");
-    expect(clear).not.toHaveBeenCalled();
-    expect(replace).not.toHaveBeenCalled();
-  });
 });

@@ -60,32 +60,36 @@ afterEach(() => {
 });
 
 describe("AccountProvider identity boundary", () => {
-  it("keeps the document while the session check is still loading", () => {
-    renderBoundary("account-a");
-    expect(locationMock.replace).not.toHaveBeenCalled();
-    expect(locationMock.reload).not.toHaveBeenCalled();
-  });
-
-  it("keeps the document when the session check fails for network reasons", () => {
-    // An offline/failed check is not proof of a sign-out: clearing the page
-    // here would throw away a healthy session's chat state.
-    sessionState.current = {
-      data: { user: { id: "account-a" } },
-      error: { status: 0, message: "network" },
-      isPending: false,
-    };
-    renderBoundary("account-a");
-    expect(locationMock.replace).not.toHaveBeenCalled();
-    expect(locationMock.reload).not.toHaveBeenCalled();
-  });
-
-  it("keeps the document for the same account", () => {
-    sessionState.current = {
-      data: { user: { id: "account-a" } },
-      error: null,
-      isPending: false,
-    };
-    renderBoundary("account-a");
+  // An offline/failed check is not proof of a sign-out: clearing the page
+  // there would throw away a healthy session's chat state.
+  it.each([
+    {
+      name: "the session check is still loading",
+      baseline: "account-a",
+      session: { data: null, error: null, isPending: true },
+    },
+    {
+      name: "the session check fails for network reasons",
+      baseline: "account-a",
+      session: {
+        data: { user: { id: "account-a" } },
+        error: { status: 0, message: "network" },
+        isPending: false,
+      },
+    },
+    {
+      name: "the account is unchanged",
+      baseline: "account-a",
+      session: { data: { user: { id: "account-a" } }, error: null, isPending: false },
+    },
+    {
+      name: "the page is anonymous",
+      baseline: null,
+      session: { data: null, error: null, isPending: false },
+    },
+  ])("keeps the document when $name", ({ baseline, session }) => {
+    sessionState.current = session;
+    renderBoundary(baseline);
     expect(locationMock.replace).not.toHaveBeenCalled();
     expect(locationMock.reload).not.toHaveBeenCalled();
   });
@@ -112,12 +116,15 @@ describe("AccountProvider identity boundary", () => {
     expect(listPendingGenerationRequests("account-a")).toEqual([]);
   });
 
-  it("sends a confirmed signed-out session to the sign-in page", () => {
+  it.each([
+    { name: "a signed-out session", error: null },
+    { name: "a 401 from the session endpoint", error: { status: 401, message: "unauthorized" } },
+  ])("sends $name to the sign-in page and drops receipts", ({ error }) => {
     rememberPendingGenerationRequest({
       requestId: "r1",
       userId: "account-a",
     });
-    sessionState.current = { data: null, error: null, isPending: false };
+    sessionState.current = { data: null, error, isPending: false };
 
     act(() => {
       renderBoundary("account-a");
@@ -125,24 +132,5 @@ describe("AccountProvider identity boundary", () => {
 
     expect(locationMock.replace).toHaveBeenCalledWith("/sign-in");
     expect(listPendingGenerationRequests("account-a")).toEqual([]);
-  });
-
-  it("treats a 401 from the session endpoint as a confirmed sign-out", () => {
-    sessionState.current = {
-      data: null,
-      error: { status: 401, message: "unauthorized" },
-      isPending: false,
-    };
-    act(() => {
-      renderBoundary("account-a");
-    });
-    expect(locationMock.replace).toHaveBeenCalledWith("/sign-in");
-  });
-
-  it("does nothing on anonymous pages", () => {
-    sessionState.current = { data: null, error: null, isPending: false };
-    renderBoundary(null);
-    expect(locationMock.replace).not.toHaveBeenCalled();
-    expect(locationMock.reload).not.toHaveBeenCalled();
   });
 });
