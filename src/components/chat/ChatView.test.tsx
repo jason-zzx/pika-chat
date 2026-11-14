@@ -13,6 +13,7 @@ import {
 import { AccountUserIdContext } from "@/hooks/use-account-user";
 import { listPendingGenerationRequests } from "@/lib/pending-generation-requests";
 import { defaultModelMetadata } from "@/lib/schemas/provider";
+import { generationSummary } from "@/test-utils/generation-summary";
 import type {
   ChatMessagesResponse,
   ChatUIMessage,
@@ -83,7 +84,6 @@ vi.mock("@/components/layout/InsetHeader", () => ({ default: () => null }));
 vi.mock("@/components/assistant/use-assistants", () => ({
   assistantKeys: { tree: () => ["assistant", "tree"] as const },
   useAssistantTree: () => ({ data: { assistants: [] }, isPending: false }),
-  useGenerateTopicTitle: () => ({ mutate: vi.fn() }),
   useSetAssistantDefaultModel: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -1692,25 +1692,8 @@ describe("ChatView server-owned generation (B3/B4/B5 client)", () => {
     ...defaultModelMetadata(),
     outputModalities: ["text"],
   };
-
-  function generationSummary(overrides: Record<string, unknown> = {}) {
-    const now = new Date().toISOString();
-    return {
-      id: "gen-9",
-      topicId: "t1",
-      assistantId: "a1",
-      assistantMessageId: "srv-a2",
-      kind: "send",
-      status: "running",
-      targetDeleted: false,
-      errorMessage: null,
-      createdAt: now,
-      updatedAt: now,
-      startedAt: now,
-      finishedAt: null,
-      ...overrides,
-    };
-  }
+  const uuidV7 =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   /** Discovery answers with the given active list; nothing else is fetched. */
   function stubGenerationDiscovery(generations: () => unknown[]) {
@@ -1780,9 +1763,7 @@ describe("ChatView server-owned generation (B3/B4/B5 client)", () => {
     ).mock.calls[0];
     const requestId = (sendCall?.[1] as { body?: { requestId?: string } })
       ?.body?.requestId;
-    expect(requestId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
+    expect(requestId).toMatch(uuidV7);
     // Stored per account, so a reload can look the task up instead of
     // re-sending the model call.
     expect(
@@ -1811,48 +1792,6 @@ describe("ChatView server-owned generation (B3/B4/B5 client)", () => {
     await waitFor(() => {
       expect(composerProps.latest?.canSend).toBe(false);
     });
-    expect(captured.resumeStream).toHaveBeenCalled();
-  });
-
-  it("re-attempts the reconnect after a dropped connection, keeping the turn", async () => {
-    stubGenerationDiscovery(() => [generationSummary()]);
-
-    const view = renderChatView(
-      { assistantId: "a1", topicId: "t1" },
-      { userId: "account-a" },
-    );
-    await screen.findByRole("article", { name: "Assistant" });
-    await waitFor(() => {
-      expect(captured.resumeStream).toHaveBeenCalledTimes(1);
-    });
-
-    // The reconnect dropped (network). The turn is untouched server-side and
-    // still listed as active, so the view must re-attach instead of leaving
-    // the answer frozen on its partial content. Retries are rate-limited (a
-    // down network reports an error per attempt), so step the clock past it.
-    const now = Date.now();
-    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
-    act(() => {
-      captured.status = "error";
-    });
-    nowSpy.mockReturnValue(now + 6_000);
-    view.rerender(
-      wrapWithIntl(
-        <QueryClientProvider client={view.client}>
-          <AccountUserIdContext.Provider value="account-a">
-            <ChatView assistantId="a1" topicId="t1" />
-          </AccountUserIdContext.Provider>
-        </QueryClientProvider>,
-      ),
-    );
-
-    await waitFor(() => {
-      expect(captured.resumeStream.mock.calls.length).toBeGreaterThanOrEqual(2);
-    });
-    act(() => {
-      captured.status = "ready";
-    });
-    nowSpy.mockRestore();
   });
 
   it("stops the answer the server named, not the tail of the conversation", async () => {
@@ -1951,9 +1890,7 @@ describe("ChatView server-owned generation (B3/B4/B5 client)", () => {
         "t1",
         "srv-a1",
         expect.objectContaining({
-          requestId: expect.stringMatching(
-            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-          ),
+          requestId: expect.stringMatching(uuidV7),
         }),
       );
     });

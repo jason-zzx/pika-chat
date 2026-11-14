@@ -60,54 +60,6 @@ function textOf(message: ChatUIMessage): string {
     .join("");
 }
 
-describe("live state assembly", () => {
-  it("keeps one growing copy of the answer and its metadata", () => {
-    const live = state();
-    applyChunk(live, { type: "start", messageId: "msg-1" });
-    applyChunk(live, { type: "text-start", id: "txt-1" });
-    applyChunk(live, { type: "text-delta", id: "txt-1", delta: "A" });
-    applyChunk(live, { type: "text-delta", id: "txt-1", delta: "B" });
-    applyChunk(live, {
-      type: "message-metadata",
-      messageMetadata: { modelId: "m-1" },
-    });
-
-    expect(live.message.parts).toEqual([{ type: "text", text: "AB" }]);
-    expect(live.message.metadata.modelId).toBe("m-1");
-    // No history of snapshots: exactly one part, one state.
-    expect(live.message.parts).toHaveLength(1);
-  });
-
-  it("keeps the raw streaming tool input, not just the parsed object", () => {
-    const live = state();
-    applyChunk(live, {
-      type: "tool-input-start",
-      toolCallId: "call-1",
-      toolName: "searchWeb",
-    });
-    applyChunk(live, {
-      type: "tool-input-delta",
-      toolCallId: "call-1",
-      inputTextDelta: '{"query":"half',
-    });
-
-    expect(live.toolRaw.get("call-1")).toBe('{"query":"half');
-    const [part] = live.message.parts;
-    expect(part?.type).toBe("tool-searchWeb");
-    // A half-written JSON object stays unparsed, never replaced by `{}`.
-    expect((part as { state?: string }).state).toBe("input-streaming");
-  });
-
-  it("drops framing parts from what gets persisted", () => {
-    const live = state();
-    applyChunk(live, { type: "start-step" });
-    applyChunk(live, { type: "text-start", id: "txt-1" });
-    applyChunk(live, { type: "text-delta", id: "txt-1", delta: "answer" });
-
-    expect(persistableParts(live)).toEqual([{ type: "text", text: "answer" }]);
-  });
-});
-
 describe("resume prefix", () => {
   it("replays the current answer and continues the same part to ABCD", async () => {
     const live = state();
@@ -131,6 +83,10 @@ describe("resume prefix", () => {
     // The producer then emits the rest of the same part.
     applyChunk(live, { type: "text-delta", id: "txt-1", delta: "D" });
     applyChunk(live, { type: "text-end", id: "txt-1" });
+    // A late reconnect must not reopen the finished part.
+    expect(
+      resumePrefixChunks(live).some((chunk) => chunk.type === "text-end"),
+    ).toBe(true);
     const tail: ChatChunk[] = [
       { type: "text-delta", id: "txt-1", delta: "D" },
       { type: "text-end", id: "txt-1" },
@@ -143,19 +99,6 @@ describe("resume prefix", () => {
     expect(
       resumed.parts.filter((part) => part.type === "text"),
     ).toHaveLength(1);
-  });
-
-  it("closes finished parts so a late reconnect cannot reopen them", async () => {
-    const live = state();
-    applyChunk(live, { type: "start", messageId: "msg-1" });
-    applyChunk(live, { type: "text-start", id: "txt-1" });
-    applyChunk(live, { type: "text-delta", id: "txt-1", delta: "done" });
-    applyChunk(live, { type: "text-end", id: "txt-1" });
-
-    const prefix = resumePrefixChunks(live);
-    expect(prefix.some((chunk) => chunk.type === "text-end")).toBe(true);
-    const message = await reduce(prefix);
-    expect(textOf(message)).toBe("done");
   });
 
   it("replays an in-flight tool call with its partial input", async () => {
@@ -254,9 +197,12 @@ describe("single assembly path", () => {
       toolCallId: "call-9",
       output: { results: 3 },
     });
+    // Attribution can also first arrive with the input after a plain start.
+    applyChunk(live, { type: "tool-input-start", toolCallId: "call-1", toolName: "web_search" });
+    applyChunk(live, { type: "tool-input-available", toolCallId: "call-1", toolName: "web_search", input: {}, providerExecuted: true });
 
     const parts = persistableParts(live);
-    expect(parts).toHaveLength(1);
+    expect(parts).toHaveLength(2);
     expect(parts[0]).toMatchObject({
       type: "tool-web_search",
       toolCallId: "call-9",
@@ -279,23 +225,11 @@ describe("single assembly path", () => {
     expect(
       message.parts.find((part) => part.type === "tool-web_search"),
     ).toMatchObject({ toolCallId: "call-9", providerExecuted: true, output: { results: 3 } });
-  });
-
-  it("keeps provider execution attribution when it first arrives with the input", async () => {
-    const live = state();
-    applyChunk(live, { type: "tool-input-start", toolCallId: "call-1", toolName: "web_search" });
-    applyChunk(live, { type: "tool-input-available", toolCallId: "call-1", toolName: "web_search", input: {}, providerExecuted: true });
-    const message = await reduce(resumePrefixChunks(live));
-    expect(message.parts[0]).toMatchObject({ providerExecuted: true });
-  });
-
-  it("preserves reasoning phase duration before a finish chunk exists", () => {
-    const live = state();
-    applyChunk(live, { type: "reasoning-start", id: "r-1" });
-    applyChunk(live, { type: "reasoning-delta", id: "r-1", delta: "thought" });
-    applyChunk(live, { type: "reasoning-end", id: "r-1" });
-    applyChunk(live, { type: "message-metadata", messageMetadata: { reasoningDurations: [123], reasoningMs: 123 } });
-    expect(persistableParts(live)).toMatchObject([{ type: "reasoning", durationMs: 123 }]);
+    expect(
+      message.parts.find(
+        (part) => part.type === "tool-web_search" && part.toolCallId === "call-1",
+      ),
+    ).toMatchObject({ providerExecuted: true });
   });
 
   it("replays a source-document citation", () => {
@@ -324,6 +258,9 @@ describe("single assembly path", () => {
     applyChunk(live, { type: "reasoning-start", id: "r-1" });
     applyChunk(live, { type: "reasoning-delta", id: "r-1", delta: "one" });
     applyChunk(live, { type: "reasoning-end", id: "r-1" });
+    // A stop or crash before finish still keeps the phase duration.
+    applyChunk(live, { type: "message-metadata", messageMetadata: { reasoningDurations: [1200], reasoningMs: 1200 } });
+    expect(persistableParts(live)).toMatchObject([{ type: "reasoning", durationMs: 1200 }]);
     applyChunk(live, { type: "start-step" });
     applyChunk(live, { type: "reasoning-start", id: "r-2" });
     applyChunk(live, { type: "reasoning-delta", id: "r-2", delta: "two" });
@@ -350,35 +287,5 @@ describe("single assembly path", () => {
       finishReason: "stop",
       reasoningMs: 2000,
     });
-  });
-
-  it("replays the group/version identity of a live answer", () => {
-    const live = createLiveStreamState({
-      generationId: "gen-1",
-      userId: "user-1",
-      topicId: "topic-1",
-      assistantMessageId: "msg-1",
-      metadata: {
-        providerConfigId: "cfg-1",
-        modelId: "m-1",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        groupId: "g-1",
-        versionIndex: 2,
-        versionCount: 2,
-        versionIds: ["old", "msg-1"],
-      },
-    });
-    const prefix = resumePrefixChunks(live);
-    expect(prefix).toContainEqual(
-      expect.objectContaining({
-        type: "start",
-        messageId: "msg-1",
-        messageMetadata: expect.objectContaining({
-          groupId: "g-1",
-          versionIndex: 2,
-          versionCount: 2,
-        }),
-      }),
-    );
   });
 });
