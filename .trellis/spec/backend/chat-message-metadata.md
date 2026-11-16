@@ -2,8 +2,9 @@
 
 > Cross-layer contract for per-message assistant/user metadata — landed with
 > `09-04-chat-message-meta` (`createdAt`, `reasoningMs`); earlier fields:
-> `providerConfigId`, `modelId`, `totalTokens`, `finishReason`, `outcome`,
-> `errorMessage`.
+> `providerConfigId`, `modelId`, `finishReason`, `outcome`, `errorMessage`;
+> `usage` (jsonb, replaced the old `totalTokens` column) landed with
+> `11-15-message-token-stats`.
 
 ## Scenario: adding or consuming a per-message metadata field
 
@@ -29,7 +30,7 @@ them together or the live and reloaded views disagree.
   for lazy translation — see
   [chat-message-translation.md](./chat-message-translation.md).) Server-managed
   turns insert an assistant placeholder at admission; checkpoint/finalization
-  updates that same row, including `totalTokens` and `finishReason`. Message
+  updates that same row, including `usage` and `finishReason`. Message
   timestamps come from the app clock, never an omitted-value DB default.
 - Live metadata: route `messageMetadata: ({ part }) => part.type === "finish"
   ? {...} : undefined` inside `toUIMessageStream` — it runs on `start` and
@@ -153,6 +154,118 @@ if (row.role !== "assistant") {
 // Early emit once from the execute closure, driven by onChunk observations;
 // finish metadata still carries the value as the authoritative fallback.
 writer.write({ type: "message-metadata", messageMetadata: { ...metadata, reasoningMs } });
+```
+
+## Scenario: per-message token usage (`usage`)
+
+### 1. Scope / Trigger
+
+Changing what the model row's usage stats show, how they are measured, or how
+they are stored. `usage` is a jsonb column + nested metadata object, unlike
+the flat per-field columns above, because it is display-only and never queried.
+
+### 2. Signatures
+
+- Schema: `chatUsageSchema` in `src/lib/schemas/chat.ts` — all fields
+  optional non-negative ints: `inputTokens`, `outputTokens`, `totalTokens`,
+  `cacheReadTokens`, `cacheWriteTokens`, `durationMs`, `ttftMs`, `outputMs`.
+  `chatMetadataSchema.usage` is optional; there is **no** top-level
+  `totalTokens` any more.
+- DB: `chat_messages.usage jsonb` typed `$type<ChatUsage>()`. Migration
+  `0028` added it, backfilled `{ totalTokens }` from `total_tokens`, then
+  dropped `total_tokens`.
+- Capture: `streamText({ onLanguageModelCallEnd })` in
+  `src/server/ai/generation-turn.ts` accumulates per model call; the finish
+  `messageMetadata` emits `usage`. UI: `src/components/chat/MessageUsage.tsx`.
+
+### 3. Contracts
+
+- Only raw facts are stored. TPS (`outputTokens / outputMs * 1000`) and hit
+  rate (`cacheReadTokens / inputTokens`) are derived in the UI.
+- `inputTokens` / `outputTokens` / `totalTokens` / `cacheWriteTokens` come
+  from the finish part's `totalUsage` (SDK-normalized: input includes cached
+  tokens on every format, output includes reasoning tokens).
+- `outputMs` = Σ over model calls of `performance.responseTimeMs −
+  timeToFirstOutputMs`. `onLanguageModelCallEnd` fires **before** client-side
+  tool execution, so tool time and TTFT are excluded without a custom timer.
+  Provider-executed (builtin) search stays inside a call and is not excluded.
+- `ttftMs` = `ttftMs ??= performance.timeToFirstOutputMs` across model calls
+  (rounded on emit; request sent → first output chunk, reasoning included):
+  the first call that produced output wins, later tool-loop calls never
+  overwrite it. No call reporting one → `undefined`, card shows `—`.
+  Card-only, never on the inline trigger.
+- `durationMs` = finish − `turnStartMs` (taken when the text turn starts
+  executing, not the row's `createdAt`; queueing before execution is
+  excluded by decision).
+- `cacheReadTokens`, per call:
+  - claude / google → `usage.inputTokenDetails.cacheReadTokens` (Gemini omits
+    the field on no hit; the SDK reports 0, read as a real 0).
+  - openai-compatible → raw usage only, through `openaiRawUsageCacheSchema`:
+    `prompt_tokens_details.cached_tokens` ?? `prompt_cache_hit_tokens`
+    (DeepSeek) ?? top-level `cached_tokens` (Kimi); none → `undefined`.
+  - Turn value stays `undefined` until a call reports a number, then sums.
+- Usage is finish-only: no early `message-metadata` emit carries it, and
+  stopped / failed / restart-recovered turns (no finish part) and image turns
+  persist `usage = null`.
+
+### 4. Validation & Error Matrix
+
+- openai-compatible endpoint ignores `include_usage` → `totalUsage` fields
+  undefined → `outputTokens` undefined → no stats rendered.
+- Cache unreported (`cacheReadTokens` undefined) → card omits the cache and
+  hit-rate rows (not `0`, not `—`).
+- `outputMs` 0 / undefined (single coarse chunk) → TPS hidden; mobile trigger
+  falls back to `↑in ↓out` so it is never empty.
+- `inputTokens` 0 / undefined → hit rate hidden. Other missing fields → `—`.
+- Legacy backfilled rows (`{ totalTokens }` only) → `outputTokens` undefined →
+  stats hidden.
+
+### 5. Good / Base / Bad Cases
+
+- Good: DeepSeek turn with `prompt_cache_hit_tokens: 640` → card shows cache
+  640 and the matching hit rate.
+- Base: openai-compatible proxy without any cache field → card shows input,
+  output, TPS, duration only.
+- Bad: using the SDK `cacheReadTokens` for openai-compatible — it defaults a
+  missing field to 0, so "unreported" renders as a false `0%`.
+
+### 6. Tests Required
+
+- `generation-execution.integration.test.ts`: finish metadata carries `usage`;
+  `outputMs` from call performance; raw fallback for `prompt_cache_hit_tokens`
+  and top-level `cached_tokens`.
+- `message.service.test.ts`: `usage` insert/update and `metadataFromRow`
+  round-trip.
+- `MessageItem.test.tsx`: stats render with `usage.outputTokens`, absent for
+  legacy/stopped rows, cache rows absent when `cacheReadTokens` undefined,
+  trigger has an accessible name.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// Reads the SDK value for every format: openai-compatible endpoints that do
+// not report cache become "0 hits"; DeepSeek's real hits are lost.
+cacheReadTokens += callUsage.inputTokenDetails.cacheReadTokens ?? 0;
+// Measures from first chunk to finish-step: includes tool execution.
+```
+
+#### Correct
+
+```ts
+onLanguageModelCallEnd: ({ usage: callUsage, performance }) => {
+  outputMs +=
+    performance.responseTimeMs -
+    (performance.timeToFirstOutputMs ?? performance.responseTimeMs);
+  const callCacheRead =
+    handle.apiFormat === "openai-compatible"
+      ? extractOpenAICompatibleCacheRead(callUsage.raw)
+      : callUsage.inputTokenDetails.cacheReadTokens;
+  if (callCacheRead !== undefined) {
+    cacheReadTokens = (cacheReadTokens ?? 0) + callCacheRead;
+  }
+},
 ```
 
 ## Scenario: a failed turn

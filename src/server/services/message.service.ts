@@ -8,6 +8,7 @@ import {
   type ChatMessageOutcome,
   type ChatMetadata,
   type ChatUIMessage,
+  type ChatUsage,
 } from "@/lib/schemas/chat";
 import type { Actor } from "@/server/auth/actor";
 import { getDb, type DbTransaction } from "@/server/db/client";
@@ -61,7 +62,7 @@ export function metadataFromRow(row: {
   providerConfigId: ChatMessageRow["providerConfigId"];
   modelId: ChatMessageRow["modelId"];
   reasoningMs: ChatMessageRow["reasoningMs"];
-  totalTokens?: ChatMessageRow["totalTokens"];
+  usage?: ChatMessageRow["usage"];
   finishReason?: ChatMessageRow["finishReason"];
   translations: ChatMessageRow["translations"];
   createdAt: ChatMessageRow["createdAt"];
@@ -81,10 +82,8 @@ export function metadataFromRow(row: {
     reasoningMs: row.reasoningMs ?? undefined,
     reasoningDurations: reasoningDurationsFromParts(row.parts),
     // Persisted usage/finish feedback (chat task R7): without these a reload
-    // loses the "truncated by output limit" hint the live stream announced.
-    ...(row.totalTokens === null || row.totalTokens === undefined
-      ? {}
-      : { totalTokens: row.totalTokens }),
+    // loses stats and the "truncated by output limit" hint the live stream announced.
+    ...(row.usage ? { usage: row.usage } : {}),
     ...(row.finishReason === null || row.finishReason === undefined
       ? {}
       : { finishReason: row.finishReason }),
@@ -476,7 +475,7 @@ type AssistantMessageInsert = {
   providerConfigId?: string;
   modelId?: string;
   reasoningMs?: number;
-  totalTokens?: number;
+  usage?: ChatUsage;
   finishReason?: string;
   createdAt?: Date;
   /** Existing group to add a version to; omit for a new single-version group. */
@@ -521,7 +520,7 @@ export async function insertAssistantRow(
     // createdAt is the turn-start time so a reloaded history shows the same
     // value the live stream announced.
     reasoningMs: input.reasoningMs,
-    totalTokens: input.totalTokens,
+    usage: input.usage,
     finishReason: input.finishReason,
     createdAt: input.createdAt,
     groupId: input.groupId ?? input.id,
@@ -585,7 +584,7 @@ export async function appendAssistantMessage(
     providerConfigId: string;
     modelId: string;
     reasoningMs?: number;
-    totalTokens?: number;
+    usage?: ChatUsage;
     finishReason?: string;
     createdAt?: Date;
     groupId?: string;
@@ -604,7 +603,7 @@ export async function appendAssistantMessage(
     providerConfigId: input.providerConfigId,
     modelId: input.modelId,
     reasoningMs: input.reasoningMs,
-    totalTokens: input.totalTokens,
+    usage: input.usage,
     finishReason: input.finishReason,
     createdAt: input.createdAt,
     groupId: input.groupId,
@@ -658,7 +657,7 @@ export type AssistantTurnWrite = {
   providerConfigId?: string | null;
   modelId?: string | null;
   reasoningMs?: number;
-  totalTokens?: number;
+  usage?: ChatUsage;
   finishReason?: string | null;
 };
 
@@ -693,9 +692,7 @@ export async function writeAssistantTurnRow(
       ...(input.reasoningMs === undefined
         ? {}
         : { reasoningMs: input.reasoningMs }),
-      ...(input.totalTokens === undefined
-        ? {}
-        : { totalTokens: input.totalTokens }),
+      ...(input.usage === undefined ? {} : { usage: input.usage }),
       ...(input.finishReason === undefined
         ? {}
         : { finishReason: input.finishReason }),

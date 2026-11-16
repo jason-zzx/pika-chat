@@ -212,7 +212,22 @@
       "stoppedBeforeAnswer": "模型在给出回答前停止了。",
       "stopped": "已停止",
       "failedFallback": "模型未能回复。",
-      "citationSource": "来源 {num}：{title}"
+      "citationSource": "来源 {num}：{title}",
+      "usage": {
+        "triggerLabel": "Token 用量与速度：{summary}",
+        "tps": "{tps} tok/s",
+        "title": "用量统计",
+        "inputTokens": "输入 tokens",
+        "outputTokens": "输出 tokens",
+        "cacheReadTokens": "缓存命中",
+        "cacheHitRate": "缓存命中率",
+        "outputSpeed": "输出速度",
+        "ttft": "首字时延",
+        "totalDuration": "总耗时",
+        "seconds": "{seconds} 秒",
+        "percent": "{percent}%",
+        "missing": "—"
+      }
     },
     "Actions": {
       "copy": "复制",

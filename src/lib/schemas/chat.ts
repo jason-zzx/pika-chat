@@ -15,12 +15,24 @@ export const chatMessageOutcomeSchema = z.enum([
 ]);
 export type ChatMessageOutcome = z.infer<typeof chatMessageOutcomeSchema>;
 
+export const chatUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
+  totalTokens: z.number().int().nonnegative().optional(),
+  cacheReadTokens: z.number().int().nonnegative().optional(),
+  cacheWriteTokens: z.number().int().nonnegative().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  ttftMs: z.number().int().nonnegative().optional(),
+  outputMs: z.number().int().nonnegative().optional(),
+});
+export type ChatUsage = z.infer<typeof chatUsageSchema>;
+
 export const chatMetadataSchema = z.object({
   outcome: chatMessageOutcomeSchema.optional(),
   errorMessage: z.string().optional(),
   providerConfigId: z.string().optional(),
   modelId: z.string().optional(),
-  totalTokens: z.number().optional(),
+  usage: chatUsageSchema.optional(),
   finishReason: z.string().optional(),
   // ISO 8601, message creation time (server-persisted or stream-start).
   createdAt: z.string().optional(),

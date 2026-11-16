@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "Verify live/reloaded metadata convergence and spec update"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend lint/type/test rules"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend accessibility and test rules"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared Zod contracts, no type escapes"}

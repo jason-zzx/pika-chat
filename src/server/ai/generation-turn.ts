@@ -9,6 +9,8 @@ import {
   type ToolSet,
 } from "ai";
 
+import { z } from "zod";
+
 import type { ErrorsTranslator } from "@/lib/api/error-contract";
 import { isDefaultTopicTitle } from "@/i18n/defaults";
 import type { Actor } from "@/server/auth/actor";
@@ -19,7 +21,6 @@ import type {
   ChatUIMessage,
   ImageGenerationParams,
 } from "@/lib/schemas/chat";
-import type { z } from "zod";
 import type { regenerateMessageRequestSchema } from "@/lib/schemas/chat";
 import { newId } from "@/lib/id";
 import {
@@ -64,6 +65,25 @@ import { resolveModelPreference } from "@/server/services/model-preferences.serv
 import { resolveSearchProviderCredentials } from "@/server/services/search-provider.service";
 import { findTopicContextForActor } from "@/server/services/topic.service";
 import { requireOwnedAssistant } from "@/server/services/assistant.service";
+
+const openaiRawUsageCacheSchema = z.object({
+  prompt_tokens_details: z
+    .object({
+      cached_tokens: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
+  prompt_cache_hit_tokens: z.number().int().nonnegative().optional(),
+  cached_tokens: z.number().int().nonnegative().optional(),
+});
+
+function extractOpenAICompatibleCacheRead(raw: unknown): number | undefined {
+  const usage = openaiRawUsageCacheSchema.safeParse(raw).data;
+  return (
+    usage?.prompt_tokens_details?.cached_tokens ??
+    usage?.prompt_cache_hit_tokens ??
+    usage?.cached_tokens
+  );
+}
 
 /**
  * Turn preparation and execution for server-managed generations.
@@ -693,6 +713,12 @@ async function runTextTurn(
   // Turn-start time from the app clock; the placeholder row was written with
   // admission time, so the final metadata reuses the row's own createdAt.
   const startedAt = row.createdAt;
+  const turnStartMs = Date.now();
+  let outputMs = 0;
+  // The first model call that reports a TTFT wins; later tool-loop calls never
+  // overwrite it.
+  let ttftMs: number | undefined;
+  let cacheReadTokens: number | undefined;
 
   logger.info(
     {
@@ -743,6 +769,19 @@ async function runTextTurn(
       reasoningTimer.onChunk(chunk);
       emitReasoningMetadata?.();
     },
+    onLanguageModelCallEnd: ({ usage: callUsage, performance }) => {
+      ttftMs ??= performance.timeToFirstOutputMs;
+      outputMs +=
+        performance.responseTimeMs -
+        (performance.timeToFirstOutputMs ?? performance.responseTimeMs);
+      const callCacheRead =
+        handle.apiFormat === "openai-compatible"
+          ? extractOpenAICompatibleCacheRead(callUsage.raw)
+          : callUsage.inputTokenDetails.cacheReadTokens;
+      if (callCacheRead !== undefined) {
+        cacheReadTokens = (cacheReadTokens ?? 0) + callCacheRead;
+      }
+    },
   });
 
   void result.consumeStream();
@@ -792,7 +831,18 @@ async function runTextTurn(
             return {
               providerConfigId: input.providerConfigId,
               modelId: input.modelId,
-              totalTokens: part.totalUsage.totalTokens,
+              // Timings are rounded to satisfy the int usage schema.
+              usage: {
+                inputTokens: part.totalUsage.inputTokens,
+                outputTokens: part.totalUsage.outputTokens,
+                totalTokens: part.totalUsage.totalTokens,
+                cacheReadTokens,
+                cacheWriteTokens:
+                  part.totalUsage.inputTokenDetails.cacheWriteTokens,
+                durationMs: Date.now() - turnStartMs,
+                ttftMs: ttftMs === undefined ? undefined : Math.round(ttftMs),
+                outputMs: Math.round(outputMs),
+              },
               finishReason: part.finishReason,
               createdAt: startedAt.toISOString(),
               reasoningMs: reasoningTimer.measure(),

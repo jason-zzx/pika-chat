@@ -320,7 +320,7 @@ describe("generation lifecycle", () => {
       messageId,
       parts: [{ type: "text", text: "par" }],
       reasoningMs: 1_200,
-      totalTokens: 42,
+      usage: { inputTokens: 20, outputTokens: 22, totalTokens: 42 },
       finishReason: "length",
     });
     expect(checked).toBe(true);
@@ -336,7 +336,11 @@ describe("generation lifecycle", () => {
     const checkedMessages = await listTopicMessages({ topicId }, actor);
     expect(checkedMessages[1]?.parts).toEqual([{ type: "text", text: "par" }]);
     expect(checkedMessages[1]?.metadata?.reasoningMs).toBe(1_200);
-    expect(checkedMessages[1]?.metadata?.totalTokens).toBe(42);
+    expect(checkedMessages[1]?.metadata?.usage).toEqual({
+      inputTokens: 20,
+      outputTokens: 22,
+      totalTokens: 42,
+    });
     expect(checkedMessages[1]?.metadata?.finishReason).toBe("length");
     // The outcome stays open until the turn really ends.
     expect(checkedMessages[1]?.metadata?.outcome).toBeUndefined();
@@ -351,7 +355,7 @@ describe("generation lifecycle", () => {
         messageId,
         parts: [{ type: "text", text: "partial" }],
         outcome: "stopped",
-        totalTokens: 12,
+        usage: { inputTokens: 5, outputTokens: 7, totalTokens: 12 },
         finishReason: "length",
       },
     });
@@ -368,7 +372,11 @@ describe("generation lifecycle", () => {
     expect(messages[1]?.id).toBe(messageId);
     expect(messages[1]?.parts).toEqual([{ type: "text", text: "partial" }]);
     expect(messages[1]?.metadata?.outcome).toBe("stopped");
-    expect(messages[1]?.metadata?.totalTokens).toBe(12);
+    expect(messages[1]?.metadata?.usage).toEqual({
+      inputTokens: 5,
+      outputTokens: 7,
+      totalTokens: 12,
+    });
     expect(messages[1]?.metadata?.finishReason).toBe("length");
 
     const afterFinalize = await db

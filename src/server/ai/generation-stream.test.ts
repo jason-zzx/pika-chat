@@ -270,7 +270,7 @@ describe("single assembly path", () => {
       messageMetadata: {
         reasoningDurations: [1200, 800],
         reasoningMs: 2000,
-        totalTokens: 30,
+        usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
         finishReason: "stop",
       },
     });
@@ -283,7 +283,7 @@ describe("single assembly path", () => {
       { id: "r-2", durationMs: 800, text: "two" },
     ]);
     expect(live.message.metadata).toMatchObject({
-      totalTokens: 30,
+      usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
       finishReason: "stop",
       reasoningMs: 2000,
     });

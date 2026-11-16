@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/chat-message-metadata.md", "reason": "Cross-layer metadata contract: schema, columns, live vs persisted"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "Runner checkpoint/finalize persistence of metadata"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Drizzle schema and migration conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Popup positioning, responsive layout, cursor affordance"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Catalog keys for new UI copy"}
