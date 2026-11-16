@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-15
+
+### Highlights
+
+- **Server-Managed Generation**: Once the server accepts a send, regenerate, or edit, the reply no longer depends on the browser staying open. Switching topics, refreshing, closing the tab, or signing out keeps the generation running on the server; coming back resumes the same reply with its live status and Stop button instead of calling the model again. Explicit Stop or deleting the topic/assistant still cancels it.
+- **Per-Message Token Stats**: Each assistant reply now shows input/output tokens and output speed; hover or tap for cache-hit tokens, hit rate, time to first token, and total duration.
+
+### Feats
+
+- **Background Generation & Recovery**:
+  - Text and image turns run as server-side tasks that survive client disconnects; closing the tab no longer severs the upstream provider (this replaces the 0.3.3 disconnect-on-cancel behavior).
+  - Returning to a topic shows the final result if finished, or restores accumulated text, reasoning, tool state, citations, and live streaming if still running. Topic titles are generated even with no browser attached.
+  - Duplicate submits and reconnects never re-run the same generation; a lost submit acknowledgement can be recovered by request ID. One active turn per topic is enforced server-side, while different topics generate in parallel.
+  - Partial output is checkpointed periodically. After a server restart, running tasks are marked interrupted with their saved content (never silently re-run), stopping tasks finish as stopped, and queued tasks continue.
+  - Subscribe, query, and stop all verify account ownership; signing out ends client subscriptions and clears account-local state, and signing back in resumes the task.
+  - No new deployment components: works on the existing Node + PostgreSQL setup with no extra configuration.
+- **Message Usage Stats**:
+  - Usage is captured per model call, so TPS excludes TTFT and client-side tool execution; mobile shows TPS only in the inline row.
+  - OpenAI-compatible cache hits are read from raw usage (`cached_tokens`, `prompt_cache_hit_tokens`); providers that don't report cache hide the cache rows instead of showing 0.
+
+### Fixes
+
+- **Model Vendor Icons**: Models hosted by another lab's catalog provider (e.g. Claude on Azure or Vertex, DeepSeek on Alibaba) now get their own vendor icon instead of the host's; existing catalog rows are backfilled.
+- **Reconnect Loop**: The chat no longer keeps retrying reconnects the server has refused.
+
+### Dev
+
+- Upgraded `ai` to 7.0.170 and `@ai-sdk/react` to 4.0.174 for mid-stream resume support.
+- Pruned redundant generation tests and added a shared integration harness.
+
 ## [0.3.3] - 2026-10-21
 
 ### Highlights
