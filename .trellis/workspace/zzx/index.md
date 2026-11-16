@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 40
-- **Last Active**: 2026-11-13
+- **Total Sessions**: 41
+- **Last Active**: 2026-11-15
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1117 | Active |
+| `journal-1.md` | ~1139 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 41 | 2026-11-15 | Per-message token usage stats | `d8b7a90` | `feat/message-token-stats` |
 | 40 | 2026-11-13 | Demo site mode | `7fb068a`, `1481555` | `main` |
 | 39 | 2026-11-13 | Server-managed chat generation & stream recovery | `721cb1d`, `9848536` | `main` |
 | 38 | 2026-10-21 | 流式恢复：客户端 Chat 池 + 断连即断 provider | `c70a919`, `2292dc5` | `main` |
