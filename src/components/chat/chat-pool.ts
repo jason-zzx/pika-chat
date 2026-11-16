@@ -83,7 +83,8 @@ export type PoolEntry = {
  * null in unit tests that render ChatView without the bridge.
  */
 type ChatPoolBridge = {
-  invalidateTree: () => void;
+  /** A send's topic is known: refresh the tree and pick up its title. */
+  onTopicAnnounced: (topicId: string) => void;
   invalidateAfterFinish: (topicId: string | null) => void;
 };
 
@@ -178,7 +179,7 @@ function createEntry(chatId: string): PoolEntry {
           entries.set(topicId, entry);
         }
         markTopicStreaming(topicId);
-        bridge?.invalidateTree();
+        bridge?.onTopicAnnounced(topicId);
       }
       entry.view?.onData(part);
     },

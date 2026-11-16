@@ -118,9 +118,17 @@ index for queued/running/stopping). `chat_messages` gains nullable
   recreate rows.
 - Subscriber queues are bounded (currently 1024 unread chunks). Drop a slow
   subscriber, never the producer or another subscriber.
-- Title generation is a server-side, best-effort post-turn task, protected
-  against overwriting manual titles and cancelled on deletion. No browser
-  callback is required; it does not delay reply completion.
+- Title generation is a server-side, best-effort post-turn task started when
+  the runner claims the turn (it only needs the stored user message), so it
+  runs beside the answer. It is skipped when the claimed turn is already
+  stopped or caught by shutdown; a first turn that later fails still gets a
+  (usually truncated-text fallback) title. It is protected against overwriting manual titles
+  and cancelled on deletion. No browser callback is required; it does not delay
+  reply completion. Because no stream carries the title, the client calls
+  `GET /api/topics/:id/title` on `data-topic` (unless the cached tree already
+  shows a real title); the route checks ownership, awaits the topic's
+  post-turn tasks, then the
+  client refreshes the tree. Single-instance only, like the runner itself.
 
 ### Client recovery and account boundary
 

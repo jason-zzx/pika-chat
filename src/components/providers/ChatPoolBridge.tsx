@@ -10,9 +10,12 @@ import {
   topicKeys,
 } from "@/components/chat/use-chat-history";
 import { useAccountUserId } from "@/hooks/use-account-user";
+import { isDefaultTopicTitle } from "@/i18n/defaults";
 import { useActiveGenerations } from "@/hooks/use-active-generations";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import { listTopicMessages } from "@/lib/api/chat";
+import { waitForTopicTitle } from "@/lib/api/topic";
+import type { AssistantTree } from "@/lib/schemas/assistant";
 import {
   findGenerationByRequest,
   generationKeys,
@@ -32,7 +35,8 @@ import {
  * itself is hook-free so its handlers keep working after every ChatView has
  * unmounted (a stream finishing while the user sits on a settings page still
  * invalidates the tree/history caches). Title generation no longer travels
- * through the browser: the server names the topic when the turn completes.
+ * through the browser: the server names the topic beside the answer, and the
+ * bridge waits for that task before refreshing the tree.
  *
  * Everything account-owned here is keyed by the signed-in user id: the
  * QueryClient and the pool live for the whole document, so an unscoped key
@@ -88,8 +92,28 @@ export default function ChatPoolBridge() {
 
   useEffect(() => {
     return configureChatPool({
-      invalidateTree: () => {
+      onTopicAnnounced: (topicId) => {
         void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
+        // The server names the topic beside the answer; the tree refetch above
+        // usually runs before that title lands, so wait for it. A topic the
+        // cache already shows with a real title has no title task to wait on
+        // (a new draft topic is not in the cache yet).
+        const titled = queryClient
+          .getQueryData<AssistantTree>(assistantKeys.tree())
+          ?.assistants.some((assistant) =>
+            assistant.topics.some(
+              (topic) => topic.id === topicId && !isDefaultTopicTitle(topic.title),
+            ),
+          );
+        if (titled) {
+          return;
+        }
+        // A failure (topic deleted mid-turn, signed out, offline) leaves
+        // nothing to refresh; focus/visibility refetches cover the rest.
+        waitForTopicTitle(topicId).then(
+          () => queryClient.invalidateQueries({ queryKey: assistantKeys.tree() }),
+          () => undefined,
+        );
       },
       invalidateAfterFinish: (topicId) => refreshAfterGeneration(topicId),
     });

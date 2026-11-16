@@ -309,7 +309,10 @@ describe("generation execution: attachments", () => {
       filename: "server-name.txt",
     });
     // And the extracted text reached the model.
-    expect(JSON.stringify(provider.calls[0]!.messages)).toContain("attachment body");
+    // The title call runs beside the answer, so pick the answer by streaming.
+    expect(
+      JSON.stringify(provider.calls.find((call) => call.stream)!.messages),
+    ).toContain("attachment body");
   });
 
   it("rejects an unroutable attachment", async () => {

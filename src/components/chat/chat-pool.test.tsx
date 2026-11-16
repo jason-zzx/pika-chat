@@ -218,7 +218,7 @@ describe("chat pool streaming status", () => {
 describe("chat pool module-level side effects", () => {
   it("invalidates the tree even with no view attached", () => {
     const bridge = {
-      invalidateTree: vi.fn(),
+      onTopicAnnounced: vi.fn(),
       invalidateAfterFinish: vi.fn(),
     };
     const dispose = configureChatPool(bridge);
@@ -232,7 +232,7 @@ describe("chat pool module-level side effects", () => {
       });
     });
 
-    expect(bridge.invalidateTree).toHaveBeenCalled();
+    expect(bridge.onTopicAnnounced).toHaveBeenCalledWith("t1");
     dispose();
   });
 

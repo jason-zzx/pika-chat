@@ -14,6 +14,12 @@ export async function getTopic(id: string): Promise<TopicDetail> {
   return parseJson(response, (data) => topicDetailSchema.parse(data));
 }
 
+/** Resolves once the topic's server-side title task has settled. */
+export async function waitForTopicTitle(id: string): Promise<TopicDetail> {
+  const response = await fetch(`/api/topics/${encodeURIComponent(id)}/title`);
+  return parseJson(response, (data) => topicDetailSchema.parse(data));
+}
+
 /** Manual history compression (PRD R2): folds the topic's history into its
  * rolling summary with the session's current model. The caller only needs the
  * side effect (the refreshed detail query supplies the new boundary), so the

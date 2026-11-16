@@ -101,9 +101,10 @@ type RunnerState = {
   /**
    * Work that outlives its generation row but must still be cancelled with the
    * topic (title naming today; search/fetch cleanup in the next phase). Keyed
-   * by topic id, aborted by the delete paths.
+   * by topic id, aborted by the delete paths. Each controller maps to its
+   * settled-or-not promise so a client can wait for the topic's title.
    */
-  postTurn: Map<string, Set<AbortController>>;
+  postTurn: Map<string, Map<AbortController, Promise<void>>>;
 };
 
 /**
@@ -362,6 +363,15 @@ async function claimAndStart(
     entry.status = "stopping";
     entry.controller.abort();
   }
+  // The title only needs the already-stored user message, so it runs beside
+  // the answer instead of after it: the sidebar is named while the reply
+  // streams. Best-effort (chat task §7): it never blocks or fails the turn,
+  // works with no browser open, and the service keeps a user-set title. A
+  // turn already stopped or caught by shutdown (whose post-turn abort has
+  // already run) must not start one.
+  if (!entry.controller.signal.aborted) {
+    void generateTitleForTurn(row);
+  }
   void executeTurn(row, entry);
   return entry;
 }
@@ -580,14 +590,6 @@ async function executeTurn(
     closeAllSubscribers(entry);
     removeLiveGeneration(row.id);
     entry.markSettled();
-
-    if (result?.settled && result.messageStored && result.status === "completed") {
-      // Title generation is server-side and best-effort (chat task §7): it
-      // must not block or fail the reply, must work with no browser open, and
-      // the service refuses to overwrite a title the user already set. It is
-      // tracked as a post-turn task so deleting the topic cancels it.
-      void generateTitleAfterTurn(row);
-    }
   };
 
   try {
@@ -738,17 +740,29 @@ export function runPostTurnTask(
   const controller = new AbortController();
   let tasks = state.postTurn.get(topicId);
   if (!tasks) {
-    tasks = new Set();
+    tasks = new Map();
     state.postTurn.set(topicId, tasks);
   }
   const registered = tasks;
-  registered.add(controller);
-  return run(controller.signal).finally(() => {
+  // `finally` always runs in a later microtask, so the entry is registered
+  // before it can be removed.
+  const done = run(controller.signal).finally(() => {
     registered.delete(controller);
     if (registered.size === 0 && state.postTurn.get(topicId) === registered) {
       state.postTurn.delete(topicId);
     }
   });
+  registered.set(controller, done);
+  return done;
+}
+
+/**
+ * Resolves once every post-turn task of a topic has settled (immediately when
+ * none is running). Lets a client wait for the server-side title, which no
+ * stream carries, instead of refetching before it is written.
+ */
+export async function waitForPostTurnTasks(topicId: string): Promise<void> {
+  await Promise.allSettled(runnerState().postTurn.get(topicId)?.values() ?? []);
 }
 
 /** Cancels every post-turn task of a topic (called by the delete paths). */
@@ -757,7 +771,7 @@ export function abortPostTurnTasks(topicId: string): void {  const state = runne
   if (!tasks) {
     return;
   }
-  for (const controller of tasks) {
+  for (const controller of tasks.keys()) {
     controller.abort();
   }
   state.postTurn.delete(topicId);
@@ -765,14 +779,14 @@ export function abortPostTurnTasks(topicId: string): void {  const state = runne
 
 function abortAllPostTurnTasks(state: RunnerState): void {
   for (const tasks of state.postTurn.values()) {
-    for (const controller of tasks) {
+    for (const controller of tasks.keys()) {
       controller.abort();
     }
   }
   state.postTurn.clear();
 }
 
-async function generateTitleAfterTurn(row: GenerationRow): Promise<void> {
+async function generateTitleForTurn(row: GenerationRow): Promise<void> {
   const input = row.input;
   const topicId = row.topicId;
   if (!input?.titleCandidate || topicId === null) {

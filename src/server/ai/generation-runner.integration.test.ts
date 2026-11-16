@@ -7,6 +7,7 @@ import {
   checkpointContentOf,
   ensureGenerationRunning,
   runPostTurnTask,
+  waitForPostTurnTasks,
   startGenerationRunner,
   stopGenerationById,
   subscribeToGeneration,
@@ -389,6 +390,54 @@ describe("generation executor", () => {
     // Title naming (and, in the next phase, search cleanup) must not keep
     // working on a topic the user already deleted.
     expect(aborted).toBe(true);
+  });
+
+  it("lets a client wait for a topic's post-turn tasks to settle", async () => {
+    const { topicId } = await seedChat(provider.baseUrl);
+    await waitForPostTurnTasks(topicId);
+
+    let release = () => {};
+    let settled = false;
+    void runPostTurnTask(
+      topicId,
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const waiting = waitForPostTurnTasks(topicId).then(() => {
+      settled = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+    release();
+    await waiting;
+    expect(settled).toBe(true);
+  });
+
+  it("names the topic beside the answer, before the answer finishes", async () => {
+    const { actor, assistantId, topicId } = await seedChat(provider.baseUrl);
+    provider.deltas = ["Greeting"];
+    provider.holdOpen = true;
+    const { generation } = await admitPrepared(
+      preparedTurn({ assistantId, topicId, titleCandidate: true }),
+      actor,
+    );
+    const entry = await ensureGenerationRunning(generation.id);
+    if (!entry) throw new Error("missing live generation");
+
+    await waitForPostTurnTasks(topicId);
+    const [topic] = await db
+      .select({ title: topics.title })
+      .from(topics)
+      .where(eq(topics.id, topicId));
+    expect(topic?.title).toBe("Greeting");
+    expect((await generationRow(generation.id))?.status).toBe("running");
+
+    provider.release();
+    await entry.settled;
+    expect((await generationRow(generation.id))?.status).toBe("completed");
   });
 
   it("waits for the real in-flight checkpoint before starting terminal persistence", async () => {
