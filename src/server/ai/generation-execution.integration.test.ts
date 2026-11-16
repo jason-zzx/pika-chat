@@ -695,7 +695,14 @@ describe("generation execution: answer metadata", () => {
     // Both come from the `finish` chunk merged into the single live state, not
     // from a second SDK-side message copy.
     expect(answer?.metadata?.finishReason).toBe("stop");
-    expect(answer?.metadata?.totalTokens).toBe(12);
+    expect(answer?.metadata?.usage).toMatchObject({
+      inputTokens: 5,
+      outputTokens: 7,
+      totalTokens: 12,
+    });
+    expect(answer?.metadata?.usage?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(answer?.metadata?.usage?.outputMs).toBeGreaterThanOrEqual(0);
+    expect(answer?.metadata?.usage?.cacheReadTokens).toBeUndefined();
     // The first completed turn names its topic on the server, from the model's
     // title reply (not the user-text fallback), with no client involved.
     await waitFor(async () => {
@@ -704,6 +711,65 @@ describe("generation execution: answer metadata", () => {
         .from(topics)
         .where(eq(topics.id, generation.topicId!));
       return topic?.title === "Weather in Paris";
+    });
+  });
+
+  it("captures openai-compatible raw cache-read fallbacks (prompt_cache_hit_tokens and cached_tokens)", async () => {
+    const seed = await seedChat(provider.baseUrl);
+    provider.deltas = ["Cached ", "reply"];
+    provider.deltaDelayMs = 25;
+    provider.streamUsage = {
+      prompt_tokens: 100,
+      completion_tokens: 20,
+      prompt_cache_hit_tokens: 60,
+    };
+
+    const first = await prepareSendTurn(
+      sendRequest({ assistantId: seed.assistantId, text: "first" }),
+      seed.actor,
+    );
+    const { generation: g1 } = await admitPrepared(first, seed.actor);
+    await runToCompletion(g1);
+
+    const firstStored = await listTopicMessages({ topicId: g1.topicId! }, seed.actor);
+    const firstUsage = firstStored.find((m) => m.role === "assistant")?.metadata?.usage;
+    expect(firstUsage).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      totalTokens: 120,
+      cacheReadTokens: 60,
+    });
+    expect(firstUsage?.outputMs).toBeGreaterThan(0);
+    expect(firstUsage?.durationMs).toBeGreaterThanOrEqual(firstUsage?.outputMs ?? 0);
+    // The first delta is written immediately and the rest after 25ms delays, so
+    // the call's time to first output is far below its output span, and TTFT +
+    // output time fit inside the turn duration (±1ms rounding).
+    expect(firstUsage?.ttftMs).toBeGreaterThanOrEqual(0);
+    expect(firstUsage?.ttftMs).toBeLessThan(firstUsage?.outputMs ?? 0);
+    expect((firstUsage?.ttftMs ?? 0) + (firstUsage?.outputMs ?? 0)).toBeLessThanOrEqual(
+      (firstUsage?.durationMs ?? 0) + 1,
+    );
+
+    provider.streamUsage = {
+      prompt_tokens: 200,
+      completion_tokens: 40,
+      cached_tokens: 150,
+    };
+    const second = await prepareSendTurn(
+      sendRequest({ assistantId: seed.assistantId, text: "second" }),
+      seed.actor,
+    );
+    const { generation: g2 } = await admitPrepared(second, seed.actor);
+    await runToCompletion(g2);
+
+    const secondStored = await listTopicMessages({ topicId: g2.topicId! }, seed.actor);
+    expect(
+      secondStored.find((m) => m.role === "assistant")?.metadata?.usage,
+    ).toMatchObject({
+      inputTokens: 200,
+      outputTokens: 40,
+      totalTokens: 240,
+      cacheReadTokens: 150,
     });
   });
 

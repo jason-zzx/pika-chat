@@ -10,6 +10,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import type { ChatUsage } from "@/lib/schemas/chat";
+
 import { topics } from "./assistant";
 import { users } from "./auth";
 import { timestamptz } from "./columns";
@@ -43,11 +45,11 @@ export const chatMessages = pgTable(
     ),
     modelId: text("model_id"),
     reasoningMs: integer("reasoning_ms"),
-    // Provider-reported total usage and finish reason. Nullable because rows
+    // Provider-reported usage/timing and finish reason. Nullable because rows
     // written before these columns (and user messages) have neither; history
-    // reloads surface them so a truncated/limited finish keeps its feedback
-    // after a refresh (chat task R7).
-    totalTokens: integer("total_tokens"),
+    // reloads surface them so stats and truncated/limited finish feedback
+    // survive a refresh.
+    usage: jsonb("usage").$type<ChatUsage>(),
     finishReason: text("finish_reason"),
     // Per-version translations keyed by BCP-47 target language code
     // ({ "zh-CN": "…" }); null until the first translation of the row.

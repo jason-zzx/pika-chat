@@ -212,7 +212,22 @@
       "stoppedBeforeAnswer": "The model stopped before writing an answer.",
       "stopped": "Stopped",
       "failedFallback": "The model failed to respond.",
-      "citationSource": "Source {num}: {title}"
+      "citationSource": "Source {num}: {title}",
+      "usage": {
+        "triggerLabel": "Token usage and speed: {summary}",
+        "tps": "{tps} tok/s",
+        "title": "Usage",
+        "inputTokens": "Input tokens",
+        "outputTokens": "Output tokens",
+        "cacheReadTokens": "Cache hits",
+        "cacheHitRate": "Cache hit rate",
+        "outputSpeed": "Output speed",
+        "ttft": "Time to first token",
+        "totalDuration": "Total duration",
+        "seconds": "{seconds}s",
+        "percent": "{percent}%",
+        "missing": "—"
+      }
     },
     "Actions": {
       "copy": "Copy",

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { fileIdFromUrl } from "@/lib/files/media-types";
-import type { ChatUIMessage } from "@/lib/schemas/chat";
+import type { ChatUIMessage, ChatUsage } from "@/lib/schemas/chat";
 import { errorsTranslatorFor } from "@/i18n/server-translator";
 import {
   runGenerationTurn,
@@ -402,7 +402,7 @@ export function checkpointContentOf(state: LiveStreamState, toolMode = false): {
   providerConfigId?: string;
   modelId?: string;
   reasoningMs?: number;
-  totalTokens?: number;
+  usage?: ChatUsage;
   finishReason?: string;
 } {
   return {
@@ -423,7 +423,7 @@ export function persistedMetadataOf(state: LiveStreamState): {
   providerConfigId?: string;
   modelId?: string;
   reasoningMs?: number;
-  totalTokens?: number;
+  usage?: ChatUsage;
   finishReason?: string;
 } {
   const metadata = state.message.metadata;
@@ -435,9 +435,7 @@ export function persistedMetadataOf(state: LiveStreamState): {
     ...(metadata?.reasoningMs === undefined
       ? {}
       : { reasoningMs: metadata.reasoningMs }),
-    ...(metadata?.totalTokens === undefined
-      ? {}
-      : { totalTokens: metadata.totalTokens }),
+    ...(metadata?.usage === undefined ? {} : { usage: metadata.usage }),
     ...(metadata?.finishReason === undefined
       ? {}
       : { finishReason: metadata.finishReason }),

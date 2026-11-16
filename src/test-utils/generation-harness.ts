@@ -239,7 +239,10 @@ export async function drainStream(
 function sseChunk(
   delta: Record<string, unknown>,
   finish: string | null,
-  usage?: { prompt_tokens: number; completion_tokens: number },
+  usage?: Record<string, unknown> & {
+    prompt_tokens: number;
+    completion_tokens: number;
+  },
 ): string {
   return `data: ${JSON.stringify({
     id: "cmpl-test",
@@ -248,7 +251,7 @@ function sseChunk(
     model: "gpt-4o",
     choices: [{ index: 0, delta, finish_reason: finish }],
     ...(usage && {
-      usage: { ...usage, total_tokens: usage.prompt_tokens + usage.completion_tokens },
+      usage: { total_tokens: usage.prompt_tokens + usage.completion_tokens, ...usage },
     }),
   })}\n\n`;
 }
@@ -277,6 +280,11 @@ const providerDefaults = () => ({
   /** Responses the client closed before they ended. */
   aborted: 0,
   holds: [] as (() => void)[],
+  /** Usage payload emitted on the final streaming chunk. */
+  streamUsage: { prompt_tokens: 5, completion_tokens: 7 } as Record<string, unknown> & {
+    prompt_tokens: number;
+    completion_tokens: number;
+  },
 });
 
 /** Local OpenAI-compatible endpoint. Tests mutate its fields to script it. */
@@ -356,7 +364,7 @@ export async function startFakeProvider() {
         if (response.destroyed) {
           return;
         }
-        response.write(sseChunk({}, "stop", { prompt_tokens: 5, completion_tokens: 7 }));
+        response.write(sseChunk({}, "stop", script.streamUsage));
         response.write("data: [DONE]\n\n");
         response.end();
       })();

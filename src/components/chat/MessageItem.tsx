@@ -45,6 +45,7 @@ const HIGHLIGHT_CLASS = {
 import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
 import MessageActions from "./MessageActions";
 import MessageTimestamp from "./MessageTimestamp";
+import MessageUsage from "./MessageUsage";
 import ReasoningBlock from "./ReasoningBlock";
 import SearchToolCall, { type SearchWebToolPart } from "./SearchToolCall";
 import UserMessageEditor from "./UserMessageEditor";
@@ -475,6 +476,7 @@ function MessageItem({
   const metadata = message.metadata;
   const outcome = metadata?.outcome;
   const modelId = metadata?.modelId;
+  const usage = metadata?.usage;
   const createdAt = metadata?.createdAt;
   const reasoningMs = metadata?.reasoningMs;
   const reasoningDurations = metadata?.reasoningDurations;
@@ -761,7 +763,10 @@ function MessageItem({
         )
       ) : null}
       {modelId ? (
-        <p className="text-xs text-muted-foreground">{modelId}</p>
+        <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+          <span className="truncate">{modelId}</span>
+          {usage ? <MessageUsage usage={usage} /> : null}
+        </div>
       ) : null}
       {translationEntries.length > 0 || translatingTargetLang ? (
         <div className="flex w-full flex-col gap-2">

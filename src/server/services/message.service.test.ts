@@ -43,7 +43,7 @@ function row(overrides: Partial<ChatMessageRow>): ChatMessageRow {
     providerConfigId: null,
     modelId: null,
     reasoningMs: null,
-    totalTokens: null,
+    usage: null,
     finishReason: null,
     translations: null,
     groupId: "msg-1",
@@ -153,6 +153,14 @@ describe("rowToChatUIMessage", () => {
         providerConfigId: "cfg-1",
         modelId: "gpt-4o",
         reasoningMs: 3200,
+        usage: {
+          inputTokens: 120,
+          outputTokens: 45,
+          totalTokens: 165,
+          cacheReadTokens: 80,
+          durationMs: 2500,
+          outputMs: 1500,
+        },
       }),
     );
     expect(message).toEqual({
@@ -165,6 +173,14 @@ describe("rowToChatUIMessage", () => {
         providerConfigId: "cfg-1",
         modelId: "gpt-4o",
         reasoningMs: 3200,
+        usage: {
+          inputTokens: 120,
+          outputTokens: 45,
+          totalTokens: 165,
+          cacheReadTokens: 80,
+          durationMs: 2500,
+          outputMs: 1500,
+        },
         createdAt: "2026-01-01T00:00:00.000Z",
       },
     });

@@ -1845,3 +1845,146 @@ describe("MessageItem translation progress", () => {
     expect(screen.getByText("こんにちは")).toBeInTheDocument();
   });
 });
+
+describe("MessageItem usage stats", () => {
+  it("renders compact inline stats on the model row and opens the detail card", async () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Answer", {
+          modelId: "gpt-5.2",
+          usage: {
+            inputTokens: 1200,
+            outputTokens: 350,
+            totalTokens: 1550,
+            cacheReadTokens: 600,
+            durationMs: 4200,
+            ttftMs: 800,
+            outputMs: 2500,
+          },
+        })}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: /Token usage and speed: ↑1\.2K ↓350 · 140\.0 tok\/s/,
+    });
+    expect(trigger).toHaveTextContent("↑1.2K ↓350 · 140.0 tok/s");
+
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("1,200");
+    expect(dialog).toHaveTextContent("350");
+    expect(dialog).toHaveTextContent("600");
+    expect(dialog).toHaveTextContent("50%");
+    expect(dialog).toHaveTextContent("140.0 tok/s");
+    expect(dialog).toHaveTextContent("Time to first token0.8s");
+    expect(dialog).toHaveTextContent("4.2s");
+    // TTFT is card-only, never on the inline trigger.
+    expect(trigger).not.toHaveTextContent("0.8s");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("omits cache rows when cacheReadTokens is unreported and shows 0/0% when 0", async () => {
+    const { rerender } = renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Answer", {
+          modelId: "deepseek-chat",
+          usage: {
+            inputTokens: 100,
+            outputTokens: 50,
+            durationMs: 1000,
+            outputMs: 500,
+          },
+        })}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Token usage and speed/ }),
+    );
+    const unreportedDialog = await screen.findByRole("dialog");
+    expect(unreportedDialog).not.toHaveTextContent("Cache hits");
+    expect(unreportedDialog).not.toHaveTextContent("Cache hit rate");
+
+    rerender(
+      wrapWithIntl(
+        <MessageItem
+          message={assistantMessage("Answer", {
+            modelId: "claude-sonnet-4",
+            usage: {
+              inputTokens: 100,
+              outputTokens: 50,
+              cacheReadTokens: 0,
+              durationMs: 1000,
+              outputMs: 500,
+            },
+          })}
+        />,
+      ),
+    );
+
+    const zeroDialog = await screen.findByRole("dialog");
+    expect(zeroDialog).toHaveTextContent("Cache hits");
+    expect(zeroDialog).toHaveTextContent("0%");
+  });
+
+  it("hides TPS when outputMs is 0 and hides hit rate when inputTokens is 0", async () => {
+    renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Answer", {
+          modelId: "gemini-2.5-flash",
+          usage: {
+            inputTokens: 0,
+            outputTokens: 20,
+            cacheReadTokens: 0,
+            durationMs: 1000,
+            outputMs: 0,
+          },
+        })}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: /Token usage and speed: ↑0 ↓20$/,
+    });
+    expect(trigger).not.toHaveTextContent("tok/s");
+
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).not.toHaveTextContent("Output speed");
+    expect(dialog).not.toHaveTextContent("Cache hit rate");
+    expect(dialog).toHaveTextContent("Time to first token—");
+  });
+
+  it("renders no usage trigger for legacy/stopped/empty-usage rows", () => {
+    const { rerender } = renderWithIntl(
+      <MessageItem
+        message={assistantMessage("Legacy", {
+          modelId: "gpt-4o",
+          usage: { totalTokens: 42 },
+        })}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /Token usage and speed/ }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      wrapWithIntl(
+        <MessageItem
+          message={assistantMessage("Stopped", {
+            modelId: "gpt-4o",
+            outcome: "stopped",
+          })}
+        />,
+      ),
+    );
+    expect(
+      screen.queryByRole("button", { name: /Token usage and speed/ }),
+    ).not.toBeInTheDocument();
+  });
+});

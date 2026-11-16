@@ -444,7 +444,7 @@ describe("generation executor", () => {
       type: "message-metadata",
       messageMetadata: {
         reasoningMs: 1_234,
-        totalTokens: 7,
+        usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
         finishReason: "length",
       },
     });
@@ -454,7 +454,7 @@ describe("generation executor", () => {
     expect(checkpointContentOf(state)).toEqual({
       parts: [{ type: "text", text: "par<tool_call>leaked</tool_call>" }],
       reasoningMs: 1_234,
-      totalTokens: 7,
+      usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
       finishReason: "length",
     });
     // The persistence markup safety net applies to tool-mode turns only.
