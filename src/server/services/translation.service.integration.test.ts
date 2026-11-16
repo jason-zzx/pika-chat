@@ -205,7 +205,8 @@ describe("translateMessage", () => {
       prompt: string;
     };
     expect(call.instructions).toContain("简体中文");
-    expect(call.prompt).toBe("Hello **world**");
+    expect(call.prompt).toContain("<text>\nHello **world**\n</text>");
+    expect(call.prompt).toContain("简体中文");
 
     const rows = await db
       .select({ translations: chatMessages.translations })
@@ -231,7 +232,7 @@ describe("translateMessage", () => {
 
     expect(result).toEqual({ translation: "Hello world" });
     const call = generateText.mock.calls[0]?.[0] as { prompt: string };
-    expect(call.prompt).toBe("Bonjour le monde");
+    expect(call.prompt).toContain("<text>\nBonjour le monde\n</text>");
   });
 
   it("prefers the user's translation-model preference over the client pair", async () => {

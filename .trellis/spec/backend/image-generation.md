@@ -198,7 +198,7 @@ over the images endpoint would silently render 1K while the user picked 2K.
 
 **Title short-circuit.** The title fallback pair is the composer's current
 model; when it is image-only, `generateText` is guaranteed to fail and burn
-the 15s timeout. `title.service` checks the fallback pair's
+the 20s timeout. `title.service` checks the fallback pair's
 `outputModalities` first and goes straight to the truncated-text title. An
 explicit title preference naming an image model is honored as-is — the
 existing catch degrades it to the same fallback.
