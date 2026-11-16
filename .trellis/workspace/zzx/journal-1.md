@@ -1115,3 +1115,25 @@ Planned and checked env-gated DEMO_MODE: per-device anonymous guests via better-
 ### Status
 
 [OK] **Completed**
+
+
+## Session 41: Per-message token usage stats
+<!-- trellis-session: v=2 fp=60d8e52931004f46 -->
+
+**Date**: 2026-11-15
+**Task**: Per-message token usage stats
+**Branch**: `feat/message-token-stats`
+
+### Summary
+
+Added per-message token usage on the assistant model row: input/output tokens and TPS inline (TPS only on mobile), hover/tap popover with cache-hit tokens, hit rate, TPS, TTFT and total duration. Captured per model call via AI SDK onLanguageModelCallEnd (TPS excludes TTFT and tool execution; TTFT from first call that produced output). openai-compatible cache hits read from raw usage (cached_tokens / prompt_cache_hit_tokens / top-level cached_tokens), unreported cache hides cache rows. Replaced chat_messages.total_tokens with usage jsonb (migration 0028 backfills). Applied over-engineering review (-51 lines). Spec chat-message-metadata.md updated.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8b7a90` | feat(chat): show per-message token usage, cache hit, TTFT and TPS stats |
+
+### Status
+
+[OK] **Completed**
