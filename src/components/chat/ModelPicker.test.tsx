@@ -73,7 +73,7 @@ describe("ModelPicker", () => {
 
     expect(await screen.findByText("my-keys")).toBeInTheDocument();
     expect(
-      screen.getByText("instance-openai (shared by operator)"),
+      screen.getByText("instance-openai (shared)"),
     ).toBeInTheDocument();
     expect(screen.queryByText("No default model")).not.toBeInTheDocument();
 
@@ -155,30 +155,6 @@ describe("ModelPicker", () => {
     expect(imageRow).toHaveAccessibleName(/Image generation/);
     const plainRow = screen.getByRole("button", { name: /plain-chat/ });
     expect(plainRow).not.toHaveAccessibleName(/Image generation/);
-  });
-
-  it("falls back to the anonymous owner label for a shared config without an owner name", async () => {
-    vi.mocked(listAvailableModels).mockResolvedValue([
-      {
-        configId: "cfg-shared",
-        configName: "instance-openai",
-        modelId: "gpt-4o",
-        provenance: "shared",
-        ownerName: null,
-        ...defaultModelMetadata(),
-      },
-    ]);
-
-    renderPicker();
-    const trigger = await screen.findByRole("button", {
-      name: "Select a model",
-    });
-    await vi.waitFor(() => expect(trigger).toBeEnabled());
-    fireEvent.click(trigger);
-
-    expect(
-      await screen.findByText("instance-openai (shared by another user)"),
-    ).toBeInTheDocument();
   });
 
   it("shows a 1M context label, hides labels under 1M, and renders vision and reasoning as icons", async () => {

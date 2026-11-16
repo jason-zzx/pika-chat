@@ -88,7 +88,6 @@ describe("groupAvailableModels", () => {
     ).toEqual({
       kind: "shared",
       configName: "instance-openai",
-      ownerName: "operator",
     });
   });
 });

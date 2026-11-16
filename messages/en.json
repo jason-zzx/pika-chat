@@ -256,8 +256,7 @@
       "vision": "Vision",
       "reasoning": "Reasoning",
       "imageGeneration": "Image generation",
-      "sharedBy": "{configName} (shared by {name})",
-      "anotherUser": "another user",
+      "sharedConfig": "{configName} (shared)",
       "searchMode": {
         "off": "Off",
         "offDescription": "No web search.",

@@ -115,7 +115,7 @@ describe("AssistantEditorDialog", () => {
     expect(await screen.findByText("my-keys")).toBeInTheDocument();
     expect(screen.getByText("local-llama")).toBeInTheDocument();
     expect(
-      screen.getByText("instance-openai (shared by operator)"),
+      screen.getByText("instance-openai (shared)"),
     ).toBeInTheDocument();
     expect(screen.getByText("gpt-4o")).toBeInTheDocument();
     expect(screen.getByText("No default model")).toBeInTheDocument();

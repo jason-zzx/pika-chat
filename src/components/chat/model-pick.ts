@@ -76,14 +76,13 @@ export function modelMatchesQuery(model: AvailableModel, query: string): boolean
  */
 type ModelGroupHeading =
   | { kind: "config"; configName: string }
-  | { kind: "shared"; configName: string; ownerName: string | null };
+  | { kind: "shared"; configName: string };
 
 export function modelGroupHeading(group: ModelGroup): ModelGroupHeading {
   if (group.provenance === "shared") {
     return {
       kind: "shared",
       configName: group.configName,
-      ownerName: group.ownerName,
     };
   }
   return { kind: "config", configName: group.configName };

@@ -256,8 +256,7 @@
       "vision": "视觉",
       "reasoning": "推理",
       "imageGeneration": "图像生成",
-      "sharedBy": "{configName}（由 {name} 共享）",
-      "anotherUser": "其他用户",
+      "sharedConfig": "{configName}（共享）",
       "searchMode": {
         "off": "关闭",
         "offDescription": "不使用网络搜索。",

@@ -176,10 +176,7 @@ export default function ModelPicker({
                 <div key={group.configId} className="mb-1">
                   <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
                     {heading.kind === "shared"
-                      ? t("sharedBy", {
-                          configName: heading.configName,
-                          name: heading.ownerName ?? t("anotherUser"),
-                        })
+                      ? t("sharedConfig", { configName: heading.configName })
                       : heading.configName}
                   </p>
                   {group.models.map((model) => {
