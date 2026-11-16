@@ -10,7 +10,8 @@
 
 <p align="center">
   <a href="README.md">English</a> •
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.zh-CN.md">简体中文</a> •
+  <a href="https://pika-demo.jasonzzx.com">Live Demo</a>
 </p>
 
 <p align="center">
@@ -32,12 +33,21 @@
 
 ---
 
+## Live Demo
+
+Try Pika Chat directly in your browser without creating an account: **[https://pika-demo.jasonzzx.com](https://pika-demo.jasonzzx.com)** 
+
+- One-click guest access using preconfigured models and web search, with daily usage quotas.
+- Conversations and uploaded files are isolated to your browser session and automatically purged after 7 days of inactivity (please avoid entering sensitive information).
+
+---
+
 ## Highlights
 
 - **Zero-Maintenance Philosophy**: Ships with sensible defaults out of the box — local disk storage, auto-migrating database schemas, auto-creating S3 buckets, and automatic orphan file cleanup.
 - **Privacy & Security First**: Provider API keys encrypted with authenticated AES-256-GCM at rest; role-based access control, TOTP 2-Factor Authentication, and isolated storage quotas.
 - **Universal Multimodal Support**: Drag-and-drop images, documents (PDF, DOCX, XLSX, PPTX, EPUB, TXT, Markdown), audio, and video with instant text extraction and dynamic model conversion.
-- **High-Performance Architecture**: Next.js 16 App Router, React 19, Tailwind CSS v4, streaming responses with smooth scroll pinning, and optional direct S3 byte transfers.
+- **High-Performance Architecture**: Next.js 16 App Router, React 19, Tailwind CSS v4, server-managed background generation with stream recovery, smooth scroll pinning, and optional direct S3 byte transfers.
 
 ---
 
@@ -52,13 +62,16 @@
 - **Private & Shared Configurations**: Share vetted provider configs across all instance members, or keep custom keys personal.
 
 ### 💬 Seamless Conversational Experience
+- **Background Generation & Stream Recovery**: Generations run as server-managed tasks that survive tab closes, refreshes, topic switching, and sign-outs — returning to a topic picks up live streaming or shows the finished result without re-running the model, with periodic checkpoints and no extra deployment components required.
+- **In-Place User Message Editing**: Edit any sent user message (text and attachments) directly in the conversation to create a new switchable version and automatically regenerate the assistant reply below it without truncating later turns.
 - **Non-Tail Regeneration**: Regenerate any prior assistant turn without truncating or modifying subsequent conversation turns. Branching message versions are tracked via `group_id` and server-persisted selection states.
+- **Per-Message Token & Latency Stats**: Each assistant reply displays input/output token counts and output speed (TPS), with an expandable card on hover or tap showing cache-hit tokens, hit rate, time to first token (TTFT), and total duration.
 - **Rich Markdown & Code Rendering**: Powered by Streamdown with real-time KaTeX math formulas, interactive Mermaid diagrams, syntax-highlighted code blocks with one-click copying, and CJK-friendly typography.
 - **Context History Compression**: Automatically compresses long conversations into rolling summaries at ~80% of the model context budget, with one-click manual compression and collapsible summary views in the message list.
 - **On-Demand Message Translation**: Translate any question or answer into 8 languages with per-version persistent caching and preserved citation links.
-- **Smart Scroll Management**: Tail message reserve space prevents layout jumps during streaming, while gesture-based unpinning respects wheel and touch scrolls.
+- **Smart Scroll Management**: Tail message reserve space prevents layout jumps during streaming, while gesture-based unpinning respects wheel, touch, and scrollbar drag interactions.
 - **Mobile-First UX**: Responsive split-column layout, tap-to-reveal message actions (no hover-only dependencies), and non-modal dropdowns designed for touch interactions.
-- **Assistants & Topics**: Create custom assistants with dedicated system instructions and default models. Pin topics and export dialogues.
+- **Assistants & Topics**: Create custom assistants with dedicated system instructions and default models. Pin topics, sync tab titles with active conversations, and export dialogues.
 - **Full-Text Message Search**: Instantly jump to any topic or message with global full-text search, a `Ctrl+K` command palette, and in-topic hit navigation.
 
 ### 📎 Multimodal Attachments & Document Parsing
