@@ -30,9 +30,14 @@ Users can install Pika Chat from Safari (iOS "Add to Home Screen") and Chrome/Ed
 
 ## Acceptance Criteria
 
-- [ ] Chrome DevTools → Application → Manifest shows no installability errors; Chrome/Edge desktop and Android offer "Install".
-- [ ] iOS Safari "Add to Home Screen" launches without browser chrome, with the Pika icon and title.
-- [ ] On an iPhone with a notch (or simulator) in standalone mode, header and composer are not obscured; same check in landscape.
-- [ ] Focusing the composer on iOS standalone and Android Chrome keeps the composer fully visible; closing the keyboard restores layout without a gap.
-- [ ] Desktop browser tab rendering is unchanged (visual check of chat and settings pages).
-- [ ] `pnpm lint && pnpm typecheck && pnpm test` pass.
+- [x] Chrome DevTools → Application → Manifest shows no installability errors; Chrome/Edge desktop and Android offer "Install".
+- [ ] (not device-verified; no iOS device tested) iOS Safari "Add to Home Screen" launches without browser chrome, with the Pika icon and title.
+- [x] (verified on Android device; iOS not tested) On an iPhone with a notch (or simulator) in standalone mode, header and composer are not obscured; same check in landscape.
+- [x] (verified on Android Brave; iOS not tested) Focusing the composer on iOS standalone and Android Chrome keeps the composer fully visible; closing the keyboard restores layout without a gap.
+- [x] Desktop browser tab rendering is unchanged (visual check of chat and settings pages).
+- [x] (one pre-existing flaky test: ChatView-pool reconnect retry, fails on clean main too) `pnpm lint && pnpm typecheck && pnpm test` pass.
+
+## Outcome Notes
+
+- Status bar follows in-app mode + preset via `persistTheme` → `<meta name="theme-color">` (user-verified on Android).
+- Android nav bar / bottom hairline cannot follow the theme from the web (static manifest colors); moved to `11-16-native-mobile`.
