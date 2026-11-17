@@ -130,7 +130,7 @@ export default function MessageActions({
         : t("copyFailed");
 
   return (
-    <div className="flex h-5 shrink-0 items-center gap-1">
+    <div className="flex h-5 shrink-0 select-none items-center gap-1">
       {/* The version switcher is part of the same reveal group as the other
           actions (R9): hidden until hover/focus/tap, not always visible. */}
       <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 motion-reduce:transition-none group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100">

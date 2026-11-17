@@ -522,6 +522,49 @@ export default function MessageList({
     return () => container.removeEventListener("mousedown", onMouseDown);
   }, [hasMessages]);
 
+  // Drag-selecting past a message's last character puts the selection focus
+  // in a non-selectable spot (the select-none action row, the gap under the
+  // bubble); Chromium then resolves it forward to the start of the next
+  // message, so the copied text ends in blank lines from the crossed block
+  // boundaries. Trim that trailing whitespace for selections inside the list.
+  // Listens on `document` because `copy` targets the focused element (usually
+  // body), not the selection. Form fields (the in-place message editor) keep
+  // the native copy.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const onCopy = (event: ClipboardEvent) => {
+      const selection = window.getSelection();
+      if (
+        !selection ||
+        selection.rangeCount === 0 ||
+        !event.clipboardData ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLInputElement
+      ) {
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      if (!content.contains(range.commonAncestorContainer)) {
+        return;
+      }
+      const text = selection.toString();
+      const trimmed = text.trimEnd();
+      if (trimmed === text) {
+        return;
+      }
+      const holder = document.createElement("div");
+      holder.append(range.cloneContents());
+      event.clipboardData.setData("text/plain", trimmed);
+      event.clipboardData.setData("text/html", holder.innerHTML);
+      event.preventDefault();
+    };
+    document.addEventListener("copy", onCopy);
+    return () => document.removeEventListener("copy", onCopy);
+  }, [hasMessages]);
+
   const scrollToBottom = useCallback(() => {
     const container = containerRef.current;
     if (!container) {
