@@ -1,7 +1,7 @@
 {
   "RootLayout": {
-    "title": "Pika chat",
-    "titleTemplate": "%s · Pika chat",
+    "title": "Pika Chat",
+    "titleTemplate": "%s · Pika Chat",
     "description": "自托管的 AI 聊天"
   },
   "Layout": {
@@ -91,7 +91,7 @@
       "signInLink": "登录"
     },
     "setup": {
-      "title": "初始化 Pika chat",
+      "title": "初始化 Pika Chat",
       "description": "为此实例创建第一个管理员账户。",
       "submit": "创建管理员账户",
       "submitting": "正在创建…"
@@ -104,7 +104,7 @@
     "signOut": "退出登录",
     "signOutFailed": "退出登录失败，请重试。",
     "demo": {
-      "title": "体验 Pika chat",
+      "title": "体验 Pika Chat",
       "description": "以临时访客身份立即试用站内已配置的大模型，无需注册账号。",
       "enter": "进入演示",
       "entering": "正在进入演示…",

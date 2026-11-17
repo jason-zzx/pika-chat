@@ -112,7 +112,7 @@ export function createAuthInstance() {
   const ipHeader = currentEnv.CLIENT_IP_HEADER!;
 
   return betterAuth({
-    appName: "Pika chat",
+    appName: "Pika Chat",
     baseURL: appUrl,
     secret: currentEnv.BETTER_AUTH_SECRET,
     database: drizzleAdapter(getDb(), {
@@ -170,7 +170,7 @@ export function createAuthInstance() {
       // TOTP-only: `otpOptions.sendOTP` stays unset (no email/SMS channel
       // exists), and `skipVerificationOnEnable` / `trustDeviceMaxAge` stay at
       // their defaults so enrollment always needs a confirmed code.
-      twoFactor({ issuer: "Pika chat" }),
+      twoFactor({ issuer: "Pika Chat" }),
       ...(demo
         ? [
             anonymous({

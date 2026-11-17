@@ -1,7 +1,7 @@
 {
   "RootLayout": {
-    "title": "Pika chat",
-    "titleTemplate": "%s · Pika chat",
+    "title": "Pika Chat",
+    "titleTemplate": "%s · Pika Chat",
     "description": "Self-hosted AI chat"
   },
   "Layout": {
@@ -91,7 +91,7 @@
       "signInLink": "Sign in"
     },
     "setup": {
-      "title": "Set up Pika chat",
+      "title": "Set up Pika Chat",
       "description": "Create the first admin account for this instance.",
       "submit": "Create admin account",
       "submitting": "Creating…"
@@ -104,7 +104,7 @@
     "signOut": "Sign out",
     "signOutFailed": "Sign out failed. Please try again.",
     "demo": {
-      "title": "Try Pika chat",
+      "title": "Try Pika Chat",
       "description": "Explore the workspace as a temporary guest using the operator's configured models. No sign-up required.",
       "enter": "Enter demo",
       "entering": "Starting demo…",
