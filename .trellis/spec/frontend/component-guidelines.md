@@ -178,6 +178,14 @@ fork so both branches read the same source.
 Test both breakpoints before calling a component done, and specifically test
 that the mobile drawer opens, closes, and closes again after navigation.
 
+**Safe areas**: the root viewport sets `viewport-fit=cover`, so in an installed
+PWA the page extends under the notch, status bar, and home indicator. `AppShell`
+pads `SidebarInset` with all four `env(safe-area-inset-*)` values (left only
+below `md`; the desktop sidebar pads its own left side). Any new full-screen
+surface (`fixed inset-0`, like `ImagePreviewDialog`) or edge-anchored overlay
+(like the toast viewport) must pad or offset by the insets itself. The insets
+are 0 in a normal browser tab, so this never changes tab rendering.
+
 ---
 
 ## Accessibility

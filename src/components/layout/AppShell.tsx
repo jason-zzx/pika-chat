@@ -36,7 +36,9 @@ export default function AppShell({
           role={user.role}
           themePreference={themePreference}
         />
-        <SidebarInset className="min-h-0 overflow-hidden">
+        {/* The desktop sidebar is always visible (collapsible="icon") and pads
+            the left inset itself; only the mobile layout pads it here. */}
+        <SidebarInset className="min-h-0 overflow-hidden pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] md:pl-0">
           {user.isGuest ? <DemoBanner /> : null}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {children}

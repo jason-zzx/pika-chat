@@ -133,8 +133,11 @@ function SidebarProvider({
         data-slot="sidebar-wrapper"
         style={
           {
-            "--sidebar-width": SIDEBAR_WIDTH,
-            "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+            // Widened by the left safe-area inset (landscape notch, PWA
+            // viewport-fit=cover) so the inner padding does not eat the
+            // content width; the inset is 0 in a normal browser tab.
+            "--sidebar-width": `calc(${SIDEBAR_WIDTH} + env(safe-area-inset-left))`,
+            "--sidebar-width-icon": `calc(${SIDEBAR_WIDTH_ICON} + env(safe-area-inset-left))`,
             ...style,
           } as React.CSSProperties
         }
@@ -201,7 +204,9 @@ function Sidebar({
             <SheetTitle>{t("sidebar.title")}</SheetTitle>
             <SheetDescription>{t("sidebar.description")}</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div className="flex h-full w-full flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
+            {children}
+          </div>
         </SheetContent>
       </Sheet>
     )
@@ -244,7 +249,7 @@ function Sidebar({
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
-          className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
+          className="flex size-full flex-col bg-sidebar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
         >
           {children}
         </div>

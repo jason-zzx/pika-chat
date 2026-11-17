@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies, headers } from "next/headers";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -35,8 +35,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { default: t("title"), template: t("titleTemplate") },
     description: t("description"),
+    appleWebApp: { title: t("title") },
   };
 }
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
 
 export default async function RootLayout({
   children,
@@ -72,6 +78,9 @@ export default async function RootLayout({
       data-theme={preference.preset === "default" ? undefined : preference.preset}
     >
       <body className="flex min-h-full flex-col">
+        {/* Filled by persistTheme so the PWA status bar follows the in-app
+            mode and preset, not the OS color scheme. */}
+        <meta name="theme-color" />
         {/* Outside AppProviders (a client component) so every client
             component below can call useTranslations. Server-rendered with no
             props: locale/messages/now/timeZone/formats are inherited from

@@ -75,6 +75,16 @@ on failure (`Errors.actions.updateTheme`). `ThemeControl` (sidebar + settings)
 and `ThemePresetControl` (settings/general appearance section) both go through
 this hook — do not write the cookie or PATCH from anywhere else.
 
+`persistTheme` also writes the resolved `body` background into the single
+`<meta name="theme-color">` that `RootLayout` renders empty. That tag is what
+the installed PWA's status bar reads, so it follows mode **and** preset — do
+not reintroduce a static `viewport.themeColor` keyed on `prefers-color-scheme`
+(it ignores the in-app mode and presets). jsdom tests get the tag from
+`vitest.dom.setup.ts`. The manifest's `theme_color` / `background_color` stay
+static (`#fafafa`): Android paints the installed app's navigation bar and
+window background from them, which is why the PWA's bottom bar does not follow
+the theme — the native Android shell owns that fix.
+
 Do not add a try/catch fallback around the layout's preference read:
 `resolveActor` already hit the DB for the session, so a failure there 500s
 first; the extra catch protected a scenario that cannot occur.
@@ -95,3 +105,9 @@ toast) carries sanctioned hand edits — the `cn` import points to
 `@/lib/utils`, and the close-button `aria-label` is localized via
 `useTranslations("Common")`. A shadcn regen silently reverts both; re-apply
 after any regen (same status as the dropdown-menu cursor edits).
+
+The same applies to the safe-area edits for the PWA (`viewport-fit=cover`):
+`toast.tsx` offsets the viewport by `env(safe-area-inset-bottom)`, and
+`sidebar.tsx` widens `--sidebar-width` / `--sidebar-width-icon` by
+`env(safe-area-inset-left)` and pads the desktop inner panel and the mobile
+sheet with the top/bottom/left insets.

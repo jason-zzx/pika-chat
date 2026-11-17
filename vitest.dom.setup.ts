@@ -4,3 +4,7 @@ import { afterEach } from "vitest";
 
 afterEach(cleanup);
 
+// RootLayout renders this tag; persistTheme writes into it.
+document.head.append(
+  Object.assign(document.createElement("meta"), { name: "theme-color" }),
+);

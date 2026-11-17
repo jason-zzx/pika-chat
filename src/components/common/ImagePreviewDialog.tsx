@@ -160,7 +160,7 @@ export default function ImagePreviewDialog({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogOverlay />
-        <DialogPrimitive.Popup className="fixed inset-0 z-50 flex h-dvh w-full flex-col bg-background text-sm text-foreground outline-none">
+        <DialogPrimitive.Popup className="fixed inset-0 z-50 flex h-dvh w-full flex-col bg-background pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-sm text-foreground outline-none">
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
             <DialogPrimitive.Title className="truncate font-heading text-base font-medium">
               {filename}
