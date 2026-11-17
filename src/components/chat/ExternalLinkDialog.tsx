@@ -24,10 +24,11 @@ type ExternalLinkDialogProps = {
 const COPIED_FEEDBACK_MS = 2000;
 
 /**
- * Confirmation before navigating to an external URL. Visually mirrors
- * Streamdown's built-in linkSafety modal (used for message-body links):
- * same structure, classes, and copy, layered on the AlertDialog primitive
- * for focus trapping and Escape handling. Copy goes through
+ * Confirmation before navigating to an external URL, used for citation
+ * chips, fetch tool links, and (via Streamdown's `linkSafety.renderModal`)
+ * message-body links. Styled after Streamdown's built-in linkSafety modal,
+ * layered on the AlertDialog primitive for focus trapping, Escape handling,
+ * and open/close animation. Copy goes through
  * `copyTextToClipboard` so it works on plain-HTTP LAN origins where the
  * Clipboard API is absent.
  */

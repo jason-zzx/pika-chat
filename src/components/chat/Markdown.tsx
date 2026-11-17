@@ -1,7 +1,8 @@
 "use client";
 
+import { useMessages } from "next-intl";
 import { useSyncExternalStore } from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, type LinkSafetyConfig } from "streamdown";
 
 import { CITATION_COMPONENTS } from "./CitationSup";
 import {
@@ -9,7 +10,25 @@ import {
   REMARK_PLUGINS_WITH_CITATIONS,
   type CitationSource,
 } from "./citations";
+import ExternalLinkDialog from "./ExternalLinkDialog";
 import { textNeedsMermaid, useStreamdownPlugins } from "./markdown-plugins";
+
+// Streamdown's built-in link modal has no enter/exit animation and only
+// English copy, so message-body links reuse the app's dialog instead.
+const LINK_SAFETY: LinkSafetyConfig = {
+  enabled: true,
+  renderModal: (props) => (
+    <ExternalLinkDialog
+      url={props.url}
+      open={props.isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          props.onClose();
+        }
+      }}
+    />
+  ),
+};
 
 type MarkdownProps = {
   text: string;
@@ -93,6 +112,9 @@ function getDarkSnapshot() {
 
 export default function Markdown({ text, citations }: MarkdownProps) {
   const plugins = useStreamdownPlugins(text);
+  // Keys mirror StreamdownTranslations; link-modal and file-format keys are
+  // omitted (the modal is replaced via LINK_SAFETY, formats are not copy).
+  const translations = useMessages().Chat.Markdown;
   // SSR always reports light; mermaid only renders client-side, so there is
   // no hydration mismatch.
   const isDark = useSyncExternalStore(
@@ -142,6 +164,8 @@ export default function Markdown({ text, citations }: MarkdownProps) {
       key={streamdownKey}
       plugins={plugins}
       mermaid={mermaidOptions}
+      linkSafety={LINK_SAFETY}
+      translations={translations}
       {...(hasCitations
         ? {
             remarkPlugins: REMARK_PLUGINS_WITH_CITATIONS,

@@ -1,5 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import Markdown from "./Markdown";
 
@@ -46,7 +48,7 @@ describe("Markdown", () => {
   });
 
   it("remounts a mermaid message on theme change so the diagram re-renders", async () => {
-    render(<Markdown text={MERMAID_TEXT} />);
+    renderWithIntl(<Markdown text={MERMAID_TEXT} />);
     const before = screen.getByTestId("streamdown");
     expect(lastMermaidProp?.config.theme).toBe("default");
     expect(lastMermaidProp?.config.themeVariables).toBeUndefined();
@@ -65,7 +67,7 @@ describe("Markdown", () => {
   });
 
   it("does not remount a message without a mermaid fence on theme change", async () => {
-    render(<Markdown text="plain **text**" />);
+    renderWithIntl(<Markdown text="plain **text**" />);
     const before = screen.getByTestId("streamdown");
 
     setDarkClass(true);
