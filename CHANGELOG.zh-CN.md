@@ -5,6 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [0.4.2] - 2026-11-16
+
+### Fixes
+
+- **Markdown 控件与外链确认弹窗**：为 Streamdown 的代码块、表格、图片和 Mermaid 图表控件补充本地化文案，并让消息正文中的外链点击复用带动画与多语言支持的 `ExternalLinkDialog`。
+- **弹窗底部与操作按钮**：统一 `AlertDialogFooter` 的扁平样式以对齐常规弹窗，并将用户创建、服务商配置及搜索服务商表单中的提交按钮移入 `DialogFooter`、统一按钮尺寸。
+- **划词复制消息正文**：修复拖选超过消息末尾时，复制结果末尾多出空行的问题。
+
 ## [0.4.1] - 2026-11-16
 
 ### Fixes

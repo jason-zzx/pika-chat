@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-11-16
+
+### Fixes
+
+- **Markdown Controls & External Link Dialog**: Localized Streamdown's code block, table, image, and Mermaid controls, and routed message-body link prompts through the app's animated, localized `ExternalLinkDialog`.
+- **Dialog Footers & Action Buttons**: Flattened `AlertDialogFooter` to match standard dialogs and moved inline form submit buttons (user creation, provider setup, and search provider keys) into `DialogFooter` at a consistent size.
+- **Drag-Selected Message Copy**: Drag-selecting past the end of a message no longer appends trailing blank lines when copying.
+
 ## [0.4.1] - 2026-11-16
 
 ### Fixes
