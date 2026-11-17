@@ -1137,3 +1137,27 @@ Added per-message token usage on the assistant model row: input/output tokens an
 ### Status
 
 [OK] **Completed**
+
+
+## Session 42: Native apps planning + PWA child
+<!-- trellis-session: v=2 fp=570bc5634657148e -->
+
+**Date**: 2026-11-16
+**Task**: Native apps planning + PWA child
+**Branch**: `feat/native-pwa`
+
+### Summary
+
+Planned native apps (Electron desktop remote+local, Capacitor Android remote-only, iOS via PWA; parent + 4 children). Shipped PWA: manifest/icons, viewport-fit=cover, safe-area padding, theme-color following in-app mode+preset; renamed app to Pika Chat. Android nav bar theming deferred to mobile shell. Pre-existing flaky test: ChatView-pool reconnect retry.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `707bada` | feat(pwa): make the web app installable with safe-area and theme-color support |
+| `1bf5d73` | chore(brand): spell the app name "Pika Chat" |
+| `9d875a2` | docs(trellis): plan native desktop and mobile apps |
+
+### Status
+
+[OK] **Completed**
