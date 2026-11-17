@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Responsive layout and server/client boundary for manifest/viewport and safe-area changes"}
+{"file": ".trellis/spec/frontend/theming.md", "reason": "Theme tokens/presets to pick manifest and theme-color values"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint/test/accessibility rules"}

@@ -1,0 +1,31 @@
+{
+  "id": "native-apps",
+  "name": "native-apps",
+  "title": "Native desktop & mobile apps",
+  "description": "Electron (desktop) + Capacitor (mobile) shells in native/ delivering desktop (remote + local mode) and mobile (remote only) apps, plus PWA baseline",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "zzx",
+  "assignee": "zzx",
+  "createdAt": "2026-11-16",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "11-16-native-pwa",
+    "11-16-native-desktop-remote",
+    "11-16-native-desktop-local",
+    "11-16-native-mobile"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
