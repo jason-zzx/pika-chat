@@ -47,7 +47,7 @@ function AlertDialogContent({
 }: AlertDialogPrimitive.Popup.Props & {
   size?: "default" | "sm"
   /** Restyles the backdrop for dialogs that need a different scrim (e.g.
-   * ExternalLinkDialog matching Streamdown's linkSafety modal). */
+   * ExternalLinkDialog styled after Streamdown's linkSafety modal). */
   overlayClassName?: string
   /** Click handler for the backdrop. Alert dialogs disable pointer dismissal
    * by default; pass this to close on backdrop click. */
@@ -93,7 +93,7 @@ function AlertDialogFooter({
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
+        "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
         className
       )}
       {...props}

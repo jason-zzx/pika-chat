@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -376,9 +377,11 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" disabled={createUser.isPending} className="mt-1 w-fit">
-              {createUser.isPending ? t("creating") : t("create")}
-            </Button>
+            <DialogFooter>
+              <Button type="submit" disabled={createUser.isPending}>
+                {createUser.isPending ? t("creating") : t("create")}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

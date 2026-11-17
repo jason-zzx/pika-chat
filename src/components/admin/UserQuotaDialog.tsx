@@ -115,7 +115,7 @@ export default function UserQuotaDialog({
             </p>
           ) : null}
           <DialogFooter>
-            <Button type="submit" size="sm" disabled={!canSave}>
+            <Button type="submit" disabled={!canSave}>
               {mutation.isPending ? t("quotaSaving") : t("quotaSave")}
             </Button>
           </DialogFooter>

@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -367,17 +368,16 @@ function ProviderFormDialog({
               onChange={(event) => setBaseUrl(event.currentTarget.value)}
             />
           </div>
-          <div>
+          <DialogFooter>
             <Button
               type="submit"
-              size="sm"
               disabled={
                 upsert.isPending || (!isEdit && apiKey.trim().length === 0)
               }
             >
               {isEdit ? t("save") : t("add")}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

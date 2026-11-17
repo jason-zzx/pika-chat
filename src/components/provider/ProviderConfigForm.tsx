@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -170,9 +171,11 @@ export default function ProviderConfigForm({
         </div>
       ) : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" disabled={pending} className="mt-1 w-fit">
-        {pending ? t("saving") : submitLabel}
-      </Button>
+      <DialogFooter>
+        <Button type="submit" disabled={pending}>
+          {pending ? t("saving") : submitLabel}
+        </Button>
+      </DialogFooter>
     </form>
   );
 }
