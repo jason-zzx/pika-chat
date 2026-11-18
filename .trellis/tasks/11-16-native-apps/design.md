@@ -12,7 +12,7 @@ native/
 └── mobile/          # Capacitor project (android/), capacitor.config.ts
 ```
 
-Each of `shell-ui`, `desktop`, `mobile` has its own `package.json`; no pnpm workspace yet.
+`native/` is its own pnpm workspace (`native/pnpm-workspace.yaml`, own lockfile) containing `shell-ui`, `desktop`, and later `mobile`; the root workspace and Dockerfile are untouched.
 Root `tsconfig.json` / eslint / `.dockerignore` exclude `native/`.
 
 ## Runtime model
@@ -46,9 +46,9 @@ interface PikaNative {
 }
 ```
 
-Web side (`chat-pool.ts` `onFinish`): when `document.hidden` and not `isError`, call
-`window.pikaNative?.notify(...)`, else fall back to the Web Notification API (PWA / browser, permission-gated).
-Clicking the notification focuses the window and navigates to `topicPath`.
+Web side (chat-pool finish → `ChatPoolBridge`): when the page is hidden or unfocused and the turn was not
+aborted/disconnected, call `window.pikaNative?.notify(...)`. No Web Notification fallback for browser/PWA
+(decided in `11-16-native-desktop-remote`). Clicking the notification focuses the window and opens the topic path.
 The global type lives in `src/global.d.ts`; no other web code reads `pikaNative`.
 
 ### Local mode (server change, owned by desktop-local)
@@ -63,7 +63,7 @@ Activated by env `LOCAL_MODE=1`, set only by the desktop launcher. Gated at proc
 
 ## Release
 
-- `release.yml` keeps Docker + release-notes; new `native.yml` triggered by the same `v*` tag builds on `ubuntu`, `windows`, `macos` runners (electron-builder) and Android (Gradle, debug-keystore-free release keystore from repo secret) and uploads to the same release.
+- `release.yml` gains native build jobs (desktop matrix on `ubuntu`/`windows`/`macos`; later Android via Gradle with a release keystore from a repo secret); `create-release` waits for them and attaches their artifacts, so one tag yields one release.
 - Updates: electron-updater with GitHub provider on Win/Linux; macOS and Android query the latest GitHub release and show a download prompt.
 
 ## Trade-offs

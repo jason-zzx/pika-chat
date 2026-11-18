@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Transport/domain split for the health route/service change"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend lint/test rules for health change"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "Chat pool / stream finish semantics (abort, disconnect, resume) for the notify hook"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Reading topic title/assistant from the TanStack Query cache in ChatPoolBridge"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "New notification catalog keys in en + zh-CN"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Global Window type for pikaNative, no escapes"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend test/lint rules"}
+{"file": ".trellis/tasks/11-16-native-apps/design.md", "reason": "Parent cross-child contracts (layout, runtime model, release)"}
+{"file": ".trellis/tasks/11-16-native-apps/research/mobile-shell-options.md", "reason": "Why Electron/Capacitor; shell-ui must stay reusable by Android"}

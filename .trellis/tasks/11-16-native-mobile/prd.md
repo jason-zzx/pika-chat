@@ -14,7 +14,7 @@ An Android APK that connects to deployed Pika servers with a native-feeling shel
 - Keyboard resize mode keeps the composer visible; hardware back navigates history then returns to shell-ui; status bar **and navigation bar** follow the in-app theme (mode + preset) live, with no hairline gap at the bottom. The PWA cannot do this: Android paints an installed PWA's nav bar and window background from the static manifest colors.
 - External origins open in the system browser.
 - Update check against latest GitHub release with download prompt.
-- `native.yml` builds a signed release APK (keystore from repo secret) on `v*` tags.
+- `release.yml` builds a signed release APK (keystore from repo secret) on `v*` tags and attaches it to the release.
 
 ## Acceptance Criteria (draft)
 
