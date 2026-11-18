@@ -1161,3 +1161,29 @@ Planned native apps (Electron desktop remote+local, Capacitor Android remote-onl
 ### Status
 
 [OK] **Completed**
+
+
+## Session 43: Desktop shell remote mode
+<!-- trellis-session: v=2 fp=9ebf91828482a4df -->
+
+**Date**: 2026-11-17
+**Task**: Desktop shell remote mode
+**Branch**: `feat/native-desktop-remote`
+
+### Summary
+
+Planned and shipped the Electron desktop shell (native/ workspace: shell-ui + desktop) for connecting to Pika servers: per-server sessions, no in-app browser windows (files open in OS apps, scripts only revealed), tray/hotkey/close-to-tray, notifications via window.pikaNative, in-page server switcher (sidebar/account menu/auth chip with native popup), electron-updater for Win/AppImage/deb/rpm and macOS prompt; release.yml builds all desktop artifacts; health returns version. Implemented by Sonnet, checked by Opus, ponytail-simplified. Manual verification deferred to an rc release.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb2c20a` | feat(web): integrate with the desktop shell (server version, reply notifications, server switcher) |
+| `255d04b` | feat(desktop): add Electron desktop app for connecting to Pika servers |
+| `470981c` | ci(release): build desktop installers and keep prerelease tags off docker latest |
+| `67f8f19` | docs: document the desktop app and native shell contracts |
+| `4ccba6d` | docs(trellis): plan desktop shell remote mode |
+
+### Status
+
+[OK] **Completed**
