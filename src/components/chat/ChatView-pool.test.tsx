@@ -563,6 +563,9 @@ describe("ChatView resumes a server-owned turn (real AI SDK)", () => {
     await waitFor(() => expect(acquireChat("t1").chat.status).toBe("error"), {
       timeout: 5_000,
     });
+    // The transcript marks the turn failed and clears the latched error, so a
+    // discovery poll in the app always sees "ready" here, never "error".
+    await waitFor(() => expect(acquireChat("t1").chat.status).toBe("ready"));
     expect(resume).toHaveBeenCalledTimes(1);
     // Step the clock past the retry rate limit. Only Date is faked: the real
     // SDK and testing-library still need real timers and microtasks.
