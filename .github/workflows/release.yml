@@ -92,7 +92,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern=v{{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
       - name: Build and push multi-arch image
         uses: docker/build-push-action@v7
@@ -105,9 +105,76 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  build-desktop:
+    name: Build Desktop App (${{ matrix.os }})
+    needs: quality-gate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: desktop-linux
+            args: --linux AppImage deb rpm --x64
+          - os: windows-latest
+            artifact: desktop-windows
+            args: --win nsis --x64
+          - os: macos-latest
+            artifact: desktop-macos
+            args: --mac dmg --x64 --arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: native/pnpm-lock.yaml
+
+      - name: Verify tag matches package.json version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          if [ "v$(node -p "require('./package.json').version")" != "${{ github.ref_name }}" ]; then
+            echo "Tag ${{ github.ref_name }} does not match package.json version" >&2
+            exit 1
+          fi
+
+      - name: Install rpm tooling
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install native dependencies
+        run: pnpm -C native install --frozen-lockfile
+
+      - name: Build and package desktop app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm -C native/desktop dist ${{ matrix.args }}
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            native/desktop/release/*.exe
+            native/desktop/release/*.dmg
+            native/desktop/release/*.AppImage
+            native/desktop/release/*.deb
+            native/desktop/release/*.rpm
+            native/desktop/release/*.blockmap
+            native/desktop/release/latest*.yml
+          if-no-files-found: error
+
   create-release:
     name: Create GitHub Release
-    needs: build-and-push
+    needs: [build-and-push, build-desktop]
     runs-on: ubuntu-latest
 
     steps:
@@ -118,6 +185,13 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: desktop-assets
+          merge-multiple: true
 
       - name: Extract Release Notes from CHANGELOG
         id: notes
@@ -132,12 +206,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          args=(--title "${{ github.ref_name }}")
           if [ "${{ steps.notes.outputs.has_notes }}" = "true" ]; then
-            gh release create "${{ github.ref_name }}" \
-              --title "${{ github.ref_name }}" \
-              --notes-file release_notes.md
+            args+=(--notes-file release_notes.md)
           else
-            gh release create "${{ github.ref_name }}" \
-              --title "${{ github.ref_name }}" \
-              --generate-notes
+            args+=(--generate-notes)
           fi
+          case "${{ github.ref_name }}" in
+            *-*) args+=(--prerelease) ;;
+          esac
+          gh release create "${{ github.ref_name }}" "${args[@]}" desktop-assets/*

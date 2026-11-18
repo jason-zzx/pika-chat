@@ -61,6 +61,36 @@ jobs:
       - name: Run unit & integration tests
         run: pnpm test
 
+  native:
+    name: Native Shell Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: native/pnpm-lock.yaml
+
+      - name: Install native dependencies
+        run: pnpm -C native install --frozen-lockfile
+
+      - name: TypeScript typecheck
+        run: pnpm -C native -r typecheck
+
+      - name: Run unit tests
+        run: pnpm -C native -r test
+
+      - name: Build shell UI and desktop bundles
+        run: pnpm -C native/desktop build
+
   docker-smoke:
     name: Docker Build Smoke Test
     needs: test
