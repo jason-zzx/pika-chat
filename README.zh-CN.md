@@ -246,6 +246,28 @@
 
 ---
 
+## 桌面应用
+
+Electron 桌面客户端支持 Windows、macOS 与 Linux，可连接一个或多个已部署的 Pika Chat 服务器，并提供托盘图标、全局显示/隐藏快捷键、回复完成通知和自动更新。
+
+- **下载**：前往 [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases)，获取 Windows 安装包（`.exe`）、macOS `.dmg`（Intel 与 Apple Silicon）、Linux `.AppImage` / `.deb` / `.rpm`。
+- **连接**：首次启动时添加服务器地址。每个服务器拥有独立的登录会话，同一时间只激活一个服务器。
+- **更新**：Windows 与 Linux 在应用内更新；`.deb` / `.rpm` 在选择“重启并安装”时会要求输入管理员密码；macOS 会弹出提示并跳转到新版本发布页。
+- **Windows**：安装包未签名，出现 SmartScreen 提示时点击“更多信息” → “仍要运行”。
+- **macOS**：应用未签名，拖入“应用程序”后执行一次 `xattr -dr com.apple.quarantine "/Applications/Pika Chat.app"`。
+- **Linux**：GNOME 需安装 AppIndicator 扩展才能显示托盘图标；没有托盘时，再次启动应用或按全局快捷键（默认 `Ctrl+Shift+Space`）即可显示窗口。
+
+开发桌面应用（`native/` 下为独立的 pnpm 工作区）：
+
+```bash
+pnpm -C native install --frozen-lockfile
+pnpm -C native -r typecheck && pnpm -C native -r test
+pnpm -C native/desktop start                          # 连接开发服务器运行
+pnpm -C native/desktop dist --linux AppImage deb rpm  # 本地打包
+```
+
+---
+
 ## 环境变量配置说明
 
 Pika Chat 通过根目录 `.env` 文件或容器环境进行配置：

@@ -246,6 +246,28 @@ If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neo
 
 ---
 
+## Desktop App
+
+A native desktop client (Electron) for Windows, macOS, and Linux connects to one or more Pika Chat servers you already run, and adds a tray icon, a global show/hide hotkey, reply notifications, and auto-update.
+
+- **Download** from the [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) page: Windows installer (`.exe`), macOS `.dmg` (Intel and Apple Silicon), Linux `.AppImage`, `.deb`, or `.rpm`.
+- **Connect**: add your server URL on first launch. Each server keeps its own sign-in session; one server is active at a time.
+- **Updates**: Windows and Linux update in-app. `.deb` / `.rpm` installs ask for your administrator password when you choose "Restart and install". On macOS the app shows a prompt linking to the new release.
+- **Windows**: builds are unsigned; on the SmartScreen dialog choose "More info" → "Run anyway".
+- **macOS**: builds are unsigned; after moving the app to Applications run `xattr -dr com.apple.quarantine "/Applications/Pika Chat.app"` once.
+- **Linux**: GNOME needs the AppIndicator extension to show the tray icon. Without a tray, launching the app again or pressing the global hotkey (default `Ctrl+Shift+Space`) shows the window.
+
+Developing the desktop app (separate pnpm workspace under `native/`):
+
+```bash
+pnpm -C native install --frozen-lockfile
+pnpm -C native -r typecheck && pnpm -C native -r test
+pnpm -C native/desktop start                          # run against a dev server
+pnpm -C native/desktop dist --linux AppImage deb rpm  # local package build
+```
+
+---
+
 ## Configuration Reference
 
 Configure Pika Chat through environment variables in your `.env` file or deployment container environment:

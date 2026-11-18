@@ -60,6 +60,7 @@ Handlers it calls.
 | [Theming](./theming.md) | Token system, preset themes, DB-backed theme preference |
 | [Type Safety](./type-safety.md) | Shared Zod contracts, inference, forbidden escapes |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, tests, accessibility, performance |
+| [Native Shell](../guides/native-shell.md) | `window.pikaNative` is optional (desktop shell only); never assume it exists |
 
 ---
 
