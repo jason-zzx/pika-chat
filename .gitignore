@@ -1,5 +1,8 @@
 # dependencies
 /node_modules
+native/**/node_modules
+native/**/dist
+native/desktop/release
 /.pnp
 .pnp.*
 .yarn/*

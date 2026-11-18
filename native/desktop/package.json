@@ -1,0 +1,33 @@
+{
+  "name": "pika-chat-desktop",
+  "productName": "Pika Chat",
+  "version": "0.0.0",
+  "description": "Desktop app for Pika Chat",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/main.js",
+  "desktopName": "pika-chat-desktop.desktop",
+  "homepage": "https://github.com/jason-zzx/pika-chat",
+  "author": {
+    "name": "jason-zzx",
+    "email": "zxzhukke@gmail.com"
+  },
+  "scripts": {
+    "build": "pnpm -C ../shell-ui build && node scripts/build.mjs",
+    "start": "pnpm build && electron .",
+    "dist": "pnpm build && electron-builder --config electron-builder.config.mjs --publish never",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "@pika/shell-ui": "workspace:*",
+    "@types/node": "22.19.1",
+    "electron": "45.3.4",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "zod": "4.5.4"
+  }
+}

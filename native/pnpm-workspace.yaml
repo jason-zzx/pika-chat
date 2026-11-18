@@ -1,0 +1,8 @@
+packages:
+  - shell-ui
+  - desktop
+allowBuilds:
+  electron-winstaller: false
+  esbuild: true
+minimumReleaseAgeExclude:
+  - electron@45.3.4

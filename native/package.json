@@ -1,0 +1,8 @@
+{
+  "name": "pika-native",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  }
+}
