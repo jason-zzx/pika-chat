@@ -597,11 +597,14 @@ export default function ChatView({
     }
     if (
       isFollowingGeneration(chatId, serverGenerationId) &&
-      status !== "error"
+      (status === "submitted" || status === "streaming")
     ) {
-      // Already attached (or still mid-reconnect). A local error — a dropped
-      // connection, not a failed turn — falls through and re-attempts: the
-      // generation target survived the error for exactly this.
+      // Already attached. A local error — a dropped connection, not a failed
+      // turn — falls through and re-attempts: the generation target survived
+      // the error for exactly this. Testing for "not error" would miss it: the
+      // transcript marks the turn failed and clearError() flips the status
+      // back to "ready" shortly after. A reconnect still opening also reads
+      // "ready"; resumeGeneration dedupes it via resumeInFlight.
       return;
     }
     if (refusedGenerationIdsRef.current.has(serverGenerationId)) {
