@@ -60,3 +60,9 @@ An Electron desktop app for Windows, macOS, and Linux that connects to one or mo
 - [ ] A server whose major.minor differs shows a warning; an unreachable or non-Pika URL shows a retryable error.
 - [ ] A `v*` tag (or rc tag) produces all desktop artifacts on one GitHub Release alongside the Docker image; an older Windows / AppImage / deb / rpm build updates (deb/rpm after the password prompt).
 - [ ] Root `pnpm lint && pnpm typecheck && pnpm test` pass; Docker build unaffected.
+
+## Outcome Notes
+
+- Archived with manual verification skipped at the user's request. Automated: root lint/typecheck/tests, native typecheck/tests, desktop build, local AppImage build + boot, DevTools checks of the shell bridge and auth-page server chip.
+- Not yet verified (carry to an rc release): signed-in sidebar switcher / account menu / native popup, notifications, tray + hotkey + close-to-tray, Windows/macOS packages, deb/rpm install and pkexec update, the release workflow itself.
+- Known follow-ups: http→https redirecting servers break origin matching; tray "Switch server" submenu bypasses the health/version check; startup hotkey registration failure only logged.
