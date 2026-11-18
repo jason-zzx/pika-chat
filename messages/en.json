@@ -38,6 +38,10 @@
     "locale": {
       "label": "Language"
     },
+    "desktopServer": {
+      "switchAria": "Switch server, current: {name}",
+      "switchItem": "Switch server…"
+    },
     "tree": {
       "backToAssistants": "Back to assistants",
       "assistants": "Assistants",
@@ -159,6 +163,10 @@
     "passwordDescription": "Change the password you sign in with."
   },
   "Chat": {
+    "Notification": {
+      "finished": "Reply finished",
+      "failed": "Reply failed"
+    },
     "Composer": {
       "messageLabel": "Message",
       "chatMap": "Chat map",

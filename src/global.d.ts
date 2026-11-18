@@ -8,3 +8,16 @@ declare module "next-intl" {
     Messages: typeof messages;
   }
 }
+
+declare global {
+  interface PikaNative {
+    serverName: string;
+    notify(input: { title: string; body: string; path: string }): void;
+    showServerMenu(anchor: { x: number; y: number }): void;
+    openServers(screen: "list" | "add"): void;
+  }
+
+  interface Window {
+    pikaNative?: PikaNative;
+  }
+}

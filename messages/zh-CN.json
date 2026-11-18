@@ -38,6 +38,10 @@
     "locale": {
       "label": "语言"
     },
+    "desktopServer": {
+      "switchAria": "切换服务器，当前：{name}",
+      "switchItem": "切换服务器…"
+    },
     "tree": {
       "backToAssistants": "返回助手列表",
       "assistants": "助手",
@@ -159,6 +163,10 @@
     "passwordDescription": "更改登录时使用的密码。"
   },
   "Chat": {
+    "Notification": {
+      "finished": "回复已完成",
+      "failed": "回复失败"
+    },
     "Composer": {
       "messageLabel": "消息",
       "chatMap": "聊天地图",

@@ -86,6 +86,8 @@ type ChatPoolBridge = {
   /** A send's topic is known: refresh the tree and pick up its title. */
   onTopicAnnounced: (topicId: string) => void;
   invalidateAfterFinish: (topicId: string | null) => void;
+  /** A turn ended on its own (not stopped, not a dropped connection). */
+  notifyReplyFinished: (topicId: string, isError: boolean) => void;
 };
 
 const entries = new Map<string, PoolEntry>();
@@ -196,6 +198,9 @@ function createEntry(chatId: string): PoolEntry {
       // by now a refetch returns the persisted row (including its error
       // detail for a failed turn).
       bridge?.invalidateAfterFinish(entry.topicId);
+      if (entry.topicId && !event.isAbort && !event.isDisconnect) {
+        bridge?.notifyReplyFinished(entry.topicId, event.isError);
+      }
       try {
         entry.view?.onFinish({ isError: event.isError });
       } finally {

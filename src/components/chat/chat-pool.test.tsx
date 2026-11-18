@@ -220,6 +220,7 @@ describe("chat pool module-level side effects", () => {
     const bridge = {
       onTopicAnnounced: vi.fn(),
       invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished: vi.fn(),
     };
     const dispose = configureChatPool(bridge);
     acquireChat("draft");
@@ -340,5 +341,29 @@ describe("chat pool resume outcomes", () => {
     await expect(resumeGeneration("t1", "gen-9")).resolves.toBeUndefined();
     await first;
     expect(chatControl.resumeCalls).toHaveLength(1);
+  });
+});
+
+describe("chat pool finish notification", () => {
+  function finishWith(event: Record<string, boolean>) {
+    const notifyReplyFinished = vi.fn();
+    configureChatPool({
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished,
+    });
+    acquireChat("t1");
+    chatControl.byId.get("t1")?.onFinish?.({ isError: false, ...event });
+    return notifyReplyFinished;
+  }
+
+  it("reports a completed turn and an errored turn", () => {
+    expect(finishWith({})).toHaveBeenCalledWith("t1", false);
+    expect(finishWith({ isError: true })).toHaveBeenCalledWith("t1", true);
+  });
+
+  it("stays silent for an abort or a dropped connection", () => {
+    expect(finishWith({ isAbort: true })).not.toHaveBeenCalled();
+    expect(finishWith({ isDisconnect: true })).not.toHaveBeenCalled();
   });
 });

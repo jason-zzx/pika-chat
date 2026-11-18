@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import DesktopServerChip from "@/components/auth/DesktopServerChip";
 import PikaMark from "@/components/common/PikaMark";
 import { resolveActor } from "@/server/auth/actor";
 
@@ -23,6 +24,7 @@ export default async function AuthLayout({
         <div className="flex items-center gap-2.5">
           <PikaMark className="size-9" />
           <p className="font-semibold tracking-tight">{t("title")}</p>
+          <DesktopServerChip />
         </div>
         {children}
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 
 import { assistantKeys } from "@/components/assistant/use-assistants";
@@ -13,6 +14,7 @@ import { useAccountUserId } from "@/hooks/use-account-user";
 import { isDefaultTopicTitle } from "@/i18n/defaults";
 import { useActiveGenerations } from "@/hooks/use-active-generations";
 import { useStableCallback } from "@/hooks/use-stable-callback";
+import { assistantTopicHref } from "@/lib/assistant-path";
 import { listTopicMessages } from "@/lib/api/chat";
 import { waitForTopicTitle } from "@/lib/api/topic";
 import type { AssistantTree } from "@/lib/schemas/assistant";
@@ -45,6 +47,8 @@ import {
 export default function ChatPoolBridge() {
   const queryClient = useQueryClient();
   const userId = useAccountUserId();
+  const tRoot = useTranslations("RootLayout");
+  const tNotify = useTranslations("Chat.Notification");
   // Server-owned turns are the source of truth for the sidebar spinner: this
   // runs app-wide (not per topic), so a turn started in another tab or before
   // a refresh still shows while it runs.
@@ -90,6 +94,33 @@ export default function ChatPoolBridge() {
     }
   });
 
+  const notifyReplyFinished = useStableCallback(
+    (topicId: string, isError: boolean) => {
+      if (
+        !window.pikaNative ||
+        (document.visibilityState !== "hidden" && document.hasFocus())
+      ) {
+        return;
+      }
+      // A topic the tree does not hold yet has no assistant to build a path
+      // from, so no notification is shown.
+      const assistant = queryClient
+        .getQueryData<AssistantTree>(assistantKeys.tree())
+        ?.assistants.find((candidate) =>
+          candidate.topics.some((topic) => topic.id === topicId),
+        );
+      if (!assistant) {
+        return;
+      }
+      const title = assistant.topics.find((topic) => topic.id === topicId)?.title;
+      window.pikaNative.notify({
+        title: title && !isDefaultTopicTitle(title) ? title : tRoot("title"),
+        body: isError ? tNotify("failed") : tNotify("finished"),
+        path: assistantTopicHref(assistant.id, topicId),
+      });
+    },
+  );
+
   useEffect(() => {
     return configureChatPool({
       onTopicAnnounced: (topicId) => {
@@ -116,8 +147,9 @@ export default function ChatPoolBridge() {
         );
       },
       invalidateAfterFinish: (topicId) => refreshAfterGeneration(topicId),
+      notifyReplyFinished,
     });
-  }, [queryClient, refreshAfterGeneration]);
+  }, [queryClient, refreshAfterGeneration, notifyReplyFinished]);
 
   // Reload recovery for a request whose confirmation was lost (chat task
   // §4/G2): look each stored receipt up by request id — never re-POST, which

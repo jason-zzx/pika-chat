@@ -10,12 +10,14 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuShortcut,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 import { toast } from "@/components/ui/toast";
 import { useIsGuest } from "@/hooks/use-is-guest";
+import { usePikaNative } from "@/hooks/use-pika-native";
 import type { ActorRole } from "@/lib/auth-hierarchy";
 import { signOutAndReset } from "@/lib/sign-out";
 
@@ -27,8 +29,10 @@ type SidebarUserMenuProps = {
 export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
   const { setOpenMobile } = useSidebar();
   const isGuest = useIsGuest();
+  const native = usePikaNative();
   const t = useTranslations("Layout");
   const tAuth = useTranslations("Auth");
+  const tServer = useTranslations("Layout.desktopServer");
 
   async function onSignOut() {
     setOpenMobile(false);
@@ -41,6 +45,13 @@ export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
       toast.add({ type: "error", title: tAuth("signOutFailed") });
     }
   }
+
+  function onSwitchServer() {
+    native?.openServers("list");
+  }
+  // navigator is only read once the bridge exists, i.e. on the client.
+  const switchShortcut =
+    native && navigator.userAgent.includes("Mac") ? "⌘⇧L" : "Ctrl+Shift+L";
 
   return (
     <div className="flex w-full min-w-0 items-center gap-1 group-data-[collapsible=icon]:flex-col">
@@ -62,6 +73,24 @@ export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
                 : `${name} · ${role === "super_admin" ? t("userMenu.superAdmin") : role}`}
             </DropdownMenuLabel>
           </DropdownMenuGroup>
+          {native ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="truncate font-normal">
+                  {native.serverName === window.location.host
+                    ? native.serverName
+                    : `${native.serverName} · ${window.location.host}`}
+                </DropdownMenuLabel>
+                <DropdownMenuItem onClick={onSwitchServer}>
+                  {tServer("switchItem")}
+                  <DropdownMenuShortcut>
+                    {switchShortcut}
+                  </DropdownMenuShortcut>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </>
+          ) : null}
           {!isGuest ? (
             <>
               <DropdownMenuSeparator />

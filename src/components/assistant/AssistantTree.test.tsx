@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor, within, act } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -521,6 +521,45 @@ describe("AssistantTree", () => {
     await waitFor(() => {
       expect(setTopicFavorite).toHaveBeenCalledWith("t-fav", {
         favorite: false,
+      });
+    });
+  });
+
+  describe("desktop shell server switcher", () => {
+    afterEach(() => {
+      delete window.pikaNative;
+    });
+
+    it("keeps the plain brand link in a browser", async () => {
+      nav.pathname = "/";
+      vi.mocked(listAssistantTree).mockResolvedValue({ assistants: [] });
+      renderTree();
+
+      expect(await screen.findByRole("link", { name: /Pika Chat/ })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Switch server/ })).toBeNull();
+    });
+
+    it("opens the native server menu from the sidebar header", async () => {
+      nav.pathname = "/";
+      const showServerMenu = vi.fn();
+      window.pikaNative = {
+        serverName: "Home lab",
+        notify: vi.fn(),
+        showServerMenu,
+        openServers: vi.fn(),
+      };
+      vi.mocked(listAssistantTree).mockResolvedValue({ assistants: [] });
+      renderTree();
+
+      const trigger = await screen.findByRole("button", {
+        name: "Switch server, current: Home lab",
+      });
+      expect(within(trigger).getByText("Home lab")).toBeTruthy();
+      fireEvent.click(trigger);
+
+      expect(showServerMenu).toHaveBeenCalledWith({
+        x: expect.any(Number),
+        y: expect.any(Number),
       });
     });
   });

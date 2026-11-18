@@ -3,6 +3,7 @@
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
+  ChevronsUpDownIcon,
   Loader2Icon,
   MoreHorizontalIcon,
   PlusIcon,
@@ -27,6 +28,7 @@ import SettingsNav from "@/components/layout/SettingsNav";
 import SidebarNavLink from "@/components/layout/SidebarNavLink";
 import DeleteTopicDialog from "@/components/topic/DeleteTopicDialog";
 import RenameTopicDialog from "@/components/topic/RenameTopicDialog";
+import { usePikaNative } from "@/hooks/use-pika-native";
 import { useStreamingTopics } from "@/lib/streaming-topics";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +68,8 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
   const pathname = usePathname();
   const t = useTranslations("Layout");
   const tRoot = useTranslations("RootLayout");
+  const tServer = useTranslations("Layout.desktopServer");
+  const native = usePikaNative();
   const { assistantId: pathAssistantId, topicId } = parseAssistantPath(pathname);
   const isSettings = pathname === "/settings" || pathname.startsWith("/settings/");
 
@@ -111,6 +115,25 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
             icon={viewing.icon}
             onBack={() => router.push("/")}
           />
+        ) : native ? (
+          <SidebarMenuButton
+            tooltip={native.serverName}
+            aria-label={tServer("switchAria", { name: native.serverName })}
+            className="px-2 py-0 font-semibold tracking-tight group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1! [&>svg:first-child]:size-6"
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              native.showServerMenu({ x: rect.left, y: rect.bottom });
+            }}
+          >
+            <PikaMark className="size-6" />
+            <span className="flex-1 truncate group-data-[collapsible=icon]:sr-only">
+              {native.serverName}
+            </span>
+            <ChevronsUpDownIcon
+              className="text-muted-foreground group-data-[collapsible=icon]:hidden"
+              aria-hidden="true"
+            />
+          </SidebarMenuButton>
         ) : (
           <div className="flex h-8 min-w-0 items-center overflow-hidden px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
             <CloseOnNavigateLink href="/">
