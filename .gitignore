@@ -3,6 +3,7 @@
 native/**/node_modules
 native/**/dist
 native/desktop/release
+native/desktop/server
 /.pnp
 .pnp.*
 .yarn/*

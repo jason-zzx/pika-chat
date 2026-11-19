@@ -27,8 +27,11 @@ import { z } from "zod";
 import type { Server } from "@pika/shell-ui/host";
 import { classifyHealth, normalizeServerUrl } from "@pika/shell-ui/servers";
 import { loadStrings } from "./i18n";
+import { createLocalServer, localPaths } from "./local-server";
 import { loadConfig, saveConfig } from "./store";
 import { createUpdater } from "./updater";
+
+const LOCAL_SERVER_ID = "local";
 
 const APP_ID = "io.github.jason-zzx.pika-chat";
 const isMac = process.platform === "darwin";
@@ -67,6 +70,7 @@ if (!app.requestSingleInstanceLock()) {
 function start() {
   const config = loadConfig();
   const t = loadStrings(app.getLocale());
+  const localServer = createLocalServer();
   const icon = nativeImage.createFromPath(join(__dirname, "assets", "icon.png"));
   const shellUrl = pathToFileURL(join(__dirname, "shell-ui", "index.html")).href;
 
@@ -181,6 +185,27 @@ function start() {
       event.preventDefault();
       openExternal(url);
     });
+    if (server.id === LOCAL_SERVER_ID) {
+      // Local mode has no sign-in page: a lapsed session signs in again and reloads the app. Server
+      // redirects arrive as will-redirect, client router pushes as did-navigate-in-page, and
+      // location.replace() as will-navigate.
+      const isAuthPage = (url: string) => /^\/(sign-in|setup)(\/|$)/.test(new URL(url).pathname);
+      const signInAgain = () =>
+        void localServer
+          .signIn(contents.session)
+          .then(() => contents.loadURL(server.url))
+          .catch(() => setImmediate(() => showShell("?failed=local")));
+      const intercept = (event: { preventDefault(): void; url: string; isMainFrame: boolean }) => {
+        if (!event.isMainFrame || !isAuthPage(event.url)) return;
+        event.preventDefault();
+        signInAgain();
+      };
+      contents.on("will-navigate", intercept);
+      contents.on("will-redirect", intercept);
+      contents.on("did-navigate-in-page", (_event, url, isMainFrame) => {
+        if (isMainFrame && isAuthPage(url)) signInAgain();
+      });
+    }
     // -3 is ERR_ABORTED: a navigation superseded by another one, not a failure. The shell shows the
     // error without retrying: the health check can pass while the page itself fails to load.
     contents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
@@ -188,14 +213,12 @@ function start() {
     });
   };
 
-  const connect = (id: string) => {
-    const server = config.servers.find((candidate) => candidate.id === id);
-    if (!server) throw new Error("unknown server");
+  const attachServerView = (server: Server, partition: string, url: string) => {
     closeRemote();
     const view = new WebContentsView({
       webPreferences: {
         ...webPreferences("preload-remote.js"),
-        partition: `persist:server-${id}`,
+        partition,
         additionalArguments: [`--pika-server-name=${encodeURIComponent(server.name)}`],
         // A reply must be able to finish, and notify, while the window sits in the tray.
         backgroundThrottling: false,
@@ -204,11 +227,25 @@ function start() {
     secureSession(view.webContents.session);
     guardRemote(view.webContents, server);
     remote = { view, server };
-    void view.webContents.loadURL(server.url);
+    void view.webContents.loadURL(url);
     attach(view);
-    config.lastServerId = id;
+    config.lastServerId = server.id;
     saveConfig(config);
     rebuildTray();
+  };
+
+  const connect = async (id: string) => {
+    if (id === LOCAL_SERVER_ID) {
+      // A failure rejects back to shell-ui, which shows the local error view.
+      const origin = await localServer.ensureStarted(config, saveConfig);
+      await localServer.signIn(session.fromPartition("persist:local"));
+      attachServerView({ id: LOCAL_SERVER_ID, name: t.localName, url: origin }, "persist:local", origin);
+      return;
+    }
+
+    const server = config.servers.find((candidate) => candidate.id === id);
+    if (!server) throw new Error("unknown server");
+    attachServerView(server, `persist:server-${id}`, server.url);
   };
 
   const applyHotkey = (accelerator: string | null) => {
@@ -263,6 +300,10 @@ function start() {
     return classifyHealth(res.ok, await res.json().catch(() => null));
   });
   handleShell("shell:connect", z.string(), connect);
+  handleShell("shell:openLocalLog", z.undefined(), () => {
+    shell.showItemInFolder(localPaths().logFile);
+  });
+  handleShell("shell:getLocalError", z.undefined(), () => localServer.lastError());
   handleShell("shell:getHotkey", z.undefined(), () => config.hotkey);
   handleShell("shell:setHotkey", z.string().nullable(), (accelerator) => {
     const ok = applyHotkey(accelerator);
@@ -299,6 +340,12 @@ function start() {
     // The anchor is in viewport CSS px; popup takes window DIP, and the view fills the content area.
     const zoom = event.sender.getZoomFactor();
     Menu.buildFromTemplate([
+      {
+        label: t.localName,
+        type: "radio",
+        checked: current === LOCAL_SERVER_ID,
+        click: () => current !== LOCAL_SERVER_ID && showShell("?connect=local"),
+      },
       ...config.servers.map(
         (server): MenuItemConstructorOptions => ({
           label: server.name,
@@ -329,13 +376,20 @@ function start() {
         { type: "separator" },
         {
           label: t.switchServer,
-          enabled: config.servers.length > 0,
-          submenu: config.servers.map((server) => ({
-            label: server.name,
-            type: "radio",
-            checked: remote?.server.id === server.id,
-            click: () => connect(server.id),
-          })),
+          submenu: [
+            {
+              label: t.localName,
+              type: "radio",
+              checked: remote?.server.id === LOCAL_SERVER_ID,
+              click: () => showShell("?connect=local"),
+            },
+            ...config.servers.map((server) => ({
+              label: server.name,
+              type: "radio" as const,
+              checked: remote?.server.id === server.id,
+              click: () => showShell(`?connect=${server.id}`),
+            })),
+          ],
         },
         {
           label: t.servers,
@@ -389,8 +443,11 @@ function start() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
 
   let quitting = false;
-  app.on("before-quit", () => {
+  app.on("before-quit", (event) => {
+    if (quitting) return;
     quitting = true;
+    event.preventDefault();
+    void localServer.shutdown().finally(() => app.quit());
   });
   win.on("close", (event) => {
     config.windowState = { bounds: win.getNormalBounds(), isMaximized: win.isMaximized() };

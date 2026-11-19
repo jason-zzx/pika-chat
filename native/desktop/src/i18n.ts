@@ -1,4 +1,5 @@
 const en = {
+  localName: "This computer",
   show: "Show Pika Chat",
   hide: "Hide Pika Chat",
   switchServer: "Switch server",
@@ -26,6 +27,7 @@ const en = {
 };
 
 const zhCN: typeof en = {
+  localName: "此电脑",
   show: "显示 Pika Chat",
   hide: "隐藏 Pika Chat",
   switchServer: "切换服务器",

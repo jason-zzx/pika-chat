@@ -8,6 +8,10 @@ export default {
   productName: "Pika Chat",
   directories: { output: "release", buildResources: "assets" },
   files: ["dist/**", "package.json"],
+  extraResources: [
+    { from: "server", to: "server" },
+    { from: "server/node_modules", to: "server/node_modules" },
+  ],
   extraMetadata: { version: rootPackage.version },
   artifactName: "pika-chat-${version}-${os}-${arch}.${ext}",
   // Only used to generate updater metadata; CI publishes through the GitHub Release job.

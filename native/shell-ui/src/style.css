@@ -189,22 +189,6 @@ h1 {
   white-space: nowrap;
 }
 
-.empty {
-  padding: 48px 16px;
-  text-align: center;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-}
-
-.empty p {
-  margin: 0;
-}
-
-.empty-title {
-  font-weight: 500;
-  margin-bottom: 4px !important;
-}
-
 .form {
   display: flex;
   flex-direction: column;

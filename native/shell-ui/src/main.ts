@@ -47,33 +47,43 @@ function heading(title: string, body?: string) {
 
 let navigation = 0;
 
+const LOCAL_SERVER_ID = "local";
+
 async function showList() {
   navigation++;
   const { servers } = await host.listServers();
-  const rows = servers.map((server) =>
-    el(
-      "li",
-      { className: "row" },
+  const local = el(
+    "button",
+    { type: "button", className: "row-main", onclick: () => void connectLocal() },
+    el("span", { className: "row-name", textContent: t("localName") }),
+    el("span", { className: "row-url muted", textContent: t("localDescription") }),
+  );
+  local.dataset.focus = "";
+  const rows = [
+    el("li", { className: "row" }, local),
+    ...servers.map((server) =>
       el(
-        "button",
-        { type: "button", className: "row-main", onclick: () => void connect(server) },
-        el("span", { className: "row-name", textContent: server.name }),
-        el("span", { className: "row-url muted", textContent: server.url }),
-      ),
-      button(t("edit"), () => showForm(server), "ghost"),
-      button(
-        t("remove"),
-        async () => {
-          if (!confirm(t("removeConfirm", { name: server.name }))) return;
-          await host.removeServer(server.id);
-          await showList();
-        },
-        "ghost",
+        "li",
+        { className: "row" },
+        el(
+          "button",
+          { type: "button", className: "row-main", onclick: () => void connect(server) },
+          el("span", { className: "row-name", textContent: server.name }),
+          el("span", { className: "row-url muted", textContent: server.url }),
+        ),
+        button(t("edit"), () => showForm(server), "ghost"),
+        button(
+          t("remove"),
+          async () => {
+            if (!confirm(t("removeConfirm", { name: server.name }))) return;
+            await host.removeServer(server.id);
+            await showList();
+          },
+          "ghost",
+        ),
       ),
     ),
-  );
-  const first = rows[0]?.querySelector<HTMLElement>(".row-main");
-  if (first) first.dataset.focus = "";
+  ];
   render(
     el(
       "div",
@@ -86,14 +96,54 @@ async function showList() {
         button(t("addServer"), () => showForm(), "primary"),
       ),
     ),
-    rows.length > 0
-      ? el("ul", { className: "list" }, ...rows)
-      : el(
-          "div",
-          { className: "empty" },
-          el("p", { className: "empty-title", textContent: t("noServers") }),
-          el("p", { className: "muted", textContent: t("noServersHint") }),
-        ),
+    el("ul", { className: "list" }, ...rows),
+  );
+}
+
+function showWelcome() {
+  navigation++;
+  render(
+    heading(t("welcomeTitle"), t("welcomeBody")),
+    el(
+      "div",
+      { className: "actions" },
+      button(t("useLocal"), () => void connectLocal(), "primary", true),
+      button(t("connectRemote"), () => showForm()),
+    ),
+  );
+}
+
+async function connectLocal() {
+  const run = ++navigation;
+  render(
+    el(
+      "div",
+      { className: "status" },
+      el("div", { className: "spinner", role: "progressbar" }),
+      el("p", { textContent: t("localStarting") }),
+      button(t("cancel"), () => void showList(), "ghost", true),
+    ),
+  );
+  try {
+    await host.connect(LOCAL_SERVER_ID);
+  } catch {
+    if (run !== navigation) return;
+    await showLocalError();
+  }
+}
+
+async function showLocalError() {
+  navigation++;
+  const detail = await host.getLocalError();
+  render(
+    heading(t("localFailedTitle"), detail ?? t("localFailedBody")),
+    el(
+      "div",
+      { className: "actions" },
+      button(t("retry"), () => void connectLocal(), "primary", true),
+      button(t("openLog"), () => void host.openLocalLog()),
+      button(t("back"), () => void showList()),
+    ),
   );
 }
 
@@ -287,11 +337,18 @@ async function showSettings() {
 
 const params = new URLSearchParams(location.search);
 const { servers, lastServerId } = await host.listServers();
-const failed = servers.find((server) => server.id === params.get("failed"));
-const target = servers.find((server) => server.id === params.get("connect"));
+const failedId = params.get("failed");
+const connectId = params.get("connect");
+const failed = servers.find((server) => server.id === failedId);
+const target = servers.find((server) => server.id === connectId);
 const last = servers.find((server) => server.id === lastServerId);
-if (failed) showError(failed, "unreachable");
+if (failedId === LOCAL_SERVER_ID) await showLocalError();
+else if (failed) showError(failed, "unreachable");
+else if (connectId === LOCAL_SERVER_ID) await connectLocal();
 else if (target) await connect(target);
 else if (params.has("add")) showForm();
-else if (last && location.search === "") await connect(last);
+else if (location.search === "" && lastServerId === LOCAL_SERVER_ID) await connectLocal();
+else if (location.search === "" && last) await connect(last);
+// Nothing to auto-connect to and no saved servers: offer the first-run choice.
+else if (location.search === "" && servers.length === 0) showWelcome();
 else await showList();

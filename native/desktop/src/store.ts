@@ -9,6 +9,7 @@ const DEFAULT_HOTKEY = "CommandOrControl+Shift+Space";
 const configSchema = z.object({
   servers: z.array(z.object({ id: z.string(), name: z.string(), url: z.string() })).catch([]),
   lastServerId: z.string().nullable().catch(null),
+  localPort: z.number().int().positive().nullable().catch(null),
   hotkey: z.string().nullable().catch(DEFAULT_HOTKEY),
   windowState: z
     .object({
