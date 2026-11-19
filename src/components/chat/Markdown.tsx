@@ -40,6 +40,12 @@ type MarkdownProps = {
   citations?: readonly CitationSource[];
 };
 
+// Body prose steps up to 16px with relaxed line-height on mobile (matching
+// Streamdown's heading scale) while preserving 14px/20px on desktop; module-
+// level constant keeps Streamdown's memoized prop identity stable.
+const STREAMDOWN_CLASS =
+  "text-base md:text-sm [&_p]:leading-relaxed md:[&_p]:leading-5 [&_[data-streamdown='list-item']]:leading-relaxed md:[&_[data-streamdown='list-item']]:leading-5 [&_[data-streamdown='blockquote']]:leading-relaxed md:[&_[data-streamdown='blockquote']]:leading-5 [&_[data-streamdown='heading-6']]:text-base md:[&_[data-streamdown='heading-6']]:text-sm";
+
 // Mermaid's built-in `dark` theme mixes light and dark node fills that clash
 // with the app's dark palette, so dark mode uses `base` with explicit
 // variables. Values are hex approximations of the `.dark` oklch tokens in
@@ -162,6 +168,7 @@ export default function Markdown({ text, citations }: MarkdownProps) {
   const streamdown = (
     <Streamdown
       key={streamdownKey}
+      className={STREAMDOWN_CLASS}
       plugins={plugins}
       mermaid={mermaidOptions}
       linkSafety={LINK_SAFETY}

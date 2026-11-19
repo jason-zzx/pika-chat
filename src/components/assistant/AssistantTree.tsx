@@ -123,7 +123,7 @@ export default function AssistantTree({
           <SidebarMenuButton
             tooltip={native.serverName}
             aria-label={tServer("switchAria", { name: native.serverName })}
-            className="px-2 py-0 font-semibold tracking-tight group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1! [&>svg:first-child]:size-6"
+            className="px-2.5 py-0 font-semibold tracking-tight md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1! [&>svg:first-child]:size-6"
             onClick={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
               native.showServerMenu({ x: rect.left, y: rect.bottom });
@@ -139,7 +139,7 @@ export default function AssistantTree({
             />
           </SidebarMenuButton>
         ) : (
-          <div className="flex h-8 min-w-0 items-center overflow-hidden px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <div className="flex h-10 min-w-0 items-center overflow-hidden px-2.5 md:h-8 md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
             <CloseOnNavigateLink href="/">
               <PikaMark className="size-6" />
               <span className="truncate group-data-[collapsible=icon]:sr-only">
@@ -235,11 +235,12 @@ function PaneHeader({
 }) {
   const t = useTranslations("Layout");
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden px-1 text-base md:gap-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
+        className="size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
         aria-label={t("tree.backToAssistants")}
         onClick={onBack}
       >
@@ -262,9 +263,9 @@ function LoadingRows() {
     <SidebarGroup>
       <SidebarGroupContent>
         <div className="flex flex-col gap-2 px-2 py-1">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-4/5" />
-          <Skeleton className="h-8 w-3/5" />
+          <Skeleton className="h-10 w-full md:h-8" />
+          <Skeleton className="h-10 w-4/5 md:h-8" />
+          <Skeleton className="h-10 w-3/5 md:h-8" />
         </div>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -300,11 +301,11 @@ function AssistantList({
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-        <div className="shrink-0 pt-1">
+        <div className="shrink-0 pt-2 md:pt-1">
           <Button
             type="button"
             variant="ghost"
-            className="w-full justify-start group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+            className="h-10 w-full justify-start gap-2.5 px-2.5 text-base md:h-8 md:gap-2 md:px-2 md:text-sm [&_svg]:size-4.5 md:[&_svg]:size-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
             aria-label={t("tree.newAssistant")}
             onClick={onCreate}
           >
@@ -470,7 +471,7 @@ function AssistantPane({
         </SidebarGroupContent>
       </SidebarGroup>
       <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
-        <SidebarGroupContent className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto">
+        <SidebarGroupContent className="thin-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-clip overflow-y-auto md:gap-1">
           {favoriteTopics.length > 0 ? (
             <div>
               <SectionToggle
@@ -626,14 +627,14 @@ function TopicRow({
           // this topic; decorative — the row link itself stays the action.
           <Loader2Icon
             aria-hidden="true"
-            className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+            className="size-4 shrink-0 animate-spin text-muted-foreground md:size-3.5"
           />
         ) : null}
         {/* Reserves room for the star action next to the "..." trigger. */}
-        <span aria-hidden="true" className="w-6 shrink-0" />
+        <span aria-hidden="true" className="w-7 shrink-0 md:w-6" />
       </SidebarNavLink>
       <SidebarMenuAction
-        className="right-7"
+        className="right-8 md:right-7"
         showOnHover={!topic.isFavorite}
         aria-label={
           topic.isFavorite

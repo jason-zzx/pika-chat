@@ -76,10 +76,10 @@ export default function ReasoningBlock({
         });
 
   return (
-    <div className="w-full text-sm text-muted-foreground">
+    <div className="w-full text-base text-muted-foreground md:text-sm">
       <button
         type="button"
-        className="-mx-1 flex w-full items-center justify-between gap-2 rounded-sm px-1 py-0.5 font-medium hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="-mx-1.5 flex w-full items-center justify-between gap-2 rounded-sm px-1.5 py-1.5 font-medium hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:-mx-1 md:px-1 md:py-0.5"
         aria-expanded={open}
         aria-controls={contentId}
         onClick={() => setUserOpen(!open)}
@@ -106,7 +106,7 @@ export default function ReasoningBlock({
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="thin-scrollbar mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap"
+            className="thin-scrollbar mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed md:leading-5"
           >
             {text}
           </div>

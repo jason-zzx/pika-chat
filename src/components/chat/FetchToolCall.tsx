@@ -83,7 +83,7 @@ export default function FetchToolCall({
             <span className="flex-1" />
           )}
           {output && !("error" in output) ? (
-            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground">
+            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-sm font-medium text-foreground md:text-xs">
               {searchProviderLabel(output.provider)}
             </span>
           ) : null}
@@ -165,12 +165,12 @@ function FetchToolBody({
       {preview.length === 0 ? (
         <p className="text-muted-foreground">{t("fetchNoText")}</p>
       ) : (
-        <p className="whitespace-pre-wrap break-words text-muted-foreground">
+        <p className="whitespace-pre-wrap break-words leading-relaxed text-muted-foreground md:leading-5">
           {preview}
         </p>
       )}
       {output.truncated ? (
-        <p className="text-xs text-muted-foreground">{t("fetchTruncated")}</p>
+        <p className="text-sm text-muted-foreground md:text-xs">{t("fetchTruncated")}</p>
       ) : null}
     </div>
   );

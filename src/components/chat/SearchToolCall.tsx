@@ -156,7 +156,7 @@ function SearchToolBody({
   }
   return (
     <div className="flex flex-col gap-2">
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground md:text-xs">
         {t("searchVia")}
         <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-foreground">
           {searchProviderLabel(output.provider)}
@@ -176,17 +176,17 @@ function SearchToolBody({
                   href={result.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="flex items-center gap-2 rounded-md px-1 py-1.5 hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:py-1"
                 >
                   <span
                     aria-hidden="true"
-                    className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground"
+                    className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground md:text-xs"
                   >
                     {letterSource.charAt(0).toUpperCase()}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate">{result.title}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-sm text-muted-foreground md:text-xs">
                       {host}
                       {published ? ` · ${published}` : ""}
                     </span>

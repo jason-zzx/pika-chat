@@ -179,7 +179,7 @@ function AttachmentCard({ part, onEdit }: AttachmentCardProps) {
     );
   }
   const linkClass =
-    "flex max-w-[16rem] items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground";
+    "flex max-w-[16rem] items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-base text-foreground md:text-sm";
   const card = (
     <a
       href={part.url}
@@ -191,7 +191,7 @@ function AttachmentCard({ part, onEdit }: AttachmentCardProps) {
       <span className="flex min-w-0 flex-col">
         <span className="truncate">{part.filename}</span>
         {part.sizeBytes !== undefined ? (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground md:text-xs">
             {formatBytes(part.sizeBytes)}
           </span>
         ) : null}
@@ -203,7 +203,7 @@ function AttachmentCard({ part, onEdit }: AttachmentCardProps) {
   // filename row stays a link so the file can still be opened in a new tab.
   if (category === "audio" || category === "video") {
     return (
-      <div className="flex w-[min(100%,16rem)] flex-col gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
+      <div className="flex w-[min(100%,16rem)] flex-col gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-base text-foreground md:text-sm">
         {category === "audio" ? (
           // User media arrives without a caption track and we generate none
           // (transcription is out of scope); the player is the affordance.
@@ -318,9 +318,9 @@ function buildContentBlocks(parts: ChatUIMessage["parts"]): ContentBlock[] {
  * source chips exactly as they do in the body (R7).
  */
 const TRANSLATION_TOGGLE_CLASS =
-  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:py-2";
 const TRANSLATION_CHEVRON_CLASS = "size-4";
-const TRANSLATION_CONTENT_CLASS = "px-3 pb-2";
+const TRANSLATION_CONTENT_CLASS = "px-3 pb-2.5 md:pb-2";
 
 function TranslationBlock({
   lang,
@@ -336,7 +336,7 @@ function TranslationBlock({
   return (
     <CollapseBlock
       defaultOpen
-      className="w-full rounded-lg border border-border bg-muted/50 text-sm"
+      className="w-full rounded-lg border border-border bg-muted/50 text-base md:text-sm"
       buttonClassName={TRANSLATION_TOGGLE_CLASS}
       chevronClassName={TRANSLATION_CHEVRON_CLASS}
       ariaLabel={(open) =>
@@ -346,7 +346,7 @@ function TranslationBlock({
       }
       label={({ chevron }) => (
         <>
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+          <span className="shrink-0 text-sm font-medium text-muted-foreground md:text-xs">
             {label}
           </span>
           {chevron}
@@ -378,7 +378,7 @@ function TranslationPendingBlock({
   return (
     <div
       role="status"
-      className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm"
+      className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-base md:py-2 md:text-sm"
     >
       <span className={cn("inline-block font-medium", SHIMMER_TEXT_CLASS)}>
         {t("translating", { language: translateLanguageNativeName(lang) })}
@@ -622,7 +622,7 @@ function MessageItem({
               </div>
             ) : null}
             {hasAnswer ? (
-              <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+              <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3.5 py-2.5 text-base leading-relaxed text-foreground md:px-3 md:py-2 md:text-sm md:leading-5">
                 {textParts.map((part, index) => (
                   <p key={index} className="whitespace-pre-wrap">
                     {part.text}
@@ -666,7 +666,7 @@ function MessageItem({
       onClick={handleArticleClick}
     >
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium">
+        <span className="text-base font-medium md:text-sm">
           {assistantIcon ?? DEFAULT_ASSISTANT_ICON}{" "}
           {assistantName ?? tAssistant("defaultName")}
         </span>
@@ -710,7 +710,7 @@ function MessageItem({
         }
         if (block.kind === "text") {
           return (
-            <div key={block.key} className="w-full text-sm">
+            <div key={block.key} className="w-full text-base md:text-sm">
               <Markdown text={block.text} citations={citations} />
             </div>
           );
@@ -733,37 +733,37 @@ function MessageItem({
         );
       })}
       {showThinkingShimmer ? (
-        <div className="w-full text-sm">
+        <div className="w-full text-base md:text-sm">
           <span className={cn("inline-block font-medium", SHIMMER_TEXT_CLASS)}>
             {t("thinkingShimmer")}
           </span>
         </div>
       ) : null}
       {!streaming && !hasAnswer && finishReason === "length" ? (
-        <p className="text-xs text-muted-foreground">{t("tokenLimit")}</p>
+        <p className="text-sm text-muted-foreground md:text-xs">{t("tokenLimit")}</p>
       ) : null}
       {!streaming &&
       !hasAnswer &&
       finishReason !== "length" &&
       reasoningParts.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground md:text-xs">
           {t("stoppedBeforeAnswer")}
         </p>
       ) : null}
       {outcome === "stopped" ? (
-        <p className="text-xs text-muted-foreground">{t("stopped")}</p>
+        <p className="text-sm text-muted-foreground md:text-xs">{t("stopped")}</p>
       ) : null}
       {outcome === "failed" ? (
         metadata?.errorMessage ? (
           <ErrorBlock text={metadata.errorMessage} />
         ) : (
-          <p className="text-xs text-destructive" role="alert">
+          <p className="text-sm text-destructive md:text-xs" role="alert">
             {t("failedFallback")}
           </p>
         )
       ) : null}
       {modelId ? (
-        <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex w-full items-center gap-2 text-[13px] text-muted-foreground md:text-xs">
           <span className="truncate">{modelId}</span>
           {usage ? <MessageUsage usage={usage} /> : null}
         </div>

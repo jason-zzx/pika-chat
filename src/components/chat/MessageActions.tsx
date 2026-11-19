@@ -71,7 +71,8 @@ type MessageActionsProps = {
 };
 
 const ACTION_BUTTON_CLASS =
-  "rounded-sm p-0.5 text-muted-foreground hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50";
+  "rounded-sm p-1.5 text-muted-foreground hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 md:p-0.5";
+const ACTION_ICON_CLASS = "size-4 md:size-3.5";
 
 export default function MessageActions({
   text,
@@ -130,7 +131,7 @@ export default function MessageActions({
         : t("copyFailed");
 
   return (
-    <div className="flex h-5 shrink-0 select-none items-center gap-1">
+    <div className="flex h-8 shrink-0 select-none items-center gap-1 md:h-5">
       {/* The version switcher is part of the same reveal group as the other
           actions (R9): hidden until hover/focus/tap, not always visible. */}
       <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 motion-reduce:transition-none group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100">
@@ -156,10 +157,10 @@ export default function MessageActions({
               }}
               className={ACTION_BUTTON_CLASS}
             >
-              <ChevronLeftIcon aria-hidden="true" className="size-3.5" />
+              <ChevronLeftIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
             </button>
             <span
-              className="min-w-7 text-center text-xs text-muted-foreground tabular-nums"
+              className="min-w-7 text-center text-sm text-muted-foreground tabular-nums md:text-xs"
               aria-hidden="true"
             >
               {version.versionIndex}/{version.versionCount}
@@ -177,7 +178,7 @@ export default function MessageActions({
               }}
               className={ACTION_BUTTON_CLASS}
             >
-              <ChevronRightIcon aria-hidden="true" className="size-3.5" />
+              <ChevronRightIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
             </button>
           </div>
         ) : null}
@@ -191,7 +192,7 @@ export default function MessageActions({
             onClick={onEdit}
             className={ACTION_BUTTON_CLASS}
           >
-            <PencilIcon aria-hidden="true" className="size-3.5" />
+            <PencilIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
           </button>
         ) : null}
         {onRegenerate ? (
@@ -202,7 +203,7 @@ export default function MessageActions({
             onClick={onRegenerate}
             className={ACTION_BUTTON_CLASS}
           >
-            <RefreshCwIcon aria-hidden="true" className="size-3.5" />
+            <RefreshCwIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
           </button>
         ) : null}
         {hideCopy ? null : (
@@ -216,9 +217,9 @@ export default function MessageActions({
             className={ACTION_BUTTON_CLASS}
           >
             {copyState === "success" ? (
-              <CheckIcon aria-hidden="true" className="size-3.5" />
+              <CheckIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
             ) : (
-              <CopyIcon aria-hidden="true" className="size-3.5" />
+              <CopyIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
             )}
           </button>
         )}
@@ -234,7 +235,7 @@ export default function MessageActions({
                 />
               }
             >
-              <LanguagesIcon aria-hidden="true" className="size-3.5" />
+              <LanguagesIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="top" className="w-auto">
               {TRANSLATE_TARGET_LANGUAGES.map((language) => {
@@ -251,8 +252,8 @@ export default function MessageActions({
                       aria-hidden="true"
                       className={
                         translated
-                          ? "size-3.5 text-muted-foreground"
-                          : "invisible size-3.5"
+                          ? "size-4 text-muted-foreground md:size-3.5"
+                          : "invisible size-4 md:size-3.5"
                       }
                     />
                     {language.nativeName}
@@ -273,7 +274,7 @@ export default function MessageActions({
               />
             }
           >
-            <MoreHorizontalIcon aria-hidden="true" className="size-3.5" />
+            <MoreHorizontalIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="top" className="w-auto">
             {showEdit ? (

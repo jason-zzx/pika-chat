@@ -128,22 +128,22 @@ export default function SearchModePicker({
               disabled={optionDisabled}
               aria-pressed={selected}
               className={cn(
-                "flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50",
+                "flex w-full flex-col gap-1 rounded-md px-2.5 py-2 text-left hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 md:gap-0.5 md:px-2 md:py-1.5",
                 selected && "bg-accent text-accent-foreground",
               )}
               onClick={() => select(option.value)}
             >
-              <span className="text-sm font-medium">
+              <span className="text-base font-medium md:text-sm">
                 {t(option.labelKey)}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground md:text-xs">
                 {t(option.descriptionKey)}
               </span>
             </button>
           );
         })}
         {!toolAvailable ? (
-          <p className="px-2 pb-1 pt-1 text-xs text-muted-foreground">
+          <p className="px-2.5 pt-1 pb-1 text-sm text-muted-foreground md:px-2 md:text-xs">
             {t("searchMode.noProviders")}{" "}
             <Link
               href="/settings/search"

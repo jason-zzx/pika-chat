@@ -114,7 +114,7 @@ export default function SidebarUserMenu({
         render={<Link href="/settings/general" />}
         tooltip={t("userMenu.settings")}
         aria-label={t("userMenu.settings")}
-        className="size-8 shrink-0"
+        className="size-10 shrink-0 md:size-8"
         onClick={() => setOpenMobile(false)}
       >
         <SettingsIcon aria-hidden="true" />

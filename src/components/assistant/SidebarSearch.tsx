@@ -16,7 +16,7 @@ export default function SidebarSearch() {
   const setOpen = useSearchDialogStore((state) => state.setOpen);
 
   return (
-    <div className="shrink-0 px-2 pb-1">
+    <div className="shrink-0 px-2 pb-1.5 md:pb-1">
       <Button
         type="button"
         variant="ghost"
@@ -30,7 +30,7 @@ export default function SidebarSearch() {
       <div className="relative group-data-[collapsible=icon]:hidden">
         <SearchIcon
           aria-hidden="true"
-          className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute top-1/2 left-3 size-4.5 -translate-y-1/2 text-muted-foreground md:left-2.5 md:size-4"
         />
         {/* readOnly entry box: focusing (keyboard) and clicking (already
             focused) both open the dialog. mousedown is prevented so a
@@ -44,7 +44,7 @@ export default function SidebarSearch() {
           value=""
           placeholder={tSidebar("placeholder")}
           aria-label={tSidebar("placeholder")}
-          className="pl-8"
+          className="pl-9 md:pl-8"
           onMouseDown={(event) => event.preventDefault()}
           onFocus={() => setOpen(true)}
           onClick={() => setOpen(true)}

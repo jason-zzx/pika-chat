@@ -43,7 +43,7 @@ const COMPRESSION_TOGGLE_CLASS =
   "flex w-full items-center gap-3 rounded-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 const COMPRESSION_CHEVRON_CLASS = "size-3.5";
 const COMPRESSION_CONTENT_CLASS =
-  "mt-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm";
+  "mt-2 rounded-lg border border-border bg-muted/50 px-3.5 py-2.5 text-base md:px-3 md:py-2 md:text-sm";
 
 /**
  * Compression boundary marker (PRD R3/R9). With no persisted summary it is a
@@ -62,7 +62,7 @@ function CompressionSummary({ summaryText }: { summaryText?: string | null }) {
     return (
       <div className="flex items-center gap-3">
         <div aria-hidden="true" className="h-px flex-1 bg-border" />
-        <span className="shrink-0 text-xs text-muted-foreground">
+        <span className="shrink-0 text-sm text-muted-foreground md:text-xs">
           {t("marker")}
         </span>
         <div aria-hidden="true" className="h-px flex-1 bg-border" />
@@ -79,7 +79,7 @@ function CompressionSummary({ summaryText }: { summaryText?: string | null }) {
       label={({ chevron }) => (
         <>
           <div aria-hidden="true" className="h-px flex-1 bg-border" />
-          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+          <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground md:text-xs">
             {t("marker")}
             {chevron}
           </span>
@@ -630,7 +630,7 @@ export default function MessageList({
   if (messages.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <p className="text-base text-muted-foreground md:text-sm">{t("empty")}</p>
       </div>
     );
   }
@@ -647,7 +647,7 @@ export default function MessageList({
       >
         <div
           ref={contentRef}
-          className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-4"
+          className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-5 md:gap-4"
         >
           <div className="sr-only" aria-live="polite">
             {streaming ? t("responding") : ""}
@@ -722,7 +722,7 @@ export default function MessageList({
             <div role="status" className="flex items-center gap-3">
               <div aria-hidden="true" className="h-px flex-1 bg-border" />
               <span
-                className={`shrink-0 text-xs font-medium ${SHIMMER_TEXT_CLASS}`}
+                className={`shrink-0 text-sm font-medium md:text-xs ${SHIMMER_TEXT_CLASS}`}
               >
                 {tCompression("compressing")}
               </span>

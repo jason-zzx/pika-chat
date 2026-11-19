@@ -89,7 +89,7 @@ function CitationChip({ source }: { source: CitationSource }) {
           title: source.title,
         })}
         onClick={() => setDialogOpen(true)}
-        className="mx-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 align-super text-[10px] leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="mx-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-muted px-1 align-super text-[11px] leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:h-4 md:min-w-4 md:text-[10px]"
       >
         {source.num}
       </button>

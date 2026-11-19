@@ -66,7 +66,7 @@ export default function AttachmentChip({
   return (
     <div
       className={cn(
-        "flex max-w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-xs",
+        "flex max-w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm md:px-2 md:text-xs",
         failed ? "border-destructive/50" : "border-border bg-background/60",
       )}
     >

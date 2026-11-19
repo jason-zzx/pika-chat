@@ -22,9 +22,9 @@ export default function DemoUsageCard() {
   }
 
   return (
-    <div className="mx-2 mb-1 rounded-lg border bg-background/60 px-2.5 py-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+    <div className="mx-2 mb-1 rounded-lg border bg-background/60 px-3 py-2.5 text-sm text-muted-foreground md:px-2.5 md:py-2 md:text-xs group-data-[collapsible=icon]:hidden">
       <p className="mb-1 font-medium text-foreground">{t("demo.usageTitle")}</p>
-      <ul className="flex flex-col gap-0.5 tabular-nums">
+      <ul className="flex flex-col gap-1 tabular-nums md:gap-0.5">
         {KINDS.map((kind) => (
           <li key={kind}>
             {t(LABEL_KEYS[kind], {

@@ -1685,7 +1685,7 @@ export default function ChatView({
       <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
       {historyPending ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-          <p className="text-sm text-muted-foreground">{t("loading")}</p>
+          <p className="text-base text-muted-foreground md:text-sm">{t("loading")}</p>
         </div>
       ) : (
         // Wrapper is the positioning ancestor for SearchHitNav: `bottom-20`
@@ -1754,7 +1754,7 @@ export default function ChatView({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 z-10 m-2 flex items-center justify-center rounded-xl border-2 border-dashed border-foreground/40 bg-background/80"
         >
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-medium text-foreground md:text-sm">
             {tFiles("dropHint")}
           </p>
         </div>

@@ -153,7 +153,7 @@ export default function ModelPicker({
             <button
               type="button"
               className={cn(
-                "mb-1 w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                "mb-1 w-full rounded-md px-2.5 py-2 text-left text-base hover:bg-accent hover:text-accent-foreground md:px-2 md:py-1.5 md:text-sm",
                 value === null && "bg-accent text-accent-foreground",
               )}
               onClick={() => closeAndSelect(null)}
@@ -162,19 +162,19 @@ export default function ModelPicker({
             </button>
           ) : null}
           {available.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">
+            <p className="px-2.5 py-3 text-base text-muted-foreground md:px-2 md:text-sm">
               {t("noModelsAvailable")}
             </p>
           ) : groups.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">
+            <p className="px-2.5 py-3 text-base text-muted-foreground md:px-2 md:text-sm">
               {t("noMatchingModels")}
             </p>
           ) : (
             groups.map((group) => {
               const heading = modelGroupHeading(group);
               return (
-                <div key={group.configId} className="mb-1">
-                  <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                <div key={group.configId} className="mb-1.5 md:mb-1">
+                  <p className="px-2.5 py-1.5 text-sm font-medium text-muted-foreground md:px-2 md:py-1 md:text-xs">
                     {heading.kind === "shared"
                       ? t("sharedConfig", { configName: heading.configName })
                       : heading.configName}
@@ -199,7 +199,7 @@ export default function ModelPicker({
                         key={`${model.configId}::${model.modelId}`}
                         type="button"
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                          "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-base hover:bg-accent hover:text-accent-foreground md:px-2 md:py-1.5 md:text-sm",
                           isSelected && "bg-accent text-accent-foreground",
                         )}
                         onClick={() => closeAndSelect(pick)}
@@ -212,7 +212,7 @@ export default function ModelPicker({
                           {model.modelId}
                         </span>
                         {hasCues ? (
-                          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground md:text-xs">
                             {contextLabel !== null ? (
                               <span>{contextLabel}</span>
                             ) : null}

@@ -19,7 +19,7 @@ export default function ErrorBlock({ text }: ErrorBlockProps) {
       role="alert"
       className="w-full min-w-0 overflow-hidden rounded-lg border border-destructive/40 bg-destructive/5"
     >
-      <pre className="max-h-64 overflow-auto px-3 py-2 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-destructive">
+      <pre className="max-h-64 overflow-auto px-3 py-2 font-mono text-sm leading-relaxed break-words whitespace-pre-wrap text-destructive md:text-xs">
         {text}
       </pre>
     </div>

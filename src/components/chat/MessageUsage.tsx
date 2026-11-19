@@ -82,7 +82,7 @@ export default function MessageUsage({ usage }: MessageUsageProps) {
         delay={150}
         closeDelay={100}
         aria-label={t("triggerLabel", { summary: fullSummary })}
-        className="ml-auto inline-flex shrink-0 items-center rounded-sm px-1 py-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="ml-auto inline-flex shrink-0 items-center rounded-sm px-1 py-0.5 text-[13px] tabular-nums text-muted-foreground transition-colors hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-xs"
       >
         <span className={tpsLabel ? "hidden md:inline" : undefined}>
           {tokens}
@@ -90,7 +90,7 @@ export default function MessageUsage({ usage }: MessageUsageProps) {
         </span>
         {tpsLabel}
       </PopoverTrigger>
-      <PopoverContent align="end" side="top" className="w-60 gap-2 p-3 text-xs">
+      <PopoverContent align="end" side="top" className="w-60 gap-2 p-3 text-sm md:text-xs">
         <p className="font-medium text-foreground">{t("title")}</p>
         <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 tabular-nums">
           {rows.map(([label, value]) => (

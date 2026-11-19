@@ -184,7 +184,7 @@ export default function UserMessageEditor({
         onChange={(event) => setText(event.target.value)}
         onKeyDown={handleKeyDown}
         rows={2}
-        className="field-sizing-content thin-scrollbar max-h-[12rem] min-h-[3rem] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent"
+        className="field-sizing-content thin-scrollbar max-h-[12rem] min-h-[3rem] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-base leading-relaxed shadow-none focus-visible:ring-0 md:text-sm md:leading-6 dark:bg-transparent"
       />
       <div className="flex items-center justify-between gap-2">
         <Button

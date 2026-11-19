@@ -14,13 +14,16 @@ Divergences from the first draft of this spec:
 
 - shadcn/ui CLI v4 defaulted to Base UI (`@base-ui/react`) rather than Radix.
   `components/ui/` remains generated territory; do not hand-edit those files,
-  with three recorded exceptions: the shared popup Positioners pass
+  with recorded exceptions: the shared popup Positioners pass
   `positionMethod="fixed"` so portal popups cannot grow the document scroll
   area, the `cursor-default` → `cursor-pointer` edits for pointer-cursor
   affordance ([Component Guidelines](./component-guidelines.md) "Popup
-  positioning", "Cursor affordance"), and string-only i18n edits swapping
+  positioning", "Cursor affordance"), string-only i18n edits swapping
   hardcoded copy for catalog lookups in `sidebar`, `dialog`, `sheet`, and
-  `emoji-picker` ([i18n](./i18n.md)).
+  `emoji-picker` ([i18n](./i18n.md)), safe-area padding/offsets in `sidebar`
+  and `toast` ([Theming](./theming.md)), and mobile-first sizing/spacing
+  (`text-base md:text-sm`, row height/gap) in `sidebar`, `sheet`,
+  `dropdown-menu`, and `select` (desktop `md:` values stay unchanged).
 - AppShell lives at `components/layout/AppShell.tsx`; `(app)/layout.tsx` is the
   session guard that renders it.
 - Administration is under `(app)/settings/`, not an `admin/` page route. The

@@ -207,11 +207,11 @@ export default function SearchDialog() {
         {trimmed.length > 0 ? (
           <div className="thin-scrollbar max-h-[50vh] min-h-0 overflow-y-auto">
             {debounced !== trimmed || search.isPending ? (
-              <p className="px-2 py-1 text-sm text-muted-foreground">
+              <p className="px-2 py-1 text-base text-muted-foreground md:text-sm">
                 {tSidebar("searching")}
               </p>
             ) : results.length === 0 ? (
-              <p className="px-2 py-1 text-sm text-muted-foreground">
+              <p className="px-2 py-1 text-base text-muted-foreground md:text-sm">
                 {tSidebar("noResults", { query: trimmed })}
               </p>
             ) : (
@@ -219,7 +219,7 @@ export default function SearchDialog() {
                 {topics.length > 0 ? (
                   <li
                     aria-hidden="true"
-                    className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground"
+                    className="px-2.5 pt-2.5 pb-1 text-sm font-medium text-muted-foreground md:px-2 md:pt-2 md:text-xs"
                   >
                     {tSidebar("topicsGroup")}
                   </li>
@@ -232,7 +232,7 @@ export default function SearchDialog() {
                     activeRef={activeItemRef}
                     onSelect={() => selectResult({ kind: KIND_TOPIC, topic })}
                   >
-                    <span className="w-full truncate text-sm">
+                    <span className="w-full truncate text-base md:text-sm">
                       <HighlightedTitle title={topic.title} query={trimmed} />
                     </span>
                   </ResultItem>
@@ -240,7 +240,7 @@ export default function SearchDialog() {
                 {messages.length > 0 ? (
                   <li
                     aria-hidden="true"
-                    className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground"
+                    className="px-2.5 pt-2.5 pb-1 text-sm font-medium text-muted-foreground md:px-2 md:pt-2 md:text-xs"
                   >
                     {tSidebar("messagesGroup")}
                   </li>
@@ -253,10 +253,10 @@ export default function SearchDialog() {
                     activeRef={activeItemRef}
                     onSelect={() => selectResult({ kind: KIND_MESSAGE, message: hit })}
                   >
-                    <span className="w-full truncate text-xs text-muted-foreground">
+                    <span className="w-full truncate text-sm text-muted-foreground md:text-xs">
                       {hit.topicTitle}
                     </span>
-                    <span className="line-clamp-2 w-full whitespace-normal text-sm">
+                    <span className="line-clamp-2 w-full whitespace-normal text-base md:text-sm">
                       <HighlightedText text={hit.snippet} query={trimmed} />
                     </span>
                   </ResultItem>
@@ -294,7 +294,7 @@ function ResultItem({
         type="button"
         ref={active ? activeRef : undefined}
         className={cn(
-          "flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left",
+          "flex w-full flex-col items-start gap-1 rounded-md px-2.5 py-2 text-left md:gap-0.5 md:px-2 md:py-1.5",
           active && "bg-accent",
         )}
         onClick={onSelect}

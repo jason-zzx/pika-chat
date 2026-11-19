@@ -54,7 +54,7 @@ export default function MessageTimestamp({ createdAt }: MessageTimestampProps) {
     <time
       dateTime={createdAt}
       title={exact}
-      className="flex h-5 shrink-0 items-center text-xs text-muted-foreground opacity-0 transition-opacity duration-150 motion-reduce:transition-none group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100"
+      className="flex h-6 shrink-0 items-center text-sm text-muted-foreground opacity-0 transition-opacity duration-150 motion-reduce:transition-none md:h-5 md:text-xs group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100"
     >
       {label}
     </time>

@@ -69,7 +69,7 @@ export default function ChatMapDialog({
                   type="button"
                   onClick={() => onSelect(key)}
                   className={cn(
-                    "flex w-full py-0.5",
+                    "flex w-full py-1 md:py-0.5",
                     isUser ? "justify-end" : "justify-start",
                   )}
                 >
@@ -78,7 +78,7 @@ export default function ChatMapDialog({
                       // Filled vs outlined on top of the alignment split:
                       // three signals, so the two sides stay tellable apart
                       // at a glance.
-                      "block max-w-[85%] truncate rounded-lg px-3 py-2 text-sm",
+                      "block max-w-[85%] truncate rounded-lg px-3.5 py-2.5 text-base md:px-3 md:py-2 md:text-sm",
                       isUser
                         ? "bg-muted font-medium"
                         : "border border-border font-normal",
