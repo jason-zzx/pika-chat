@@ -28,6 +28,7 @@ function openMenu(local = false) {
 describe("SidebarUserMenu server switching", () => {
   afterEach(() => {
     delete window.pikaNative;
+    vi.restoreAllMocks();
   });
 
   it("has no server entry in a browser", async () => {
@@ -55,6 +56,22 @@ describe("SidebarUserMenu server switching", () => {
     );
 
     expect(openServers).toHaveBeenCalledWith("list");
+  });
+
+  it("shows no keyboard shortcut hint in the Android shell", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (Linux; Android 16)",
+    );
+    window.pikaNative = {
+      serverName: "Home lab",
+      notify: vi.fn(),
+      showServerMenu: vi.fn(),
+      openServers: vi.fn(),
+    };
+    openMenu();
+
+    await screen.findByRole("menuitem", { name: "Switch server…" });
+    expect(screen.queryByText("Ctrl+Shift+L")).toBeNull();
   });
 
   it("hides sign-out and omits host from server label in local mode", async () => {

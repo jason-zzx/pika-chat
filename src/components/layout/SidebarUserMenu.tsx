@@ -55,8 +55,12 @@ export default function SidebarUserMenu({
     native?.openServers("list");
   }
   // navigator is only read once the bridge exists, i.e. on the client.
-  const switchShortcut =
-    native && navigator.userAgent.includes("Mac") ? "⌘⇧L" : "Ctrl+Shift+L";
+  // The shell hotkey only exists on desktop; the Android shell has no keyboard shortcut.
+  const switchShortcut = !native || navigator.userAgent.includes("Android")
+    ? null
+    : navigator.userAgent.includes("Mac")
+      ? "⌘⇧L"
+      : "Ctrl+Shift+L";
 
   return (
     <div className="flex w-full min-w-0 items-center gap-1 group-data-[collapsible=icon]:flex-col">
@@ -89,9 +93,9 @@ export default function SidebarUserMenu({
                 </DropdownMenuLabel>
                 <DropdownMenuItem onClick={onSwitchServer}>
                   {tServer("switchItem")}
-                  <DropdownMenuShortcut>
-                    {switchShortcut}
-                  </DropdownMenuShortcut>
+                  {switchShortcut ? (
+                    <DropdownMenuShortcut>{switchShortcut}</DropdownMenuShortcut>
+                  ) : null}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </>
