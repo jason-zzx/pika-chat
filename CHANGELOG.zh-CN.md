@@ -5,6 +5,47 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [1.0.0-rc.1] - 2026-11-19
+
+### Highlights
+
+- **跨平台桌面客户端（Windows、macOS、Linux）**：全新 Electron 原生桌面应用，支持免配置的本地独立运行模式（「此电脑」，内置 PGlite 数据库）与多远程服务器连接，提供独立会话隔离、系统托盘、全局快捷键、回复完成通知及应用更新能力。
+- **Android 客户端（APK）**：基于 Capacitor 8 构建的 Android 原生壳，连接已部署的 Pika Chat 服务端，支持仅限当前连接源的原生桥接注入、跟随主题色的系统栏、键盘避让布局、系统返回手势/按键导航、原生服务器切换弹窗与回复完成通知。
+- **可安装 PWA 与移动端体验升级**：新增 Web App Manifest、安全区适配、跟随应用内主题变化的动态 `theme-color`，并全面优化移动端正文字号、行距与列表触控间距。
+
+### Feats
+
+- **桌面端应用（`native/desktop`）**：
+  - **本地模式（「此电脑」）**：通过内置 PGlite 数据库与 `<userData>/local/` 本地磁盘存储启动打包的 Next.js 独立服务端，仅监听 `127.0.0.1` 并复用持久化端口。使用 Electron `safeStorage` 加密保存自动生成的实例密钥，静默登录本地超级管理员（自动隐藏 `/setup`、登录、退出、2FA 与用户管理页面），并在退出应用及安装更新前优雅关闭本地服务。
+  - **多服务器远程模式**：支持添加并连接多个 Pika Chat 服务端，按服务器隔离会话与 Cookie（`persist:server-<id>`），连接前通过 `/api/health` 校验服务端主次版本兼容性并给出非阻塞提示；本地模式与远程模式数据互不干扰，切换时后台生成仍持续运行。
+  - **原生桌面能力**：支持系统托盘与关闭最小化到托盘、可自定义的全局显示/隐藏快捷键（默认 `Ctrl+Shift+Space`）、窗口位置尺寸记忆、回复完成系统通知（点击唤起窗口并直达对应话题）、安全的附件打开策略（文档与媒体文件交由系统默认应用打开，脚本与可执行文件仅在文件管理器中定位），以及 Windows/Linux 应用内自动更新与 macOS 新版本跳转提示。
+- **Android 应用（`native/mobile`）**：
+  - **远程服务器壳**：支持原生持久化保存多个服务端、无跨域限制的健康检查、按源隔离的 Cookie 会话（移除服务器时自动清理对应源 Cookie），以及从侧边栏品牌行、账户菜单和登录页芯片唤起的原生单选服务器切换弹窗。
+  - **源隔离的原生桥接**：仅向已连接服务器的主框架通过 `androidx.webkit` `WebMessageListener` 与 document-start 脚本注入 `window.pikaNative`，在原生层严格校验来源与参数边界（若 Android System WebView 缺少所需特性则直接报错提示更新，不回退到全源开放桥接）。
+  - **系统栏、键盘与导航适配**：实现全屏 Edge-to-Edge 沉浸式布局，状态栏与导航栏背景及深浅图标对比度实时跟随页面 `theme-color`（兼容 `oklch`/`lab` 色彩 token）；输入法弹出时自动调整视口保持输入框不被遮挡；基于 `OnBackPressedCallback` 实现优先回退应用内历史、再返回服务器列表、最后退至后台的返回逻辑（兼容预测性返回手势）；外部域名跳转系统浏览器，附件支持文件选择器上传与 `DownloadManager`/系统打开方式下载，支持 WebView 渲染进程崩溃恢复、回复完成通知（在应用前台或刚切后台冻结前生效，点击直达话题）与 GitHub Release 更新检测。
+- **可安装 PWA 与移动端响应式优化**：
+  - 新增 `/manifest.webmanifest`、桌面与可遮罩（maskable）应用图标、`apple-web-app` 元信息、`viewport-fit=cover`、`interactive-widget=resizes-content`、侧边栏/弹窗/图片预览安全区留白，以及随应用内明暗模式和主题预设实时同步的 `<meta name="theme-color">` 。
+  - 优化移动端排版与触控体验：Markdown 正文在移动端提升至 `16px` 并放宽行高，调整消息列表间距及侧边栏、下拉菜单、选择器、抽屉等组件的行高与间距，同时保持桌面端显示不变。
+- **服务端与 Web 桥接**：
+  - 扩展 `GET /api/health` 返回来自 `package.json` 的服务端 `version` 以供客户端做版本兼容检查；保持 `window.pikaNative` 完全可选，普通浏览器行为不受任何影响。
+
+### Fixes
+
+- **聊天断线重连**：修复流式重连失败后状态短暂锁住的问题，改为仅在 `submitted`/`streaming` 状态下视作已连接，确保 `clearError()` 重置状态后发现刷新能够正常重试断开的重连。
+- **开发模式设置页重定向报错**：将 `/settings` 到 `/settings/general` 的重定向迁移至 `next.config.ts`，并让侧边栏设置按钮直接链接到 `/settings/general`，避免服务端与浏览器时钟偏差时 RSC `NEXT_REDIRECT` 触发 React Flight `performance.measure` 负时间戳报错。
+- **客户端更新 SemVer 比较**：为 Android 与桌面 macOS 的更新检查补齐完整的 SemVer 预发布版本号比较逻辑（`native/shell-ui` 与 `Updates.kt`）。
+
+### Dev
+
+- 新增独立隔离的 `native/` pnpm 工作区（含 `@pika/shell-ui`、`pika-chat-desktop` 与 `@pika/mobile`），排除于根目录 `tsconfig.json` 与 Docker 构建上下文之外。
+- 新增 `native` 工作区检查、Android Debug APK 编译验证及基于 PGlite 的集成测试 CI 任务。
+- 扩展 `release.yml` 发布流水线：在构建多架构 Docker 镜像的同时，产出包含本地独立服务端的 Windows/macOS（Intel 与 Apple Silicon）/Linux 桌面安装包与签名版 Android APK；预发布标签不覆盖 Docker `latest`，且带连字符的 tag 自动标记为 GitHub Prerelease。
+
+### Chore
+
+- 统一英文与简体中文文案、应用图标及 Better Auth 配置中的品牌拼写为 **Pika Chat**。
+- 在 `README.md` 与 `README.zh-CN.md` 中补充桌面端与 Android 客户端的安装、使用及开发说明。
+
 ## [0.4.2] - 2026-11-16
 
 ### Fixes

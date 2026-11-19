@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.1] - 2026-11-19
+
+### Highlights
+
+- **Cross-Platform Desktop App (Windows, macOS, Linux)**: Native Electron client supporting both zero-config standalone local mode ("This computer" powered by embedded PGlite) and multi-server remote mode with isolated sessions, tray icon, global hotkey, reply notifications, and auto-update.
+- **Android App (APK)**: Native Android shell built on Capacitor 8 for connecting to deployed Pika Chat servers, featuring origin-scoped native bridge injection, live theme-colored system bars, keyboard-aware layout, hardware back navigation, native server switching, and reply notifications.
+- **Installable PWA & Mobile Polish**: Web App Manifest, safe-area support, dynamic `theme-color` tracking, and refined mobile typography and list spacing for browser and iOS PWA users.
+
+### Feats
+
+- **Desktop App (`native/desktop`)**:
+  - **Local Mode ("This computer")**: Launches a bundled Next.js standalone server bound strictly to `127.0.0.1` using an embedded PGlite database and local disk storage under `<userData>/local/`. Automatically generates and encrypts secrets with Electron `safeStorage`, silently signs into a local super-admin account (hiding `/setup`, login, sign-out, 2FA, and user management), persists the local port across restarts, and shuts down cleanly on quit and before update installs.
+  - **Multi-Server Remote Mode**: Connects to one or more remote Pika Chat servers with per-server cookie/session isolation (`persist:server-<id>`), `/api/health` version compatibility checks (major.minor mismatch warnings), and seamless switching between local and remote instances without interrupting background generations.
+  - **Native Desktop Integration**: Adds a system tray icon with close-to-tray behavior, a customizable global show/hide hotkey (default `Ctrl+Shift+Space`), saved window bounds, native completion notifications that focus and open the target topic, safe attachment opening (document/media types open in the OS default app while scripts/executables are only revealed in the file manager), and in-app updates via `electron-updater` on Windows and Linux (plus release prompts on macOS).
+- **Android App (`native/mobile`)**:
+  - **Remote Server Shell**: Connects to deployed Pika Chat servers with native server list persistence, CORS-free health checks, per-origin cookie isolation (cookies cleared on server removal), and a native single-choice server-switcher dialog reachable from the sidebar brand row, account menu, and sign-in page chip.
+  - **Origin-Scoped Native Bridge**: Injects `window.pikaNative` exclusively into the connected server's main frame via `androidx.webkit` `WebMessageListener` and document-start scripts with native origin and payload validation (refusing to connect if Android System WebView lacks required features instead of falling back to an all-origins bridge).
+  - **System Bars, Keyboard & Navigation**: Renders edge-to-edge with live `theme-color` tinting across status and navigation bars (supporting `oklch`/`lab` theme tokens and automatic light/dark icon contrast), keeps the composer above the soft keyboard, routes in-app history and server-list returns through `OnBackPressedCallback` (supporting predictive back), opens external origins in the system browser, handles file uploads and `DownloadManager`/chooser attachment downloads, recovers from WebView renderer crashes, posts reply notifications (while active or shortly before Android freezes backgrounded apps), and checks GitHub Releases for updates.
+- **Installable PWA & Responsive UX**:
+  - Added `/manifest.webmanifest`, launcher and maskable icons, `apple-web-app` metadata, `viewport-fit=cover`, `interactive-widget=resizes-content`, safe-area padding across sidebar/toasts/image preview, and live `<meta name="theme-color">` updates matching the user's in-app theme mode and preset.
+  - Improved mobile typography (`16px` markdown prose with relaxed line height) and touch-friendly row heights/spacing across the sidebar, message list, dropdown menus, selects, and sheets without altering desktop sizing.
+- **Server & Web Bridge**:
+  - Extended `GET /api/health` to return the server `version` from `package.json` for shell compatibility checks, while keeping `window.pikaNative` strictly optional so plain browser behavior remains unchanged.
+
+### Fixes
+
+- **Chat Reconnect Retry**: Treated a chat as attached only while submitted/streaming so a discovery refresh retries dropped reconnects after `clearError()` resets status to `ready`.
+- **Settings Navigation in Dev Mode**: Moved the `/settings` to `/settings/general` redirect to `next.config.ts` and linked the sidebar entry directly, avoiding RSC `NEXT_REDIRECT` `performance.measure` negative-timestamp errors under clock skew.
+- **Update Version Comparison**: Used proper SemVer pre-release comparison in Android and macOS update checks (`native/shell-ui` and `Updates.kt`).
+
+### Dev
+
+- Added an isolated `native/` pnpm workspace (`@pika/shell-ui`, `pika-chat-desktop`, and `@pika/mobile`) excluded from root `tsconfig.json` and Docker builds.
+- Added CI checks for the `native` workspace, unsigned Android debug APK builds (`ci.yml`), and running the integration test suite against PGlite.
+- Expanded `release.yml` to build desktop installers (Windows NSIS, Intel/Apple Silicon macOS `.dmg`, Linux `.AppImage`/`.deb`/`.rpm` bundling the standalone local server) and signed Android APKs alongside multi-arch Docker images, keep prerelease tags off Docker `latest`, and mark hyphenated tags as GitHub prereleases.
+
+### Chore
+
+- Standardized the product name spelling to **Pika Chat** across localizations, icon metadata, and Better Auth settings.
+- Added Desktop and Android installation, usage, and development documentation to `README.md` and `README.zh-CN.md`.
+
 ## [0.4.2] - 2026-11-16
 
 ### Fixes
