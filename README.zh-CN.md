@@ -246,6 +246,20 @@
 
 ---
 
+## Android 应用
+
+Android 应用（APK，Android 7.0+）可连接一个或多个已部署的 Pika Chat 服务器，系统状态栏与导航栏跟随主题色，输入框始终位于键盘上方，支持返回键与回复完成通知。应用不内置服务端，请连接远程服务器。
+
+- **安装**：前往 [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) 下载 `Pika-Chat-<版本>.apk` 并打开；系统会提示允许浏览器或文件管理器安装未知来源应用。
+- **服务器**：首次启动会打开“添加服务器”表单；可通过侧边栏品牌行、账户菜单或登录页右上角芯片调出原生选择框切换服务器，每个服务器拥有独立的登录会话。
+- **通知**：Android 13+ 在首次连接成功后请求通知权限。Android 会在应用进入后台约 10 秒后冻结它，因此仅当回复在应用打开或刚离开时完成才会弹出通知；重新打开应用即可看到已完成的回复。
+- **更新**：应用在启动时及“设置”中检查 GitHub Releases，并提供新 APK 的链接。
+- **要求**：保持 Android System WebView 为最新版（可在 Google Play 更新），否则应用会提示更新。
+
+开发 Android 应用：见 [`native/mobile/README.md`](native/mobile/README.md)。
+
+---
+
 ## 桌面应用
 
 Electron 桌面客户端支持 Windows、macOS 与 Linux，既可在本地“此电脑”模式免配置直接运行 Pika Chat，也可连接一个或多个已部署的远程服务器，并提供托盘图标、全局显示/隐藏快捷键、回复完成通知和自动更新。

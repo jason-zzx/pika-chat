@@ -246,6 +246,20 @@ If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neo
 
 ---
 
+## Android App
+
+An Android app (APK, Android 7.0+) connects to one or more deployed Pika Chat servers. It follows the theme colour in the system bars, keeps the composer above the keyboard, supports the back button, and posts reply notifications. There is no on-device server; use a remote one.
+
+- **Install**: download `Pika-Chat-<version>.apk` from [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) and open it; Android asks you to allow installs from your browser or file manager (unknown sources).
+- **Servers**: the first launch opens the add-server form. Switch servers from the sidebar brand row, account menu, or sign-in page chip (a native picker). Each server keeps its own sign-in session.
+- **Notifications**: Android 13+ asks for notification permission after the first connection. Android freezes backgrounded apps after about 10 seconds, so a notification appears only when a reply finishes while the app is open or just after you leave it; reopening the app shows the finished reply.
+- **Updates**: the app checks GitHub Releases at launch and from Settings, and links to the new APK.
+- **Requirements**: an up-to-date Android System WebView (update it in Google Play); the app shows an error asking for this otherwise.
+
+Developing the Android app: see [`native/mobile/README.md`](native/mobile/README.md).
+
+---
+
 ## Desktop App
 
 A native desktop client (Electron) for Windows, macOS, and Linux runs Pika Chat locally on this computer with no server setup or connects to one or more remote Pika Chat servers, and adds a tray icon, a global show/hide hotkey, reply notifications, and auto-update.
