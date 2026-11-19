@@ -59,3 +59,38 @@ The desktop app works with no server. Choosing "This computer" starts a bundled 
 - Multiple local profiles; changing the data dir location.
 - Downgrading after a newer migration ran.
 - Server-side API blocks for the hidden actions (only the local user can reach the API).
+
+## Outcome Notes (2026-11-18)
+
+Work commits: `9e77cb5` (server), `158b53a` (desktop), `72a7389` (release), `87e652e` (docs), `d8219ea` (planning).
+
+Verified locally:
+- **Root:** lint and typecheck pass. The Postgres suite passes (1543 tests; integration 281/281). The PGlite integration suite passes twice (278 passed, 3 skipped by design).
+- **Native:** typecheck and tests (12/12) pass, and the desktop build succeeds.
+- **Standalone build:** it contains the pglite assets. `build-server.mjs` output has no symlinks and no `.env`.
+- **Linux AppImage smoke** (throwaway userData, driven over CDP):
+  - welcome → "Use on this computer" → chat page with no login;
+  - bound to `127.0.0.1` only; `/api/health` ok;
+  - the Account/Users pages are gated;
+  - the pinned local row comes first in the list;
+  - "Connect to a server" → Cancel returns to the list;
+  - a relaunch reuses the port and the session, and does not provision the admin again;
+  - `app.quit()` takes the graceful parentPort shutdown path (no kill);
+  - lapsed-session re-sign-in works for both reload and client-router navigations;
+  - user env vars (`S3_*`, `DEMO_MODE`, `NODE_OPTIONS`) do not reach the server.
+- After ponytail-review: unpackaged Electron smoke — welcome view, local connect, graceful quit within ~2 s, relaunch auto-connects on the same port.
+
+Deferred to an rc tag:
+- Windows and macOS installers, including `utilityProcess` + `safeStorage` behaviour and junction handling in `build-server.mjs` on Windows.
+- The split mac runners.
+- The CI PGlite step and the release workflow.
+- Driving the native switcher popup and tray submenu, which were only checked by reading the code.
+- The full provider / chat / upload / image-generation flow in local mode.
+- Switching to a remote server during a local reply.
+- A forced startup failure view.
+- LAN unreachability from a second machine; `ss` shows only 127.0.0.1.
+
+Known follow-ups:
+- On Windows, NSIS `quitAndInstall` may race the up-to-5 s local shutdown in `before-quit`.
+- Turbopack `.next/node_modules/<pkg>-<hash>` aliases become full copies, about 21 MB duplicated.
+- Optional: replace the hand-written pnpm flattening in `build-server.mjs` with a `node-linker=hoisted` install (ponytail item, deferred by user).
