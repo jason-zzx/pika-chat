@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const desktopDir = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -14,16 +14,44 @@ if (!existsSync(join(standaloneDir, "server.js"))) {
   throw new Error(`Standalone build not found at ${standaloneDir}; run DOCKER_BUILD=1 pnpm build first.`);
 }
 
+const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
+
+// Windows Defender and Next.js's copied symlinks can raise transient EPERM/EBUSY on fs calls.
+function retryFs(fn) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return fn();
+    } catch (err) {
+      const transient = process.platform === "win32" && (err?.code === "EPERM" || err?.code === "EBUSY");
+      if (!transient || attempt >= 5) throw err;
+      Atomics.wait(sleepBuffer, 0, 0, 50 * (attempt + 1));
+    }
+  }
+}
+
+// Next.js standalone on Windows can copy pnpm links as symlinks whose `stat()` fails with EPERM
+// inside `realpathSync`; unwrap leaf links via `readlinkSync` before canonicalizing.
+function resolveReal(targetPath) {
+  let current = resolve(targetPath);
+  const seen = new Set();
+  while (retryFs(() => lstatSync(current)).isSymbolicLink()) {
+    if (seen.has(current)) throw new Error(`Circular symlink encountered while resolving ${targetPath}`);
+    seen.add(current);
+    current = resolve(dirname(current), retryFs(() => readlinkSync(current)));
+  }
+  return retryFs(() => realpathSync(current));
+}
+
 // fs.cpSync's `dereference` does not follow symlinks nested inside a copied directory, and the
 // standalone tree has some (`.next/node_modules/<pkg>-<hash>` aliases into `.pnpm`).
 function copy(from, to) {
-  const real = realpathSync(from);
-  if (!statSync(real).isDirectory()) {
-    copyFileSync(real, to);
+  const real = resolveReal(from);
+  if (!retryFs(() => statSync(real)).isDirectory()) {
+    retryFs(() => copyFileSync(real, to));
     return;
   }
   mkdirSync(to, { recursive: true });
-  for (const entry of readdirSync(real)) copy(join(real, entry), join(to, entry));
+  for (const entry of retryFs(() => readdirSync(real))) copy(join(real, entry), join(to, entry));
 }
 
 rmSync(outDir, { recursive: true, force: true });
@@ -40,18 +68,18 @@ for (const entry of readdirSync(standaloneDir)) {
 // nothing links to is only loaded through a Turbopack alias (`.next/node_modules/<pkg>-<hash>`, copied
 // whole above), so it is not hoisted a second time and its conflicting dependencies nest under the alias.
 const packagesIn = (nm) =>
-  readdirSync(nm).flatMap((name) =>
-    name.startsWith(".") ? [] : name.startsWith("@") ? readdirSync(join(nm, name)).map((sub) => `${name}/${sub}`) : [name],
+  retryFs(() => readdirSync(nm)).flatMap((name) =>
+    name.startsWith(".") ? [] : name.startsWith("@") ? retryFs(() => readdirSync(join(nm, name))).map((sub) => `${name}/${sub}`) : [name],
   );
 const storeEntries = readdirSync(storeDir)
   .filter((entry) => entry !== "node_modules")
   .map((entry) => join(storeDir, entry, "node_modules"))
   .filter((nm) => existsSync(nm));
 
-const isLink = (nm, name) => lstatSync(join(nm, name)).isSymbolicLink();
+const isLink = (nm, name) => retryFs(() => lstatSync(join(nm, name))).isSymbolicLink();
 const aliasNm = join(standaloneDir, ".next", "node_modules");
 const aliases = new Map(
-  packagesIn(aliasNm).map((alias) => [realpathSync(join(aliasNm, alias)), join(outDir, ".next", "node_modules", alias)]),
+  packagesIn(aliasNm).map((alias) => [resolveReal(join(aliasNm, alias)), join(outDir, ".next", "node_modules", alias)]),
 );
 
 const hoisted = new Map();
@@ -60,7 +88,7 @@ for (const nm of [sourceNm, join(storeDir, "node_modules"), ...storeEntries]) {
   if (!existsSync(nm)) continue;
   for (const name of packagesIn(nm)) {
     if (hoisted.has(name) || !isLink(nm, name)) continue;
-    const real = realpathSync(join(nm, name));
+    const real = resolveReal(join(nm, name));
     hoisted.set(name, real);
     copy(real, join(destNm, name));
   }
@@ -70,10 +98,10 @@ for (const nm of storeEntries) {
   const names = packagesIn(nm);
   const owners = names.filter((name) => !isLink(nm, name));
   for (const name of names.filter((name) => isLink(nm, name))) {
-    const real = realpathSync(join(nm, name));
+    const real = resolveReal(join(nm, name));
     if (hoisted.get(name) === real) continue;
     for (const owner of owners) {
-      const ownerReal = realpathSync(join(nm, owner));
+      const ownerReal = resolveReal(join(nm, owner));
       const ownerDir = hoisted.get(owner) === ownerReal ? join(destNm, owner) : aliases.get(ownerReal);
       if (!ownerDir) {
         throw new Error(`Cannot place ${name} for ${owner}: ${owner} itself conflicts with the hoisted version.`);
