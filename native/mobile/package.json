@@ -1,0 +1,21 @@
+{
+  "name": "pika-chat-mobile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "sync": "pnpm build && cap sync android",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/core": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "@pika/shell-ui": "workspace:*",
+    "typescript": "5.9.3",
+    "vite": "8.3.8"
+  }
+}

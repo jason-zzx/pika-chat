@@ -1,6 +1,7 @@
 packages:
   - shell-ui
   - desktop
+  - mobile
 allowBuilds:
   electron-winstaller: false
   esbuild: true

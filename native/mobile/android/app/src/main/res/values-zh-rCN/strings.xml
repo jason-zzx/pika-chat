@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_replies">回复通知</string>
+    <string name="notification_channel_replies_desc">助手回复完成时发送通知</string>
+
+    <string name="webview_unsupported">请更新 Android System WebView 后再连接服务器。</string>
+    <string name="unknown_server">未知服务器</string>
+
+    <string name="server_menu_title">切换服务器</string>
+    <string name="server_menu_add">添加服务器…</string>
+    <string name="server_menu_manage">管理服务器…</string>
+
+    <string name="update_title">发现新版本</string>
+    <string name="update_body">Pika Chat %1$s 已发布。是否前往 GitHub Releases 下载最新 APK？</string>
+    <string name="update_download">下载</string>
+    <string name="update_later">稍后</string>
+    <string name="update_up_to_date_title">已是最新版本</string>
+    <string name="update_up_to_date_body">当前版本（%1$s）已是最新。</string>
+    <string name="update_error_title">检查更新失败</string>
+    <string name="update_error_body">无法连接到 GitHub Releases。是否在浏览器中打开发布页？</string>
+    <string name="ok">确定</string>
+    <string name="download_done">已下载 %1$s</string>
+    <string name="download_failed">下载失败</string>
+    <string name="open_with">打开方式</string>
+    <string name="open_no_app">没有可打开此文件的应用</string>
+</resources>

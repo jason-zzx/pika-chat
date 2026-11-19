@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pika Chat</string>
+    <string name="title_activity_main">Pika Chat</string>
+
+    <string name="notification_channel_replies">Replies</string>
+    <string name="notification_channel_replies_desc">Notifications when assistant replies finish</string>
+
+    <string name="webview_unsupported">Please update Android System WebView to connect to a server.</string>
+    <string name="unknown_server">Unknown server</string>
+
+    <string name="server_menu_title">Switch server</string>
+    <string name="server_menu_add">Add server…</string>
+    <string name="server_menu_manage">Manage servers…</string>
+
+    <string name="update_title">Update available</string>
+    <string name="update_body">Pika Chat %1$s is available. Download the latest APK from GitHub Releases?</string>
+    <string name="update_download">Download</string>
+    <string name="update_later">Later</string>
+    <string name="update_up_to_date_title">Up to date</string>
+    <string name="update_up_to_date_body">You are running the latest version (%1$s).</string>
+    <string name="update_error_title">Update check failed</string>
+    <string name="update_error_body">Could not reach GitHub Releases. Open the releases page in your browser?</string>
+    <string name="ok">OK</string>
+    <string name="download_done">Downloaded %1$s</string>
+    <string name="download_failed">Download failed</string>
+    <string name="open_with">Open with</string>
+    <string name="open_no_app">No app can open this file</string>
+</resources>
