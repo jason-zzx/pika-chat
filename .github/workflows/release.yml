@@ -156,8 +156,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y rpm
 
       - name: Install root dependencies and build local standalone server
+        # Next.js evaluates server modules during `next build` page-data collection;
+        # pass dummy values matching Dockerfile so CI builds succeed without secrets.
         env:
           DOCKER_BUILD: '1'
+          DATABASE_URL: postgres://build:build@localhost:5432/build
+          CREDENTIAL_ENCRYPTION_SECRET: build-dummy-credential-encryption-secret-min32
+          BETTER_AUTH_SECRET: build-dummy-better-auth-secret-min-32-chars
         run: |
           pnpm install --frozen-lockfile
           pnpm build
