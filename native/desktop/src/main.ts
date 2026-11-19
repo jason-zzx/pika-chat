@@ -253,7 +253,7 @@ function start() {
     return accelerator === null || globalShortcut.register(accelerator, toggleWindow);
   };
 
-  const checkForUpdates = createUpdater(t);
+  const checkForUpdates = createUpdater(t, localServer.shutdown);
   const manualUpdateCheck = () => {
     showWindow();
     void checkForUpdates(true);

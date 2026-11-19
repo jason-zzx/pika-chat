@@ -96,7 +96,11 @@ screen.
   `location.replace()` as `will-navigate`. Switching
   to a remote server or closing to tray leaves the local server running so
   background generations finish; `before-quit` posts `"shutdown"` over
-  `parentPort`, waiting up to 5 s for PGlite to close before killing.
+  `parentPort`, waiting up to 5 s for PGlite to close before killing. An update
+  install shuts the local server down **before** `quitAndInstall()`: the NSIS
+  installer starts inside that call and force-kills every `Pika Chat.exe`
+  (utility processes included) within ~2.6 s, and the server's open files would
+  block the overwrite.
 - Packaging: `native/desktop/scripts/build-server.mjs` copies `.next/standalone`,
   `.next/static`, `public`, and `src/server/db/migrations`, flattening pnpm's
   `.pnpm` store into a plain `node_modules` (conflicting versions nested under
@@ -104,7 +108,11 @@ screen.
   `dereference` does not follow symlinks nested in a copied directory and
   `extraResources` / Windows installers cannot keep them. It skips `.env*`:
   Next copies the developer's `.env` into standalone, which would ship
-  `DATABASE_URL`, secrets and S3 keys inside a locally built installer. Mac release builds split
+  `DATABASE_URL`, secrets and S3 keys inside a locally built installer. Only
+  packages something links to are hoisted: a package nothing links to (e.g.
+  pglite) is loaded only through its Turbopack alias
+  (`.next/node_modules/<pkg>-<hash>`), which is already a full copy, so hoisting
+  it as well would ship it twice (~20 MB). Mac release builds split
   into `macos-15-intel` (`--x64`) and `macos-latest` (`--arm64`) because `sharp`
   native binaries are arch-specific.
 

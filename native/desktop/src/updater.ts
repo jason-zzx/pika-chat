@@ -10,7 +10,7 @@ const latestRelease = z.object({ tag_name: z.string(), html_url: z.string() });
 
 // Dialogs have no parent window: an update can finish downloading while the window is hidden in the
 // tray, and a dialog attached to a hidden window may never appear.
-export function createUpdater(t: Strings) {
+export function createUpdater(t: Strings, beforeInstall: () => Promise<void>) {
   // Errors from a launch-time check stay silent; a manual check or an install attempt reports them.
   let reportErrors = false;
 
@@ -32,6 +32,10 @@ export function createUpdater(t: Strings) {
     const { response } = await message(t.updateReady(info.version), [t.restartInstall, t.later]);
     if (response !== 0) return;
     reportErrors = true;
+    // The installer starts inside quitAndInstall and force-kills every "Pika Chat" process within
+    // ~2.6 s, the local server included, and its open files block the overwrite on Windows: stop the
+    // server first.
+    await beforeInstall();
     autoUpdater.quitAndInstall();
   });
 

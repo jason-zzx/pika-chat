@@ -35,8 +35,10 @@ for (const entry of readdirSync(standaloneDir)) {
 }
 
 // pnpm's layout is symlinks into `.pnpm`, which electron-builder's extraResources and Windows installers
-// do not keep. Flatten it: every package goes to the top level once, and a dependency whose version
-// differs from the hoisted one is nested under the package that needs it.
+// do not keep. Flatten it: every package something links to goes to the top level once, and a dependency
+// whose version differs from the hoisted one is nested under the package that needs it. A package
+// nothing links to is only loaded through a Turbopack alias (`.next/node_modules/<pkg>-<hash>`, copied
+// whole above), so it is not hoisted a second time and its conflicting dependencies nest under the alias.
 const packagesIn = (nm) =>
   readdirSync(nm).flatMap((name) =>
     name.startsWith(".") ? [] : name.startsWith("@") ? readdirSync(join(nm, name)).map((sub) => `${name}/${sub}`) : [name],
@@ -47,13 +49,17 @@ const storeEntries = readdirSync(storeDir)
   .filter((nm) => existsSync(nm));
 
 const isLink = (nm, name) => lstatSync(join(nm, name)).isSymbolicLink();
+const aliasNm = join(standaloneDir, ".next", "node_modules");
+const aliases = new Map(
+  packagesIn(aliasNm).map((alias) => [realpathSync(join(aliasNm, alias)), join(outDir, ".next", "node_modules", alias)]),
+);
 
 const hoisted = new Map();
 // Top-level links first (what server.js resolves), then pnpm's own hoisting choice, then everything else.
 for (const nm of [sourceNm, join(storeDir, "node_modules"), ...storeEntries]) {
   if (!existsSync(nm)) continue;
   for (const name of packagesIn(nm)) {
-    if (hoisted.has(name) || (nm === sourceNm && !isLink(nm, name))) continue;
+    if (hoisted.has(name) || !isLink(nm, name)) continue;
     const real = realpathSync(join(nm, name));
     hoisted.set(name, real);
     copy(real, join(destNm, name));
@@ -67,10 +73,12 @@ for (const nm of storeEntries) {
     const real = realpathSync(join(nm, name));
     if (hoisted.get(name) === real) continue;
     for (const owner of owners) {
-      if (hoisted.get(owner) !== realpathSync(join(nm, owner))) {
+      const ownerReal = realpathSync(join(nm, owner));
+      const ownerDir = hoisted.get(owner) === ownerReal ? join(destNm, owner) : aliases.get(ownerReal);
+      if (!ownerDir) {
         throw new Error(`Cannot place ${name} for ${owner}: ${owner} itself conflicts with the hoisted version.`);
       }
-      copy(real, join(destNm, owner, "node_modules", name));
+      copy(real, join(ownerDir, "node_modules", name));
     }
   }
 }
