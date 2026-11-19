@@ -7,6 +7,17 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite"],
   agentRules: false,
   allowedDevOrigins: ['192.168.99.203'],
+  // Redirect /settings before RSC rendering so direct visits skip SettingsIndexPage's
+  // thrown NEXT_REDIRECT (which trips React Flight dev performance.measure under clock skew).
+  async redirects() {
+    return [
+      {
+        source: "/settings",
+        destination: "/settings/general",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 // No-arg form auto-discovers ./src/i18n/request.ts.

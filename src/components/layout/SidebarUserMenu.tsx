@@ -111,7 +111,7 @@ export default function SidebarUserMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       <SidebarMenuButton
-        render={<Link href="/settings" />}
+        render={<Link href="/settings/general" />}
         tooltip={t("userMenu.settings")}
         aria-label={t("userMenu.settings")}
         className="size-8 shrink-0"
