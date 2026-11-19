@@ -1213,3 +1213,34 @@ Planned 11-16-native-desktop-local. A PGlite spike passed the full integration s
 ### Status
 
 [OK] **Completed**
+
+
+## Session 45: Mobile shell remote mode (Android) & mobile web fixes
+<!-- trellis-session: v=2 fp=6561798afdf572bc -->
+
+**Date**: 2026-11-19
+**Task**: Mobile shell remote mode (Android) & mobile web fixes
+**Branch**: `feat/native-apps`
+
+### Summary
+
+Shipped the Capacitor 8 Android shell (11-16-native-mobile) on top of shared shell-ui: grouped desktop-only host capabilities under optional desktop, added native PikaHostPlugin/RemoteBridge/Updates/MainActivity (origin-scoped window.pikaNative via androidx WebMessageListener and document-start script, live theme-color system bars, IME-aware edge-to-edge layout, OnBackPressedCallback navigation, native server-switch dialog, DownloadManager attachments, completion notifications), hid the desktop shortcut hint on Android, wired CI debug APK and signed release APK builds, and updated docs/specs. Also landed semver update-check comparison, /settings redirect RSC fix, mobile font/spacing improvements, and Trellis agent skills.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5dbb8ff` | feat(shell-ui): group desktop-only host methods under an optional desktop capability |
+| `5128ade` | feat(mobile): add Capacitor Android app for connecting to Pika servers |
+| `6ce8ee3` | feat(web): hide the desktop server-switch shortcut hint in the Android shell |
+| `324a6e6` | ci(release): build a signed Android APK and attach it to the release |
+| `cd4e6bf` | docs: document the Android app and its native shell contracts |
+| `ec35ee5` | docs(trellis): plan and record the Android shell |
+| `3f6f349` | fix(native): compare semver versions when checking for updates |
+| `50bc7c9` | dev(trellis): add common trellis agent skills |
+| `a896cdc` | fix(web): avoid RSC redirect error when navigating to settings |
+| `79e86e4` | fix(web): improve mobile font sizes and list spacing |
+
+### Status
+
+[OK] **Completed**
