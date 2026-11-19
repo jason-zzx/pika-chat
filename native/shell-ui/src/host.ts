@@ -11,11 +11,13 @@ export interface PikaShell {
   removeServer(id: string): Promise<void>;
   checkServer(url: string): Promise<ServerCheck>;
   connect(id: string): Promise<void>;
-  openLocalLog(): Promise<void>;
-  getLocalError(): Promise<string | null>;
-  getHotkey(): Promise<string | null>;
-  setHotkey(accelerator: string | null): Promise<{ ok: boolean }>;
   checkForUpdates(): Promise<void>;
+  desktop?: {
+    openLocalLog(): Promise<void>;
+    getLocalError(): Promise<string | null>;
+    getHotkey(): Promise<string | null>;
+    setHotkey(accelerator: string | null): Promise<{ ok: boolean }>;
+  };
 }
 
 declare global {

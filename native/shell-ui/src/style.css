@@ -48,7 +48,11 @@ body {
 .view {
   max-width: 520px;
   margin: 0 auto;
-  padding: 48px 24px;
+  padding:
+    calc(48px + env(safe-area-inset-top, 0px))
+    calc(24px + env(safe-area-inset-right, 0px))
+    calc(48px + env(safe-area-inset-bottom, 0px))
+    calc(24px + env(safe-area-inset-left, 0px));
 }
 
 h1 {

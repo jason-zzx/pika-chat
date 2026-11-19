@@ -8,11 +8,13 @@ const shell: PikaShell = {
   removeServer: (id) => ipcRenderer.invoke("shell:removeServer", id),
   checkServer: (url) => ipcRenderer.invoke("shell:checkServer", url),
   connect: (id) => ipcRenderer.invoke("shell:connect", id),
-  openLocalLog: () => ipcRenderer.invoke("shell:openLocalLog"),
-  getLocalError: () => ipcRenderer.invoke("shell:getLocalError"),
-  getHotkey: () => ipcRenderer.invoke("shell:getHotkey"),
-  setHotkey: (accelerator) => ipcRenderer.invoke("shell:setHotkey", accelerator),
   checkForUpdates: () => ipcRenderer.invoke("shell:checkForUpdates"),
+  desktop: {
+    openLocalLog: () => ipcRenderer.invoke("shell:openLocalLog"),
+    getLocalError: () => ipcRenderer.invoke("shell:getLocalError"),
+    getHotkey: () => ipcRenderer.invoke("shell:getHotkey"),
+    setHotkey: (accelerator) => ipcRenderer.invoke("shell:setHotkey", accelerator),
+  },
 };
 
 contextBridge.exposeInMainWorld("pikaShell", shell);

@@ -52,25 +52,29 @@ const LOCAL_SERVER_ID = "local";
 async function showList() {
   navigation++;
   const { servers } = await host.listServers();
-  const local = el(
-    "button",
-    { type: "button", className: "row-main", onclick: () => void connectLocal() },
-    el("span", { className: "row-name", textContent: t("localName") }),
-    el("span", { className: "row-url muted", textContent: t("localDescription") }),
-  );
-  local.dataset.focus = "";
-  const rows = [
-    el("li", { className: "row" }, local),
-    ...servers.map((server) =>
-      el(
+  const rows: HTMLLIElement[] = [];
+  if (host.desktop) {
+    const local = el(
+      "button",
+      { type: "button", className: "row-main", onclick: () => void connectLocal() },
+      el("span", { className: "row-name", textContent: t("localName") }),
+      el("span", { className: "row-url muted", textContent: t("localDescription") }),
+    );
+    local.dataset.focus = "";
+    rows.push(el("li", { className: "row" }, local));
+  }
+  rows.push(
+    ...servers.map((server) => {
+      const rowButton = el(
+        "button",
+        { type: "button", className: "row-main", onclick: () => void connect(server) },
+        el("span", { className: "row-name", textContent: server.name }),
+        el("span", { className: "row-url muted", textContent: server.url }),
+      );
+      return el(
         "li",
         { className: "row" },
-        el(
-          "button",
-          { type: "button", className: "row-main", onclick: () => void connect(server) },
-          el("span", { className: "row-name", textContent: server.name }),
-          el("span", { className: "row-url muted", textContent: server.url }),
-        ),
+        rowButton,
         button(t("edit"), () => showForm(server), "ghost"),
         button(
           t("remove"),
@@ -81,9 +85,9 @@ async function showList() {
           },
           "ghost",
         ),
-      ),
-    ),
-  ];
+      );
+    }),
+  );
   render(
     el(
       "div",
@@ -133,21 +137,23 @@ async function connectLocal() {
 }
 
 async function showLocalError() {
+  const desktop = host.desktop;
+  if (!desktop) return showList();
   navigation++;
-  const detail = await host.getLocalError();
+  const detail = await desktop.getLocalError();
   render(
     heading(t("localFailedTitle"), detail ?? t("localFailedBody")),
     el(
       "div",
       { className: "actions" },
       button(t("retry"), () => void connectLocal(), "primary", true),
-      button(t("openLog"), () => void host.openLocalLog()),
+      button(t("openLog"), () => void desktop.openLocalLog()),
       button(t("back"), () => void showList()),
     ),
   );
 }
 
-function showForm(server?: Server) {
+function showForm(server?: Server, allowCancel = true) {
   navigation++;
   let warned = false;
   const nameInput = el("input", { id: "name", value: server?.name ?? "", autocomplete: "off" });
@@ -179,7 +185,7 @@ function showForm(server?: Server) {
     el("label", { htmlFor: "name" }, t("name"), el("span", { className: "muted", textContent: ` · ${t("nameHint")}` })),
     nameInput,
     message,
-    el("div", { className: "actions end" }, button(t("cancel"), () => void showList()), submit),
+    el("div", { className: "actions end" }, ...(allowCancel ? [button(t("cancel"), () => void showList())] : []), submit),
   );
   form.onsubmit = async (event) => {
     event.preventDefault();
@@ -237,14 +243,23 @@ async function connect(server: Server, { skipVersionCheck = false } = {}) {
     );
     return;
   }
-  await host.connect(server.id);
+  try {
+    await host.connect(server.id);
+  } catch (err) {
+    if (run !== navigation) return;
+    const message = err instanceof Error ? err.message : undefined;
+    showError(server, "unreachable", message);
+  }
 }
 
-function showError(server: Server, reason: "unreachable" | "not-pika") {
+function showError(server: Server, reason: "unreachable" | "not-pika", detail?: string) {
   navigation++;
   const unreachable = reason === "unreachable";
   render(
-    heading(unreachable ? t("unreachableTitle") : t("notPikaTitle"), unreachable ? t("unreachableBody") : t("notPikaBody")),
+    heading(
+      unreachable ? t("unreachableTitle") : t("notPikaTitle"),
+      detail || (unreachable ? t("unreachableBody") : t("notPikaBody")),
+    ),
     el(
       "div",
       { className: "actions" },
@@ -256,49 +271,43 @@ function showError(server: Server, reason: "unreachable" | "not-pika") {
 
 async function showSettings() {
   navigation++;
-  let hotkey = await host.getHotkey();
-  const message = el("p", { className: "message", role: "alert" });
-  const recorder = el("button", { type: "button", className: "btn btn-secondary recorder" });
-  const label = (accelerator: string | null) =>
-    accelerator === null ? t("hotkeyNone") : accelerator.replace("CommandOrControl", isMac ? "Cmd" : "Ctrl");
+  const desktop = host.desktop;
+  const rows: Child[] = [];
+  if (desktop) {
+    let hotkey = await desktop.getHotkey();
+    const message = el("p", { className: "message", role: "alert" });
+    const recorder = el("button", { type: "button", className: "btn btn-secondary recorder" });
+    const label = (accelerator: string | null) =>
+      accelerator === null ? t("hotkeyNone") : accelerator.replace("CommandOrControl", isMac ? "Cmd" : "Ctrl");
 
-  let recording = false;
-  const idle = () => {
-    recording = false;
-    recorder.textContent = label(hotkey);
-    recorder.title = t("hotkeyRecord");
-  };
-  idle();
-  recorder.onclick = () => {
-    recording = true;
-    recorder.textContent = t("hotkeyRecording");
-  };
-  recorder.onblur = idle;
-  recorder.onkeydown = async (event) => {
-    if (!recording) return;
-    event.preventDefault();
-    if (event.code === "Escape") {
-      idle();
-      return;
-    }
-    const accelerator = acceleratorFromKey(event, isMac);
-    if (!accelerator) return;
-    const result = await host.setHotkey(accelerator);
-    message.textContent = result.ok ? "" : t("hotkeyFailed");
-    if (result.ok) hotkey = accelerator;
+    let recording = false;
+    const idle = () => {
+      recording = false;
+      recorder.textContent = label(hotkey);
+      recorder.title = t("hotkeyRecord");
+    };
     idle();
-  };
+    recorder.onclick = () => {
+      recording = true;
+      recorder.textContent = t("hotkeyRecording");
+    };
+    recorder.onblur = idle;
+    recorder.onkeydown = async (event) => {
+      if (!recording) return;
+      event.preventDefault();
+      if (event.code === "Escape") {
+        idle();
+        return;
+      }
+      const accelerator = acceleratorFromKey(event, isMac);
+      if (!accelerator) return;
+      const result = await desktop.setHotkey(accelerator);
+      message.textContent = result.ok ? "" : t("hotkeyFailed");
+      if (result.ok) hotkey = accelerator;
+      idle();
+    };
 
-  render(
-    el(
-      "div",
-      { className: "toolbar" },
-      el("h1", { textContent: t("settings") }),
-      button(t("back"), () => void showList(), "ghost", true),
-    ),
-    el(
-      "section",
-      { className: "card" },
+    rows.push(
       el(
         "div",
         { className: "setting" },
@@ -315,7 +324,7 @@ async function showSettings() {
           button(
             t("hotkeyClear"),
             async () => {
-              await host.setHotkey(null);
+              await desktop.setHotkey(null);
               hotkey = null;
               message.textContent = "";
               idle();
@@ -325,13 +334,25 @@ async function showSettings() {
         ),
       ),
       message,
-      el(
-        "div",
-        { className: "setting" },
-        el("div", {}, el("div", { className: "row-name", textContent: t("version") }), el("div", { className: "muted", textContent: host.appVersion })),
-        button(t("checkForUpdates"), () => void host.checkForUpdates()),
-      ),
+    );
+  }
+  rows.push(
+    el(
+      "div",
+      { className: "setting" },
+      el("div", {}, el("div", { className: "row-name", textContent: t("version") }), el("div", { className: "muted", textContent: host.appVersion })),
+      button(t("checkForUpdates"), () => void host.checkForUpdates()),
     ),
+  );
+
+  render(
+    el(
+      "div",
+      { className: "toolbar" },
+      el("h1", { textContent: t("settings") }),
+      button(t("back"), () => void showList(), "ghost", true),
+    ),
+    el("section", { className: "card" }, ...rows),
   );
 }
 
@@ -342,13 +363,15 @@ const connectId = params.get("connect");
 const failed = servers.find((server) => server.id === failedId);
 const target = servers.find((server) => server.id === connectId);
 const last = servers.find((server) => server.id === lastServerId);
-if (failedId === LOCAL_SERVER_ID) await showLocalError();
+if (host.desktop && failedId === LOCAL_SERVER_ID) await showLocalError();
 else if (failed) showError(failed, "unreachable");
-else if (connectId === LOCAL_SERVER_ID) await connectLocal();
+else if (host.desktop && connectId === LOCAL_SERVER_ID) await connectLocal();
 else if (target) await connect(target);
 else if (params.has("add")) showForm();
-else if (location.search === "" && lastServerId === LOCAL_SERVER_ID) await connectLocal();
+else if (location.search === "" && host.desktop && lastServerId === LOCAL_SERVER_ID) await connectLocal();
 else if (location.search === "" && last) await connect(last);
-// Nothing to auto-connect to and no saved servers: offer the first-run choice.
-else if (location.search === "" && servers.length === 0) showWelcome();
-else await showList();
+// Nothing to auto-connect to and no saved servers: offer the first-run choice (welcome on desktop, add form on mobile).
+else if (location.search === "" && servers.length === 0) {
+  if (host.desktop) showWelcome();
+  else showForm(undefined, false);
+} else await showList();
