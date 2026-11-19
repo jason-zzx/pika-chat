@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 43
-- **Last Active**: 2026-11-17
+- **Total Sessions**: 44
+- **Last Active**: 2026-11-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1189 | Active |
+| `journal-1.md` | ~1215 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 44 | 2026-11-18 | Desktop local mode: PGlite spike, planning, check, ponytail, commit | `9e77cb5`, `158b53a`, `72a7389`, `87e652e`, `d8219ea` | `feat/native-desktop-local` |
 | 43 | 2026-11-17 | Desktop shell remote mode | `eb2c20a`, `255d04b`, `470981c`, `67f8f19`, `4ccba6d` | `feat/native-desktop-remote` |
 | 42 | 2026-11-16 | Native apps planning + PWA child | `707bada`, `1bf5d73`, `9d875a2` | `feat/native-pwa` |
 | 41 | 2026-11-15 | Per-message token usage stats | `d8b7a90` | `feat/message-token-stats` |

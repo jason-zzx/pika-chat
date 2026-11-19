@@ -1187,3 +1187,29 @@ Planned and shipped the Electron desktop shell (native/ workspace: shell-ui + de
 ### Status
 
 [OK] **Completed**
+
+
+## Session 44: Desktop local mode: PGlite spike, planning, check, ponytail, commit
+<!-- trellis-session: v=2 fp=ae028155e2e92842 -->
+
+**Date**: 2026-11-18
+**Task**: Desktop local mode: PGlite spike, planning, check, ponytail, commit
+**Branch**: `feat/native-desktop-local`
+
+### Summary
+
+Planned 11-16-native-desktop-local. A PGlite spike passed the full integration suite after 5 small fixes and 2 migration breakpoints, so PGlite was chosen over embedded-postgres. User decisions: one installer bundles local mode; a first-run welcome screen, then a pinned 'This computer' row for switching. Implementation was done elsewhere. Two parallel trellis-check agents fixed 17 issues: .env shipped in the local installer, user env leaking into the local server, re-sign-in missing will-redirect/did-navigate-in-page, pnpm flattening picking wrong versions, local admin quota written in the wrong order, and a once() shutdown listener. Ponytail-review cut about 94 lines, including dropping the welcomeDone flag and folding the PGlite CI job into the test job. Verified with root and native lint, typecheck and tests, Postgres and PGlite integration runs, and Linux AppImage plus unpackaged Electron smoke runs. Windows/macOS, CI and release are deferred to an rc tag.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9e77cb5` | feat(server): run on embedded PGlite and add desktop local mode |
+| `158b53a` | feat(desktop): add "This computer" local mode to the desktop app |
+| `72a7389` | ci(release): bundle the local server and build macOS installers per arch |
+| `87e652e` | docs: document desktop local mode |
+| `d8219ea` | docs(trellis): plan desktop local mode |
+
+### Status
+
+[OK] **Completed**
