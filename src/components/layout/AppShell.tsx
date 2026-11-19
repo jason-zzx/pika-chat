@@ -16,6 +16,7 @@ type AppShellProps = {
     role: ActorRole;
     isGuest: boolean;
   };
+  local?: boolean;
   themePreference: ThemePreference;
 };
 
@@ -23,6 +24,7 @@ export default function AppShell({
   children,
   defaultSidebarOpen,
   user,
+  local = false,
   themePreference,
 }: AppShellProps) {
   return (
@@ -34,6 +36,7 @@ export default function AppShell({
         <AppSidebar
           name={user.name}
           role={user.role}
+          local={local}
           themePreference={themePreference}
         />
         {/* The desktop sidebar is always visible (collapsible="icon") and pads

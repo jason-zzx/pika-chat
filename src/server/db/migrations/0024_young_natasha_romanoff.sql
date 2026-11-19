@@ -3,7 +3,7 @@
 -- deleted keep their (already shifted) position — the pre-anchor ordering
 -- information is unrecoverable.
 ALTER TABLE "chat_messages" ADD COLUMN "group_created_at" timestamp with time zone;
-
+--> statement-breakpoint
 UPDATE "chat_messages" cm
 SET "group_created_at" = sub."group_created_at"
 FROM (
@@ -12,6 +12,7 @@ FROM (
   GROUP BY "group_id"
 ) sub
 WHERE cm."group_id" = sub."group_id";
-
+--> statement-breakpoint
 ALTER TABLE "chat_messages" ALTER COLUMN "group_created_at" SET NOT NULL;
+--> statement-breakpoint
 ALTER TABLE "chat_messages" ALTER COLUMN "group_created_at" SET DEFAULT now();

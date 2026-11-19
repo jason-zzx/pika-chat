@@ -60,9 +60,13 @@ import { cn } from "@/lib/utils";
 
 type AssistantTreeProps = {
   showUsers: boolean;
+  local?: boolean;
 };
 
-export default function AssistantTree({ showUsers }: AssistantTreeProps) {
+export default function AssistantTree({
+  showUsers,
+  local = false,
+}: AssistantTreeProps) {
   const tree = useAssistantTree();
   const router = useRouter();
   const pathname = usePathname();
@@ -148,7 +152,7 @@ export default function AssistantTree({ showUsers }: AssistantTreeProps) {
       {isSettings ? null : <SidebarSearch />}
       <SidebarContent className="overflow-hidden">
         {isSettings ? (
-          <SettingsNav showUsers={showUsers} />
+          <SettingsNav showUsers={showUsers} local={local} />
         ) : tree.isPending ? (
           <LoadingRows />
         ) : tree.isError ? (

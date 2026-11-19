@@ -4,6 +4,6 @@ CREATE TABLE "app_settings" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
-
+--> statement-breakpoint
 INSERT INTO "app_settings" ("id", "allow_registration")
 VALUES ('0193e1c0-0000-7000-8000-000000000001', false);

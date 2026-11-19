@@ -218,9 +218,11 @@ export async function messageVersionMetadata(
   return versionInfoOf(group, target);
 }
 
-async function listTopicRows(topicId: string): Promise<ChatMessageRow[]> {
-  const db = getDb();
-  return db
+async function listTopicRows(
+  topicId: string,
+  executor: DbTransaction | ReturnType<typeof getDb> = getDb(),
+): Promise<ChatMessageRow[]> {
+  return executor
     .select()
     .from(chatMessages)
     .where(eq(chatMessages.topicId, topicId))
@@ -241,9 +243,9 @@ async function assertTargetNotCompressed(
   topicId: string,
   targetId: string,
   knownGroups?: ChatMessageRow[][],
+  executor: DbTransaction | ReturnType<typeof getDb> = getDb(),
 ): Promise<void> {
-  const db = getDb();
-  const boundaryRows = await db
+  const boundaryRows = await executor
     .select({ summaryUpToMessageId: topics.summaryUpToMessageId })
     .from(topics)
     .where(eq(topics.id, topicId))
@@ -252,7 +254,7 @@ async function assertTargetNotCompressed(
   if (!boundaryId) {
     return;
   }
-  const groups = knownGroups ?? groupRows(await listTopicRows(topicId));
+  const groups = knownGroups ?? groupRows(await listTopicRows(topicId, executor));
   const boundaryIndex = groups.findIndex((group) =>
     group.some((row) => row.id === boundaryId),
   );
@@ -737,7 +739,7 @@ export async function deleteMessage(
       throw new AppError("NOT_FOUND", 404, "message.notFound");
     }
     // PRD R10: the compressed zone is immutable; check before deleting.
-    await assertTargetNotCompressed(input.topicId, target.id);
+    await assertTargetNotCompressed(input.topicId, target.id, undefined, tx);
     releasedFileIds = fileIdsFromParts(target.parts);
     await tx.delete(chatMessages).where(eq(chatMessages.id, target.id));
     const remaining = await tx

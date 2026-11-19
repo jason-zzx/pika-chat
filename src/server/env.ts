@@ -18,7 +18,8 @@ const booleanFlag = z.preprocess(
 );
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: emptyToUndefined(z.string().min(1).optional()),
+  PGLITE_DATA_DIR: emptyToUndefined(z.string().min(1).optional()),
   TEST_DATABASE_URL: z.string().min(1).optional(),
   CREDENTIAL_ENCRYPTION_SECRET: z.string().min(32),
   BETTER_AUTH_SECRET: z.string().min(32),
@@ -83,12 +84,29 @@ const envSchema = z.object({
   // Single-value header the reverse proxy overwrites with the peer address
   // (e.g. `x-real-ip`, `cf-connecting-ip`). Required when DEMO_MODE is set.
   CLIENT_IP_HEADER: emptyToUndefined(z.string().trim().min(1).optional()),
+  // Desktop local mode: runs in-process against PGlite with auto-provisioned
+  // single admin user and hidden multi-user/account management UI. Requires
+  // PGLITE_DATA_DIR and LOCAL_ADMIN_PASSWORD — enforced in instrumentation.ts.
+  LOCAL_MODE: emptyToUndefined(booleanFlag),
+  LOCAL_ADMIN_PASSWORD: emptyToUndefined(z.string().min(1).optional()),
+}).superRefine((data, ctx) => {
+  if (!data.PGLITE_DATA_DIR && !data.DATABASE_URL) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["DATABASE_URL"],
+      message: "DATABASE_URL is required unless PGLITE_DATA_DIR is set",
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
 
 export function isDemoMode(): boolean {
   return getEnv().DEMO_MODE !== undefined;
+}
+
+export function isLocalMode(): boolean {
+  return getEnv().LOCAL_MODE !== undefined;
 }
 
 let cached: Env | undefined;

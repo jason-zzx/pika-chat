@@ -61,6 +61,11 @@ jobs:
       - name: Run unit & integration tests
         run: pnpm test
 
+      - name: Run integration tests on PGlite
+        run: pnpm vitest run --project integration
+        env:
+          PGLITE_DATA_DIR: memory://
+
   native:
     name: Native Shell Checks
     runs-on: ubuntu-latest

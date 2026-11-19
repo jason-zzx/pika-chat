@@ -169,6 +169,26 @@ Therefore:
 
 ---
 
+## Transactions and PGlite
+
+When `PGLITE_DATA_DIR` is set (desktop local mode and the PGlite CI job), the
+process runs a single embedded PGlite connection on the Node main thread:
+
+- **Never call `getDb()` inside a `db.transaction` callback.** PGlite holds an
+  exclusive mutex for the entire transaction; any `getDb()` query inside it
+  waits on the same mutex and deadlocks the server permanently. Always thread
+  the `tx` executor into helpers used inside a transaction.
+- **Never await network calls (LLM providers, HTTP, S3) inside a transaction.**
+  Holding a PGlite transaction open across I/O stalls every other query in the
+  process. Check preconditions under lock, run the network call outside any
+  transaction, then re-check and write conditionally under lock.
+- **Read raw `execute()` results through `executeRows()`**
+  (`src/server/db/client.ts`). postgres-js returns a row array, PGlite returns
+  `{ rows }`; indexing the result directly breaks on one of them.
+- **Hand-written SQL migrations must separate multiple statements with
+  `--> statement-breakpoint`.** The PGlite migrator executes each chunk through
+  the extended protocol, which rejects multi-statement chunks (`42601`).
+
 ## Forbidden
 
 - String-interpolated SQL. Use Drizzle's query builder, or `sql` with bound

@@ -24,9 +24,14 @@ import { signOutAndReset } from "@/lib/sign-out";
 type SidebarUserMenuProps = {
   name: string;
   role: ActorRole;
+  local?: boolean;
 };
 
-export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
+export default function SidebarUserMenu({
+  name,
+  role,
+  local = false,
+}: SidebarUserMenuProps) {
   const { setOpenMobile } = useSidebar();
   const isGuest = useIsGuest();
   const native = usePikaNative();
@@ -78,7 +83,7 @@ export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuLabel className="truncate font-normal">
-                  {native.serverName === window.location.host
+                  {local || native.serverName === window.location.host
                     ? native.serverName
                     : `${native.serverName} · ${window.location.host}`}
                 </DropdownMenuLabel>
@@ -91,7 +96,7 @@ export default function SidebarUserMenu({ name, role }: SidebarUserMenuProps) {
               </DropdownMenuGroup>
             </>
           ) : null}
-          {!isGuest ? (
+          {!isGuest && !local ? (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void onSignOut()}>

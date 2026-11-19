@@ -17,19 +17,21 @@ import type { ThemePreference } from "@/lib/theme";
 type AppSidebarProps = {
   name: string;
   role: ActorRole;
+  local?: boolean;
   themePreference: ThemePreference;
 };
 
 export default function AppSidebar({
   name,
   role,
+  local = false,
   themePreference,
 }: AppSidebarProps) {
   const t = useTranslations("Layout");
 
   return (
     <Sidebar collapsible="icon" aria-label={t("sidebar.main")}>
-      <AssistantTree showUsers={isStaffRole(role)} />
+      <AssistantTree showUsers={!local && isStaffRole(role)} local={local} />
       <SidebarFooter>
         <DemoUsageCard />
         <SidebarMenu>
@@ -41,7 +43,7 @@ export default function AppSidebar({
             />
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarUserMenu name={name} role={role} />
+            <SidebarUserMenu name={name} role={role} local={local} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

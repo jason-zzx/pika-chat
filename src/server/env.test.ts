@@ -29,6 +29,9 @@ const MANAGED = [
   "DEMO_GLOBAL_DAILY_MODEL_CALLS",
   "DEMO_MAX_OUTPUT_TOKENS",
   "CLIENT_IP_HEADER",
+  "PGLITE_DATA_DIR",
+  "LOCAL_MODE",
+  "LOCAL_ADMIN_PASSWORD",
   "NEXT_RUNTIME",
   "APP_URL",
   "APP_TRUSTED_ORIGINS",
@@ -156,6 +159,39 @@ describe("register boot guard", () => {
     vi.resetModules();
     const { register } = await import("@/instrumentation");
     await expect(register()).rejects.toThrow(/CLIENT_IP_HEADER/);
+  });
+
+  it("refuses LOCAL_MODE without PGLITE_DATA_DIR", async () => {
+    process.env.NEXT_RUNTIME = "nodejs";
+    process.env.LOCAL_MODE = "1";
+    process.env.LOCAL_ADMIN_PASSWORD = "local-secret-password";
+    vi.resetModules();
+    const { register } = await import("@/instrumentation");
+    await expect(register()).rejects.toThrow(/PGLITE_DATA_DIR/);
+  });
+
+  it("refuses LOCAL_MODE without LOCAL_ADMIN_PASSWORD", async () => {
+    process.env.NEXT_RUNTIME = "nodejs";
+    process.env.LOCAL_MODE = "1";
+    process.env.PGLITE_DATA_DIR = "memory://";
+    vi.resetModules();
+    const { register } = await import("@/instrumentation");
+    await expect(register()).rejects.toThrow(/LOCAL_ADMIN_PASSWORD/);
+  });
+
+  it("allows DATABASE_URL to be omitted when PGLITE_DATA_DIR is set", async () => {
+    const savedDbUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    try {
+      process.env.PGLITE_DATA_DIR = "memory://";
+      const { getEnv } = await loadEnvModule();
+      expect(getEnv().PGLITE_DATA_DIR).toBe("memory://");
+      expect(getEnv().DATABASE_URL).toBeUndefined();
+    } finally {
+      if (savedDbUrl !== undefined) {
+        process.env.DATABASE_URL = savedDbUrl;
+      }
+    }
   });
 
   it("boots when DEMO_MODE and CLIENT_IP_HEADER are both configured", async () => {

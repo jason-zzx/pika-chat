@@ -2,8 +2,9 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
-  // Standalone output is for the Docker runner, which has no pnpm/next CLI.
+  // Standalone output is for the Docker runner and desktop local server, which have no pnpm/next CLI.
   output: process.env.DOCKER_BUILD === "1" ? "standalone" : undefined,
+  serverExternalPackages: ["@electric-sql/pglite"],
   agentRules: false,
   allowedDevOrigins: ['192.168.99.203'],
 };

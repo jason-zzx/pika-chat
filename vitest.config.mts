@@ -50,6 +50,7 @@ export default defineConfig({
           setupFiles: [
             "./vitest.integration.env.ts",
             "./vitest.integration.storage.ts",
+            "./vitest.integration.pglite.ts",
           ],
           testTimeout: 30_000,
           fileParallelism: false,

@@ -18,7 +18,7 @@ import {
   type ChatChunk,
 } from "@/server/ai/generation-stream";
 import { getLiveGeneration } from "@/server/ai/generation-registry";
-import { getDb } from "@/server/db/client";
+import { executeRows, getDb } from "@/server/db/client";
 import { chatGenerations, chatMessages, files, topics } from "@/server/db/schema";
 import { getFileStorage } from "@/server/files/storage";
 import { uploadFile } from "@/server/files/file.service";
@@ -93,10 +93,12 @@ async function readUntilText(
 /** Waits until some other backend is blocked on the lock held by `pid`. */
 async function waitUntilBlocking(pid: number, timeoutMs?: number): Promise<void> {
   await waitFor(async () => {
-    const [blocked] = await db.execute<{ count: number }>(sql`
-      select count(*)::int as count from pg_stat_activity
-      where ${pid} = ANY(pg_blocking_pids(pid))
-    `);
+    const [blocked] = executeRows<{ count: number }>(
+      await db.execute(sql`
+        select count(*)::int as count from pg_stat_activity
+        where ${pid} = ANY(pg_blocking_pids(pid))
+      `),
+    );
     return (blocked?.count ?? 0) > 0;
   }, timeoutMs);
 }
@@ -222,7 +224,7 @@ describe("generation executor", () => {
       "stopped",
     );
     expect(await assistantText(topicId, actor)).toContain("partial");
-    expect(provider.aborted).toBe(1);
+    await waitFor(() => provider.aborted === 1);
     expect(getLiveGeneration(generation.id)).toBeUndefined();
     expect(provider.calls).toHaveLength(1);
   });
@@ -440,7 +442,7 @@ describe("generation executor", () => {
     expect((await generationRow(generation.id))?.status).toBe("completed");
   });
 
-  it("waits for the real in-flight checkpoint before starting terminal persistence", async () => {
+  it.skipIf(process.env.PGLITE_DATA_DIR)("waits for the real in-flight checkpoint before starting terminal persistence", async () => {
     const { actor, assistantId, topicId } = await seedChat(provider.baseUrl);
     provider.deltas = ["checkpoint before stop"];
     provider.holdOpen = true;
@@ -452,7 +454,9 @@ describe("generation executor", () => {
     const release = Promise.withResolvers<void>();
     const blocker = db.transaction(async tx => {
       await tx.select().from(chatMessages).where(eq(chatMessages.id, generation.assistantMessageId!)).for("update");
-      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      const [backend] = executeRows<{ pid: number }>(
+        await tx.execute(sql`select pg_backend_pid() as pid`),
+      );
       locked.resolve(backend!.pid);
       await release.promise;
     });
@@ -510,7 +514,7 @@ describe("generation executor", () => {
     expect(checkpointContentOf(state, true).parts).toEqual([{ type: "text", text: "par" }]);
   });
 
-  it.each(["topic", "assistant"] as const)("cleans an image committed while %s deletion waits for the topic lock", async (target) => {
+  it.skipIf(process.env.PGLITE_DATA_DIR).each(["topic", "assistant"] as const)("cleans an image committed while %s deletion waits for the topic lock", async (target) => {
     const { actor, assistantId, topicId } = await seedChat(provider.baseUrl);
     await createAssistant({ name: "Spare", icon: "✨" }, actor);
     const { generation } = await admitPrepared(preparedTurn({ assistantId, topicId }), actor);
@@ -536,7 +540,9 @@ describe("generation executor", () => {
         .from(topics)
         .where(eq(topics.id, topicId))
         .for("update");
-      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      const [backend] = executeRows<{ pid: number }>(
+        await tx.execute(sql`select pg_backend_pid() as pid`),
+      );
       locked.resolve(backend!.pid);
       await release.promise;
       await writeAssistantTurnRow(tx, {

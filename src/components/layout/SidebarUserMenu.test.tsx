@@ -11,11 +11,11 @@ const account = { name: "Ada", role: "user" } as const;
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 
-function openMenu() {
+function openMenu(local = false) {
   renderWithIntl(
     <TooltipProvider>
       <SidebarProvider>
-        <SidebarUserMenu {...account} />
+        <SidebarUserMenu {...account} local={local} />
       </SidebarProvider>
     </TooltipProvider>,
   );
@@ -55,5 +55,18 @@ describe("SidebarUserMenu server switching", () => {
     );
 
     expect(openServers).toHaveBeenCalledWith("list");
+  });
+
+  it("hides sign-out and omits host from server label in local mode", async () => {
+    window.pikaNative = {
+      serverName: "This computer",
+      notify: vi.fn(),
+      showServerMenu: vi.fn(),
+      openServers: vi.fn(),
+    };
+    openMenu(true);
+
+    expect(await screen.findByText("This computer")).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Sign out" })).toBeNull();
   });
 });

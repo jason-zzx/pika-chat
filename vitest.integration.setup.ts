@@ -9,6 +9,7 @@ export default async function setup(): Promise<void> {
     // Vars may already be in the environment.
   }
 
+  if (process.env.PGLITE_DATA_DIR) return;
   const url = process.env.TEST_DATABASE_URL;
   if (!url) {
     throw new Error(

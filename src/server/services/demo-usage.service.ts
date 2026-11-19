@@ -3,7 +3,7 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { DemoUsageResponse } from "@/lib/schemas/demo";
-import { getDb, type DbTransaction } from "@/server/db/client";
+import { executeRows, getDb, type DbTransaction } from "@/server/db/client";
 import { demoUsageCounters } from "@/server/db/schema";
 import { getEnv } from "@/server/env";
 import { AppError } from "@/server/errors";
@@ -30,14 +30,16 @@ export async function consumeDemoQuota(
 ): Promise<boolean> {
   const executor = input.tx ?? getDb();
   const day = input.day ?? utcDayString();
-  const rows = await executor.execute<{ count: number }>(sql`
-    insert into demo_usage_counters (subject, day, kind, count)
-    values (${input.subject}, ${day}::date, ${input.kind}, 1)
-    on conflict (subject, day, kind)
-    do update set count = demo_usage_counters.count + 1
-    where demo_usage_counters.count < ${input.limit}
-    returning count
-  `);
+  const rows = executeRows<{ count: number }>(
+    await executor.execute<{ count: number }>(sql`
+      insert into demo_usage_counters (subject, day, kind, count)
+      values (${input.subject}, ${day}::date, ${input.kind}, 1)
+      on conflict (subject, day, kind)
+      do update set count = demo_usage_counters.count + 1
+      where demo_usage_counters.count < ${input.limit}
+      returning count
+    `),
+  );
   return rows.length > 0;
 }
 

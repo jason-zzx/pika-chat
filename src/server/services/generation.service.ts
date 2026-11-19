@@ -15,7 +15,7 @@ import {
   type GenerationSummary,
 } from "@/lib/schemas/generation";
 import type { Actor } from "@/server/auth/actor";
-import { getDb, type DbTransaction } from "@/server/db/client";
+import { executeRows, getDb, type DbTransaction } from "@/server/db/client";
 import {
   chatGenerations,
   chatMessages,
@@ -116,8 +116,8 @@ export type PreparedTurn = {
 export type Clock = () => Promise<Date>;
 
 export async function databaseNow(): Promise<Date> {
-  const rows = await getDb().execute<{ now: Date | string }>(
-    sql`select now() as now`,
+  const rows = executeRows<{ now: Date | string }>(
+    await getDb().execute<{ now: Date | string }>(sql`select now() as now`),
   );
   const value = rows[0]?.now;
   // postgres-js hands back the raw column value (a Date when the type parser

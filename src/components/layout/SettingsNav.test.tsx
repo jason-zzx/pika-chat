@@ -16,12 +16,12 @@ vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
 
-function renderNav(showUsers: boolean) {
+function renderNav(showUsers: boolean, local = false) {
   return renderWithIntl(
     <TooltipProvider>
       <SidebarProvider>
         <Sidebar>
-          <SettingsNav showUsers={showUsers} />
+          <SettingsNav showUsers={showUsers} local={local} />
         </Sidebar>
       </SidebarProvider>
     </TooltipProvider>,
@@ -106,6 +106,14 @@ describe("SettingsNav", () => {
     expect(screen.queryByRole("link", { name: "Account" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Providers" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Search" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
+  });
+
+  it("hides the account tab in local mode", () => {
+    renderNav(false, true);
+    expect(screen.getByRole("link", { name: "General" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Providers" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Account" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
   });
 });

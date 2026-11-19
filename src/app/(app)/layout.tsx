@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import AppShell from "@/components/layout/AppShell";
 import { resolveActor } from "@/server/auth/actor";
+import { isLocalMode } from "@/server/env";
 import { getUserThemePreference } from "@/server/services/user-preferences.service";
 
 const SIDEBAR_STATE_COOKIE = "sidebar_state";
@@ -25,6 +26,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <AppShell
       defaultSidebarOpen={defaultSidebarOpen}
       user={{ name: actor.name, role: actor.role, isGuest: actor.isGuest === true }}
+      local={isLocalMode()}
       themePreference={themePreference}
     >
       {children}

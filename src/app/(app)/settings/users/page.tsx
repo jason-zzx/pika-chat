@@ -8,12 +8,16 @@ import StorageQuotaCard from "@/components/admin/StorageQuotaCard";
 import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
 import { resolveActor } from "@/server/auth/actor";
+import { isLocalMode } from "@/server/env";
 
 export const generateMetadata = async () => ({
   title: (await getTranslations("Settings.Users"))("title"),
 });
 
 export default async function SettingsUsersPage() {
+  if (isLocalMode()) {
+    redirect("/settings/general");
+  }
   const actor = await resolveActor(await headers());
   if (!actor) {
     redirect("/sign-in");

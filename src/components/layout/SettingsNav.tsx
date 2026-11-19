@@ -19,12 +19,13 @@ type SettingsTab = {
   labelKey: SettingsTabLabelKey;
   staffOnly?: boolean;
   memberOnly?: boolean;
+  remoteOnly?: boolean;
 };
 
 const SETTINGS_TABS: SettingsTab[] = [
   { href: "/settings/general", labelKey: "settingsNav.general" },
   { href: "/settings/models", labelKey: "settingsNav.models" },
-  { href: "/settings/account", labelKey: "settingsNav.account", memberOnly: true },
+  { href: "/settings/account", labelKey: "settingsNav.account", memberOnly: true, remoteOnly: true },
   { href: "/settings/files", labelKey: "settingsNav.files" },
   { href: "/settings/providers", labelKey: "settingsNav.providers", memberOnly: true },
   { href: "/settings/search", labelKey: "settingsNav.search", memberOnly: true },
@@ -33,9 +34,10 @@ const SETTINGS_TABS: SettingsTab[] = [
 
 type SettingsNavProps = {
   showUsers: boolean;
+  local?: boolean;
 };
 
-export default function SettingsNav({ showUsers }: SettingsNavProps) {
+export default function SettingsNav({ showUsers, local = false }: SettingsNavProps) {
   const pathname = usePathname();
   const isGuest = useIsGuest();
   const t = useTranslations("Layout");
@@ -47,7 +49,9 @@ export default function SettingsNav({ showUsers }: SettingsNavProps) {
           <SidebarMenu>
             {SETTINGS_TABS.filter(
               (tab) =>
-                (!tab.staffOnly || showUsers) && (!tab.memberOnly || !isGuest),
+                (!tab.staffOnly || showUsers) &&
+                (!tab.memberOnly || !isGuest) &&
+                (!tab.remoteOnly || !local),
             ).map((tab) => (
               <SidebarMenuItem key={tab.href}>
                 <SidebarNavLink

@@ -10,12 +10,16 @@ import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSection from "@/components/settings/SettingsSection";
 import { auth } from "@/server/auth";
 import { resolveActor } from "@/server/auth/actor";
+import { isLocalMode } from "@/server/env";
 
 export const generateMetadata = async () => ({
   title: (await getTranslations("Account"))("title"),
 });
 
 export default async function SettingsAccountPage() {
+  if (isLocalMode()) {
+    redirect("/settings/general");
+  }
   const requestHeaders = await headers();
   const actor = await resolveActor(requestHeaders);
   if (!actor) {

@@ -83,7 +83,11 @@ async function topicWithHistory(
     seed.actor,
     "New topic",
   );
-  for (const message of messages) {
+  // Explicit monotonic timestamps avoid 1 ms now() ties on PGlite where rows
+  // inserted within the same millisecond would tie-break on random ids.
+  const baseMs = Date.now() - messages.length * 1000;
+  for (const [index, message] of messages.entries()) {
+    const createdAt = new Date(baseMs + index * 1000);
     const parts = [
       ...(message.files ?? []).map((url) => ({
         type: "file" as const,
@@ -100,13 +104,14 @@ async function topicWithHistory(
         {
           topicId: topic.id,
           message: { id: `msg-${Math.random().toString(36).slice(2)}`, role: "user", parts },
+          createdAt,
         },
         seed.actor,
       );
       continue;
     }
     const placeholder = await insertAssistantPlaceholder(
-      { topicId: topic.id, id: `msg-${Math.random().toString(36).slice(2)}` },
+      { topicId: topic.id, id: `msg-${Math.random().toString(36).slice(2)}`, createdAt },
       seed.actor,
     );
     await writeAssistantTurnRow(db, {

@@ -211,9 +211,10 @@ export type CompressionResult = {
  *   generation row is allowed to exist while it does. The model call happens
  *   outside any lock; the summary write then fails if the boundary moved
  *   underneath it, so two compactions can never disagree.
- * - the MANUAL path (`exclusive`) holds the topic lock across the model call
- *   and the write, so a request admitted in between cannot change the history
- *   that is being summarized.
+ * - the MANUAL path (`exclusive`) asserts the topic is idle, plans outside any
+ *   transaction, then re-locks, re-asserts idle and writes conditionally. The
+ *   model call must not run inside a transaction: on PGlite that stalls every
+ *   other query in the process.
  *
  * Throws `topic.nothingToCompress` when there is no unsummarized history —
  * the auto-compression caller catches every failure and continues
@@ -239,9 +240,12 @@ export async function compressTopicHistory(
   }
   const db = getDb();
   if (input.exclusive) {
+    await db.transaction(async (tx) => {
+      await lockTopicAndAssertIdle(tx, input.topicId);
+    });
+    const plan = await planCompression(input, actor);
     return db.transaction(async (tx) => {
       await lockTopicAndAssertIdle(tx, input.topicId);
-      const plan = await planCompression(input, actor);
       await writeSummary(tx, input.topicId, actor, plan);
       return plan.result;
     });
