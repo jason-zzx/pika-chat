@@ -119,9 +119,12 @@ jobs:
           - os: windows-latest
             artifact: desktop-windows
             args: --win nsis --x64
+          - os: macos-15-intel
+            artifact: desktop-macos-x64
+            args: --mac dmg --x64
           - os: macos-latest
-            artifact: desktop-macos
-            args: --mac dmg --x64 --arm64
+            artifact: desktop-macos-arm64
+            args: --mac dmg --arm64
 
     steps:
       - name: Checkout code
@@ -135,7 +138,9 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
-          cache-dependency-path: native/pnpm-lock.yaml
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            native/pnpm-lock.yaml
 
       - name: Verify tag matches package.json version
         if: github.ref_type == 'tag'
@@ -149,6 +154,14 @@ jobs:
       - name: Install rpm tooling
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install root dependencies and build local standalone server
+        env:
+          DOCKER_BUILD: '1'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          node native/desktop/scripts/build-server.mjs
 
       - name: Install native dependencies
         run: pnpm -C native install --frozen-lockfile
@@ -170,6 +183,7 @@ jobs:
             native/desktop/release/*.rpm
             native/desktop/release/*.blockmap
             native/desktop/release/latest*.yml
+            !native/desktop/release/latest-mac.yml
           if-no-files-found: error
 
   create-release:
