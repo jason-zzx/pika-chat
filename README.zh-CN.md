@@ -248,10 +248,11 @@
 
 ## 桌面应用
 
-Electron 桌面客户端支持 Windows、macOS 与 Linux，可连接一个或多个已部署的 Pika Chat 服务器，并提供托盘图标、全局显示/隐藏快捷键、回复完成通知和自动更新。
+Electron 桌面客户端支持 Windows、macOS 与 Linux，既可在本地“此电脑”模式免配置直接运行 Pika Chat，也可连接一个或多个已部署的远程服务器，并提供托盘图标、全局显示/隐藏快捷键、回复完成通知和自动更新。
 
 - **下载**：前往 [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases)，获取 Windows 安装包（`.exe`）、macOS `.dmg`（Intel 与 Apple Silicon）、Linux `.AppImage` / `.deb` / `.rpm`。
-- **连接**：首次启动时添加服务器地址。每个服务器拥有独立的登录会话，同一时间只激活一个服务器。
+- **本地使用（“此电脑”）**：首次启动选择“在此电脑上使用”，即可启动内置本地服务（内嵌 PGlite 数据库与 Next 独立服务端），仅监听 `127.0.0.1`。对话记录、上传文件、密钥凭据与日志均保存在系统应用数据目录（`<userData>/local/`）中，应用升级时保留不变。
+- **连接远程服务器**：可选择“连接到服务器”，或随时通过侧边栏服务器切换器、账户菜单或托盘切换。每个服务器拥有独立的登录会话；本地与远程数据相互独立，切换时互不影响，本地服务会在后台保持运行直到退出应用。
 - **更新**：Windows 与 Linux 在应用内更新；`.deb` / `.rpm` 在选择“重启并安装”时会要求输入管理员密码；macOS 会弹出提示并跳转到新版本发布页。
 - **Windows**：安装包未签名，出现 SmartScreen 提示时点击“更多信息” → “仍要运行”。
 - **macOS**：应用未签名，拖入“应用程序”后执行一次 `xattr -dr com.apple.quarantine "/Applications/Pika Chat.app"`。
@@ -260,9 +261,11 @@ Electron 桌面客户端支持 Windows、macOS 与 Linux，可连接一个或多
 开发桌面应用（`native/` 下为独立的 pnpm 工作区）：
 
 ```bash
+DOCKER_BUILD=1 pnpm build
+node native/desktop/scripts/build-server.mjs
 pnpm -C native install --frozen-lockfile
 pnpm -C native -r typecheck && pnpm -C native -r test
-pnpm -C native/desktop start                          # 连接开发服务器运行
+pnpm -C native/desktop start                          # 连接本地或远程服务器运行
 pnpm -C native/desktop dist --linux AppImage deb rpm  # 本地打包
 ```
 

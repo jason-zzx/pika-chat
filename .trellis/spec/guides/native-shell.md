@@ -63,10 +63,50 @@ Defined in `native/shell-ui/src/host.ts`, implemented by the desktop
 `preload-shell.ts`. Main validates every IPC payload at the handler and answers
 only the shell view. Connection logic (health check, version warning, URL
 normalization) lives in shell-ui so Android can reuse it. Query modes of
-`index.html`: none (auto-connect to the last server), `?list`, `?add` (add form;
+`index.html`: none (auto-connect to the last server, `"local"` included, or show
+the welcome screen when there is nothing to auto-connect to and `servers` is
+empty), `?list`, `?add` (add form;
 Cancel returns to the list), `?connect=<id>` (connect flow for that server
-regardless of the last one), `?failed=<id>` (load-error screen). An unknown id falls back to the list;
-only an empty query auto-connects.
+regardless of the last one, including `"local"`), `?failed=<id>` (load-error
+screen, or local startup error with "Open log" when `id === "local"`). An unknown
+id falls back to the list; only an empty query auto-connects or shows the welcome
+screen.
+
+## Local mode (`LOCAL_MODE=1`, desktop only)
+
+- Electron main (`native/desktop/src/local-server.ts`) forks the bundled Next
+  standalone server (`resources/server/server.js`, outside `asar`) via
+  `utilityProcess.fork` on `127.0.0.1` only. The child gets an env **allowlist**
+  (`PATH`, `HOME`, `USERPROFILE`, temp vars, `SystemRoot`, `LANG`, `TZ`) plus the
+  explicit local-mode vars; never spread `process.env`, or a user's `S3_*` /
+  `DEMO_MODE` / `NODE_OPTIONS` would reconfigure or break the local server.
+- Port selection: the first launch probes `127.0.0.1:0`, saves `localPort` in
+  `config.json`, and reuses it on later starts unless it is already taken, so
+  origin-scoped `localStorage` (drafts, composer settings, sidebar state)
+  survives restarts.
+- Secrets and storage: `<userData>/local/` holds `db/`, `files/`, `server.log`,
+  and `secrets.bin` (`BETTER_AUTH_SECRET`, `CREDENTIAL_ENCRYPTION_SECRET`,
+  `LOCAL_ADMIN_PASSWORD` encrypted with Electron `safeStorage`). Decryption
+  failure surfaces as a shell error and never silently regenerates secrets.
+- Session and lifecycle: `connect("local")` waits for `/api/health`, signs into
+  partition `persist:local` via `/api/auth/sign-in/username` as `local`, and
+  intercepts any main-frame `/sign-in` or `/setup` navigation back to silent
+  sign-in. All three events are needed: server `redirect()` arrives as
+  `will-redirect`, client router pushes as `did-navigate-in-page`, and
+  `location.replace()` as `will-navigate`. Switching
+  to a remote server or closing to tray leaves the local server running so
+  background generations finish; `before-quit` posts `"shutdown"` over
+  `parentPort`, waiting up to 5 s for PGlite to close before killing.
+- Packaging: `native/desktop/scripts/build-server.mjs` copies `.next/standalone`,
+  `.next/static`, `public`, and `src/server/db/migrations`, flattening pnpm's
+  `.pnpm` store into a plain `node_modules` (conflicting versions nested under
+  their dependant) and resolving every symlink by hand, because `fs.cpSync`'s
+  `dereference` does not follow symlinks nested in a copied directory and
+  `extraResources` / Windows installers cannot keep them. It skips `.env*`:
+  Next copies the developer's `.env` into standalone, which would ship
+  `DATABASE_URL`, secrets and S3 keys inside a locally built installer. Mac release builds split
+  into `macos-15-intel` (`--x64`) and `macos-latest` (`--arm64`) because `sharp`
+  native binaries are arch-specific.
 
 ## Navigation rule: no in-app browser windows
 
