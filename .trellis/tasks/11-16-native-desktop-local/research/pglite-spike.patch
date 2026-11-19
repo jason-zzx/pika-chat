@@ -1,0 +1,689 @@
+diff --git a/package.json b/package.json
+index 46f95fa..8b96c4d 100644
+--- a/package.json
++++ b/package.json
+@@ -26,6 +26,7 @@
+     "@aws-sdk/s3-presigned-post": "^3.1131.0",
+     "@aws-sdk/s3-request-presigner": "^3.1131.0",
+     "@base-ui/react": "1.7.0",
++    "@electric-sql/pglite": "0.5.16",
+     "@streamdown/cjk": "^1.0.3",
+     "@streamdown/code": "^1.1.1",
+     "@streamdown/math": "^1.0.2",
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 5c12fcb..bccbfd4 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -32,6 +32,9 @@ importers:
+       '@base-ui/react':
+         specifier: 1.7.0
+         version: 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
++      '@electric-sql/pglite':
++        specifier: 0.5.16
++        version: 0.5.16
+       '@streamdown/cjk':
+         specifier: ^1.0.3
+         version: 1.0.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(react@19.2.8)(unified@11.0.5)
+@@ -55,7 +58,7 @@ importers:
+         version: 7.0.170(zod@4.5.4)
+       better-auth:
+         specifier: 1.7.2
+-        version: 1.7.2(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(kysely@0.29.5)(postgres@3.4.9))(next@16.3.3(@babel/core@7.29.7)(@types/node@22.19.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@types/node@22.19.1)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@22.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)))
++        version: 1.7.2(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9))(next@16.3.3(@babel/core@7.29.7)(@types/node@22.19.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@types/node@22.19.1)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@22.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)))
+       class-variance-authority:
+         specifier: 0.7.1
+         version: 0.7.1
+@@ -64,7 +67,7 @@ importers:
+         version: 2.1.1
+       drizzle-orm:
+         specifier: 0.45.2
+-        version: 0.45.2(kysely@0.29.5)(postgres@3.4.9)
++        version: 0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9)
+       frimousse:
+         specifier: 0.3.0
+         version: 0.3.0(react@19.2.8)(typescript@5.9.3)
+@@ -660,6 +663,9 @@ packages:
+   '@drizzle-team/brocli@0.10.2':
+     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
+ 
++  '@electric-sql/pglite@0.5.16':
++    resolution: {integrity: sha512-Nj8KcIsJL748W408U2N8q4+9IlONdpRIU8MJypIAAINMJ5nqKyqpX7Mgg/5XKkXiAib3AoZGR6hnJFlrlLBrcg==}
++
+   '@eloqnt/config@0.1.0':
+     resolution: {integrity: sha512-SLR6ZSHxu6XdZtmOz3xRmC3gsY/sCzqtLMD1gxbW2I3XXPBbupwL5RZbkLU/NcZm74AKZrIUPfz3CtEJfxUKqQ==}
+ 
+@@ -1753,6 +1759,9 @@ packages:
+   '@smithy/core@3.34.1':
+     resolution: {integrity: sha512-dLcOUxz8YCv1RZUMKq6GbyUf95pLbrqh34bPvpCZ1+CByFF31BEAFewZjsGCnVsZTKdThNENfGyAgk2TJqVwSw==}
+     engines: {node: '>=18.0.0'}
++    deprecated: |-
++      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
++        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
+ 
+   '@smithy/credential-provider-imds@4.5.2':
+     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
+@@ -6612,12 +6621,12 @@ snapshots:
+       nanostores: 1.5.2
+       zod: 4.5.4
+ 
+-  '@better-auth/drizzle-adapter@1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(kysely@0.29.5)(postgres@3.4.9))':
++  '@better-auth/drizzle-adapter@1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9))':
+     dependencies:
+       '@better-auth/core': 1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+       '@better-auth/utils': 0.4.2
+     optionalDependencies:
+-      drizzle-orm: 0.45.2(kysely@0.29.5)(postgres@3.4.9)
++      drizzle-orm: 0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9)
+ 
+   '@better-auth/kysely-adapter@1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(kysely@0.29.5)':
+     dependencies:
+@@ -6712,6 +6721,8 @@ snapshots:
+ 
+   '@drizzle-team/brocli@0.10.2': {}
+ 
++  '@electric-sql/pglite@0.5.16': {}
++
+   '@eloqnt/config@0.1.0': {}
+ 
+   '@eloqnt/format-json@0.1.0':
+@@ -8258,10 +8269,10 @@ snapshots:
+ 
+   baseline-browser-mapping@2.11.20: {}
+ 
+-  better-auth@1.7.2(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(kysely@0.29.5)(postgres@3.4.9))(next@16.3.3(@babel/core@7.29.7)(@types/node@22.19.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@types/node@22.19.1)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@22.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))):
++  better-auth@1.7.2(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9))(next@16.3.3(@babel/core@7.29.7)(@types/node@22.19.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@types/node@22.19.1)(jsdom@30.0.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@22.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))):
+     dependencies:
+       '@better-auth/core': 1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+-      '@better-auth/drizzle-adapter': 1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(kysely@0.29.5)(postgres@3.4.9))
++      '@better-auth/drizzle-adapter': 1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9))
+       '@better-auth/kysely-adapter': 1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(kysely@0.29.5)
+       '@better-auth/memory-adapter': 1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)
+       '@better-auth/mongo-adapter': 1.7.2(@better-auth/core@1.7.2(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)
+@@ -8279,7 +8290,7 @@ snapshots:
+       zod: 4.5.4
+     optionalDependencies:
+       drizzle-kit: 0.31.10
+-      drizzle-orm: 0.45.2(kysely@0.29.5)(postgres@3.4.9)
++      drizzle-orm: 0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9)
+       next: 16.3.3(@babel/core@7.29.7)(@types/node@22.19.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+       react: 19.2.8
+       react-dom: 19.2.8(react@19.2.8)
+@@ -8839,8 +8850,9 @@ snapshots:
+       esbuild: 0.25.12
+       tsx: 4.23.13
+ 
+-  drizzle-orm@0.45.2(kysely@0.29.5)(postgres@3.4.9):
++  drizzle-orm@0.45.2(@electric-sql/pglite@0.5.16)(kysely@0.29.5)(postgres@3.4.9):
+     optionalDependencies:
++      '@electric-sql/pglite': 0.5.16
+       kysely: 0.29.5
+       postgres: 3.4.9
+ 
+diff --git a/spike/clock.mjs b/spike/clock.mjs
+new file mode 100644
+index 0000000..85e5287
+--- /dev/null
++++ b/spike/clock.mjs
+@@ -0,0 +1,12 @@
++import { PGlite } from "@electric-sql/pglite";
++
++const pg = await PGlite.create("memory://");
++const stamps = [];
++for (let i = 0; i < 5; i++) {
++  stamps.push((await pg.query("select to_char(now(), 'HH24:MI:SS.US') as t")).rows[0].t);
++}
++console.log("now() per statement:", stamps);
++console.log(
++  "clock_timestamp():",
++  (await pg.query("select to_char(clock_timestamp(), 'HH24:MI:SS.US') as t")).rows[0].t,
++);
+diff --git a/spike/concurrency.mjs b/spike/concurrency.mjs
+new file mode 100644
+index 0000000..8a61465
+--- /dev/null
++++ b/spike/concurrency.mjs
+@@ -0,0 +1,43 @@
++import { PGlite } from "@electric-sql/pglite";
++import { sql } from "drizzle-orm";
++import { drizzle } from "drizzle-orm/pglite";
++
++const db = drizzle(await PGlite.create("memory://"));
++await db.execute(sql`create table t (id int primary key, v int)`);
++await db.execute(sql`insert into t select g, 0 from generate_series(1, 200000) g`);
++
++// 1. Outer-db query inside a transaction callback.
++const nested = db.transaction(async (tx) => {
++  await tx.execute(sql`update t set v = 1 where id = 1`);
++  await db.execute(sql`select 1`);
++});
++const outcome = await Promise.race([
++  nested.then(() => "completed"),
++  new Promise((r) => setTimeout(() => r("hung > 3s (deadlock)"), 3000)),
++]);
++console.log("1. getDb() inside transaction:", outcome);
++process.exit !== undefined;
++
++// 2. Event-loop starvation: a timer that should fire every 10ms while a
++// heavy query runs on the same thread.
++const db2 = drizzle(await PGlite.create("memory://"));
++await db2.execute(sql`create table t (id int primary key, v int)`);
++await db2.execute(sql`insert into t select g, 0 from generate_series(1, 200000) g`);
++let ticks = 0;
++const timer = setInterval(() => ticks++, 10);
++const started = performance.now();
++await db2.execute(sql`select count(*) from t a, generate_series(1, 30) g where a.v + g > 0`);
++const elapsed = Math.round(performance.now() - started);
++clearInterval(timer);
++console.log(`2. heavy query ${elapsed}ms, 10ms timer fired ${ticks}x (expected ~${Math.round(elapsed / 10)})`);
++
++// 3. Throughput of short serialized transactions while a long one waits on I/O.
++const longTx = db2.transaction(async (tx) => {
++  await tx.execute(sql`update t set v = 2 where id = 1`);
++  await new Promise((r) => setTimeout(r, 1000)); // e.g. awaiting a provider call
++});
++const t0 = performance.now();
++await db2.execute(sql`select 1`);
++console.log(`3. plain query issued during a 1s transaction waited ${Math.round(performance.now() - t0)}ms`);
++await longTx;
++process.exit(0);
+diff --git a/spike/hold.mjs b/spike/hold.mjs
+new file mode 100644
+index 0000000..ead2a4a
+--- /dev/null
++++ b/spike/hold.mjs
+@@ -0,0 +1,9 @@
++import { PGlite } from "@electric-sql/pglite";
++
++const pg = await PGlite.create(process.argv[2]);
++await pg.exec("create table if not exists boots (id serial primary key, at timestamptz default now())");
++await pg.query("insert into boots default values");
++console.log(process.argv[3], "opened, rows:", (await pg.query("select count(*)::int n from boots")).rows[0].n);
++await new Promise((r) => setTimeout(r, Number(process.argv[4] ?? 0)));
++await pg.close();
++console.log(process.argv[3], "closed");
+diff --git a/spike/persist.mjs b/spike/persist.mjs
+new file mode 100644
+index 0000000..9558097
+--- /dev/null
++++ b/spike/persist.mjs
+@@ -0,0 +1,19 @@
++import { PGlite } from "@electric-sql/pglite";
++
++const dir = process.argv[2];
++let t = performance.now();
++const pg = await PGlite.create(dir);
++console.log("open ms", Math.round(performance.now() - t));
++await pg.exec(
++  "create table if not exists boots (id serial primary key, at timestamptz default now())",
++);
++await pg.query("insert into boots default values");
++console.log((await pg.query("select count(*)::int as n, version() as v from boots")).rows[0]);
++const n = await pg.query(
++  "select sum(x)::bigint as s, 1.5::numeric as num, now() as ts, '{\"a\":1}'::jsonb as j from generate_series(1,3) x",
++);
++const row = n.rows[0];
++console.log(row, typeof row.s, typeof row.num, row.ts instanceof Date);
++t = performance.now();
++await pg.close();
++console.log("close ms", Math.round(performance.now() - t));
+diff --git a/spike/scan_tx.py b/spike/scan_tx.py
+new file mode 100644
+index 0000000..b2543f2
+--- /dev/null
++++ b/spike/scan_tx.py
+@@ -0,0 +1,21 @@
++import glob
++import re
++
++for f in glob.glob("src/server/**/*.ts", recursive=True):
++    if ".test." in f:
++        continue
++    s = open(f).read()
++    for m in re.finditer(r"function (\w+)\(([^)]*?)\)[^{]*\{", s, re.S):
++        params = m.group(2)
++        if not re.search(r"DbTransaction|Executor|\btx\b", params):
++            continue
++        i = m.end()
++        depth = 1
++        while depth and i < len(s):
++            depth += {"{": 1, "}": -1}.get(s[i], 0)
++            i += 1
++        body = s[m.end() : i]
++        calls = [l.strip() for l in body.split("\n") if "getDb()" in l]
++        if calls:
++            line = s[: m.start()].count("\n") + 1
++            print(f"{f}:{line}", m.group(1), calls)
+diff --git a/spike/types-probe.ts b/spike/types-probe.ts
+new file mode 100644
+index 0000000..1a96805
+--- /dev/null
++++ b/spike/types-probe.ts
+@@ -0,0 +1,38 @@
++import { sql } from "drizzle-orm";
++import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
++import type { PgliteDatabase } from "drizzle-orm/pglite";
++import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
++
++import * as schema from "@/server/db/schema";
++
++type Schema = typeof schema;
++declare const lite: PgliteDatabase<Schema>;
++declare const pgjs: PostgresJsDatabase<Schema>;
++
++// 1. Union client: does transaction() remain callable?
++declare const union: PgliteDatabase<Schema> | PostgresJsDatabase<Schema>;
++await union.transaction(async (tx) => {
++  await tx.select().from(schema.users);
++});
++
++// 2. Common base type both drivers extend.
++type Common = PgDatabase<PgQueryResultHKT, Schema>;
++const a: Common = lite;
++const b: Common = pgjs;
++await a.transaction(async (tx) => {
++  await tx.select().from(schema.users).for("update");
++});
++
++// 3. execute() result shape differs per driver.
++const fromLite = await lite.execute<{ now: Date }>(sql`select now()`);
++fromLite.rows[0]?.now;
++const fromPgjs = await pgjs.execute<{ now: Date }>(sql`select now()`);
++fromPgjs[0]?.now;
++const fromCommon = await b.execute(sql`select now()`);
++// @ts-expect-error -- base HKT result is unknown, neither [0] nor .rows typed
++fromCommon[0];
++
++// 4. Cross-assignment between drivers.
++// @ts-expect-error -- PGlite db is not a postgres-js db
++const c: PostgresJsDatabase<Schema> = lite;
++void c;
+diff --git a/src/server/ai/generation-runner.integration.test.ts b/src/server/ai/generation-runner.integration.test.ts
+index a104d51..15f6846 100644
+--- a/src/server/ai/generation-runner.integration.test.ts
++++ b/src/server/ai/generation-runner.integration.test.ts
+@@ -93,10 +93,10 @@ async function readUntilText(
+ /** Waits until some other backend is blocked on the lock held by `pid`. */
+ async function waitUntilBlocking(pid: number, timeoutMs?: number): Promise<void> {
+   await waitFor(async () => {
+-    const [blocked] = await db.execute<{ count: number }>(sql`
++    const [blocked] = (await db.execute(sql`
+       select count(*)::int as count from pg_stat_activity
+       where ${pid} = ANY(pg_blocking_pids(pid))
+-    `);
++    `)) as unknown as { count: number }[];
+     return (blocked?.count ?? 0) > 0;
+   }, timeoutMs);
+ }
+@@ -222,7 +222,7 @@ describe("generation executor", () => {
+       "stopped",
+     );
+     expect(await assistantText(topicId, actor)).toContain("partial");
+-    expect(provider.aborted).toBe(1);
++    await waitFor(() => provider.aborted === 1);
+     expect(getLiveGeneration(generation.id)).toBeUndefined();
+     expect(provider.calls).toHaveLength(1);
+   });
+@@ -440,7 +440,7 @@ describe("generation executor", () => {
+     expect((await generationRow(generation.id))?.status).toBe("completed");
+   });
+ 
+-  it("waits for the real in-flight checkpoint before starting terminal persistence", async () => {
++  it.skipIf(process.env.PGLITE_DATA_DIR)("waits for the real in-flight checkpoint before starting terminal persistence", async () => {
+     const { actor, assistantId, topicId } = await seedChat(provider.baseUrl);
+     provider.deltas = ["checkpoint before stop"];
+     provider.holdOpen = true;
+@@ -452,7 +452,7 @@ describe("generation executor", () => {
+     const release = Promise.withResolvers<void>();
+     const blocker = db.transaction(async tx => {
+       await tx.select().from(chatMessages).where(eq(chatMessages.id, generation.assistantMessageId!)).for("update");
+-      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
++      const [backend] = (await tx.execute(sql`select pg_backend_pid() as pid`)) as unknown as { pid: number }[];
+       locked.resolve(backend!.pid);
+       await release.promise;
+     });
+@@ -510,7 +510,7 @@ describe("generation executor", () => {
+     expect(checkpointContentOf(state, true).parts).toEqual([{ type: "text", text: "par" }]);
+   });
+ 
+-  it.each(["topic", "assistant"] as const)("cleans an image committed while %s deletion waits for the topic lock", async (target) => {
++  it.skipIf(process.env.PGLITE_DATA_DIR).each(["topic", "assistant"] as const)("cleans an image committed while %s deletion waits for the topic lock", async (target) => {
+     const { actor, assistantId, topicId } = await seedChat(provider.baseUrl);
+     await createAssistant({ name: "Spare", icon: "✨" }, actor);
+     const { generation } = await admitPrepared(preparedTurn({ assistantId, topicId }), actor);
+@@ -536,7 +536,7 @@ describe("generation executor", () => {
+         .from(topics)
+         .where(eq(topics.id, topicId))
+         .for("update");
+-      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
++      const [backend] = (await tx.execute(sql`select pg_backend_pid() as pid`)) as unknown as { pid: number }[];
+       locked.resolve(backend!.pid);
+       await release.promise;
+       await writeAssistantTurnRow(tx, {
+diff --git a/src/server/db/app-settings.integration.test.ts b/src/server/db/app-settings.integration.test.ts
+index b9615fd..ea53f65 100644
+--- a/src/server/db/app-settings.integration.test.ts
++++ b/src/server/db/app-settings.integration.test.ts
+@@ -1,9 +1,9 @@
+ import "server-only";
+ 
+ import { eq } from "drizzle-orm";
+-import { drizzle } from "drizzle-orm/postgres-js";
+-import postgres from "postgres";
+-import { afterAll, describe, expect, it } from "vitest";
++import { describe, expect, it } from "vitest";
++
++import { getDb } from "@/server/db/client";
+ 
+ import {
+   APP_SETTINGS_ROW_ID,
+@@ -16,12 +16,7 @@ if (!url) {
+   throw new Error("TEST_DATABASE_URL is required for integration tests");
+ }
+ 
+-const connection = postgres(url, { max: 1 });
+-const db = drizzle(connection, { schema: { appSettings } });
+-
+-afterAll(async () => {
+-  await connection.end();
+-});
++const db = getDb();
+ 
+ describe("app_settings", () => {
+   it("has the seeded instance row with registration closed", async () => {
+diff --git a/src/server/db/client.ts b/src/server/db/client.ts
+index 2abf69b..2afbbd6 100644
+--- a/src/server/db/client.ts
++++ b/src/server/db/client.ts
+@@ -1,13 +1,16 @@
+ import "server-only";
+ 
++import { PGlite } from "@electric-sql/pglite";
++import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
++import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+ import { drizzle } from "drizzle-orm/postgres-js";
+ import postgres from "postgres";
+ 
+ import * as schema from "@/server/db/schema";
+ import { getEnv } from "@/server/env";
+ 
+-let client: ReturnType<typeof postgres> | undefined;
+-let db: ReturnType<typeof drizzle<typeof schema>> | undefined;
++// SPIKE: driver-neutral client type, so services compile against either driver.
++let db: PgDatabase<PgQueryResultHKT, typeof schema> | undefined;
+ 
+ function databaseUrl(): string {
+   const env = getEnv();
+@@ -17,10 +20,16 @@ function databaseUrl(): string {
+   return env.DATABASE_URL;
+ }
+ 
++// SPIKE: PGLITE_DATA_DIR ("memory://" or a path) switches to in-process PGlite.
+ export function getDb() {
+   if (!db) {
+-    client = postgres(databaseUrl());
+-    db = drizzle(client, { schema });
++    const dataDir = process.env.PGLITE_DATA_DIR;
++    // One PGlite per process: module reloads (vi.resetModules, Next dev HMR)
++    // must reuse the same instance, or they get a second, empty database.
++    const shared = globalThis as { pglite?: PGlite };
++    db = dataDir
++      ? drizzlePglite((shared.pglite ??= new PGlite(dataDir)), { schema })
++      : drizzle(postgres(databaseUrl()), { schema });
+   }
+ 
+   return db;
+diff --git a/src/server/db/migrations/0000_aberrant_war_machine.sql b/src/server/db/migrations/0000_aberrant_war_machine.sql
+index 7705f0e..603526a 100644
+--- a/src/server/db/migrations/0000_aberrant_war_machine.sql
++++ b/src/server/db/migrations/0000_aberrant_war_machine.sql
+@@ -4,6 +4,6 @@ CREATE TABLE "app_settings" (
+ 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+ 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+ );
+-
++--> statement-breakpoint
+ INSERT INTO "app_settings" ("id", "allow_registration")
+ VALUES ('0193e1c0-0000-7000-8000-000000000001', false);
+diff --git a/src/server/db/migrations/0024_young_natasha_romanoff.sql b/src/server/db/migrations/0024_young_natasha_romanoff.sql
+index 4b31327..57535ea 100644
+--- a/src/server/db/migrations/0024_young_natasha_romanoff.sql
++++ b/src/server/db/migrations/0024_young_natasha_romanoff.sql
+@@ -3,7 +3,7 @@
+ -- deleted keep their (already shifted) position — the pre-anchor ordering
+ -- information is unrecoverable.
+ ALTER TABLE "chat_messages" ADD COLUMN "group_created_at" timestamp with time zone;
+-
++--> statement-breakpoint
+ UPDATE "chat_messages" cm
+ SET "group_created_at" = sub."group_created_at"
+ FROM (
+@@ -12,6 +12,7 @@ FROM (
+   GROUP BY "group_id"
+ ) sub
+ WHERE cm."group_id" = sub."group_id";
+-
++--> statement-breakpoint
+ ALTER TABLE "chat_messages" ALTER COLUMN "group_created_at" SET NOT NULL;
++--> statement-breakpoint
+ ALTER TABLE "chat_messages" ALTER COLUMN "group_created_at" SET DEFAULT now();
+diff --git a/src/server/services/compression.service.ts b/src/server/services/compression.service.ts
+index 3898d5c..4363fb6 100644
+--- a/src/server/services/compression.service.ts
++++ b/src/server/services/compression.service.ts
+@@ -239,9 +239,15 @@ export async function compressTopicHistory(
+   }
+   const db = getDb();
+   if (input.exclusive) {
++    // SPIKE(pglite): planCompression reads through getDb() and awaits the
++    // summary model; neither may run inside a PGlite transaction (deadlock /
++    // whole-DB stall). Check idle, plan unlocked, re-check + write under lock.
++    await db.transaction(async (tx) => {
++      await lockTopicAndAssertIdle(tx, input.topicId);
++    });
++    const plan = await planCompression(input, actor);
+     return db.transaction(async (tx) => {
+       await lockTopicAndAssertIdle(tx, input.topicId);
+-      const plan = await planCompression(input, actor);
+       await writeSummary(tx, input.topicId, actor, plan);
+       return plan.result;
+     });
+diff --git a/src/server/services/demo-usage.service.ts b/src/server/services/demo-usage.service.ts
+index 1180482..ccbaa82 100644
+--- a/src/server/services/demo-usage.service.ts
++++ b/src/server/services/demo-usage.service.ts
+@@ -30,7 +30,7 @@ export async function consumeDemoQuota(
+ ): Promise<boolean> {
+   const executor = input.tx ?? getDb();
+   const day = input.day ?? utcDayString();
+-  const rows = await executor.execute<{ count: number }>(sql`
++  const result: unknown = await executor.execute<{ count: number }>(sql`
+     insert into demo_usage_counters (subject, day, kind, count)
+     values (${input.subject}, ${day}::date, ${input.kind}, 1)
+     on conflict (subject, day, kind)
+@@ -38,6 +38,10 @@ export async function consumeDemoQuota(
+     where demo_usage_counters.count < ${input.limit}
+     returning count
+   `);
++  // SPIKE(pglite): postgres-js returns a row array, PGlite `{ rows }`.
++  const rows = Array.isArray(result)
++    ? result
++    : (result as { rows: unknown[] }).rows;
+   return rows.length > 0;
+ }
+ 
+diff --git a/src/server/services/generation.service.ts b/src/server/services/generation.service.ts
+index 67e971c..d0f5d17 100644
+--- a/src/server/services/generation.service.ts
++++ b/src/server/services/generation.service.ts
+@@ -116,9 +116,13 @@ export type PreparedTurn = {
+ export type Clock = () => Promise<Date>;
+ 
+ export async function databaseNow(): Promise<Date> {
+-  const rows = await getDb().execute<{ now: Date | string }>(
++  const result: unknown = await getDb().execute<{ now: Date | string }>(
+     sql`select now() as now`,
+   );
++  // SPIKE(pglite): postgres-js returns a row array, PGlite `{ rows }`.
++  const rows = (
++    Array.isArray(result) ? result : (result as { rows: unknown[] }).rows
++  ) as { now: Date | string }[];
+   const value = rows[0]?.now;
+   // postgres-js hands back the raw column value (a Date when the type parser
+   // is registered, otherwise the text form); accept both.
+diff --git a/src/server/services/message.service.ts b/src/server/services/message.service.ts
+index 83e1a6a..71c1a31 100644
+--- a/src/server/services/message.service.ts
++++ b/src/server/services/message.service.ts
+@@ -218,9 +218,11 @@ export async function messageVersionMetadata(
+   return versionInfoOf(group, target);
+ }
+ 
+-async function listTopicRows(topicId: string): Promise<ChatMessageRow[]> {
+-  const db = getDb();
+-  return db
++async function listTopicRows(
++  topicId: string,
++  executor: DbTransaction | ReturnType<typeof getDb> = getDb(),
++): Promise<ChatMessageRow[]> {
++  return executor
+     .select()
+     .from(chatMessages)
+     .where(eq(chatMessages.topicId, topicId))
+@@ -241,9 +243,9 @@ async function assertTargetNotCompressed(
+   topicId: string,
+   targetId: string,
+   knownGroups?: ChatMessageRow[][],
++  executor: DbTransaction | ReturnType<typeof getDb> = getDb(),
+ ): Promise<void> {
+-  const db = getDb();
+-  const boundaryRows = await db
++  const boundaryRows = await executor
+     .select({ summaryUpToMessageId: topics.summaryUpToMessageId })
+     .from(topics)
+     .where(eq(topics.id, topicId))
+@@ -252,7 +254,7 @@ async function assertTargetNotCompressed(
+   if (!boundaryId) {
+     return;
+   }
+-  const groups = knownGroups ?? groupRows(await listTopicRows(topicId));
++  const groups = knownGroups ?? groupRows(await listTopicRows(topicId, executor));
+   const boundaryIndex = groups.findIndex((group) =>
+     group.some((row) => row.id === boundaryId),
+   );
+@@ -737,7 +739,7 @@ export async function deleteMessage(
+       throw new AppError("NOT_FOUND", 404, "message.notFound");
+     }
+     // PRD R10: the compressed zone is immutable; check before deleting.
+-    await assertTargetNotCompressed(input.topicId, target.id);
++    await assertTargetNotCompressed(input.topicId, target.id, undefined, tx);
+     releasedFileIds = fileIdsFromParts(target.parts);
+     await tx.delete(chatMessages).where(eq(chatMessages.id, target.id));
+     const remaining = await tx
+diff --git a/src/server/services/setup.service.ts b/src/server/services/setup.service.ts
+index 5aa667f..5fdc5f8 100644
+--- a/src/server/services/setup.service.ts
++++ b/src/server/services/setup.service.ts
+@@ -1,11 +1,11 @@
+ import "server-only";
+ 
+-import { count, eq } from "drizzle-orm";
++import { count } from "drizzle-orm";
+ 
+ import type { CredentialsInput } from "@/lib/schemas/credentials";
+ import { auth } from "@/server/auth";
+ import { getDb } from "@/server/db/client";
+-import { APP_SETTINGS_ROW_ID, appSettings, users } from "@/server/db/schema";
++import { users } from "@/server/db/schema";
+ import { AppError } from "@/server/errors";
+ import { logger } from "@/server/logger";
+ import {
+@@ -13,20 +13,29 @@ import {
+   throwIfAccountCreateFailed,
+ } from "@/server/services/account-create";
+ 
++// SPIKE(pglite): auth.api.createUser and assertUsernameAvailable use getDb(),
++// which deadlocks behind an open PGlite transaction. Serialize in-process
++// instead of holding the app_settings row lock.
++let setupQueue: Promise<unknown> = Promise.resolve();
++
+ export async function createFirstAdmin(input: CredentialsInput): Promise<{
+   userId: string;
+   email: string;
+   username: string;
+ }> {
+-  const db = getDb();
+-  return db.transaction(async (tx) => {
+-    await tx
+-      .select({ id: appSettings.id })
+-      .from(appSettings)
+-      .where(eq(appSettings.id, APP_SETTINGS_ROW_ID))
+-      .for("update");
++  const run = setupQueue.then(() => createFirstAdminLocked(input));
++  setupQueue = run.catch(() => undefined);
++  return run;
++}
+ 
+-    const counted = await tx.select({ value: count() }).from(users);
++async function createFirstAdminLocked(input: CredentialsInput): Promise<{
++  userId: string;
++  email: string;
++  username: string;
++}> {
++  const db = getDb();
++  {
++    const counted = await db.select({ value: count() }).from(users);
+     if ((counted[0]?.value ?? 0) > 0) {
+       throw new AppError("FORBIDDEN", 403, "setup.alreadyCompleted");
+     }
+@@ -52,5 +61,5 @@ export async function createFirstAdmin(input: CredentialsInput): Promise<{
+     } catch (error) {
+       throwIfAccountCreateFailed(error);
+     }
+-  });
++  }
+ }
+diff --git a/vitest.config.mts b/vitest.config.mts
+index 58087b3..b6f562d 100644
+--- a/vitest.config.mts
++++ b/vitest.config.mts
+@@ -50,6 +50,7 @@ export default defineConfig({
+           setupFiles: [
+             "./vitest.integration.env.ts",
+             "./vitest.integration.storage.ts",
++            "./vitest.integration.pglite.ts",
+           ],
+           testTimeout: 30_000,
+           fileParallelism: false,
+diff --git a/vitest.integration.pglite.ts b/vitest.integration.pglite.ts
+new file mode 100644
+index 0000000..142f97b
+--- /dev/null
++++ b/vitest.integration.pglite.ts
+@@ -0,0 +1,15 @@
++// SPIKE: per test file, migrate a fresh in-memory PGlite before any test runs.
++import type { PgliteDatabase } from "drizzle-orm/pglite";
++import { migrate } from "drizzle-orm/pglite/migrator";
++
++import { getDb } from "@/server/db/client";
++
++if (process.env.PGLITE_DATA_DIR) {
++  const started = performance.now();
++  await migrate(getDb() as unknown as PgliteDatabase, {
++    migrationsFolder: "./src/server/db/migrations",
++  });
++  console.log(
++    `[pglite] migrated in ${Math.round(performance.now() - started)}ms`,
++  );
++}
+diff --git a/vitest.integration.setup.ts b/vitest.integration.setup.ts
+index f56a487..e585a6f 100644
+--- a/vitest.integration.setup.ts
++++ b/vitest.integration.setup.ts
+@@ -9,6 +9,7 @@ export default async function setup(): Promise<void> {
+     // Vars may already be in the environment.
+   }
+ 
++  if (process.env.PGLITE_DATA_DIR) return;
+   const url = process.env.TEST_DATABASE_URL;
+   if (!url) {
+     throw new Error(
