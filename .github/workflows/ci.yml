@@ -96,6 +96,43 @@ jobs:
       - name: Build shell UI and desktop bundles
         run: pnpm -C native/desktop build
 
+  android:
+    name: Android Debug Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: native/pnpm-lock.yaml
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build web assets and sync Capacitor
+        run: |
+          pnpm -C native install --frozen-lockfile
+          pnpm -C native/mobile build
+          pnpm -C native/mobile exec cap sync android
+
+      - name: Build debug APK
+        working-directory: native/mobile/android
+        run: ./gradlew assembleDebug
+
   docker-smoke:
     name: Docker Build Smoke Test
     needs: test

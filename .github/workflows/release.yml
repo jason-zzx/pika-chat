@@ -186,9 +186,76 @@ jobs:
             !native/desktop/release/latest-mac.yml
           if-no-files-found: error
 
+  build-android:
+    name: Build Android APK
+    needs: quality-gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: native/pnpm-lock.yaml
+
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Verify tag matches package.json version
+        if: github.ref_type == 'tag'
+        run: |
+          if [ "v$(node -p "require('./package.json').version")" != "${{ github.ref_name }}" ]; then
+            echo "Tag ${{ github.ref_name }} does not match package.json version" >&2
+            exit 1
+          fi
+
+      - name: Build web assets and sync Capacitor
+        run: |
+          pnpm -C native install --frozen-lockfile
+          pnpm -C native/mobile build
+          pnpm -C native/mobile exec cap sync android
+
+      - name: Decode signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/pika-chat-release.p12"
+
+      - name: Build signed release APK
+        working-directory: native/mobile/android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/pika-chat-release.p12
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - name: Rename APK
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          mkdir android-assets
+          cp native/mobile/android/app/build/outputs/apk/release/app-release.apk "android-assets/Pika-Chat-${version}.apk"
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          path: android-assets/*.apk
+          if-no-files-found: error
+
   create-release:
     name: Create GitHub Release
-    needs: [build-and-push, build-desktop]
+    needs: [build-and-push, build-desktop, build-android]
     runs-on: ubuntu-latest
 
     steps:
@@ -206,6 +273,12 @@ jobs:
           pattern: desktop-*
           path: desktop-assets
           merge-multiple: true
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: android-apk
+          path: desktop-assets
 
       - name: Extract Release Notes from CHANGELOG
         id: notes
