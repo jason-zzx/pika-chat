@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/11-16-native-mobile/research/capacitor-android.md", "reason": "Capacitor 8 / androidx.webkit facts: bridge injection, navigation, insets, back, notifications, release, toolchain"}
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "Existing shell contracts (pikaShell, pikaNative, origin checks, query modes, release) to mirror on Android"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "shell-ui host contract change spans shell-ui, desktop preload and the new Android host"}
+{"file": ".trellis/spec/frontend/theming.md", "reason": "theme-color mirroring the live background that the Android bars follow"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "SidebarUserMenu shortcut tweak"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend test/lint rules for the web tweak"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Catalog conventions; native strings mirror en + zh-CN"}
