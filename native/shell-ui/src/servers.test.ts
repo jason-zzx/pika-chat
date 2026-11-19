@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceleratorFromKey, classifyHealth, normalizeServerUrl, sameMajorMinor } from "./servers";
+import { acceleratorFromKey, classifyHealth, isNewerVersion, normalizeServerUrl, sameMajorMinor } from "./servers";
 
 describe("normalizeServerUrl", () => {
   it("assumes https and reduces to an origin", () => {
@@ -77,5 +77,36 @@ describe("acceleratorFromKey", () => {
     expect(acceleratorFromKey({ ...none, ctrlKey: true, code: "ControlLeft" }, false)).toBeNull();
     expect(acceleratorFromKey({ ...none, code: "KeyA" }, false)).toBeNull();
     expect(acceleratorFromKey({ ...none, shiftKey: true, code: "KeyA" }, false)).toBeNull();
+  });
+});
+
+describe("isNewerVersion", () => {
+  it("treats strictly higher stable versions as newer", () => {
+    expect(isNewerVersion("v0.4.3", "0.4.2")).toBe(true);
+    expect(isNewerVersion("v0.5.0", "0.4.9")).toBe(true);
+    expect(isNewerVersion("v1.0.0", "0.9.9")).toBe(true);
+  });
+
+  it("does not downgrade an rc user to an older stable release", () => {
+    expect(isNewerVersion("v0.4.2", "0.4.3-rc.1")).toBe(false);
+    expect(isNewerVersion("v0.4.2", "0.5.0-rc.1")).toBe(false);
+  });
+
+  it("prompts rc users when the matching stable version ships", () => {
+    expect(isNewerVersion("v0.4.3", "0.4.3-rc.1")).toBe(true);
+  });
+
+  it("compares prerelease identifiers numerically and lexically", () => {
+    expect(isNewerVersion("v0.4.3-rc.2", "0.4.3-rc.1")).toBe(true);
+    expect(isNewerVersion("v0.4.3-rc.10", "0.4.3-rc.2")).toBe(true);
+    expect(isNewerVersion("v0.4.3-rc.1", "0.4.3-rc.2")).toBe(false);
+    expect(isNewerVersion("v0.4.3-beta.1", "0.4.3-alpha.9")).toBe(true);
+  });
+
+  it("ignores equal and unparseable versions", () => {
+    expect(isNewerVersion("v0.4.2", "0.4.2")).toBe(false);
+    expect(isNewerVersion("v0.4.3-rc.1", "0.4.3-rc.1")).toBe(false);
+    expect(isNewerVersion("invalid", "0.4.2")).toBe(false);
+    expect(isNewerVersion("v0.4.3", "invalid")).toBe(false);
   });
 });

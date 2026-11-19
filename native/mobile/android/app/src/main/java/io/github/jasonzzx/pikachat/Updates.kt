@@ -34,8 +34,7 @@ object Updates {
                 }
 
                 val (tagName, htmlUrl) = result
-                val currentTag = "v${BuildConfig.VERSION_NAME}"
-                if (tagName == currentTag) {
+                if (!isNewerVersion(tagName, BuildConfig.VERSION_NAME)) {
                     if (manual) {
                         AlertDialog.Builder(activity)
                             .setTitle(R.string.update_up_to_date_title)
@@ -78,6 +77,56 @@ object Updates {
         } finally {
             conn.disconnect()
         }
+    }
+
+    private data class Semver(
+        val major: Int,
+        val minor: Int,
+        val patch: Int,
+        val pre: List<String>,
+    )
+
+    private val semverRegex = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$""")
+
+    internal fun isNewerVersion(candidate: String, current: String): Boolean {
+        val a = parseSemver(candidate) ?: return false
+        val b = parseSemver(current) ?: return false
+
+        if (a.major != b.major) return a.major > b.major
+        if (a.minor != b.minor) return a.minor > b.minor
+        if (a.patch != b.patch) return a.patch > b.patch
+
+        if (a.pre.isEmpty() && b.pre.isEmpty()) return false
+        if (a.pre.isEmpty()) return true
+        if (b.pre.isEmpty()) return false
+
+        val len = maxOf(a.pre.size, b.pre.size)
+        for (i in 0 until len) {
+            val ai = a.pre.getOrNull(i) ?: return false
+            val bi = b.pre.getOrNull(i) ?: return true
+            val cmp = comparePreIdentifier(ai, bi)
+            if (cmp != 0) return cmp > 0
+        }
+        return false
+    }
+
+    private fun parseSemver(version: String): Semver? {
+        val match = semverRegex.matchEntire(version.trim()) ?: return null
+        val (major, minor, patch, pre) = match.destructured
+        return Semver(
+            major = major.toInt(),
+            minor = minor.toInt(),
+            patch = patch.toInt(),
+            pre = if (pre.isEmpty()) emptyList() else pre.split('.'),
+        )
+    }
+
+    private fun comparePreIdentifier(a: String, b: String): Int {
+        val aNum = a.all { it.isDigit() }
+        val bNum = b.all { it.isDigit() }
+        if (aNum && bNum) return a.toInt().compareTo(b.toInt())
+        if (aNum != bNum) return if (aNum) -1 else 1
+        return a.compareTo(b)
     }
 
     private fun openUrl(activity: Activity, url: String) {

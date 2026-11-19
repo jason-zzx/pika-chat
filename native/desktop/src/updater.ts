@@ -1,3 +1,4 @@
+import { isNewerVersion } from "@pika/shell-ui/servers";
 import { app, dialog, net, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import { z } from "zod";
@@ -47,8 +48,7 @@ export function createUpdater(t: Strings, beforeInstall: () => Promise<void>) {
       return;
     }
     const release = parsed.data;
-    // releases/latest is always the newest stable release, so any other tag is an update.
-    if (release.tag_name === `v${__APP_VERSION__}`) {
+    if (!isNewerVersion(release.tag_name, __APP_VERSION__)) {
       if (manual) await message(t.upToDate(__APP_VERSION__), [t.ok]);
       return;
     }
