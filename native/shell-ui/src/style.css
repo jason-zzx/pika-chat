@@ -9,6 +9,7 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.92 0.006 75);
   --input: oklch(0.92 0.006 75);
   --ring: oklch(0.708 0 0);
@@ -26,6 +27,7 @@
     --muted-foreground: oklch(0.712 0 0);
     --accent: oklch(0.26 0 0);
     --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.145 0 0);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.552 0 0);
@@ -101,16 +103,27 @@ h1 {
   font-weight: 500;
   color: inherit;
   white-space: nowrap;
-  cursor: default;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
 }
 
 .btn:disabled {
   opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-primary {
   background: var(--primary);
   color: var(--primary-foreground);
+}
+
+.btn-destructive {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+
+.btn-destructive:hover {
+  opacity: 0.9;
 }
 
 .btn-secondary {
@@ -156,6 +169,12 @@ h1 {
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 4px;
+  transition: background-color 120ms ease;
+}
+
+.row:hover,
+.row:has(:focus-visible) {
+  background: var(--accent);
 }
 
 .row + .row {
@@ -175,11 +194,27 @@ h1 {
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: default;
+  cursor: pointer;
 }
 
-.row-main:hover {
-  background: var(--accent);
+.row-main:focus-visible {
+  outline-offset: -2px;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.row-actions .btn-ghost:hover {
+  background: color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+.row-actions .btn-remove:hover {
+  background: color-mix(in oklch, var(--destructive) 14%, transparent);
+  color: var(--destructive);
 }
 
 .row-name {
@@ -220,9 +255,12 @@ input:focus-visible {
 }
 
 .message {
-  min-height: 1.5em;
   margin: 4px 0;
   color: var(--destructive);
+}
+
+.message:empty {
+  display: none;
 }
 
 .card {
@@ -234,10 +272,6 @@ input:focus-visible {
 
 .card .message {
   margin: 0;
-}
-
-.card .message:empty {
-  display: none;
 }
 
 .setting {
@@ -287,5 +321,47 @@ input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation-duration: 3s;
+  }
+}
+
+dialog.confirm-dialog {
+  margin: auto;
+  width: min(calc(100% - 32px), 380px);
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 16px 40px oklch(0 0 0 / 20%);
+}
+
+dialog.confirm-dialog::backdrop {
+  background: oklch(0 0 0 / 35%);
+  backdrop-filter: blur(2px);
+}
+
+dialog.confirm-dialog h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+dialog.confirm-dialog p {
+  margin: 0 0 18px;
+}
+
+@media (max-width: 420px) {
+  .view {
+    padding:
+      calc(32px + env(safe-area-inset-top, 0px))
+      calc(16px + env(safe-area-inset-right, 0px))
+      calc(32px + env(safe-area-inset-bottom, 0px))
+      calc(16px + env(safe-area-inset-left, 0px));
+  }
+
+  .row-actions .btn {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 13px;
   }
 }

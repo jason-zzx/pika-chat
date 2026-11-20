@@ -22,7 +22,8 @@ const en = {
   cancel: "Cancel",
   edit: "Edit",
   remove: "Remove",
-  removeConfirm: "Remove {name}? You will be signed out of this server on this device.",
+  removeTitle: "Remove {name}?",
+  removeBody: "You will be signed out of this server on this device.",
   connecting: "Connecting to {name}…",
   retry: "Retry",
   back: "Back to servers",
@@ -44,6 +45,7 @@ const en = {
   hotkeyFailed: "That shortcut is unavailable. Try another one.",
   version: "Version",
   checkForUpdates: "Check for updates",
+  checkingUpdates: "Checking…",
 };
 
 const zhCN: typeof en = {
@@ -70,7 +72,8 @@ const zhCN: typeof en = {
   cancel: "取消",
   edit: "编辑",
   remove: "移除",
-  removeConfirm: "移除 {name}？此设备将退出该服务器的登录。",
+  removeTitle: "移除 {name}？",
+  removeBody: "此设备将退出该服务器的登录。",
   connecting: "正在连接 {name}…",
   retry: "重试",
   back: "返回服务器列表",
@@ -92,6 +95,7 @@ const zhCN: typeof en = {
   hotkeyFailed: "该快捷键不可用，请换一个。",
   version: "版本",
   checkForUpdates: "检查更新",
+  checkingUpdates: "正在检查…",
 };
 
 const dictionary = navigator.language.toLowerCase().startsWith("zh") ? zhCN : en;

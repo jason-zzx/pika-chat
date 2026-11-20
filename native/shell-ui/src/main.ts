@@ -22,12 +22,40 @@ function el<K extends keyof HTMLElementTagNameMap>(
 function button(
   label: string,
   onclick: () => void,
-  variant: "primary" | "secondary" | "ghost" = "secondary",
+  variant: "primary" | "secondary" | "ghost" | "destructive" = "secondary",
   focus = false,
 ) {
   const node = el("button", { type: "button", className: `btn btn-${variant}`, textContent: label, onclick });
   if (focus) node.dataset.focus = "";
   return node;
+}
+
+function confirmDialog(title: string, body: string, confirmLabel: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const dialog = el(
+      "dialog",
+      {
+        className: "confirm-dialog",
+        onclose: () => {
+          dialog.remove();
+          resolve(dialog.returnValue === "confirm");
+        },
+        onclick: (event) => {
+          if (event.target === dialog) dialog.close();
+        },
+      },
+      el("h2", { textContent: title }),
+      el("p", { className: "muted", textContent: body }),
+      el(
+        "div",
+        { className: "actions end" },
+        button(t("cancel"), () => dialog.close(), "secondary"),
+        button(confirmLabel, () => dialog.close("confirm"), "destructive", true),
+      ),
+    );
+    document.body.append(dialog);
+    dialog.showModal();
+  });
 }
 
 function render(...children: Child[]) {
@@ -60,7 +88,6 @@ async function showList() {
       el("span", { className: "row-name", textContent: t("localName") }),
       el("span", { className: "row-url muted", textContent: t("localDescription") }),
     );
-    local.dataset.focus = "";
     rows.push(el("li", { className: "row" }, local));
   }
   rows.push(
@@ -71,19 +98,27 @@ async function showList() {
         el("span", { className: "row-name", textContent: server.name }),
         el("span", { className: "row-url muted", textContent: server.url }),
       );
+      const removeButton = button(
+        t("remove"),
+        async () => {
+          if (!(await confirmDialog(t("removeTitle", { name: server.name }), t("removeBody"), t("remove")))) {
+            return;
+          }
+          await host.removeServer(server.id);
+          await showList();
+        },
+        "ghost",
+      );
+      removeButton.classList.add("btn-remove");
       return el(
         "li",
         { className: "row" },
         rowButton,
-        button(t("edit"), () => showForm(server), "ghost"),
-        button(
-          t("remove"),
-          async () => {
-            if (!confirm(t("removeConfirm", { name: server.name }))) return;
-            await host.removeServer(server.id);
-            await showList();
-          },
-          "ghost",
+        el(
+          "div",
+          { className: "row-actions" },
+          button(t("edit"), () => showForm(server), "ghost"),
+          removeButton,
         ),
       );
     }),
@@ -336,12 +371,24 @@ async function showSettings() {
       message,
     );
   }
+  const checkUpdatesButton = button(t("checkForUpdates"), async () => {
+    checkUpdatesButton.disabled = true;
+    checkUpdatesButton.textContent = t("checkingUpdates");
+    try {
+      await host.checkForUpdates();
+    } finally {
+      if (checkUpdatesButton.isConnected) {
+        checkUpdatesButton.disabled = false;
+        checkUpdatesButton.textContent = t("checkForUpdates");
+      }
+    }
+  });
   rows.push(
     el(
       "div",
       { className: "setting" },
       el("div", {}, el("div", { className: "row-name", textContent: t("version") }), el("div", { className: "muted", textContent: host.appVersion })),
-      button(t("checkForUpdates"), () => void host.checkForUpdates()),
+      checkUpdatesButton,
     ),
   );
 
