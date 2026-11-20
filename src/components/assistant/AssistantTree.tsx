@@ -171,7 +171,11 @@ export default function AssistantTree({
         {isSettings ? (
           <SettingsNav showUsers={showUsers} local={local} />
         ) : tree.isPending ? (
-          <LoadingRows />
+          <SidebarGroup className="group-data-[collapsible=icon]:p-1.5">
+            <SidebarGroupContent>
+              <LoadingRows showIcon />
+            </SidebarGroupContent>
+          </SidebarGroup>
         ) : tree.isError ? (
           <EmptyState
             title={t("tree.loadFailedTitle")}
@@ -268,24 +272,39 @@ function PaneHeader({
           {icon}
         </span>
       ) : null}
-      <span className="min-w-0 truncate font-semibold tracking-tight group-data-[collapsible=icon]:sr-only">
+      <span className="min-w-0 flex-1 truncate font-semibold tracking-tight group-data-[collapsible=icon]:sr-only">
         {title}
       </span>
     </div>
   );
 }
 
-function LoadingRows() {
+const LOADING_ROW_WIDTHS = ["w-3/4", "w-3/5", "w-2/3", "w-1/2"] as const;
+
+function LoadingRows({ showIcon = false }: { showIcon?: boolean }) {
   return (
-    <SidebarGroup>
-      <SidebarGroupContent>
-        <div className="flex flex-col gap-2 px-2 py-1">
-          <Skeleton className="h-10 w-full md:h-8" />
-          <Skeleton className="h-10 w-4/5 md:h-8" />
-          <Skeleton className="h-10 w-3/5 md:h-8" />
-        </div>
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <SidebarMenu aria-hidden="true">
+      {LOADING_ROW_WIDTHS.map((widthClass, index) => (
+        <SidebarMenuItem key={index}>
+          <div className="flex h-10 items-center justify-between gap-2.5 px-2.5 md:h-8 md:gap-2 md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 md:gap-2 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-center">
+              {showIcon ? (
+                <Skeleton className="size-4.5 shrink-0 rounded-sm md:size-4" />
+              ) : null}
+              <Skeleton
+                className={cn(
+                  "h-4 rounded-sm group-data-[collapsible=icon]:hidden",
+                  widthClass,
+                )}
+              />
+            </div>
+            {showIcon ? null : (
+              <Skeleton className="h-3 w-7 shrink-0 rounded-sm opacity-60 group-data-[collapsible=icon]:hidden" />
+            )}
+          </div>
+        </SidebarMenuItem>
+      ))}
+    </SidebarMenu>
   );
 }
 
@@ -490,6 +509,7 @@ function AssistantPane({
             <SidebarMenuItem className="min-w-0 overflow-hidden">
               <SidebarMenuButton
                 render={<Link href={assistantDraftHref(assistant.id)} />}
+                tooltip={t("tree.newTopic")}
                 aria-label={t("tree.newTopic")}
               >
                 <PlusIcon />
@@ -499,7 +519,12 @@ function AssistantPane({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem className="min-w-0 overflow-hidden">
-              <SidebarMenuButton onClick={onEdit} aria-label={t("tree.profile")}>
+              <SidebarMenuButton
+                onClick={onEdit}
+                tooltip={t("tree.profile")}
+                aria-label={t("tree.profile")}
+                className="group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground"
+              >
                 <UserRoundIcon />
                 <span className="group-data-[collapsible=icon]:hidden">
                   {t("tree.profile")}
@@ -508,6 +533,7 @@ function AssistantPane({
               <SidebarMenuAction
                 showOnHover
                 disabled={isLastAssistant}
+                className="rounded-full text-sidebar-foreground/60 hover:bg-destructive/15 hover:text-destructive disabled:pointer-events-none disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-sidebar-foreground/60"
                 aria-label={t("tree.delete")}
                 onClick={onDelete}
               >
@@ -517,7 +543,7 @@ function AssistantPane({
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
-      <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
+      <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
         <SidebarGroupContent
           ref={scrollRef}
           className="thin-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-clip overflow-y-auto md:gap-1"

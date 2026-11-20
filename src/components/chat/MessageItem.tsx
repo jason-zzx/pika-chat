@@ -147,7 +147,7 @@ function AttachmentCard({ part, onEdit }: AttachmentCardProps) {
               type="button"
               variant="secondary"
               size="icon-sm"
-              className="absolute right-1.5 top-1.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/edit:opacity-100 [@media(hover:none)]:opacity-100"
+              className="absolute right-1.5 top-1.5 border border-border/60 bg-background/85 text-foreground opacity-0 shadow-xs backdrop-blur-xs transition-opacity hover:bg-background focus-visible:opacity-100 group-hover/edit:opacity-100 [@media(hover:none)]:opacity-100"
               aria-label={t("editImage")}
               title={t("editImage")}
               onClick={editImage}

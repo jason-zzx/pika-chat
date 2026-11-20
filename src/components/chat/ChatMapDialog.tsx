@@ -55,7 +55,7 @@ export default function ChatMapDialog({
         <DialogHeader>
           <DialogTitle>{t("chatMap")}</DialogTitle>
         </DialogHeader>
-        <ul className="thin-scrollbar -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+        <ul className="thin-scrollbar -mx-1 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-1 py-0.5">
           {messages.map((message) => {
             // Same granularity as the message list's React key: a version
             // group is one row, holding whichever version is displayed.
@@ -69,7 +69,7 @@ export default function ChatMapDialog({
                   type="button"
                   onClick={() => onSelect(key)}
                   className={cn(
-                    "flex w-full py-1 md:py-0.5",
+                    "group/map-row flex w-full focus-visible:outline-none",
                     isUser ? "justify-end" : "justify-start",
                   )}
                 >
@@ -78,11 +78,11 @@ export default function ChatMapDialog({
                       // Filled vs outlined on top of the alignment split:
                       // three signals, so the two sides stay tellable apart
                       // at a glance.
-                      "block max-w-[85%] truncate rounded-lg px-3.5 py-2.5 text-base md:px-3 md:py-2 md:text-sm",
+                      "block max-w-[85%] truncate rounded-xl px-3.5 py-2 text-base shadow-2xs transition-[background-color,border-color,color,transform] duration-150 group-focus-visible/map-row:ring-3 group-focus-visible/map-row:ring-ring/50 group-active/map-row:scale-[0.99] md:px-3 md:py-1.5 md:text-sm",
                       isUser
-                        ? "bg-muted font-medium"
-                        : "border border-border font-normal",
-                      empty && "text-muted-foreground",
+                        ? "bg-muted font-medium text-foreground group-hover/map-row:bg-accent"
+                        : "border border-border bg-card font-normal text-card-foreground group-hover/map-row:border-ring/40 group-hover/map-row:bg-accent/60",
+                      empty && "text-muted-foreground italic",
                     )}
                   >
                     {empty ? t("noText") : preview}

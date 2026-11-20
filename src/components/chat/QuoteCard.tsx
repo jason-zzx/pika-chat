@@ -34,7 +34,7 @@ export default function QuoteCard({
     >
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2.5 py-1.5 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:px-2"
+        className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:px-2"
         aria-label={t("jump", { text })}
         onClick={onJump}
       >

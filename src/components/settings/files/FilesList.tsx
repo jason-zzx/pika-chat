@@ -23,6 +23,8 @@ type FilesListProps = {
   onToggleAll: (checked: boolean) => void;
   onPreview: (file: ListedFile) => void;
   onDelete: (file: ListedFile) => void;
+  onBatchDelete?: () => void;
+  onClearSelection?: () => void;
 };
 
 // Non-copy wire values for the open-in-new-tab action; hoisted so the i18next
@@ -58,7 +60,7 @@ function FileRow({
   const inUseBadgeId = useId();
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
+    <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
       {/* In-use rows cannot be deleted, so they cannot be selected either —
           the same rule the row's delete button follows. Instead of a merely
           dimmed checkbox they get a dashed lock box, visually distinct from
@@ -166,8 +168,11 @@ export default function FilesList({
   onToggleAll,
   onPreview,
   onDelete,
+  onBatchDelete,
+  onClearSelection,
 }: FilesListProps) {
   const t = useTranslations("Settings.Files");
+  const tCommon = useTranslations("Common");
   const selectableCount = files.filter((file) => !file.referenced).length;
   const selectedSelectableCount = files.filter(
     (file) => !file.referenced && selectedIds.has(file.id),
@@ -179,14 +184,41 @@ export default function FilesList({
 
   return (
     <div>
-      <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-2.5">
-        <Checkbox
-          checked={allSelected}
-          indeterminate={partiallySelected}
-          disabled={selectableCount === 0}
-          onCheckedChange={(checked) => onToggleAll(checked)}
-          aria-label={t("selectAll")}
-        />
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2">
+        <div className="flex items-center gap-3">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={partiallySelected}
+            disabled={selectableCount === 0}
+            onCheckedChange={(checked) => onToggleAll(checked)}
+            aria-label={t("selectAll")}
+          />
+          <span className="text-xs font-medium text-muted-foreground">
+            {selectedSelectableCount > 0
+              ? t("selectedCount", { count: selectedSelectableCount })
+              : t("selectAll")}
+          </span>
+        </div>
+        {selectedSelectableCount > 0 && onBatchDelete && onClearSelection ? (
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={onBatchDelete}
+            >
+              {t("deleteSelected")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClearSelection}
+            >
+              {tCommon("cancel")}
+            </Button>
+          </div>
+        ) : null}
       </div>
       <div className="divide-y divide-border">
         {files.map((file) => (

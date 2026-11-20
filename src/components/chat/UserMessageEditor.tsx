@@ -175,7 +175,7 @@ export default function UserMessageEditor({
   }
 
   return (
-    <div className="flex w-full max-w-[min(100%,42rem)] flex-col gap-2 rounded-lg border border-border bg-muted/40 p-2">
+    <div className="flex w-full max-w-[min(100%,42rem)] flex-col gap-2 rounded-lg border border-border bg-muted/40 p-2 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/20">
       {attachments.length > 0 ? (
         <div className="flex flex-wrap gap-2 px-1 pt-1">
           {attachments.map((attachment) => (
@@ -205,14 +205,22 @@ export default function UserMessageEditor({
         rows={2}
         className="field-sizing-content thin-scrollbar max-h-[12rem] min-h-[3rem] resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-base leading-relaxed shadow-none focus-visible:ring-0 md:text-sm md:leading-6 dark:bg-transparent"
       />
-      <div className="flex items-center justify-between gap-2">
+      <div className="relative flex items-center justify-between gap-2">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          className="absolute inset-0 cursor-text rounded-b-lg focus:outline-none"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => textareaRef.current?.focus()}
+        />
         <Button
           type="button"
           variant="outline"
           size="icon-sm"
           // bg-transparent matches the muted editor container (the outline
           // variant defaults to bg-background), as on the composer.
-          className="bg-transparent"
+          className="relative size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
           aria-label={tFiles("attach")}
           title={tFiles("attach")}
           disabled={attachmentCapReached}
@@ -234,7 +242,7 @@ export default function UserMessageEditor({
             event.target.value = "";
           }}
         />
-        <div className="flex items-center gap-2">
+        <div className="pointer-events-none relative flex items-center gap-2 [&>*]:pointer-events-auto">
           <Button
             type="button"
             variant="ghost"

@@ -1342,6 +1342,12 @@ describe("ChatView compression progress (PRD R7/AC8)", () => {
 
     // The composer is stubbed; drive the manual-compress action directly.
     act(() => composerProps.latest?.onCompress?.());
+    expect(topicApiMocks.compressTopic).not.toHaveBeenCalled();
+
+    const confirmDialog = await screen.findByRole("alertdialog");
+    fireEvent.click(
+      within(confirmDialog).getByRole("button", { name: "Compress" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent(
@@ -1389,6 +1395,11 @@ describe("ChatView compression progress (PRD R7/AC8)", () => {
     await screen.findByRole("article", { name: "Assistant" });
 
     act(() => composerProps.latest?.onCompress?.());
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Compress",
+      }),
+    );
 
     await waitFor(() => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -1396,6 +1407,20 @@ describe("ChatView compression progress (PRD R7/AC8)", () => {
     expect(
       await screen.findByText("Unable to compress the conversation"),
     ).toBeInTheDocument();
+  });
+
+  it("does not compress when cancelled in the confirmation dialog", async () => {
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "Assistant" });
+
+    act(() => composerProps.latest?.onCompress?.());
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+    expect(topicApiMocks.compressTopic).not.toHaveBeenCalled();
   });
 });
 

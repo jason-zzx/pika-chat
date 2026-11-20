@@ -100,7 +100,7 @@ export default function SearchModePicker({
             variant="outline"
             size="icon-sm"
             className={cn(
-              "bg-transparent",
+              "size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4",
               // Active: highlight the icon itself in primary (near-black in
               // light mode) instead of filling the button; inactive is a
               // lighter muted tint.

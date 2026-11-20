@@ -1,6 +1,6 @@
 "use client";
 
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -15,6 +15,7 @@ import {
   useDebouncedValue,
   useSearch,
 } from "@/components/assistant/use-search";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -199,10 +200,27 @@ export default function SearchDialog() {
             value={query}
             placeholder={tSidebar("placeholder")}
             aria-label={tSidebar("placeholder")}
-            className="pl-8"
+            className="pl-8 pr-9"
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
           />
+          {query.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t("clear")}
+              title={t("clear")}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setQuery("");
+                setActiveIndex(0);
+                inputRef.current?.focus();
+              }}
+            >
+              <XIcon aria-hidden="true" />
+            </Button>
+          ) : null}
         </div>
         {trimmed.length > 0 ? (
           <div className="thin-scrollbar max-h-[50vh] min-h-0 overflow-y-auto">
@@ -230,6 +248,7 @@ export default function SearchDialog() {
                     index={index}
                     activeIndex={clampedIndex}
                     activeRef={activeItemRef}
+                    onHover={() => setActiveIndex(index)}
                     onSelect={() => selectResult({ kind: KIND_TOPIC, topic })}
                   >
                     <span className="w-full truncate text-base md:text-sm">
@@ -251,6 +270,7 @@ export default function SearchDialog() {
                     index={topics.length + index}
                     activeIndex={clampedIndex}
                     activeRef={activeItemRef}
+                    onHover={() => setActiveIndex(topics.length + index)}
                     onSelect={() => selectResult({ kind: KIND_MESSAGE, message: hit })}
                   >
                     <span className="w-full truncate text-sm text-muted-foreground md:text-xs">
@@ -274,12 +294,14 @@ function ResultItem({
   index,
   activeIndex,
   activeRef,
+  onHover,
   onSelect,
   children,
 }: {
   index: number;
   activeIndex: number;
   activeRef: RefObject<HTMLButtonElement | null>;
+  onHover: () => void;
   onSelect: () => void;
   children: ReactNode;
 }) {
@@ -294,9 +316,10 @@ function ResultItem({
         type="button"
         ref={active ? activeRef : undefined}
         className={cn(
-          "flex w-full flex-col items-start gap-1 rounded-md px-2.5 py-2 text-left md:gap-0.5 md:px-2 md:py-1.5",
+          "flex w-full flex-col items-start gap-1 rounded-md px-2.5 py-2 text-left transition-colors md:gap-0.5 md:px-2 md:py-1.5",
           active && "bg-accent",
         )}
+        onMouseEnter={onHover}
         onClick={onSelect}
       >
         {children}

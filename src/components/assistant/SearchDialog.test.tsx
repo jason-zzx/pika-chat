@@ -246,4 +246,23 @@ describe("SearchDialog", () => {
     expect(nav.push).toHaveBeenCalledWith("/assistant/agt_1/tpc_1");
     expect(window.sessionStorage.getItem("pika:search-hit-queue")).toBeNull();
   });
+
+  it("updates active highlight on mouse hover and clears input with the clear button", async () => {
+    const input = await openAndType("hikes");
+    const firstMsg = await screen.findByRole(
+      "option",
+      { name: /Tell me about/ },
+      { timeout: 2000 },
+    );
+    fireEvent.mouseEnter(within(firstMsg).getByRole("button"));
+    expect(input).toHaveAttribute(
+      "aria-activedescendant",
+      "search-palette-result-1",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(input).toHaveValue("");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(useSearchDialogStore.getState().open).toBe(true);
+  });
 });

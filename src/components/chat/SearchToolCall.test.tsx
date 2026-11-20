@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { SearchWebToolOutput } from "@/lib/schemas/search-provider";
@@ -100,6 +100,21 @@ describe("SearchToolCall", () => {
     expect(
       screen.getByRole("link", { name: /Undated garbage/ }),
     ).not.toHaveTextContent("·");
+  });
+
+  it("opens the external link confirmation dialog when clicking a search result", async () => {
+    renderWithIntl(<SearchToolCall part={donePart(successOutput)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Searched the web/ }));
+    fireEvent.click(screen.getByRole("link", { name: /pika-chat on GitHub/ }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(
+      within(dialog).getByText("https://github.com/example/pika-chat"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("shows the failure summary when every provider failed", () => {

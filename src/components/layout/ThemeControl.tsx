@@ -48,7 +48,9 @@ export default function ThemeControl({
         onClick={onCycle}
       >
         <Icon aria-hidden="true" />
-        <span>{currentLabel}</span>
+        <span className="truncate group-data-[collapsible=icon]:hidden">
+          {currentLabel}
+        </span>
       </SidebarMenuButton>
     );
   }

@@ -21,6 +21,16 @@ import EmptyState from "@/components/common/EmptyState";
 import InsetHeader from "@/components/layout/InsetHeader";
 import { useAvailableModels } from "@/components/provider/use-available-models";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   activeGenerationForTopic,
   useActiveGenerations,
 } from "@/hooks/use-active-generations";
@@ -233,6 +243,8 @@ export default function ChatView({
   const userId = useAccountUserId();
   const t = useTranslations("Chat.MessageList");
   const tChat = useTranslations("Chat");
+  const tCompression = useTranslations("Chat.Compression");
+  const tCommon = useTranslations("Common");
   const tFiles = useTranslations("Files");
   const tErrors = useTranslations("Errors");
   const tree = useAssistantTree();
@@ -283,6 +295,7 @@ export default function ChatView({
   // Manual history compression (PRD R2): in-flight flag disables the button
   // against double taps.
   const [compressing, setCompressing] = useState(false);
+  const [compressConfirmOpen, setCompressConfirmOpen] = useState(false);
   // Bumped on every send so MessageList scrolls the new message to the top
   // of the viewport and pins follow-output auto-scroll for the reply.
   const [sendSignal, setSendSignal] = useState(0);
@@ -1796,7 +1809,7 @@ export default function ChatView({
         onReasoningEffortChange={setReasoningEffort}
         onOpenChatMap={() => setChatMapOpen(true)}
         chatMapDisabled={messages.length === 0}
-        onCompress={() => void handleCompress()}
+        onCompress={() => setCompressConfirmOpen(true)}
         compressDisabled={
           !activeTopicId ||
           !pickedModel ||
@@ -1822,6 +1835,30 @@ export default function ChatView({
         messages={messages}
         onSelect={handleSelectMessage}
       />
+      <AlertDialog
+        open={compressConfirmOpen}
+        onOpenChange={setCompressConfirmOpen}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{tCompression("confirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tCompression("confirmDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setCompressConfirmOpen(false);
+                void handleCompress();
+              }}
+            >
+              {tCompression("confirmAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

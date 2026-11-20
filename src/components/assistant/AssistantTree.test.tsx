@@ -767,4 +767,32 @@ describe("AssistantTree", () => {
       });
     });
   });
+
+  it("hides the topic list group when the sidebar collapses to icon mode", async () => {
+    renderPane([topic({ id: "t1", title: "Alpha topic" })]);
+
+    const topicLink = await screen.findByRole("link", { name: "Alpha topic" });
+    expect(topicLink.closest("[data-slot=sidebar-group]")).toHaveClass(
+      "group-data-[collapsible=icon]:hidden",
+    );
+  });
+
+  it("renders topic loading placeholders with the same row height as topic items", async () => {
+    nav.pathname = "/assistant/only";
+    vi.mocked(listAssistantTree).mockResolvedValue({
+      assistants: [assistant({ id: "only", name: "Work" })],
+    });
+    vi.mocked(listTopicPage).mockReturnValue(new Promise(() => {}));
+    vi.mocked(listFavoriteTopics).mockResolvedValue({ topics: [] });
+
+    const { container } = renderTree();
+    await screen.findByRole("button", { name: "Back to assistants" });
+
+    const skeletons = container.querySelectorAll("[data-slot=skeleton]");
+    expect(skeletons.length).toBeGreaterThan(0);
+    for (const bar of Array.from(skeletons)) {
+      const row = bar.closest("[data-slot=sidebar-menu-item]")?.firstElementChild;
+      expect(row).toHaveClass("h-10", "md:h-8");
+    }
+  });
 });

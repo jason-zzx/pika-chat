@@ -93,7 +93,9 @@ export default function ModelPicker({
             // composer container (outline variant defaults to bg-background).
             className={cn(
               "max-w-full bg-transparent font-normal",
-              !iconOnly && "justify-between gap-1.5",
+              iconOnly
+                ? "size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
+                : "justify-between gap-1.5",
             )}
           />
         }

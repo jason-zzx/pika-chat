@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 
 import SearchDialog from "@/components/assistant/SearchDialog";
 import AppSidebar from "@/components/layout/AppSidebar";
+import AppSidebarProvider from "@/components/layout/AppSidebarProvider";
 import DemoBanner from "@/components/layout/DemoBanner";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset } from "@/components/ui/sidebar";
 import { IsGuestProvider } from "@/hooks/use-is-guest";
 import type { ActorRole } from "@/lib/auth-hierarchy";
 import type { ThemePreference } from "@/lib/theme";
@@ -29,7 +30,7 @@ export default function AppShell({
 }: AppShellProps) {
   return (
     <IsGuestProvider value={user.isGuest}>
-      <SidebarProvider
+      <AppSidebarProvider
         defaultOpen={defaultSidebarOpen}
         className="h-svh overflow-hidden"
       >
@@ -50,7 +51,7 @@ export default function AppShell({
         {/* Globally mounted so Ctrl/Cmd+K works on every page, including
             routes where the sidebar tree is not rendered. */}
         <SearchDialog />
-      </SidebarProvider>
+      </AppSidebarProvider>
     </IsGuestProvider>
   );
 }

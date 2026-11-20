@@ -54,6 +54,9 @@ const AUTO_EFFORT = "__auto";
 
 const MIN_ROWS = 2;
 
+// Shared mobile-friendly hit target and icon size for composer toolbar buttons.
+const TOOLBAR_ICON_BUTTON_CLASS = "size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4";
+
 // Image-editing mode restricts the picker to reference images. Hoisted
 // (non-copy wire value) so the i18next guard does not read it as text.
 const IMAGE_ACCEPT = "image/*";
@@ -222,7 +225,7 @@ export default function Composer({
       onSubmit={handleSubmit}
     >
       <div className="mx-auto flex min-h-0 w-full max-w-[52.5rem] flex-1 flex-col">
-        <div className="relative flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-muted/40">
+        <div className="relative flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-muted/40 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/20">
           {attachments.length > 0 && attachmentsEnabled ? (
             <div className="flex flex-wrap gap-2 px-3 pt-2">
               {attachments.map((attachment) => (
@@ -263,8 +266,17 @@ export default function Composer({
               expanded ? "min-h-[18rem] max-h-full" : "max-h-[9rem]",
             )}
           />
-          <div className="flex items-end justify-between gap-2 p-1.5">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <div className="relative flex items-end justify-between gap-1.5 p-1.5 md:gap-2">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              disabled={inFlight}
+              className="absolute inset-0 cursor-text rounded-b-2xl focus:outline-none disabled:cursor-default"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => textareaRef.current?.focus()}
+            />
+            <div className="pointer-events-none relative flex min-w-0 flex-1 flex-wrap items-center gap-1.5 md:gap-2 [&>*]:pointer-events-auto">
               {showAssistantPicker && onAssistantChange ? (
                 <AssistantPicker
                   value={assistantId}
@@ -289,7 +301,7 @@ export default function Composer({
                     // bg-transparent matches the Select-based pickers on the
                     // muted composer container (outline variant defaults to
                     // bg-background).
-                    className="bg-transparent"
+                    className={cn(TOOLBAR_ICON_BUTTON_CLASS, "bg-transparent")}
                     aria-label={tFiles("attach")}
                     title={tFiles("attach")}
                     disabled={inFlight || attachmentCapReached}
@@ -321,7 +333,7 @@ export default function Composer({
                 />
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">
+            <div className="pointer-events-none relative flex shrink-0 items-center gap-1 [&>*]:pointer-events-auto">
               {imageMode && selected && onImageParamsChange ? (
                 <ImageParamsPicker
                   capability={imageCapabilityFor(selected.modelId)}
@@ -335,6 +347,7 @@ export default function Composer({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
+                  className={TOOLBAR_ICON_BUTTON_CLASS}
                   aria-label={tCompression("compress")}
                   title={tCompression("compress")}
                   disabled={compressDisabled}
@@ -349,6 +362,7 @@ export default function Composer({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                className={TOOLBAR_ICON_BUTTON_CLASS}
                 aria-label={t("chatMap")}
                 title={t("chatMap")}
                 disabled={chatMapDisabled}
@@ -360,7 +374,8 @@ export default function Composer({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-sm"
+                  className={TOOLBAR_ICON_BUTTON_CLASS}
                   aria-label={expanded ? t("collapse") : t("expand")}
                   title={expanded ? t("collapse") : t("expand")}
                   onClick={() => setExpanded((current) => !current)}
@@ -377,7 +392,7 @@ export default function Composer({
                   type="button"
                   variant="secondary"
                   size="icon-sm"
-                  className="rounded-full"
+                  className={cn(TOOLBAR_ICON_BUTTON_CLASS, "ml-1 rounded-full")}
                   aria-label={t("stop")}
                   title={t("stop")}
                   onClick={onStop}
@@ -388,7 +403,7 @@ export default function Composer({
                 <Button
                   type="submit"
                   size="icon-sm"
-                  className="rounded-full"
+                  className={cn(TOOLBAR_ICON_BUTTON_CLASS, "ml-1 rounded-full")}
                   aria-label={t("send")}
                   title={t("send")}
                   disabled={!canSend}

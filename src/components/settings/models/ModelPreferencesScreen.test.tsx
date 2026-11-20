@@ -125,6 +125,16 @@ describe("ModelPreferencesScreen", () => {
     });
   });
 
+  it("disables Reset all when no preferences are configured", async () => {
+    vi.mocked(getModelPreferences).mockResolvedValue({});
+
+    renderScreen();
+
+    const reset = await screen.findByRole("button", { name: "Reset all" });
+    await vi.waitFor(() => expect(getModelPreferences).toHaveBeenCalled());
+    expect(reset).toBeDisabled();
+  });
+
   it("resets all four slots at once", async () => {
     vi.mocked(getModelPreferences).mockResolvedValue({
       chat: { providerConfigId: "cfg-own", modelId: "local-llama" },

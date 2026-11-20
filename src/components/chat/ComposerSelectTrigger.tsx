@@ -25,7 +25,7 @@ export default function ComposerSelectTrigger({
           type="button"
           variant="outline"
           size="icon-sm"
-          className="bg-transparent"
+          className="size-9 bg-transparent text-base md:size-7 md:text-sm [&_svg]:size-5 md:[&_svg]:size-4"
         />
       }
     >

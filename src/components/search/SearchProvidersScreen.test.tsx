@@ -169,7 +169,7 @@ describe("SearchProvidersScreen", () => {
     });
   });
 
-  it("deletes a configured provider", async () => {
+  it("confirms before deleting a configured provider", async () => {
     vi.mocked(listSearchProviders).mockResolvedValue({
       providers: [setting("tavily", 0)],
     });
@@ -177,6 +177,21 @@ describe("SearchProvidersScreen", () => {
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Delete" }),
+    );
+    const dialog = await screen.findByRole("alertdialog");
+    expect(deleteSearchProvider).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+    expect(deleteSearchProvider).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Delete",
+      }),
     );
     await waitFor(() => {
       expect(deleteSearchProvider).toHaveBeenCalledWith("tavily");

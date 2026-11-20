@@ -54,6 +54,9 @@ export default function ModelPreferencesScreen() {
   const update = useUpdateModelPreferences();
   const isGuest = useIsGuest();
   const rows = isGuest ? ROWS.filter((row) => row.purpose === "chat") : ROWS;
+  const hasAnyPreference = rows.some((row) =>
+    Boolean(preferences.data?.[row.purpose]),
+  );
 
   function save(next: ModelPreferences) {
     update.mutate(next, {
@@ -103,7 +106,9 @@ export default function ModelPreferencesScreen() {
         <Button
           type="button"
           variant="outline"
-          disabled={preferences.isPending || update.isPending}
+          disabled={
+            preferences.isPending || update.isPending || !hasAnyPreference
+          }
           onClick={() => save({})}
         >
           {t("resetAll")}

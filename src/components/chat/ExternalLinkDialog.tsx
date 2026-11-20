@@ -9,8 +9,11 @@ import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
@@ -78,54 +81,58 @@ export default function ExternalLinkDialog({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
-        overlayClassName="bg-background/50 supports-backdrop-filter:backdrop-blur-sm"
         onOverlayClick={() => onOpenChange(false)}
-        className="flex w-[calc(100%-2rem)] flex-col gap-4 rounded-xl border bg-background p-6 shadow-lg ring-0 data-[size=default]:max-w-md data-[size=default]:sm:max-w-md"
+        className="data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-md"
       >
         <AlertDialogPrimitive.Close
-          className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground transition-all hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
+            />
+          }
           aria-label={tCommon("close")}
           title={tCommon("close")}
         >
-          <XIcon aria-hidden="true" className="size-4" />
+          <XIcon aria-hidden="true" />
         </AlertDialogPrimitive.Close>
-        <AlertDialogTitle className="flex items-center gap-2 font-semibold text-lg">
-          <ExternalLinkIcon aria-hidden="true" className="size-5" />
-          {t("externalLinkTitle")}
-        </AlertDialogTitle>
-        <AlertDialogDescription className="text-muted-foreground text-sm">
-          {t("externalLinkDescription")}
-        </AlertDialogDescription>
+        <AlertDialogHeader className="place-items-start pr-8 text-left">
+          <AlertDialogTitle className="flex items-center gap-2">
+            <ExternalLinkIcon aria-hidden="true" className="size-4 shrink-0" />
+            {t("externalLinkTitle")}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("externalLinkDescription")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         <div
           className={cn(
-            "break-all rounded-md bg-muted p-3 font-mono text-sm",
+            "rounded-lg bg-muted p-3 font-mono text-xs break-all text-foreground",
             url.length > 100 && "max-h-32 overflow-y-auto",
           )}
         >
           {url}
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onCopy}
-            className="flex flex-1 items-center justify-center gap-2 rounded-md border bg-background px-4 py-2 font-medium text-sm transition-all hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
+        <AlertDialogFooter>
+          <Button type="button" variant="outline" onClick={onCopy}>
             {copied ? (
-              <CheckIcon aria-hidden="true" className="size-3.5" />
+              <>
+                <CheckIcon aria-hidden="true" />
+                {t("copied")}
+              </>
             ) : (
-              <CopyIcon aria-hidden="true" className="size-3.5" />
+              <>
+                <CopyIcon aria-hidden="true" />
+                {t("copyLink")}
+              </>
             )}
-            {copied ? t("copied") : t("copyLink")}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
+          </Button>
+          <Button type="button" onClick={onConfirm}>
+            <ExternalLinkIcon aria-hidden="true" />
             {t("openLink")}
-          </button>
-        </div>
+          </Button>
+        </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );

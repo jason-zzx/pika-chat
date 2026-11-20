@@ -71,7 +71,7 @@ type MessageActionsProps = {
 };
 
 const ACTION_BUTTON_CLASS =
-  "rounded-sm p-1.5 text-muted-foreground hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 md:p-0.5";
+  "rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 md:p-1";
 const ACTION_ICON_CLASS = "size-4 md:size-3.5";
 
 export default function MessageActions({
@@ -131,7 +131,7 @@ export default function MessageActions({
         : t("copyFailed");
 
   return (
-    <div className="flex h-8 shrink-0 select-none items-center gap-1 md:h-5">
+    <div className="flex h-8 shrink-0 select-none items-center gap-1 md:h-6">
       {/* The version switcher is part of the same reveal group as the other
           actions (R9): hidden until hover/focus/tap, not always visible. */}
       <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 motion-reduce:transition-none group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100">

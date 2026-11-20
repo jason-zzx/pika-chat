@@ -7,6 +7,16 @@ import { type FormEvent, useState } from "react";
 import EmptyState from "@/components/common/EmptyState";
 import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsSection from "@/components/settings/SettingsSection";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -145,6 +155,8 @@ function buildUpsertInput(
   };
 }
 
+const TONE_DESTRUCTIVE = "destructive";
+
 function ConfiguredProviderCard({
   setting,
   position,
@@ -163,8 +175,10 @@ function ConfiguredProviderCard({
   const meta = SEARCH_PROVIDER_META[setting.provider];
   const remove = useDeleteSearchProvider();
   const t = useTranslations("Search");
+  const tCommon = useTranslations("Common");
   const tErrors = useTranslations("Errors");
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
     <SettingsCard className="flex items-center gap-3 p-4 sm:px-5">
@@ -212,19 +226,10 @@ function ConfiguredProviderCard({
         </Button>
         <Button
           type="button"
-          variant="outline"
+          variant={TONE_DESTRUCTIVE}
           size="sm"
           disabled={remove.isPending}
-          onClick={() => {
-            onError(null);
-            remove.mutate(setting.provider, {
-              onError: (caught) => {
-                onError(
-                  apiErrorMessage(caught, tErrors, "actions.deleteSearchProvider"),
-                );
-              },
-            });
-          }}
+          onClick={() => setDeleteOpen(true)}
         >
           {t("delete")}
         </Button>
@@ -236,6 +241,41 @@ function ConfiguredProviderCard({
         onOpenChange={setEditOpen}
         onError={onError}
       />
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("deleteTitle", { name: meta.label })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("deleteDescription", { name: meta.label })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              variant={TONE_DESTRUCTIVE}
+              onClick={() => {
+                setDeleteOpen(false);
+                onError(null);
+                remove.mutate(setting.provider, {
+                  onError: (caught) => {
+                    onError(
+                      apiErrorMessage(
+                        caught,
+                        tErrors,
+                        "actions.deleteSearchProvider",
+                      ),
+                    );
+                  },
+                });
+              }}
+            >
+              {t("delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SettingsCard>
   );
 }

@@ -74,7 +74,7 @@ export default function FetchToolCall({
           {pageUrl ? (
             <button
               type="button"
-              className="pointer-events-auto min-w-0 flex-1 truncate rounded-md text-left text-muted-foreground hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="pointer-events-auto min-w-0 flex-1 truncate rounded-md text-left text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               onClick={() => setLinkDialogOpen(true)}
             >
               {pageTitle ?? hostnameOf(pageUrl)}

@@ -1,15 +1,26 @@
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
 type InsetHeaderProps = {
   title?: string | null;
   subtitle?: string | null;
+  className?: string;
 };
 
-export default function InsetHeader({ title, subtitle }: InsetHeaderProps) {
+export default function InsetHeader({
+  title,
+  subtitle,
+  className,
+}: InsetHeaderProps) {
   return (
-    <header className="flex min-h-13 shrink-0 items-center gap-2 border-b border-border px-3 py-1 md:min-h-12">
+    <header
+      className={cn(
+        "flex min-h-13 shrink-0 items-center gap-2 border-b border-border px-3 py-1 md:min-h-12",
+        className,
+      )}
+    >
       <SidebarTrigger className="size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4" />
       {title ? (
         <div className="flex min-w-0 flex-col justify-center">

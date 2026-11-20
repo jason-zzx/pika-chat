@@ -63,11 +63,14 @@ export default function SidebarUserMenu({
       : "Ctrl+Shift+L";
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-1 group-data-[collapsible=icon]:flex-col">
+    <div className="flex w-full min-w-0 items-center rounded-md transition-colors group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1 not-group-data-[collapsible=icon]:hover:bg-sidebar-accent not-group-data-[collapsible=icon]:hover:text-sidebar-accent-foreground not-group-data-[collapsible=icon]:has-aria-expanded:bg-sidebar-accent not-group-data-[collapsible=icon]:has-aria-expanded:text-sidebar-accent-foreground">
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <SidebarMenuButton className="flex-1" tooltip={name} />
+            <SidebarMenuButton
+              className="flex-1 not-group-data-[collapsible=icon]:hover:bg-transparent not-group-data-[collapsible=icon]:active:bg-transparent not-group-data-[collapsible=icon]:data-open:hover:bg-transparent"
+              tooltip={name}
+            />
           }
           aria-label={t("userMenu.accountMenu", { name })}
         >
@@ -114,7 +117,7 @@ export default function SidebarUserMenu({
         render={<Link href="/settings/general" />}
         tooltip={t("userMenu.settings")}
         aria-label={t("userMenu.settings")}
-        className="size-10 shrink-0 md:size-8"
+        className="shrink-0 justify-center not-group-data-[collapsible=icon]:mr-1.5 not-group-data-[collapsible=icon]:size-7 not-group-data-[collapsible=icon]:rounded-full not-group-data-[collapsible=icon]:p-0 not-group-data-[collapsible=icon]:text-sidebar-foreground/60 not-group-data-[collapsible=icon]:hover:bg-sidebar-foreground/10 not-group-data-[collapsible=icon]:hover:text-sidebar-foreground not-group-data-[collapsible=icon]:md:mr-1 not-group-data-[collapsible=icon]:md:size-6"
         onClick={() => setOpenMobile(false)}
       >
         <SettingsIcon aria-hidden="true" />

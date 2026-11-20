@@ -831,5 +831,38 @@ describe("Composer attachments", () => {
     const remove = screen.getByRole("button", { name: "Remove notes.txt" });
     expect(remove).toHaveAttribute("title", "Remove notes.txt");
   });
+
+  it("focuses the message input when clicking the blank space inside the action bar", () => {
+    renderComposer({ onCompress: vi.fn() });
+
+    const textarea = screen.getByRole("textbox", { name: "Message" });
+    const sendButton = screen.getByRole("button", { name: "Send" });
+    const actionBar = sendButton.parentElement?.parentElement;
+    const blankOverlay = actionBar?.firstElementChild;
+    expect(blankOverlay).toBeInstanceOf(HTMLButtonElement);
+    if (!(blankOverlay instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    expect(textarea).not.toHaveFocus();
+    fireEvent.click(blankOverlay);
+    expect(textarea).toHaveFocus();
+  });
+
+  it("does not focus the message input when clicking blank toolbar space while in flight", () => {
+    renderComposer({ inFlight: true });
+
+    const textarea = screen.getByRole("textbox", { name: "Message" });
+    const stopButton = screen.getByRole("button", { name: "Stop" });
+    const actionBar = stopButton.parentElement?.parentElement;
+    const blankOverlay = actionBar?.firstElementChild;
+    if (!(blankOverlay instanceof HTMLButtonElement)) {
+      throw new Error("Expected toolbar blank overlay button");
+    }
+
+    expect(blankOverlay).toBeDisabled();
+    fireEvent.click(blankOverlay);
+    expect(textarea).not.toHaveFocus();
+  });
 });
 

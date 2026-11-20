@@ -114,7 +114,10 @@ export default function ToolCallShell({
       {headerMode === "button" ? (
         <button
           type="button"
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:py-2"
+          className={cn(
+            "flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:py-2",
+            open ? "rounded-t-lg" : "rounded-lg",
+          )}
           aria-expanded={open}
           aria-controls={contentId}
           onClick={toggle}
@@ -125,10 +128,13 @@ export default function ToolCallShell({
           {chevron}
         </button>
       ) : (
-        <div className="relative">
+        <div className="group/header relative">
           <button
             type="button"
-            className="absolute inset-0 rounded-t-lg hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={cn(
+              "absolute inset-0 transition-colors hover:bg-accent/50 group-hover/header:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+              open ? "rounded-t-lg" : "rounded-lg",
+            )}
             aria-expanded={open}
             aria-controls={contentId}
             aria-label={toggleAriaLabel}

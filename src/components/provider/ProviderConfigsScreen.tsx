@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftIcon, PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, PlusIcon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -448,7 +448,7 @@ function OwnProviderDetail({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  className="relative"
+                  className="relative text-muted-foreground hover:bg-destructive/15 hover:text-destructive dark:hover:bg-destructive/20"
                   aria-label={t("removeModel", { modelId: model.modelId })}
                   disabled={removeModel.isPending}
                   onClick={() => {
@@ -469,7 +469,7 @@ function OwnProviderDetail({
                       });
                   }}
                 >
-                  ×
+                  <XIcon aria-hidden="true" />
                 </Button>
               </li>
             ))}

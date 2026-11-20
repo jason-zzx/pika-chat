@@ -79,6 +79,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [quotaUser, setQuotaUser] = useState<AdminUser | null>(null);
+  const [resetUser, setResetUser] = useState<AdminUser | null>(null);
   const users = useQuery({
     queryKey: ["admin-users"],
     queryFn: listAdminUsers,
@@ -147,21 +148,6 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
       return;
     }
     await invalidate();
-  }
-
-  async function onResetPassword(userId: string) {
-    const next = window.prompt(t("newPasswordPrompt"));
-    if (!next) {
-      return;
-    }
-    setError(null);
-    const result = await authClient.admin.setUserPassword({
-      userId,
-      newPassword: next,
-    });
-    if (result.error) {
-      setError(apiErrorMessage(result.error, tErrors, "actions.resetPassword"));
-    }
   }
 
   return (
@@ -242,7 +228,10 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                   const displayName = user.username ?? user.name;
 
                   return (
-                    <tr key={user.id} className="border-b border-border last:border-b-0">
+                    <tr
+                      key={user.id}
+                      className="border-b border-border transition-colors last:border-b-0 hover:bg-muted/40"
+                    >
                       <td className="px-4 py-3">
                         <div className="flex min-w-0 items-center gap-3">
                           <span
@@ -302,7 +291,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                               ) : null}
                               {showReset ? (
                                 <DropdownMenuItem
-                                  onClick={() => void onResetPassword(user.id)}
+                                  onClick={() => setResetUser(user)}
                                 >
                                   {t("resetPassword")}
                                 </DropdownMenuItem>
@@ -316,6 +305,9 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                               ) : null}
                               {showBan ? (
                                 <DropdownMenuItem
+                                  variant={
+                                    user.banned ? undefined : TONE_DESTRUCTIVE
+                                  }
                                   onClick={() => void onToggleBan(user)}
                                 >
                                   {user.banned ? t("unban") : t("ban")}
@@ -398,6 +390,92 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
           }}
         />
       ) : null}
+      {resetUser ? (
+        <ResetPasswordDialog
+          key={resetUser.id}
+          userId={resetUser.id}
+          label={resetUser.username ?? resetUser.name ?? resetUser.email}
+          onClose={() => setResetUser(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function ResetPasswordDialog({
+  userId,
+  label,
+  onClose,
+}: {
+  userId: string;
+  label: string;
+  onClose: () => void;
+}) {
+  const t = useTranslations("Admin");
+  const tCommon = useTranslations("Common");
+  const tErrors = useTranslations("Errors");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = String(new FormData(event.currentTarget).get("password") ?? "").trim();
+    if (!next || pending) {
+      return;
+    }
+    setError(null);
+    setPending(true);
+    const result = await authClient.admin.setUserPassword({
+      userId,
+      newPassword: next,
+    });
+    setPending(false);
+    if (result.error) {
+      setError(apiErrorMessage(result.error, tErrors, "actions.resetPassword"));
+      return;
+    }
+    onClose();
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("resetPasswordTitle", { name: label })}</DialogTitle>
+          <DialogDescription>
+            {t("resetPasswordDescription")}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="reset-user-password">{t("newPasswordLabel")}</Label>
+            <Input
+              id="reset-user-password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {tCommon("cancel")}
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? t("resetting") : t("resetPassword")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

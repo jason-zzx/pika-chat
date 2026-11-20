@@ -162,7 +162,7 @@ export default function ImageParamsPicker({
             size="icon-sm"
             // bg-transparent matches the other pickers on the muted composer
             // container (outline variant defaults to bg-background).
-            className="bg-transparent"
+            className="size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
           />
         }
       >

@@ -217,7 +217,10 @@
       "compressing": "正在压缩上下文",
       "marker": "早期对话已压缩",
       "showSummary": "显示总结",
-      "hideSummary": "隐藏总结"
+      "hideSummary": "隐藏总结",
+      "confirmTitle": "压缩上下文？",
+      "confirmDescription": "早期对话将被总结为上下文供后续回复使用。原消息记录会保留显示，但总结点之前的消息将不可再编辑或删除。",
+      "confirmAction": "确认压缩"
     },
     "MessageItem": {
       "you": "你",
@@ -497,7 +500,10 @@
     "unban": "解除封禁",
     "ban": "封禁",
     "resetPassword": "重置密码",
-    "newPasswordPrompt": "新密码（至少 8 个字符）",
+    "resetPasswordTitle": "重置 {name} 的密码",
+    "resetPasswordDescription": "请输入新密码（至少 8 个字符）。",
+    "newPasswordLabel": "新密码",
+    "resetting": "正在重置…",
     "registrationTitle": "注册",
     "registrationOpen": "任何获得链接的人都可以创建普通用户账户。",
     "registrationClosed": "只有管理员可以创建账户。",
@@ -626,6 +632,8 @@
     "moveDown": "下移 {name}",
     "keepKeyHint": "留空 API 密钥字段以保留已保存的密钥。",
     "delete": "删除",
+    "deleteTitle": "移除 {name}？",
+    "deleteDescription": "将移除 {name} 已保存的 API 密钥和配置。",
     "edit": "编辑",
     "keyHint": "密钥 …{lastFour}",
     "editProviderTitle": "编辑 {name}",
@@ -639,6 +647,7 @@
     },
     "palette": {
       "openSearch": "搜索",
+      "clear": "清空搜索",
       "prevHit": "上一条",
       "nextHit": "下一条",
       "closeNav": "关闭命中导航"

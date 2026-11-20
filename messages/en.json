@@ -217,7 +217,10 @@
       "compressing": "Compressing context",
       "marker": "Earlier conversation compressed",
       "showSummary": "Show the summary",
-      "hideSummary": "Hide the summary"
+      "hideSummary": "Hide the summary",
+      "confirmTitle": "Compress conversation history?",
+      "confirmDescription": "Earlier messages will be summarized into context for future turns. Original messages stay visible, but messages before the summary can no longer be edited or deleted.",
+      "confirmAction": "Compress"
     },
     "MessageItem": {
       "you": "You",
@@ -497,7 +500,10 @@
     "unban": "Unban",
     "ban": "Ban",
     "resetPassword": "Reset password",
-    "newPasswordPrompt": "New password (min 8 characters)",
+    "resetPasswordTitle": "Reset password for {name}",
+    "resetPasswordDescription": "Enter a new password (minimum 8 characters).",
+    "newPasswordLabel": "New password",
+    "resetting": "Resetting…",
     "registrationTitle": "Registration",
     "registrationOpen": "Anyone with the link can create a user-role account.",
     "registrationClosed": "Only admins can create accounts.",
@@ -626,6 +632,8 @@
     "moveDown": "Move {name} down",
     "keepKeyHint": "Leave the API key field empty to keep the saved key.",
     "delete": "Delete",
+    "deleteTitle": "Remove {name}?",
+    "deleteDescription": "This removes your saved API key and configuration for {name}.",
     "edit": "Edit",
     "keyHint": "key …{lastFour}",
     "editProviderTitle": "Edit {name}",
@@ -639,6 +647,7 @@
     },
     "palette": {
       "openSearch": "Search",
+      "clear": "Clear search",
       "prevHit": "Previous hit",
       "nextHit": "Next hit",
       "closeNav": "Close hit navigation"

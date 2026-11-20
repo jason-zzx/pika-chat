@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import SettingsBadge from "@/components/settings/SettingsBadge";
+import SettingsCard from "@/components/settings/SettingsCard";
+import SettingsSection from "@/components/settings/SettingsSection";
 import type { AppErrorMessageKey } from "@/lib/api/error-contract";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { fetchTotpQrCode } from "@/lib/api/two-factor";
@@ -311,18 +313,13 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
   const statusTone: "success" | "neutral" = view === "on" ? "success" : "neutral";
 
   return (
-    <section className="flex w-full flex-col gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-base font-semibold tracking-tight">
-            {t("title")}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t("description")}</p>
+    <SettingsSection title={t("title")} description={t("description")}>
+      <SettingsCard className="flex flex-col gap-4 p-5">
+        <div className="flex items-center">
+          <SettingsBadge tone={statusTone}>
+            {view === "on" ? t("statusOn") : t("statusOff")}
+          </SettingsBadge>
         </div>
-        <SettingsBadge tone={statusTone}>
-          {view === "on" ? t("statusOn") : t("statusOff")}
-        </SettingsBadge>
-      </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {notice ? <p className="text-sm">{notice}</p> : null}
@@ -399,6 +396,7 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
       ) : null}
 
       {codes ? <BackupCodeList codes={codes} /> : null}
-    </section>
+      </SettingsCard>
+    </SettingsSection>
   );
 }

@@ -2,6 +2,7 @@
 
 import type { ToolUIPart } from "ai";
 import { useFormatter, useTranslations } from "next-intl";
+import { useState } from "react";
 import { z } from "zod";
 
 import { searchProviderLabel } from "@/components/search/provider-meta";
@@ -11,6 +12,7 @@ import {
 } from "@/lib/schemas/search-provider";
 import { localTimeZone } from "@/lib/time-zone";
 
+import ExternalLinkDialog from "./ExternalLinkDialog";
 import ToolCallShell from "./ToolCallShell";
 import {
   hostnameOf,
@@ -119,6 +121,8 @@ function SearchToolBody({
 }) {
   const t = useTranslations("Chat.Tools");
   const format = useFormatter();
+  const [dialogUrl, setDialogUrl] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
   if (running) {
     return <p className="text-muted-foreground">{t("searchBodyRunning")}</p>;
   }
@@ -177,6 +181,11 @@ function SearchToolBody({
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2 rounded-md px-1 py-1.5 hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:py-1"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setDialogUrl(result.url);
+                    setDialogOpen(true);
+                  }}
                 >
                   <span
                     aria-hidden="true"
@@ -197,6 +206,11 @@ function SearchToolBody({
           })}
         </ul>
       )}
+      <ExternalLinkDialog
+        url={dialogUrl}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </div>
   );
 }

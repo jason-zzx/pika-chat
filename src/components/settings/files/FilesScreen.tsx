@@ -25,7 +25,6 @@ import { useFileList } from "./use-files";
 /** Attachment management: usage, filterable list, preview, and delete. */
 export default function FilesScreen() {
   const t = useTranslations("Settings.Files");
-  const tCommon = useTranslations("Common");
   const tErrors = useTranslations("Errors");
   const [category, setCategory] = useState<FileListCategory | null>(null);
   /** Index into `imageFiles` — prev/next navigation needs a position, not a
@@ -119,31 +118,6 @@ export default function FilesScreen() {
             <p className="text-xs text-muted-foreground">
               {t("listCount", { count: totalCount })}
             </p>
-            {selectedFiles.length > 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2">
-                <p className="text-sm text-muted-foreground">
-                  {t("selectedCount", { count: selectedFiles.length })}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setBatchDeleteOpen(true)}
-                  >
-                    {t("deleteSelected")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedIds(new Set())}
-                  >
-                    {tCommon("cancel")}
-                  </Button>
-                </div>
-              </div>
-            ) : null}
             <SettingsCard className="overflow-hidden">
               <FilesList
                 files={files}
@@ -157,6 +131,8 @@ export default function FilesScreen() {
                   setPreviewIndex(index === -1 ? null : index);
                 }}
                 onDelete={setDeleteTarget}
+                onBatchDelete={() => setBatchDeleteOpen(true)}
+                onClearSelection={() => setSelectedIds(new Set())}
               />
             </SettingsCard>
             {list.hasNextPage ? (
