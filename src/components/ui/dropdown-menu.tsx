@@ -31,7 +31,10 @@ function DropdownMenuContent({
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
   return (
-    <MenuPrimitive.Portal>
+    // The modal menu's internal backdrop (blocks outside presses) has no
+    // z-index of its own; a z-50 portal keeps it above z-indexed containers
+    // such as the sidebar (z-10) and the mobile sheet (z-50).
+    <MenuPrimitive.Portal className="relative z-50">
       <MenuPrimitive.Positioner
         className="isolate z-50 outline-none"
         align={align}
