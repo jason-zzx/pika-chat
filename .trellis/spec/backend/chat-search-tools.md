@@ -196,20 +196,16 @@ parts → UI — change them together.
   expansion via the overlay pattern — an `absolute inset-0` toggle button
   under a `pointer-events-none` content row, with the title re-enabling
   `pointer-events-auto` (siblings, never nested interactives); chevron far
-  right. `FetchToolCall`'s title opens `ExternalLinkDialog`
-  (ui/alert-dialog as the a11y base) instead of navigating directly —
-  structure- and class-level parity with Streamdown's built-in
-  `linkSafety` modal that message-body links already use (Streamdown
-  enables it by default): blurred `bg-background/50` backdrop, `rounded-xl
-  border bg-background p-6` card, X close top-right, icon + "Open external
-  link?", mono URL box (`bg-muted`, max-h-32 scroll over 100 chars), Copy
-  link (via `copyTextToClipboard`, "Copied" feedback) + Open link
-  (`window.open(url, "_blank", "noreferrer")`). Card margins use
-  `w-[calc(100%-2rem)]`, NOT `mx-4` — the popup is fixed +
-  `-translate-x-1/2`, where margins break centering and overflow narrow
-  viewports. Search
-  result links inside the expanded search body stay plain anchors (scoped
-  product decision).
+  right. `FetchToolCall`'s title, Streamdown's `linkSafety.renderModal`, and
+  `SearchToolCall`'s result links all open `ExternalLinkDialog` (composed on
+  the standard `AlertDialog` surface — `bg-popover`, `ring-1
+  ring-foreground/10`, `AlertDialogHeader`/`AlertDialogFooter`/`Button` —
+  with X close top-right, mono URL box over `bg-muted` scrolling past 100
+  chars, Copy link via `copyTextToClipboard`, Open link via `window.open(...,
+  "_blank", "noreferrer")`, and `max-w-[calc(100%-2rem)] sm:max-w-md` mobile
+  width safety). Search result links keep their `<a>` semantics for preview
+  and copy-link while `onClick` prevents direct navigation so confirmation is
+  enforced consistently everywhere.
 - **Trailing thinking indicator**: while the tail message streams, the
   Thinking shimmer shows when there are no content blocks yet OR the last
   block is a *finished* tool call (the model is composing the next step). A
@@ -267,7 +263,8 @@ parts → UI — change them together.
   `:streamGenerateContent`; cross-format and non-object bodies pass through.
 - `SearchToolCall` tests: live running spins/expands; persisted incomplete
   part in stopped/failed message renders collapsed non-spinning; result
-  `publishedDate` renders next to the host and unparseable values hide.
+  `publishedDate` renders next to the host and unparseable values hide; clicking
+  a search result link opens `ExternalLinkDialog` instead of navigating directly.
 
 ### 7. Wrong vs Correct
 

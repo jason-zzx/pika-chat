@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend stack, rules, and pre-dev checklist"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component conventions, popup positioning, cursor affordance, hover rows, settings surfaces"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Catalog rules and ESLint i18n guard"}
+{"file": ".trellis/spec/frontend/theming.md", "reason": "Theme tokens and preset constraints"}
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "Native shell-ui contracts and workspace isolation"}

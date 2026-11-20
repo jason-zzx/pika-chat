@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend quality checklist"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component, responsive, and accessibility contracts"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint, typecheck, test, and forbidden pattern checks"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Bilingual en/zh-CN parity and no-literal-string guard"}
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "Native shell-ui build/test isolation"}
