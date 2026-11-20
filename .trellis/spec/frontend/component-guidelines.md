@@ -348,6 +348,32 @@ same. This is the one sanctioned hand edit inside the generated
 <PopoverPrimitive.Positioner positionMethod="fixed" className="isolate z-50">
 ```
 
+### Modal backdrop stacking
+
+Modal Base UI popups (Menu by default, Select by default, Popover/Combobox
+only with `modal`) render an internal full-screen backdrop
+(`<div role="presentation" data-base-ui-inert>`) inside their Portal. It
+blocks outside presses. It has **no z-index**, so it paints below any
+z-indexed ancestor of the trigger: the desktop sidebar (`z-10`), the mobile
+sheet and dialogs (`z-50`). An outside tap on those surfaces then closes the
+popup **and** activates whatever was tapped. Reproduced in
+`11-19-sidebar-topic-pagination` with Playwright touch and mouse: with a
+`z-auto` container the backdrop catches the press; with `z-10` or `z-50` it
+falls through.
+
+**Convention**: `ui/dropdown-menu.tsx` gives the Portal `relative z-50`. The
+backdrop and positioner then share one z-50 stacking context, appended to
+`<body>` after the sidebar/sheet portals. The first outside press only
+dismisses. `ui/select.tsx` is deliberately left unchanged: its in-dialog and
+settings-page uses were reviewed and accepted as they are. Do not
+"fix" an outside-press leak by swallowing the next `click` on `document`: the
+dismissal and the click arrive in different phases per input type, and it
+treats the symptom.
+
+```tsx
+<MenuPrimitive.Portal className="relative z-50">
+```
+
 ---
 
 ## Cursor affordance
@@ -439,6 +465,46 @@ condition. Desktop hover/focus-within stays instantaneous and independent of
 the tap state.
 
 ---
+
+### Sidebar topic rows (overlay actions, long press)
+
+Reference: `TopicRow` in `assistant/AssistantTree.tsx`, landed in
+`11-19-sidebar-topic-pagination`.
+
+- **Width**: only the title (`flex-1 truncate`) and the age label (`shrink-0`)
+  share the link's width. Star + "..." are one absolutely positioned overlay
+  at the right edge that takes no width and covers the age label and the end
+  of the title. Override `SidebarMenuButton`'s
+  `group-has-data-[sidebar=menu-action]/menu-item:pr-9` / `md:…:pr-8` back to
+  the left padding, or the right side keeps an empty gap.
+- **Overlay look**: `bg-sidebar-accent` plus a `before:` `bg-linear-to-l
+  from-sidebar-accent to-transparent` fade. Buttons are `rounded-full` with
+  `hover:bg-sidebar-foreground/10` and an icon that darkens from
+  `text-sidebar-foreground/60`. The link keeps its hover background through
+  `group-hover/menu-item:` and `group-has-aria-expanded/menu-item:`. The
+  pointer sits on the overlay, a sibling of the link, so the link's own
+  `hover:` drops.
+- **Visibility**: `group-hover/menu-item`, `group-has-focus-visible/menu-item`,
+  and `has-aria-expanded`. **Not `group-focus-within`**: clicking a row
+  focuses its link, which pins the buttons on the selected row. On touch,
+  `[@media(hover:none)]:invisible`, not `hidden`, so the "..." trigger keeps
+  a box that anchors the long-press menu. `dropdown-menu.tsx` exposes no
+  `anchor`.
+- **Long press** (touch only, `pointerType === "touch"`): 500 ms timer, cancelled
+  by a 10 px move / `pointerup` / `pointercancel`. A `suppressClick` ref eats
+  the release click in `onClickCapture`. `onContextMenu` is prevented only
+  while a press is active, so desktop right-click stays native. Add
+  `[-webkit-touch-callout:none] select-none` under `hover:none`.
+- **Long-press-only header**: the full title is a `DropdownMenuLabel` shown only
+  when the menu was opened by long press. Clear that flag in
+  `onOpenChangeComplete(false)`, not in `onOpenChange(false)`. Clearing on
+  close shrinks the menu mid-exit-animation, which reads as a jitter.
+- **Full-title tooltip**: shared `Tooltip`, `side="right"`, `delay={500}` on the
+  trigger. It opens only when the title overflows: `onOpenChange` calls
+  `details.cancel()` when `scrollWidth <= clientWidth`. Style it with popover
+  tokens (`bg-popover text-popover-foreground ring-1 ring-foreground/10
+  shadow-md rounded-lg`, arrow hidden via `[&>div]:hidden`). The primitive's
+  inverted `bg-foreground` bubble clashes with the theme presets.
 
 ## Collapsible sidebar group labels
 

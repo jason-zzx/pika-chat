@@ -49,6 +49,26 @@ response. A hook does not build URLs or read `response.json()` itself.
 
 ---
 
+### Infinite queries
+
+Reference: `useTopicPages` (`use-assistants.ts`) driven by an
+`IntersectionObserver` sentinel in `AssistantTree.tsx`.
+
+- **Gate auto-load on `!isFetching`, not `!isFetchingNextPage`.**
+  `fetchNextPage` defaults to `cancelRefetch: true`. If it fires while an
+  invalidation is refetching the loaded pages, it cancels that refetch and
+  leaves stale pages.
+- **Recreate the observer when the page count changes.** A fresh `observe()`
+  reports the sentinel's current state. Without that, a first page shorter
+  than the viewport never triggers a second load, because the intersection
+  state never changes.
+- **First-page error is `!data`, not `isError`.** In v5 a failed *next* page
+  sets `status: "error"` while keeping the loaded pages. Branching on
+  `isError` hides the list and its Retry. Use `isFetchNextPageError` for the
+  Retry row.
+- Invalidation refetches every loaded page in order and recomputes cursors from
+  the fresh data, so loaded pages stay loaded after a mutation.
+
 ## Mutations
 
 `useMutation` plus explicit invalidation of the affected keys in `onSuccess`.

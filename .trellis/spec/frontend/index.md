@@ -16,7 +16,9 @@ Divergences from the first draft of this spec:
   `components/ui/` remains generated territory; do not hand-edit those files,
   with recorded exceptions: the shared popup Positioners pass
   `positionMethod="fixed"` so portal popups cannot grow the document scroll
-  area, the `cursor-default` → `cursor-pointer` edits for pointer-cursor
+  area, the `dropdown-menu` Portal carries `relative z-50` so the modal menu's
+  internal backdrop (no z-index of its own) stacks above z-indexed containers
+  like the sidebar and mobile sheet instead of letting outside presses through, the `cursor-default` → `cursor-pointer` edits for pointer-cursor
   affordance ([Component Guidelines](./component-guidelines.md) "Popup
   positioning", "Cursor affordance"), string-only i18n edits swapping
   hardcoded copy for catalog lookups in `sidebar`, `dialog`, `sheet`, and
@@ -54,7 +56,7 @@ Handlers it calls.
 | Guide | Description |
 |-------|-------------|
 | [Directory Structure](./directory-structure.md) | Where components, hooks, and stores go |
-| [Component Guidelines](./component-guidelines.md) | Server/client boundary, composition, responsive layout, cursor affordance |
+| [Component Guidelines](./component-guidelines.md) | Server/client boundary, composition, responsive layout, cursor affordance, modal backdrop stacking, sidebar topic rows (overlay actions, long press, full-title tooltip) |
 | [Chat Scroll Behavior](./chat-scroll-behavior.md) | Message-list pin/reserve auto-scroll contracts |
 | [Chat Attachments](./chat-attachments.md) | Composer staging/upload state machine, chip warnings, attachment cards, the `FileUIPart` send contract, composer image-generation mode |
 | [Hook Guidelines](./hook-guidelines.md) | Query hooks, `useChat`, custom hook rules |

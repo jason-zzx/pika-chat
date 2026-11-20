@@ -29,8 +29,9 @@ topic-scoped mutations do not reshuffle the sidebar.
 - `topicSchema` (Zod, `src/lib/schemas/topic.ts`) now includes
   `isFavorite: z.boolean()`; every `Topic`-returning clause in the service
   layer must project it (six sites at time of writing: `createTopicForChat`,
-  `renameTopic`, `findTopicForActor`, `setTopicFavorite`, `selectTree`,
-  `title.service.ts`). A new Topic projection without the field breaks
+  `renameTopic`, `findTopicForActor`, `setTopicFavorite`, `listTopicPage`,
+  `listFavoriteTopics`, `title.service.ts`; `selectTree` no longer projects
+  topics since `11-19-sidebar-topic-pagination`). A new Topic projection without the field breaks
   `topicSchema.parse` on the client.
 - `setTopicFavoriteSchema = z.object({ favorite: z.boolean() })` validates the
   request body at the route boundary.
@@ -55,8 +56,9 @@ topic-scoped mutations do not reshuffle the sidebar.
 - Integration (`topic.service.integration.test.ts`): toggle on/off persists;
   non-owner call → 404; **`updatedAt` unchanged** (assert equality against the
   pre-toggle value, re-read the raw row).
-- Integration (`assistant.service.integration.test.ts`): tree exposes
-  `isFavorite` without changing row order.
+- Integration (`assistant.service.integration.test.ts`): favoriting moves the
+  topic from `listTopicPage` to `listFavoriteTopics` with `updatedAt`
+  unchanged.
 - UI (`AssistantTree.test.tsx`): Favorite section presence/absence (peer, above
   Topics), no duplication in
   normal rows, Topics label always visible, both collapse semantics,
@@ -84,9 +86,10 @@ await db.update(topics)
 
 ## `topics.updatedAt` semantics (general rule)
 
-`topics.updatedAt` is the **last-active-time sort key** for the sidebar
-(`selectTree` orders `desc(topics.updatedAt)`; requirement: favorites and the
-normal list both sort by last activity).
+`topics.updatedAt` is the **last-active-time sort key** for the sidebar and
+the value of its compact age label (`listTopicPage` / `listFavoriteTopics`
+order `desc(updated_at), desc(id)`; see
+[Topic List Pagination](./topic-list-pagination.md)).
 
 - Bump it for conversation activity: new message, regenerate
   (`touchTopicUpdatedAt`, called from the chat/regenerate routes).
@@ -101,13 +104,15 @@ normal list both sort by last activity).
 ## Frontend contract notes
 
 - Optimistic toggle lives in `useSetTopicFavorite`
-  (`src/components/assistant/use-assistants.ts`), modeled on
-  `useSetAssistantDefaultModel`: cancel tree query → snapshot → flip
-  `isFavorite` → guarded rollback → `onSettled` invalidate.
-- The sidebar splits the single server-ordered list client-side
-  (`favoriteTopics` / `otherTopics` filters). Favorites are moved, never
-  duplicated, and the server ORDER BY is deliberately unchanged — a server-side
-  `desc(isFavorite)` term would be redundant with the client split.
+  (`src/components/assistant/use-assistants.ts`); its variables carry
+  `assistantId`. It cancels and snapshots both the paged and the favorites
+  query, then **moves** the topic between them in `updatedAt desc` order. An
+  unfavorited topic older than everything loaded while more pages exist is not
+  inserted, because a later page returns it. Rollback restores both snapshots
+  only while the favorites cache still shows the optimistic state. `onSettled`
+  invalidates `assistantKeys.topics(assistantId)`.
+- Favorites and non-favorites are separate server lists (favorites in full,
+  non-favorites paged), so a topic is never duplicated across sections.
 - Collapse state of the sidebar labels is **view chrome** (localStorage,
   `pika.sidebar.topic-sections`), not server state — see
   [State Management](../frontend/state-management.md).

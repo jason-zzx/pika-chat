@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint/test/a11y/perf checks"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Both breakpoints first-class, components/ui edit restrictions"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "No hardcoded copy; both catalogs updated"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Service/integration test expectations"}
+{"file": ".trellis/spec/backend/topic-favorites.md", "reason": "Favorite toggle must not write updatedAt; projections include isFavorite"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Migration generated and committed"}

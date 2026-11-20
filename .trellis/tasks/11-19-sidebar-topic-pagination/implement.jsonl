@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend stack, pre-dev checklist"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Responsive layout, popup positioning, cursor affordance, components/ui edit rules"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Query hook conventions for infinite/favorites queries"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query vs Zustand boundary, optimistic updates"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Catalog keys for age labels and retry copy"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared Zod contracts for new endpoints"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend layering conventions"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Index + drizzle migration conventions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "404 ownership semantics, Zod 400 at route boundary"}
+{"file": ".trellis/spec/backend/topic-favorites.md", "reason": "isFavorite projection contract and updatedAt semantics"}
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "pikaNative optional; notification path contract"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Tree schema change ripples across server and client consumers"}
