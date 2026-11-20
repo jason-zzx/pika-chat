@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 46
+- **Total Sessions**: 47
 - **Last Active**: 2026-11-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1270 | Active |
+| `journal-1.md` | ~1293 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 47 | 2026-11-19 | Message text quote | `becad69`, `cef6c97` | `feat/native-apps` |
 | 46 | 2026-11-19 | Sidebar topic pagination and row UX | `d97bd1f`, `3877fc8`, `d87cccb` | `feat/native-apps` |
 | 45 | 2026-11-19 | Mobile shell remote mode (Android) & mobile web fixes | `5dbb8ff`, `5128ade`, `6ce8ee3`, `324a6e6`, `cd4e6bf`, `ec35ee5`, `3f6f349`, `50bc7c9`, `a896cdc`, `79e86e4` | `feat/native-apps` |
 | 44 | 2026-11-18 | Desktop local mode: PGlite spike, planning, check, ponytail, commit | `9e77cb5`, `158b53a`, `72a7389`, `87e652e`, `d8219ea` | `feat/native-desktop-local` |

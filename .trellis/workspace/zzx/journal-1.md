@@ -1268,3 +1268,26 @@ Paginated the assistant pane's topics: favorites load in full, non-favorites pag
 ### Status
 
 [OK] **Completed**
+
+
+## Session 47: Message text quote
+<!-- trellis-session: v=2 fp=d60502b6ca31771b -->
+
+**Date**: 2026-11-19
+**Task**: Message text quote
+**Branch**: `feat/native-apps`
+
+### Summary
+
+Added message text quoting: select text in an assistant/user message body to show a floating Quote button (above, or below when out of view; larger on touch); one quote per draft as a card above the composer; persisted as a data-quote part (files -> quote -> text), replayed to the model via convertDataPart as <quote> text; clicking a quote card centers and flash-highlights only the quoted lines via overlay rects, offset-first matching, falling back to whole-message flash. Editor can remove a seeded quote. Ponytail-review simplifications applied. Spec: backend/chat-message-quote.md and a quote-jump section in frontend/chat-scroll-behavior.md.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `becad69` | feat(chat): quote selected message text into the composer |
+| `cef6c97` | docs(trellis): plan and record message quote |
+
+### Status
+
+[OK] **Completed**
