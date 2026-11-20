@@ -56,11 +56,13 @@ class RemoteBridge(
         }
 
         val quotedName = JSONObject.quote(serverName)
+        val quotedVersion = JSONObject.quote(BuildConfig.VERSION_NAME)
         val nativeJs = """
             if (window === top) {
               const post = (payload) => $NATIVE_HOST.postMessage(JSON.stringify(payload));
               window.pikaNative = Object.freeze({
                 serverName: $quotedName,
+                appVersion: $quotedVersion,
                 notify: (i) => post({ type: "notify", ...i }),
                 showServerMenu: () => post({ type: "menu" }),
                 openServers: (screen) => post({ type: "open", screen }),

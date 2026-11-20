@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsGuest } from "@/hooks/use-is-guest";
 
-type SettingsTabLabelKey = `settingsNav.${"general" | "models" | "account" | "files" | "providers" | "search" | "users"}`;
+type SettingsTabLabelKey = `settingsNav.${"general" | "models" | "account" | "files" | "providers" | "search" | "users" | "about"}`;
 
 type SettingsTab = {
   href: string;
@@ -30,6 +30,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { href: "/settings/providers", labelKey: "settingsNav.providers", memberOnly: true },
   { href: "/settings/search", labelKey: "settingsNav.search", memberOnly: true },
   { href: "/settings/users", labelKey: "settingsNav.users", staffOnly: true },
+  { href: "/settings/about", labelKey: "settingsNav.about" },
 ];
 
 type SettingsNavProps = {

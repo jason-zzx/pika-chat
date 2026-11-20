@@ -51,6 +51,10 @@ describe("SettingsNav", () => {
       "href",
       "/settings/providers",
     );
+    expect(screen.getByRole("link", { name: "About" })).toHaveAttribute(
+      "href",
+      "/settings/about",
+    );
   });
 
   it("shows the search tab for everyone and the users tab only for staff", () => {
@@ -103,6 +107,7 @@ describe("SettingsNav", () => {
       screen.getByRole("link", { name: "Default models" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Files" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Account" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Providers" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Search" })).toBeNull();
@@ -113,6 +118,7 @@ describe("SettingsNav", () => {
     renderNav(false, true);
     expect(screen.getByRole("link", { name: "General" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Providers" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Account" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
   });

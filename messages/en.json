@@ -2,7 +2,7 @@
   "RootLayout": {
     "title": "Pika Chat",
     "titleTemplate": "%s · Pika Chat",
-    "description": "Self-hosted AI chat"
+    "description": "Minimalist self-hosted AI chat"
   },
   "Layout": {
     "sidebar": {
@@ -19,7 +19,8 @@
       "providers": "Providers",
       "search": "Search",
       "users": "Users",
-      "models": "Default models"
+      "models": "Default models",
+      "about": "About"
     },
     "userMenu": {
       "accountMenu": "Account menu for {name}",
@@ -463,6 +464,30 @@
       "batchDeleting": "Deleting…",
       "batchResult": "Deleted {deleted} · skipped {skipped} (in use)",
       "batchResultClean": "Deleted {deleted} files"
+    },
+    "About": {
+      "title": "About",
+      "description": "Version, project links, and license information.",
+      "version": "Version",
+      "serverVersion": "Server version",
+      "clientVersion": "Client version",
+      "localMode": "Local mode",
+      "demoMode": "Demo mode",
+      "copyVersion": "Copy version",
+      "copied": "Copied",
+      "copyFailed": "Could not copy version info",
+      "copyPayloadSingle": "{app} {version}",
+      "copyPayloadSplit": "{app} (server {serverVersion}, client {clientVersion})",
+      "projectTitle": "Project",
+      "github": "GitHub repository",
+      "githubDescription": "github.com/jason-zzx/pika-chat",
+      "releases": "Releases & changelog",
+      "releasesDescription": "View release notes and download desktop or Android apps",
+      "issues": "Report an issue",
+      "issuesDescription": "Submit bug reports or feature requests on GitHub",
+      "licenseTitle": "License",
+      "licenseName": "MIT License",
+      "licenseCopyright": "Copyright © 2026 jason-zzx"
     }
   },
   "Assistant": {

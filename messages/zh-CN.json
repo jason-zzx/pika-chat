@@ -2,7 +2,7 @@
   "RootLayout": {
     "title": "Pika Chat",
     "titleTemplate": "%s · Pika Chat",
-    "description": "自托管的 AI 聊天"
+    "description": "自托管的极简AI聊天"
   },
   "Layout": {
     "sidebar": {
@@ -19,7 +19,8 @@
       "providers": "服务商",
       "search": "搜索",
       "users": "用户",
-      "models": "默认模型"
+      "models": "默认模型",
+      "about": "关于"
     },
     "userMenu": {
       "accountMenu": "{name} 的账户菜单",
@@ -463,6 +464,30 @@
       "batchDeleting": "删除中…",
       "batchResult": "已删除 {deleted} · 跳过 {skipped} 个（使用中）",
       "batchResultClean": "已删除 {deleted} 个文件"
+    },
+    "About": {
+      "title": "关于",
+      "description": "版本信息、项目链接与开源许可。",
+      "version": "版本号",
+      "serverVersion": "服务端版本",
+      "clientVersion": "客户端版本",
+      "localMode": "本地模式",
+      "demoMode": "演示模式",
+      "copyVersion": "复制版本信息",
+      "copied": "已复制",
+      "copyFailed": "无法复制版本信息",
+      "copyPayloadSingle": "{app} {version}",
+      "copyPayloadSplit": "{app}（服务端 {serverVersion}，客户端 {clientVersion}）",
+      "projectTitle": "项目",
+      "github": "GitHub 仓库",
+      "githubDescription": "github.com/jason-zzx/pika-chat",
+      "releases": "版本发布与更新日志",
+      "releasesDescription": "查看更新日志，下载桌面端与 Android 客户端",
+      "issues": "问题反馈",
+      "issuesDescription": "在 GitHub 提交缺陷报告或功能建议",
+      "licenseTitle": "开源许可",
+      "licenseName": "MIT 开源协议",
+      "licenseCopyright": "Copyright © 2026 jason-zzx"
     }
   },
   "Assistant": {

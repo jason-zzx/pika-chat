@@ -19,6 +19,7 @@ optional.**
 ```ts
 interface PikaNative {
   serverName: string; // display name of the server this page belongs to
+  appVersion?: string; // native shell version (optional for older shells)
   notify(input: { title: string; body: string; path: string }): void;
   showServerMenu(anchor: { x: number; y: number }): void; // viewport CSS px
   openServers(screen: "list" | "add"): void;
