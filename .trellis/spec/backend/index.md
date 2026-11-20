@@ -73,6 +73,7 @@ review blocker, not a style nit.
 | [Chat Message Versions](./chat-message-versions.md) | Regenerate-as-versions contract: group_id/is_selected, selected-version view, regenerate/select/delete endpoints, reseed rule |
 | [Chat History Compression](./chat-history-compression.md) | Rolling summary + inclusive boundary on `topics`, token heuristic + 80% threshold, `historySummary` injection, both streaming routes must trim, failure degrades |
 | [Chat Message Translation](./chat-message-translation.md) | Per-message-version `translations` jsonb map, cache-first `/api/translate`, key-merge persistence, shared language list |
+| [Chat Message Quote](./chat-message-quote.md) | Cross-layer `data-quote` part (files → quote → text order, request refine, `convertDataPart` replay), `data-quote-body` quotable marker, offset-first range matching, overlay highlight, whole-message fallback |
 | [Model Preferences](./model-preferences.md) | Four user-level default-model slots on `users.model_preferences`, save-time availability check, use-time silent fallback matrix |
 | [Chat Attachments](./chat-attachments.md) | File upload/download/delete endpoints, `files` table, local-disk `FileStorage`, extraction cache, capability routing (`inputModalities`) and the `Errors.file.*` matrix |
 | [Image Generation](./image-generation.md) | Image-output model bypass: static capability table, per-format adapters, non-streaming turn over the UI message stream, generated images as attachments |

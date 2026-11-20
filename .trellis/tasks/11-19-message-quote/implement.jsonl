@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend stack and pre-dev checklist"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component, popup positioning, cursor affordance conventions"}
+{"file": ".trellis/spec/frontend/chat-scroll-behavior.md", "reason": "Pin/reserve contracts the quote jump must respect"}
+{"file": ".trellis/spec/frontend/chat-attachments.md", "reason": "Composer staging chips and send contract the quote card mirrors"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Per-draft composer store state"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "en / zh-CN catalog rules"}
+{"file": ".trellis/spec/frontend/theming.md", "reason": "Token-based highlight colors"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared Zod schemas for the new data part"}
+{"file": ".trellis/spec/backend/chat-message-versions.md", "reason": "Message keys/groupId and edit-to-new-version flow"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "How request parts are validated and persisted server-side"}

@@ -100,6 +100,25 @@ the param is absent: a repeat click on the same result re-adds the same `m`,
 and a one-shot-per-mount guard swallows that click (found by check). A missing
 target (deleted message) is a silent no-op but the param is still stripped; an empty topic (history settled, nothing seeded) also strips `m` without scrolling rather than leaving the param stuck.
 
+## Quote jump (`scrollToQuote`, landed in `11-19-message-quote`)
+
+`MessageListHandle.scrollToQuote(quote)` centers the quoted text range (not
+the message top) and paints a fading highlight; contract in
+`../backend/chat-message-quote.md`. It follows the pin-release rule above.
+Two layout constraints:
+
+- Measure the line rects **and** the content column origin before calling
+  `scrollToPosition`. Under reduced motion the scroll is `"auto"` and lands
+  synchronously, so an origin measured after it is off by the scroll
+  distance (smooth scrolling hides this — found by check).
+- The highlight rects are absolute children of the `relative` content
+  column, rendered in a `Fragment` keyed by a flash id (restarts the fade).
+  A wrapper element would become a flex item and add a row gap.
+
+The floating Quote button (`QuoteSelectionButton`) is portaled and `fixed`;
+it bounds itself by the scroll container's box and measures its own rendered
+size in a layout effect — do not hard-code its height in the placement math.
+
 ## In-topic search-hit navigation (landed in `09-30-search-command-palette`)
 
 The command-palette search (`SearchDialog`, mounted in `AppShell`, opened via
