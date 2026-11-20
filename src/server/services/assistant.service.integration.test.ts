@@ -35,7 +35,13 @@ import {
   updateAssistant,
 } from "@/server/services/assistant.service";
 import { appendUserMessage } from "@/server/services/message.service";
-import { createTopicForChat, setTopicFavorite, touchTopicUpdatedAt } from "@/server/services/topic.service";
+import {
+  createTopicForChat,
+  listFavoriteTopics,
+  listTopicPage,
+  setTopicFavorite,
+  touchTopicUpdatedAt,
+} from "@/server/services/topic.service";
 import {
   addProviderModel,
   createProviderConfig,
@@ -152,7 +158,7 @@ describe("assistant.service", () => {
     expect(created.name).toBe("Work");
     expect(created.icon).toBe("💼");
     expect(created.systemPrompt).toBe("Be brief");
-    expect(created.topics).toEqual([]);
+    expect(created.topicCount).toBe(0);
 
     const listed = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(listed.assistants.map((row) => row.id)).toContain(created.id);
@@ -333,7 +339,7 @@ describe("assistant.service", () => {
       { name: "Only", icon: "🔒" },
       userActor,
     );
-    const topic = await createTopicForChat(
+    await createTopicForChat(
       { assistantId: only.id },
       userActor,
       DEFAULT_TITLE,
@@ -346,9 +352,7 @@ describe("assistant.service", () => {
 
     const still = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(still.assistants).toHaveLength(1);
-    expect(still.assistants[0]?.topics.map((row) => row.id)).toEqual([
-      topic.id,
-    ]);
+    expect(still.assistants[0]?.topicCount).toBe(1);
 
     const second = await createAssistant(
       { name: "Second", icon: "📁" },
@@ -417,17 +421,15 @@ describe("assistant.service", () => {
       .set({ updatedAt: new Date("2026-01-02T00:00:00.000Z") })
       .where(eq(topics.id, newer.id));
 
-    const before = await listAssistantTree(userActor, DEFAULT_NAME);
-    const listed = before.assistants.find((row) => row.id === assistant.id);
-    expect(listed?.topics.map((topic) => topic.id)).toEqual([
+    const before = await listTopicPage(assistant.id, null, userActor);
+    expect(before.topics.map((topic) => topic.id)).toEqual([
       newer.id,
       older.id,
     ]);
 
     await touchTopicUpdatedAt(older.id, userActor);
-    const after = await listAssistantTree(userActor, DEFAULT_NAME);
-    const relisted = after.assistants.find((row) => row.id === assistant.id);
-    expect(relisted?.topics.map((topic) => topic.id)).toEqual([
+    const after = await listTopicPage(assistant.id, null, userActor);
+    expect(after.topics.map((topic) => topic.id)).toEqual([
       older.id,
       newer.id,
     ]);
@@ -460,14 +462,14 @@ describe("assistant.service", () => {
 
     await setTopicFavorite(older.id, { favorite: true }, userActor);
 
+    // Favoriting the older topic must not touch updatedAt.
+    const page = await listTopicPage(assistant.id, null, userActor);
+    expect(page.topics.map((row) => row.id)).toEqual([newer.id]);
+    const favorites = await listFavoriteTopics(assistant.id, userActor);
+    expect(favorites.map((row) => row.id)).toEqual([older.id]);
+    expect(favorites[0]?.updatedAt).toEqual(new Date("2026-01-01T00:00:00.000Z"));
+
     const tree = await listAssistantTree(userActor, DEFAULT_NAME);
-    const listed = tree.assistants.find((row) => row.id === assistant.id);
-    // Favoriting the older topic must not reorder: updatedAt is untouched.
-    expect(
-      listed?.topics.map((row) => ({ id: row.id, isFavorite: row.isFavorite })),
-    ).toEqual([
-      { id: newer.id, isFavorite: false },
-      { id: older.id, isFavorite: true },
-    ]);
+    expect(tree.assistants.find((row) => row.id === assistant.id)?.topicCount).toBe(2);
   });
 });

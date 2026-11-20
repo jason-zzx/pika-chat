@@ -101,7 +101,7 @@ describe("AssistantEditorDialog", () => {
       systemPrompt: null,
       defaultProviderConfigId: null,
       defaultModelId: null,
-      topics: [],
+      topicCount: 0,
     });
 
     renderEditor(null);
@@ -214,7 +214,7 @@ describe("AssistantEditorDialog", () => {
       systemPrompt: null,
       defaultProviderConfigId: "gone",
       defaultModelId: "gpt-4o",
-      topics: [],
+      topicCount: 0,
     });
 
     expect(
@@ -237,7 +237,7 @@ describe("AssistantEditorDialog", () => {
       systemPrompt: null,
       defaultProviderConfigId: null,
       defaultModelId: null,
-      topics: [],
+      topicCount: 0,
     });
 
     renderEditor(null);
@@ -275,7 +275,7 @@ describe("AssistantEditorDialog", () => {
       systemPrompt: null,
       defaultProviderConfigId: null,
       defaultModelId: null,
-      topics: [],
+      topicCount: 0,
     });
 
     renderEditor(null);

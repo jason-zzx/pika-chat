@@ -1,13 +1,37 @@
 import { parseEmpty, parseJson } from "@/lib/api/parse";
 import {
+  favoriteTopicsSchema,
   topicDetailSchema,
+  topicPageSchema,
   topicSchema,
   type CompressTopicInput,
   type RenameTopicInput,
+  type FavoriteTopics,
   type SetTopicFavoriteInput,
   type Topic,
+  type TopicPage,
   type TopicDetail,
 } from "@/lib/schemas/topic";
+
+export async function listTopicPage(
+  assistantId: string,
+  cursor: string | null,
+): Promise<TopicPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await fetch(
+    `/api/assistants/${encodeURIComponent(assistantId)}/topics${query}`,
+  );
+  return parseJson(response, (data) => topicPageSchema.parse(data));
+}
+
+export async function listFavoriteTopics(
+  assistantId: string,
+): Promise<FavoriteTopics> {
+  const response = await fetch(
+    `/api/assistants/${encodeURIComponent(assistantId)}/topics/favorites`,
+  );
+  return parseJson(response, (data) => favoriteTopicsSchema.parse(data));
+}
 
 export async function getTopic(id: string): Promise<TopicDetail> {
   const response = await fetch(`/api/topics/${encodeURIComponent(id)}`);

@@ -9,6 +9,17 @@ export const topicSchema = z.object({
 });
 export type Topic = z.infer<typeof topicSchema>;
 
+export const topicPageSchema = z.object({
+  topics: z.array(topicSchema),
+  nextCursor: z.string().nullable(),
+});
+export type TopicPage = z.infer<typeof topicPageSchema>;
+
+export const favoriteTopicsSchema = z.object({
+  topics: z.array(topicSchema),
+});
+export type FavoriteTopics = z.infer<typeof favoriteTopicsSchema>;
+
 export const setTopicFavoriteSchema = z.object({
   favorite: z.boolean(),
 });
@@ -23,6 +34,7 @@ export type RenameTopicInput = z.infer<typeof renameTopicSchema>;
  * history-compression boundary, which the message list needs to render the
  * "earlier conversation compressed" marker. */
 export const topicDetailSchema = topicSchema.extend({
+  assistantId: z.string(),
   summaryUpToMessageId: z.string().nullable(),
   summaryUpToGroupId: z.string().nullable(),
   summaryText: z.string().nullable(),

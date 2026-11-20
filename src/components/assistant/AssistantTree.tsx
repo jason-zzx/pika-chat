@@ -13,28 +13,42 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
-import { useId, useState, useSyncExternalStore } from "react";
+import { useFormatter, useTranslations } from "next-intl";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { z } from "zod";
 
 import AssistantEditorDialog from "@/components/assistant/AssistantEditorDialog";
 import DeleteAssistantDialog from "@/components/assistant/DeleteAssistantDialog";
 import SidebarSearch from "@/components/assistant/SidebarSearch";
-import { useAssistantTree, useSetTopicFavorite } from "@/components/assistant/use-assistants";
+import {
+  useAssistantTree,
+  useFavoriteTopics,
+  useSetTopicFavorite,
+  useTopicPages,
+} from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
 import PikaMark from "@/components/common/PikaMark";
 import CloseOnNavigateLink from "@/components/layout/CloseOnNavigateLink";
 import SettingsNav from "@/components/layout/SettingsNav";
-import SidebarNavLink from "@/components/layout/SidebarNavLink";
 import DeleteTopicDialog from "@/components/topic/DeleteTopicDialog";
 import RenameTopicDialog from "@/components/topic/RenameTopicDialog";
+import { useMinuteClock } from "@/hooks/use-minute-clock";
 import { usePikaNative } from "@/hooks/use-pika-native";
 import { useStreamingTopics } from "@/lib/streaming-topics";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -47,8 +61,10 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   assistantDraftHref,
   assistantTopicHref,
@@ -56,6 +72,7 @@ import {
 } from "@/lib/assistant-path";
 import type { Assistant } from "@/lib/schemas/assistant";
 import type { Topic } from "@/lib/schemas/topic";
+import { formatTopicAge } from "@/lib/topic-age";
 import { cn } from "@/lib/utils";
 
 type AssistantTreeProps = {
@@ -91,7 +108,7 @@ export default function AssistantTree({
   const isLastAssistant = assistants.length === 1;
 
   function leaveIfViewingAssistant(assistant: Assistant) {
-    if (topicId && assistant.topics.some((topic) => topic.id === topicId)) {
+    if (pathAssistantId === assistant.id) {
       router.push("/");
     }
   }
@@ -430,10 +447,40 @@ function AssistantPane({
     setTopicSections({ ...sections, [key]: !sections[key] });
   }
 
-  // Both lists keep the server's `updatedAt` desc order; favorites are only
-  // lifted into their own subsection, never duplicated.
-  const favoriteTopics = assistant.topics.filter((topic) => topic.isFavorite);
-  const otherTopics = assistant.topics.filter((topic) => !topic.isFavorite);
+  const pages = useTopicPages(assistant.id);
+  const favorites = useFavoriteTopics(assistant.id);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const favoriteTopics = favorites.data?.topics ?? [];
+  const otherTopics = pages.data?.pages.flatMap((page) => page.topics) ?? [];
+  const loadedPages = pages.data?.pages.length ?? 0;
+  const fetchNextPage = pages.fetchNextPage;
+  const canAutoLoad =
+    sections.topics &&
+    pages.hasNextPage &&
+    !pages.isFetching &&
+    !pages.isFetchNextPageError;
+
+  // Recreated after every loaded page: a fresh observe() reports the
+  // sentinel's current state, so a page shorter than the viewport keeps loading.
+  // Gated on isFetching, not isFetchingNextPage: fetchNextPage cancels an
+  // in-flight refetch of the loaded pages (cancelRefetch defaults to true).
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !canAutoLoad) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void fetchNextPage();
+        }
+      },
+      { root: scrollRef.current, rootMargin: "0px 0px 200px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [canAutoLoad, loadedPages, fetchNextPage]);
 
   return (
     <>
@@ -471,7 +518,10 @@ function AssistantPane({
         </SidebarGroupContent>
       </SidebarGroup>
       <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
-        <SidebarGroupContent className="thin-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-clip overflow-y-auto md:gap-1">
+        <SidebarGroupContent
+          ref={scrollRef}
+          className="thin-scrollbar flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-clip overflow-y-auto md:gap-1"
+        >
           {favoriteTopics.length > 0 ? (
             <div>
               <SectionToggle
@@ -518,26 +568,57 @@ function AssistantPane({
               inert={!sections.topics}
             >
               <div className="min-h-0 overflow-hidden">
-                {assistant.topics.length === 0 ? (
+                {pages.isPending ? (
+                  <LoadingRows />
+                ) : !pages.data ? (
+                  <EmptyState
+                    title={t("tree.loadFailedTitle")}
+                    description={t("tree.loadFailedDescription")}
+                  />
+                ) : otherTopics.length === 0 && favorites.data?.topics.length === 0 ? (
                   <EmptyState
                     title={t("tree.noTopicsTitle")}
                     description={t("tree.noTopicsDescription")}
                   />
-                ) : otherTopics.length > 0 ? (
-                  <SidebarMenu>
-                    {otherTopics.map((topic) => (
-                      <TopicRow
-                        key={topic.id}
-                        topic={topic}
-                        assistantId={assistant.id}
-                        isActive={topic.id === activeTopicId}
-                        streaming={streamingTopics.has(topic.id)}
-                        onRename={onRenameTopic}
-                        onDelete={onDeleteTopic}
-                      />
-                    ))}
-                  </SidebarMenu>
-                ) : null}
+                ) : (
+                  <>
+                    <SidebarMenu>
+                      {otherTopics.map((topic) => (
+                        <TopicRow
+                          key={topic.id}
+                          topic={topic}
+                          assistantId={assistant.id}
+                          isActive={topic.id === activeTopicId}
+                          streaming={streamingTopics.has(topic.id)}
+                          onRename={onRenameTopic}
+                          onDelete={onDeleteTopic}
+                        />
+                      ))}
+                    </SidebarMenu>
+                    {pages.hasNextPage ? <div ref={sentinelRef} aria-hidden="true" className="h-px" /> : null}
+                    {pages.isFetchingNextPage ? (
+                      <div className="flex justify-center py-2">
+                        <Loader2Icon
+                          aria-hidden="true"
+                          className="size-4 animate-spin text-muted-foreground"
+                        />
+                      </div>
+                    ) : null}
+                    {pages.isFetchNextPageError ? (
+                      <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-muted-foreground">
+                        <span>{t("tree.loadMoreFailed")}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void fetchNextPage()}
+                        >
+                          {t("tree.retry")}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -590,6 +671,26 @@ function CollapseChevron({ open }: { open: boolean }) {
   );
 }
 
+const AGE_DATE_FORMAT = { year: "numeric", month: "2-digit" } as const;
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_PX = 10;
+
+function TopicAgeLabel({ updatedAt }: { updatedAt: Date }) {
+  const t = useTranslations("Layout.tree.age");
+  const format = useFormatter();
+  const age = formatTopicAge(updatedAt, useMinuteClock());
+  return (
+    <span
+      aria-hidden="true"
+      className="shrink-0 text-xs text-muted-foreground tabular-nums"
+    >
+      {age.unit === "date"
+        ? format.dateTime(updatedAt, AGE_DATE_FORMAT)
+        : t(age.unit, { n: age.n })}
+    </span>
+  );
+}
+
 function TopicRow({
   topic,
   assistantId,
@@ -607,77 +708,195 @@ function TopicRow({
 }) {
   const setFavorite = useSetTopicFavorite();
   const t = useTranslations("Layout");
+  const { setOpenMobile } = useSidebar();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openedByLongPress, setOpenedByLongPress] = useState(false);
+  const titleRef = useRef<HTMLSpanElement>(null);
+  const touchPress = useRef<{ x: number; y: number; timer: number } | null>(null);
+  const suppressClick = useRef(false);
+
+  useEffect(() => {
+    return () => window.clearTimeout(touchPress.current?.timer);
+  }, []);
 
   function toggleFavorite() {
     setFavorite.mutate({
       id: topic.id,
+      assistantId,
       input: { favorite: !topic.isFavorite },
     });
   }
 
+  function endTouchPress() {
+    window.clearTimeout(touchPress.current?.timer);
+    touchPress.current = null;
+  }
+
+  const actionClass =
+    "relative top-auto right-auto translate-y-0 rounded-full text-sidebar-foreground/60 transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground aria-expanded:bg-sidebar-foreground/10 aria-expanded:text-sidebar-foreground md:w-6";
+
   return (
-    <SidebarMenuItem className="min-w-0 overflow-hidden">
-      <SidebarNavLink
-        href={assistantTopicHref(assistantId, topic.id)}
-        isActive={isActive}
-      >
-        <span className="truncate">{topic.title}</span>
-        {streaming ? (
-          // A background stream (send or regenerate) is still writing to
-          // this topic; decorative — the row link itself stays the action.
-          <Loader2Icon
-            aria-hidden="true"
-            className="size-4 shrink-0 animate-spin text-muted-foreground md:size-3.5"
-          />
-        ) : null}
-        {/* Reserves room for the star action next to the "..." trigger. */}
-        <span aria-hidden="true" className="w-7 shrink-0 md:w-6" />
-      </SidebarNavLink>
-      <SidebarMenuAction
-        className="right-8 md:right-7"
-        showOnHover={!topic.isFavorite}
-        aria-label={
-          topic.isFavorite
-            ? t("tree.unfavoriteNamed", { title: topic.title })
-            : t("tree.favoriteNamed", { title: topic.title })
+    <SidebarMenuItem
+      className="min-w-0 overflow-hidden"
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch") {
+          return;
         }
-        onClick={toggleFavorite}
+        suppressClick.current = false;
+        endTouchPress();
+        touchPress.current = {
+          x: event.clientX,
+          y: event.clientY,
+          timer: window.setTimeout(() => {
+            suppressClick.current = true;
+            setOpenedByLongPress(true);
+            setMenuOpen(true);
+          }, LONG_PRESS_MS),
+        };
+      }}
+      onPointerMove={(event) => {
+        const press = touchPress.current;
+        if (
+          press &&
+          Math.hypot(event.clientX - press.x, event.clientY - press.y) >
+            LONG_PRESS_MOVE_PX
+        ) {
+          endTouchPress();
+        }
+      }}
+      onPointerUp={endTouchPress}
+      onPointerCancel={endTouchPress}
+      onClickCapture={(event) => {
+        if (suppressClick.current) {
+          suppressClick.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onContextMenu={(event) => {
+        if (touchPress.current) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <Tooltip
+        onOpenChange={(open, details) => {
+          const title = titleRef.current;
+          if (open && title && title.scrollWidth <= title.clientWidth) {
+            details.cancel();
+          }
+        }}
       >
-        <StarIcon
-          aria-hidden="true"
-          className={cn(topic.isFavorite && "fill-current")}
-        />
-      </SidebarMenuAction>
-      <DropdownMenu>
-        <DropdownMenuTrigger
+        <SidebarMenuButton
           render={
-            <SidebarMenuAction
-              showOnHover
-              aria-label={t("tree.actionsFor", { title: topic.title })}
+            <TooltipTrigger
+              delay={500}
+              render={
+                <Link
+                  href={assistantTopicHref(assistantId, topic.id)}
+                  aria-current={isActive ? "page" : undefined}
+                />
+              }
             />
           }
+          isActive={isActive}
+          // The overlay actions take no width, so drop the menu-action
+          // right padding; the row keeps its hover look while the pointer
+          // is on the overlay or its menu is open.
+          className="group-has-data-[sidebar=menu-action]/menu-item:pr-2.5 group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground group-has-aria-expanded/menu-item:bg-sidebar-accent group-has-aria-expanded/menu-item:text-sidebar-accent-foreground md:group-has-data-[sidebar=menu-action]/menu-item:pr-2 [@media(hover:none)]:[-webkit-touch-callout:none] [@media(hover:none)]:select-none"
+          onClick={() => setOpenMobile(false)}
         >
-          <MoreHorizontalIcon aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="right">
-          <DropdownMenuItem onClick={toggleFavorite}>
-            <StarIcon
+          <span ref={titleRef} className="flex-1 truncate">
+            {topic.title}
+          </span>
+          {streaming ? (
+            // A background stream (send or regenerate) is still writing to
+            // this topic; decorative — the row link itself stays the action.
+            <Loader2Icon
               aria-hidden="true"
-              className={cn(topic.isFavorite && "fill-current")}
+              className="size-4 shrink-0 animate-spin text-muted-foreground md:size-3.5"
             />
-            {topic.isFavorite ? t("tree.unfavorite") : t("tree.favorite")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onRename(topic)}>
-            {t("tree.rename")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => onDelete(topic)}
+          ) : (
+            <TopicAgeLabel updatedAt={topic.updatedAt} />
+          )}
+        </SidebarMenuButton>
+        {/* Popover tokens (same surface as the row menu) instead of the
+            primitive's inverted foreground bubble; [&>div] is the arrow. */}
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          className="max-w-72 rounded-lg bg-popover px-2.5 py-1.5 text-xs leading-relaxed text-popover-foreground shadow-md ring-1 ring-foreground/10 wrap-break-word [&>div]:hidden"
+        >
+          {topic.title}
+        </TooltipContent>
+      </Tooltip>
+      {/* Overlay: takes no layout width, so the title never reflows on hover. */}
+      <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-r-md bg-sidebar-accent pr-1 opacity-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-6 before:bg-linear-to-l before:from-sidebar-accent before:to-transparent group-has-focus-visible/menu-item:opacity-100 group-hover/menu-item:opacity-100 has-aria-expanded:opacity-100 group-data-[collapsible=icon]:hidden [@media(hover:none)]:invisible">
+        <SidebarMenuAction
+          className={actionClass}
+          aria-label={
+            topic.isFavorite
+              ? t("tree.unfavoriteNamed", { title: topic.title })
+              : t("tree.favoriteNamed", { title: topic.title })
+          }
+          onClick={toggleFavorite}
+        >
+          <StarIcon
+            aria-hidden="true"
+            className={cn(topic.isFavorite && "fill-current")}
+          />
+        </SidebarMenuAction>
+        <DropdownMenu
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          // Drop the long-press header only once the exit animation is
+          // done; dropping it on close shrinks the menu mid-animation.
+          onOpenChangeComplete={(open) => {
+            if (!open) {
+              setOpenedByLongPress(false);
+            }
+          }}
+        >
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuAction
+                className={actionClass}
+                aria-label={t("tree.actionsFor", { title: topic.title })}
+              />
+            }
           >
-            {t("tree.delete")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <MoreHorizontalIcon aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right">
+            {openedByLongPress ? (
+              <>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="line-clamp-3 max-w-64 break-words">
+                    {topic.title}
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
+            <DropdownMenuItem onClick={toggleFavorite}>
+              <StarIcon
+                aria-hidden="true"
+                className={cn(topic.isFavorite && "fill-current")}
+              />
+              {topic.isFavorite ? t("tree.unfavorite") : t("tree.favorite")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onRename(topic)}>
+              {t("tree.rename")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => onDelete(topic)}
+            >
+              {t("tree.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </SidebarMenuItem>
   );
 }

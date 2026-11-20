@@ -36,7 +36,7 @@ export default function DeleteAssistantDialog({
   const tCommon = useTranslations("Common");
   const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
-  const topicCount = assistant?.topics.length ?? 0;
+  const topicCount = assistant?.topicCount ?? 0;
 
   function handleOpenChange(next: boolean) {
     if (!next) {

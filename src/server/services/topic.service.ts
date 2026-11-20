@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   type RenameTopicInput,
@@ -60,6 +60,57 @@ export async function createTopicForChat(
     "topic created",
   );
   return row;
+}
+
+const TOPIC_PAGE_SIZE = 20;
+
+/** `cursor` is `[updated_at::text, id]` of the last row of the previous page.
+ * `updated_at` travels as text because Postgres stores microseconds and a JS
+ * Date would truncate to milliseconds, skipping rows that share one. */
+export async function listTopicPage(
+  assistantId: string,
+  cursor: [string, string] | null,
+  actor: Actor,
+): Promise<{ topics: Topic[]; nextCursor: [string, string] | null }> {
+  await requireOwnedAssistant(assistantId, actor);
+  const rows = await getDb()
+    .select({ ...topicColumns, updatedAtText: sql<string>`${topics.updatedAt}::text` })
+    .from(topics)
+    .where(
+      and(
+        eq(topics.assistantId, assistantId),
+        eq(topics.isFavorite, false),
+        cursor
+          ? sql`(${topics.updatedAt}, ${topics.id}) < (${cursor[0]}::timestamptz, ${cursor[1]})`
+          : undefined,
+      ),
+    )
+    .orderBy(desc(topics.updatedAt), desc(topics.id))
+    .limit(TOPIC_PAGE_SIZE + 1);
+  const page = rows.slice(0, TOPIC_PAGE_SIZE);
+  const last = rows.length > TOPIC_PAGE_SIZE ? page[page.length - 1] : undefined;
+  return {
+    topics: page.map((row) => ({
+      id: row.id,
+      title: row.title,
+      isFavorite: row.isFavorite,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    })),
+    nextCursor: last ? [last.updatedAtText, last.id] : null,
+  };
+}
+
+export async function listFavoriteTopics(
+  assistantId: string,
+  actor: Actor,
+): Promise<Topic[]> {
+  await requireOwnedAssistant(assistantId, actor);
+  return getDb()
+    .select(topicColumns)
+    .from(topics)
+    .where(and(eq(topics.assistantId, assistantId), eq(topics.isFavorite, true)))
+    .orderBy(desc(topics.updatedAt), desc(topics.id));
 }
 
 export async function renameTopic(
@@ -183,6 +234,7 @@ export async function findTopicDetailForActor(
   const rows = await db
     .select({
       ...topicColumns,
+      assistantId: topics.assistantId,
       summaryUpToMessageId: topics.summaryUpToMessageId,
       // The boundary's version group (null when the row no longer resolves),
       // so the client marker and lock survive a version switch.

@@ -61,7 +61,17 @@
       "noTopicsTitle": "No topics yet",
       "noTopicsDescription": "Start a conversation in this assistant.",
       "loadFailedTitle": "Unable to load assistants",
-      "loadFailedDescription": "Refresh the page to try again."
+      "loadFailedDescription": "Refresh the page to try again.",
+      "age": {
+        "now": "now",
+        "m": "{n}m",
+        "h": "{n}h",
+        "d": "{n}d",
+        "w": "{n}w",
+        "mo": "{n}mo"
+      },
+      "loadMoreFailed": "Couldn't load more topics",
+      "retry": "Retry"
     }
   },
   "Common": {

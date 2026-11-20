@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { assistantKeys } from "@/components/assistant/use-assistants";
 import { acquireChat, resetChatPool } from "@/components/chat/chat-pool";
-import type { AssistantTree } from "@/lib/schemas/assistant";
+import { getTopic } from "@/lib/api/topic";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import ChatPoolBridge from "./ChatPoolBridge";
@@ -23,28 +23,12 @@ vi.mock("@ai-sdk/react", () => ({
   },
 }));
 
+vi.mock("@/lib/api/topic", () => ({
+  getTopic: vi.fn(),
+  waitForTopicTitle: vi.fn(),
+}));
+
 const now = new Date();
-const tree: AssistantTree = {
-  assistants: [
-    {
-      id: "a1",
-      name: "Helper",
-      icon: "x",
-      systemPrompt: null,
-      defaultProviderConfigId: null,
-      defaultModelId: null,
-      topics: [
-        {
-          id: "t1",
-          title: "Trip plan",
-          isFavorite: false,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ],
-    },
-  ],
-};
 
 const notify = vi.fn();
 
@@ -54,8 +38,18 @@ function setup(page: { hidden: boolean; focused: boolean }) {
     get: () => (page.hidden ? "hidden" : "visible"),
   });
   vi.spyOn(document, "hasFocus").mockReturnValue(page.focused);
+  vi.mocked(getTopic).mockResolvedValue({
+    id: "t1",
+    assistantId: "a1",
+    title: "Trip plan",
+    isFavorite: false,
+    createdAt: now,
+    updatedAt: now,
+    summaryUpToMessageId: null,
+    summaryUpToGroupId: null,
+    summaryText: null,
+  });
   const queryClient = new QueryClient();
-  queryClient.setQueryData(assistantKeys.tree(), tree);
   renderWithIntl(
     <QueryClientProvider client={queryClient}>
       <ChatPoolBridge />
@@ -82,27 +76,29 @@ afterEach(() => {
 });
 
 describe("ChatPoolBridge reply notification", () => {
-  it("notifies with the topic title and path when the page is hidden", () => {
+  it("notifies with the topic title and path when the page is hidden", async () => {
     setup({ hidden: true, focused: false });
     chatControl.onFinish?.({ isError: false });
-    expect(notify).toHaveBeenCalledWith({
+    await waitFor(() => expect(notify).toHaveBeenCalledWith({
       title: "Trip plan",
       body: "Reply finished",
       path: "/assistant/a1/t1",
-    });
+    }));
   });
 
-  it("notifies when the page is visible but unfocused", () => {
+  it("notifies when the page is visible but unfocused", async () => {
     setup({ hidden: false, focused: false });
     chatControl.onFinish?.({ isError: false });
-    expect(notify).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
   });
 
-  it("uses the failure body for an errored turn", () => {
+  it("uses the failure body for an errored turn", async () => {
     setup({ hidden: true, focused: false });
     chatControl.onFinish?.({ isError: true });
-    expect(notify).toHaveBeenCalledWith(
-      expect.objectContaining({ body: "Reply failed" }),
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Reply failed" }),
+      ),
     );
   });
 

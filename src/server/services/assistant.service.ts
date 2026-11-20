@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   DEFAULT_ASSISTANT_ICON,
@@ -13,7 +13,7 @@ import { newAssistantId } from "@/lib/id";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { assistants, chatMessages, topicColumns, topics } from "@/server/db/schema";
+import { assistants, chatMessages, topics } from "@/server/db/schema";
 import { insertWithShortId } from "@/server/db/short-id-insert";
 import { isUniqueViolation } from "@/server/db/unique-violation";
 import { AppError } from "@/server/errors";
@@ -26,25 +26,6 @@ import {
 
 type AssistantRow = typeof assistants.$inferSelect;
 
-type TreeRow = {
-  assistant: {
-    id: string;
-    name: string;
-    icon: string;
-    systemPrompt: string | null;
-    defaultProviderConfigId: string | null;
-    defaultModelId: string | null;
-    createdAt: Date;
-  };
-  topic: {
-    id: string;
-    title: string;
-    isFavorite: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  } | null;
-};
-
 function conflictOnName(): never {
   throw new AppError(
     "CONFLICT",
@@ -53,58 +34,17 @@ function conflictOnName(): never {
   );
 }
 
-function toAssistant(
-  row: TreeRow["assistant"],
-  assistantTopics: NonNullable<TreeRow["topic"]>[],
-): Assistant {
-  return {
-    id: row.id,
-    name: row.name,
-    icon: row.icon,
-    systemPrompt: row.systemPrompt,
-    defaultProviderConfigId: row.defaultProviderConfigId,
-    defaultModelId: row.defaultModelId,
-    topics: assistantTopics,
-  };
-}
-
-function groupTree(rows: TreeRow[]): Assistant[] {
-  const grouped = new Map<
-    string,
-    {
-      assistant: TreeRow["assistant"];
-      topics: NonNullable<TreeRow["topic"]>[];
-    }
-  >();
-  for (const row of rows) {
-    let entry = grouped.get(row.assistant.id);
-    if (!entry) {
-      entry = { assistant: row.assistant, topics: [] };
-      grouped.set(row.assistant.id, entry);
-    }
-    if (row.topic?.id) {
-      entry.topics.push(row.topic);
-    }
-  }
-  return [...grouped.values()].map((entry) =>
-    toAssistant(entry.assistant, entry.topics),
-  );
-}
-
-async function selectTree(actor: Actor, assistantId?: string): Promise<TreeRow[]> {
+async function selectTree(actor: Actor, assistantId?: string): Promise<Assistant[]> {
   const db = getDb();
-  const rows = await db
+  return db
     .select({
-      assistant: {
-        id: assistants.id,
-        name: assistants.name,
-        icon: assistants.icon,
-        systemPrompt: assistants.systemPrompt,
-        defaultProviderConfigId: assistants.defaultProviderConfigId,
-        defaultModelId: assistants.defaultModelId,
-        createdAt: assistants.createdAt,
-      },
-      topic: topicColumns,
+      id: assistants.id,
+      name: assistants.name,
+      icon: assistants.icon,
+      systemPrompt: assistants.systemPrompt,
+      defaultProviderConfigId: assistants.defaultProviderConfigId,
+      defaultModelId: assistants.defaultModelId,
+      topicCount: sql<number>`count(${topics.id})::int`,
     })
     .from(assistants)
     .leftJoin(topics, eq(topics.assistantId, assistants.id))
@@ -116,13 +56,12 @@ async function selectTree(actor: Actor, assistantId?: string): Promise<TreeRow[]
           )
         : eq(assistants.ownerId, actor.userId),
     )
-    .orderBy(asc(assistants.createdAt), desc(topics.updatedAt));
-  return rows;
+    .groupBy(assistants.id)
+    .orderBy(asc(assistants.createdAt));
 }
 
 async function loadAssistant(id: string, actor: Actor): Promise<Assistant> {
-  const grouped = groupTree(await selectTree(actor, id));
-  const assistant = grouped[0];
+  const assistant = (await selectTree(actor, id))[0];
   if (!assistant) {
     throw new AppError("NOT_FOUND", 404, "assistant.notFound");
   }
@@ -194,7 +133,7 @@ export async function listAssistantTree(
 ): Promise<AssistantTree> {
   const existing = await selectTree(actor);
   if (existing.length > 0) {
-    return { assistants: groupTree(existing) };
+    return { assistants: existing };
   }
 
   const db = getDb();
@@ -214,7 +153,7 @@ export async function listAssistantTree(
         }),
   });
 
-  return { assistants: groupTree(await selectTree(actor)) };
+  return { assistants: await selectTree(actor) };
 }
 
 export async function createAssistant(

@@ -93,7 +93,7 @@ vi.mock("./Composer", () => ({
 vi.mock("@/components/layout/InsetHeader", () => ({ default: () => null }));
 
 vi.mock("@/components/assistant/use-assistants", () => ({
-  assistantKeys: { tree: () => ["assistant", "tree"] },
+  assistantKeys: { all: ["assistants"], tree: () => ["assistant", "tree"] },
   useAssistantTree: () => ({
     data: {
       assistants: [
@@ -101,10 +101,7 @@ vi.mock("@/components/assistant/use-assistants", () => ({
           id: "a1",
           name: "Helper",
           icon: null,
-          topics: [
-            { id: "t1", title: "Topic A" },
-            { id: "t2", title: "Topic B" },
-          ],
+          topicCount: 2,
         },
       ],
     },

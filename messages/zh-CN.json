@@ -61,7 +61,17 @@
       "noTopicsTitle": "暂无话题",
       "noTopicsDescription": "在此助手中开始对话。",
       "loadFailedTitle": "无法加载助手",
-      "loadFailedDescription": "刷新页面重试。"
+      "loadFailedDescription": "刷新页面重试。",
+      "age": {
+        "now": "刚刚",
+        "m": "{n}分钟前",
+        "h": "{n}小时前",
+        "d": "{n}天前",
+        "w": "{n}周前",
+        "mo": "{n}个月前"
+      },
+      "loadMoreFailed": "无法加载更多话题",
+      "retry": "重试"
     }
   },
   "Common": {

@@ -392,13 +392,7 @@ export default function ChatView({
   // (assistant draft, existing or session-created topic) gets a titled tab.
   const showDocumentTitle = !showAssistantPicker;
   const headerTitle =
-    (activeTopicId
-      ? assistants
-          .flatMap((assistant) => assistant.topics)
-          .find((topic) => topic.id === activeTopicId)?.title
-      : undefined) ??
-    topicTitle ??
-    tChat("newTopic");
+    topicDetail.data?.title ?? topicTitle ?? tChat("newTopic");
   const headerModel = findAvailableModel(models.data, pickedModel);
   const headerSubtitle = headerModel
     ? `${headerModel.modelId} · ${headerModel.configName}`
@@ -1161,7 +1155,7 @@ export default function ChatView({
       setRegen(null);
       regenStopRequestedRef.current = false;
       noteRegenFinished(topic);
-      void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
+      void queryClient.invalidateQueries({ queryKey: assistantKeys.all });
       void queryClient.invalidateQueries({ queryKey: demoUsageKeys.all });
       reseedHistory(topic);
     }

@@ -1,8 +1,9 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
+import { newTopicId } from "@/lib/id";
 import { requireActor } from "@/server/auth/actor";
 import {
   adminCredentials,
@@ -37,8 +38,11 @@ import {
   deleteTopic,
   findTopicContextForActor,
   findTopicForActor,
+  listFavoriteTopics,
+  listTopicPage,
   renameTopic,
   setTopicFavorite,
+  touchTopicUpdatedAt,
 } from "@/server/services/topic.service";
 
 /** The route boundary resolves the real `Chat.newTopic`; the service stores
@@ -206,6 +210,146 @@ describe("topic.service", () => {
       .where(eq(topics.id, created.id));
     expect(stored[0]?.isFavorite).toBe(false);
     expect(stored[0]?.updatedAt).toEqual(created.updatedAt);
+  });
+
+  describe("topic pages", () => {
+    async function seedTopics(
+      assistantId: string,
+      count: number,
+      options?: { favorite?: boolean },
+    ): Promise<string[]> {
+      const ids = Array.from({ length: count }, () => newTopicId());
+      await db.insert(topics).values(
+        ids.map((id, index) => ({
+          id,
+          assistantId,
+          title: `Topic ${index}`,
+          isFavorite: options?.favorite ?? false,
+          // Newest first by index: ids[0] is the most recently active.
+          updatedAt: new Date(Date.UTC(2026, 0, 1) - index * 60_000),
+        })),
+      );
+      return ids;
+    }
+
+    async function readAll(
+      assistantId: string,
+      actor: Parameters<typeof listTopicPage>[2],
+    ): Promise<string[][]> {
+      const pages: string[][] = [];
+      let cursor: [string, string] | null = null;
+      do {
+        const page = await listTopicPage(assistantId, cursor, actor);
+        pages.push(page.topics.map((topic) => topic.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      return pages;
+    }
+
+    it("pages non-favorites 20 at a time, newest first, and ends with a null cursor", async () => {
+      const { userActor } = await seedActors();
+      const assistant = await createAssistant({ name: "Pages", icon: "✨" }, userActor);
+      const ids = await seedTopics(assistant.id, 45);
+
+      const first = await listTopicPage(assistant.id, null, userActor);
+      expect(first.topics).toHaveLength(20);
+      expect(first.nextCursor).not.toBeNull();
+
+      const pages = await readAll(assistant.id, userActor);
+      expect(pages.map((page) => page.length)).toEqual([20, 20, 5]);
+      expect(pages.flat()).toEqual(ids);
+    });
+
+    it("keeps pages free of duplicates and skips when a topic is touched in between", async () => {
+      const { userActor } = await seedActors();
+      const assistant = await createAssistant({ name: "Touch", icon: "✨" }, userActor);
+      const ids = await seedTopics(assistant.id, 25);
+
+      const first = await listTopicPage(assistant.id, null, userActor);
+      // One topic already shown and one still ahead both become newest.
+      await touchTopicUpdatedAt(ids[4] ?? "", userActor);
+      await touchTopicUpdatedAt(ids[22] ?? "", userActor);
+      const second = await listTopicPage(
+        assistant.id,
+        first.nextCursor,
+        userActor,
+      );
+
+      const seen = [...first.topics, ...second.topics].map((topic) => topic.id);
+      expect(new Set(seen).size).toBe(seen.length);
+      // The topic touched ahead of the cursor moves to the top and so shows
+      // up on a refetched page 1; every other topic is seen exactly once.
+      const untouched = ids.filter((id) => id !== ids[22]);
+      expect([...untouched].sort()).toEqual(
+        [...seen].sort(),
+      );
+      const refetched = await listTopicPage(assistant.id, null, userActor);
+      expect(refetched.topics.slice(0, 2).map((topic) => topic.id).sort()).toEqual(
+        [ids[4], ids[22]].sort(),
+      );
+    });
+
+    it("does not skip rows that share a millisecond across a page boundary", async () => {
+      const { userActor } = await seedActors();
+      const assistant = await createAssistant({ name: "Ties", icon: "✨" }, userActor);
+      const ids = await seedTopics(assistant.id, 25);
+      // Microsecond-spaced inside one millisecond: a millisecond cursor
+      // would drop or repeat rows on the boundary at 20.
+      await Promise.all(
+        ids.map((id, index) =>
+          db
+            .update(topics)
+            .set({
+              updatedAt: sql`timestamptz '2026-01-01 00:00:00.123000+00' - ${index} * interval '1 microsecond'`,
+            })
+            .where(eq(topics.id, id)),
+        ),
+      );
+
+      const pages = await readAll(assistant.id, userActor);
+      expect(pages.map((page) => page.length)).toEqual([20, 5]);
+      expect(pages.flat()).toEqual(ids);
+    });
+
+    it("breaks identical updated_at ties by id", async () => {
+      const { userActor } = await seedActors();
+      const assistant = await createAssistant({ name: "Same", icon: "✨" }, userActor);
+      const ids = await seedTopics(assistant.id, 25);
+      await db
+        .update(topics)
+        .set({ updatedAt: new Date("2026-01-01T00:00:00.000Z") })
+        .where(eq(topics.assistantId, assistant.id));
+
+      const seen = (await readAll(assistant.id, userActor)).flat();
+      expect(seen).toHaveLength(25);
+      expect([...seen].sort()).toEqual([...ids].sort());
+    });
+
+    it("excludes favorites from pages and lists every favorite", async () => {
+      const { userActor } = await seedActors();
+      const assistant = await createAssistant({ name: "Fav", icon: "✨" }, userActor);
+      await seedTopics(assistant.id, 3);
+      const favorites = await seedTopics(assistant.id, 25, { favorite: true });
+
+      const pages = (await readAll(assistant.id, userActor)).flat();
+      expect(pages).toHaveLength(3);
+      expect(pages.some((id) => favorites.includes(id))).toBe(false);
+
+      const listed = await listFavoriteTopics(assistant.id, userActor);
+      expect(listed.map((topic) => topic.id)).toEqual(favorites);
+    });
+
+    it("returns NOT_FOUND for another user's assistant", async () => {
+      const { userActor, otherAdminActor } = await seedActors();
+      const assistant = await createAssistant({ name: "Mine", icon: "✨" }, userActor);
+
+      await expect(
+        listTopicPage(assistant.id, null, otherAdminActor),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(
+        listFavoriteTopics(assistant.id, otherAdminActor),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    });
   });
 
   it("returns 404 when creating under an assistant the actor does not own", async () => {

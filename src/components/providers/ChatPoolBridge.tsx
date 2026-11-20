@@ -16,8 +16,8 @@ import { useActiveGenerations } from "@/hooks/use-active-generations";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import { assistantTopicHref } from "@/lib/assistant-path";
 import { listTopicMessages } from "@/lib/api/chat";
-import { waitForTopicTitle } from "@/lib/api/topic";
-import type { AssistantTree } from "@/lib/schemas/assistant";
+import { getTopic, waitForTopicTitle } from "@/lib/api/topic";
+import type { TopicDetail } from "@/lib/schemas/topic";
 import {
   findGenerationByRequest,
   generationKeys,
@@ -68,7 +68,7 @@ export default function ChatPoolBridge() {
    * pre-turn cache while the seed guard blocked the mount refetch.
    */
   const refreshAfterGeneration = useStableCallback((topicId: string | null) => {
-    void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
+    void queryClient.invalidateQueries({ queryKey: assistantKeys.all });
     void queryClient.invalidateQueries({
       queryKey: generationKeys.active(userId),
     });
@@ -95,28 +95,27 @@ export default function ChatPoolBridge() {
   });
 
   const notifyReplyFinished = useStableCallback(
-    (topicId: string, isError: boolean) => {
+    async (topicId: string, isError: boolean) => {
       if (
         !window.pikaNative ||
         (document.visibilityState !== "hidden" && document.hasFocus())
       ) {
         return;
       }
-      // A topic the tree does not hold yet has no assistant to build a path
-      // from, so no notification is shown.
-      const assistant = queryClient
-        .getQueryData<AssistantTree>(assistantKeys.tree())
-        ?.assistants.find((candidate) =>
-          candidate.topics.some((topic) => topic.id === topicId),
-        );
-      if (!assistant) {
+      // A failed lookup (deleted topic, offline) shows no notification.
+      const topic = await queryClient
+        .fetchQuery({
+          queryKey: topicKeys.detail(userId, topicId),
+          queryFn: () => getTopic(topicId),
+        })
+        .catch(() => null);
+      if (!topic) {
         return;
       }
-      const title = assistant.topics.find((topic) => topic.id === topicId)?.title;
-      window.pikaNative.notify({
-        title: title && !isDefaultTopicTitle(title) ? title : tRoot("title"),
+      window.pikaNative?.notify({
+        title: isDefaultTopicTitle(topic.title) ? tRoot("title") : topic.title,
         body: isError ? tNotify("failed") : tNotify("finished"),
-        path: assistantTopicHref(assistant.id, topicId),
+        path: assistantTopicHref(topic.assistantId, topicId),
       });
     },
   );
@@ -124,32 +123,31 @@ export default function ChatPoolBridge() {
   useEffect(() => {
     return configureChatPool({
       onTopicAnnounced: (topicId) => {
-        void queryClient.invalidateQueries({ queryKey: assistantKeys.tree() });
+        void queryClient.invalidateQueries({ queryKey: assistantKeys.all });
         // The server names the topic beside the answer; the tree refetch above
         // usually runs before that title lands, so wait for it. A topic the
         // cache already shows with a real title has no title task to wait on
         // (a new draft topic is not in the cache yet).
-        const titled = queryClient
-          .getQueryData<AssistantTree>(assistantKeys.tree())
-          ?.assistants.some((assistant) =>
-            assistant.topics.some(
-              (topic) => topic.id === topicId && !isDefaultTopicTitle(topic.title),
-            ),
-          );
-        if (titled) {
+        const cached = queryClient.getQueryData<TopicDetail>(
+          topicKeys.detail(userId, topicId),
+        );
+        if (cached && !isDefaultTopicTitle(cached.title)) {
           return;
         }
         // A failure (topic deleted mid-turn, signed out, offline) leaves
         // nothing to refresh; focus/visibility refetches cover the rest.
         waitForTopicTitle(topicId).then(
-          () => queryClient.invalidateQueries({ queryKey: assistantKeys.tree() }),
+          (detail) => {
+            queryClient.setQueryData(topicKeys.detail(userId, topicId), detail);
+            return queryClient.invalidateQueries({ queryKey: assistantKeys.all });
+          },
           () => undefined,
         );
       },
       invalidateAfterFinish: (topicId) => refreshAfterGeneration(topicId),
       notifyReplyFinished,
     });
-  }, [queryClient, refreshAfterGeneration, notifyReplyFinished]);
+  }, [queryClient, userId, refreshAfterGeneration, notifyReplyFinished]);
 
   // Reload recovery for a request whose confirmation was lost (chat task
   // §4/G2): look each stored receipt up by request id — never re-POST, which

@@ -1,0 +1,2 @@
+DROP INDEX "topics_assistant_id_idx";--> statement-breakpoint
+CREATE INDEX "topics_assistant_list_idx" ON "topics" USING btree ("assistant_id","is_favorite","updated_at" DESC NULLS FIRST,"id" DESC NULLS FIRST);

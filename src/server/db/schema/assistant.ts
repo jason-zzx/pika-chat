@@ -44,7 +44,14 @@ export const topics = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
-  (table) => [index("topics_assistant_id_idx").on(table.assistantId)],
+  (table) => [
+    index("topics_assistant_list_idx").on(
+      table.assistantId,
+      table.isFavorite,
+      table.updatedAt.desc().nullsFirst(),
+      table.id.desc().nullsFirst(),
+    ),
+  ],
 );
 
 /** The `Topic` shape every service returns. Lives here, not in a service, so

@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import { topicSchema } from "./topic";
-
 export const DEFAULT_ASSISTANT_ICON = "✨";
 
 export const assistantSchema = z.object({
@@ -11,7 +9,7 @@ export const assistantSchema = z.object({
   systemPrompt: z.string().nullable(),
   defaultProviderConfigId: z.string().nullable(),
   defaultModelId: z.string().nullable(),
-  topics: z.array(topicSchema),
+  topicCount: z.number().int(),
 });
 export type Assistant = z.infer<typeof assistantSchema>;
 
