@@ -9,12 +9,14 @@ import {
   discoverProviderModels,
   listProviderConfigs,
   removeProviderModel,
+  syncProviderModels,
   updateProviderConfig,
   updateProviderModel,
 } from "@/lib/api/provider";
 import type {
   AddProviderModelInput,
   CreateProviderConfigInput,
+  SyncProviderModelsInput,
   UpdateProviderConfigInput,
   UpdateProviderModelInput,
 } from "@/lib/schemas/provider";
@@ -24,6 +26,14 @@ import { availableModelKeys } from "./use-available-models";
 export const providerConfigKeys = {
   all: ["provider-configs"] as const,
   list: () => [...providerConfigKeys.all, "list"] as const,
+};
+
+// Kept outside `providerConfigKeys.all` so model mutations never trigger a
+// redundant upstream `/models` call while the dialog closes.
+export const providerDiscoveryKeys = {
+  all: ["provider-discovery"] as const,
+  detail: (configId: string) =>
+    [...providerDiscoveryKeys.all, configId] as const,
 };
 
 export function useProviderConfigs() {
@@ -78,9 +88,33 @@ export function useDeleteProviderConfig() {
   });
 }
 
-export function useDiscoverProviderModels() {
+export function useDiscoverProviderModels(
+  configId: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: providerDiscoveryKeys.detail(configId),
+    queryFn: () => discoverProviderModels(configId),
+    enabled,
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useSyncProviderModels() {
+  const invalidate = useInvalidateProviderQueries();
   return useMutation({
-    mutationFn: (id: string) => discoverProviderModels(id),
+    mutationFn: ({
+      configId,
+      input,
+    }: {
+      configId: string;
+      input: SyncProviderModelsInput;
+    }) => syncProviderModels(configId, input),
+    onSuccess: () => {
+      void invalidate();
+    },
   });
 }
 

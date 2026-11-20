@@ -1,7 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  discoverProviderModels,
+  listProviderConfigs,
+} from "@/lib/api/provider";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import ProviderConfigsScreen from "./ProviderConfigsScreen";
@@ -19,6 +23,7 @@ vi.mock("@/lib/api/provider", () => ({
   addProviderModel: vi.fn(),
   updateProviderModel: vi.fn(),
   removeProviderModel: vi.fn(),
+  syncProviderModels: vi.fn(),
 }));
 
 function renderScreen(canShare: boolean) {
@@ -70,5 +75,48 @@ describe("ProviderConfigsScreen", () => {
       screen.getByRole("checkbox", { name: "共享给实例" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "创建" })).toBeInTheDocument();
+  });
+
+  it("renders '从上游获取' and fetches models automatically on click", async () => {
+    vi.mocked(listProviderConfigs).mockResolvedValueOnce({
+      own: [
+        {
+          id: "cfg-1",
+          name: "OpenAI",
+          baseUrl: "https://api.openai.com/v1",
+          apiFormat: "openai-compatible",
+          visibility: "private",
+          enabled: true,
+          apiKeyLastFour: "1234",
+          models: [],
+        },
+      ],
+      shared: [],
+    });
+    vi.mocked(discoverProviderModels).mockResolvedValueOnce({
+      modelIds: ["gpt-4o"],
+    });
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderWithIntl(
+      <QueryClientProvider client={client}>
+        <ProviderConfigsScreen canShare={false} />
+      </QueryClientProvider>,
+      { locale: "zh-CN" },
+    );
+
+    const fetchButton = await screen.findByRole("button", {
+      name: "从上游获取",
+    });
+    fireEvent.click(fetchButton);
+
+    await waitFor(() => {
+      expect(discoverProviderModels).toHaveBeenCalledWith("cfg-1");
+    });
+    expect(
+      await screen.findByRole("tab", { name: "现有模型 1" }),
+    ).toBeInTheDocument();
   });
 });

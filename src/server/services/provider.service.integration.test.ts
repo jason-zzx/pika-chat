@@ -16,6 +16,7 @@ import {
   PATCH as patchProviderModel,
   DELETE as deleteProviderModel,
 } from "@/app/api/providers/[id]/models/route";
+import { POST as postSyncProviderModels } from "@/app/api/providers/[id]/models/sync/route";
 import { POST as postProvider } from "@/app/api/providers/route";
 import { resetModelCatalogCache } from "@/server/ai/model-catalog";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
@@ -1036,6 +1037,85 @@ describe("provider.service", () => {
         .from(providerConfigs)
         .where(eq(providerConfigs.id, config.id));
       expect(rows[0]?.at?.getTime()).toBe(marked.getTime());
+    });
+  });
+
+  describe("syncProviderModels", () => {
+    it("adds and removes models in one batch while preserving untouched ones", async () => {
+      const { userActor, userCookie, otherAdminCookie } = await seedActors();
+      const config = await createProviderConfig(
+        {
+          name: "batch-sync",
+          baseUrl: "https://relay.example.com/v1",
+          visibility: "private",
+        },
+        userActor,
+      );
+      await addProviderModel(config.id, { modelId: "keep-me" }, userActor);
+      await addProviderModel(config.id, { modelId: "drop-me" }, userActor);
+      await addProviderModel(config.id, { modelId: "drop-me-2" }, userActor);
+
+      const restore = stubModelsDevCatalog(gpt4oCatalog());
+      try {
+        const synced = await postSyncProviderModels(
+          jsonRequest(`/api/providers/${config.id}/models/sync`, {
+            cookie: userCookie,
+            body: {
+              add: ["gpt-4o", "new-custom", "keep-me", "gpt-4o"],
+              remove: ["drop-me", "drop-me-2", "not-present"],
+            },
+          }),
+          { params: Promise.resolve({ id: config.id }) },
+        );
+        expect(synced.status).toBe(200);
+        const body = asObject(await readJson(synced));
+        expect(body.addedCount).toBe(2);
+        expect(body.removedCount).toBe(2);
+        const modelIds = (body.models as Array<{ modelId: string }>).map(
+          (model) => model.modelId,
+        );
+        expect(modelIds.sort()).toEqual(["gpt-4o", "keep-me", "new-custom"]);
+        const gpt = (
+          body.models as Array<{
+            modelId: string;
+            contextTokens: number;
+            metadataSource: string;
+          }>
+        ).find((model) => model.modelId === "gpt-4o");
+        expect(gpt).toMatchObject({
+          contextTokens: 128000,
+          metadataSource: "catalog",
+        });
+
+        const available = await resolveAvailableModels(userActor);
+        expect(available.map((model) => model.modelId).sort()).toEqual([
+          "gpt-4o",
+          "keep-me",
+          "new-custom",
+        ]);
+      } finally {
+        restore();
+      }
+
+      const unauthorized = await postSyncProviderModels(
+        jsonRequest(`/api/providers/${config.id}/models/sync`, {
+          cookie: otherAdminCookie,
+          body: { add: ["hijack"], remove: ["keep-me"] },
+        }),
+        { params: Promise.resolve({ id: config.id }) },
+      );
+      expect(unauthorized.status).toBe(404);
+      expect(errorCode(await readJson(unauthorized))).toBe("NOT_FOUND");
+
+      const invalid = await postSyncProviderModels(
+        jsonRequest(`/api/providers/${config.id}/models/sync`, {
+          cookie: userCookie,
+          body: { add: ["  "], remove: [] },
+        }),
+        { params: Promise.resolve({ id: config.id }) },
+      );
+      expect(invalid.status).toBe(400);
+      expect(errorCode(await readJson(invalid))).toBe("VALIDATION_FAILED");
     });
   });
 });

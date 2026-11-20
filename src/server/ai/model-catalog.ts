@@ -274,26 +274,47 @@ async function loadCatalog(): Promise<Catalog | null> {
   return catalog;
 }
 
-export async function lookupModelMetadata(
+function lookupFromCatalog(
+  catalog: Catalog | null,
   modelId: string,
-): Promise<ModelMetadataFields | null> {
-  const catalog = await loadCatalog();
+): ModelMetadataFields | null {
   if (!catalog) {
     return null;
   }
   const matched = matchModel(catalog, modelId);
-  if (!matched) {
-    return null;
-  }
-  return hitToMetadata(matched.providerId, modelId, matched.model);
+  return matched
+    ? hitToMetadata(matched.providerId, modelId, matched.model)
+    : null;
+}
+
+export async function lookupModelMetadata(
+  modelId: string,
+): Promise<ModelMetadataFields | null> {
+  return lookupFromCatalog(await loadCatalog(), modelId);
 }
 
 export async function fillMetadataForModelId(
   modelId: string,
 ): Promise<ModelMetadataFields> {
-  const hit = await lookupModelMetadata(modelId);
-  if (hit) {
-    return hit;
+  return (await lookupModelMetadata(modelId)) ?? defaultModelMetadata();
+}
+
+/**
+ * Loads the catalog at most once for an entire batch so a cold or failing
+ * upstream lookup never repeats N sequential timeouts.
+ */
+export async function fillMetadataForModelIds(
+  modelIds: string[],
+): Promise<Map<string, ModelMetadataFields>> {
+  const uniqueIds = Array.from(new Set(modelIds));
+  if (uniqueIds.length === 0) {
+    return new Map();
   }
-  return defaultModelMetadata();
+  const catalog = await loadCatalog();
+  return new Map(
+    uniqueIds.map((id) => [
+      id,
+      lookupFromCatalog(catalog, id) ?? defaultModelMetadata(),
+    ]),
+  );
 }

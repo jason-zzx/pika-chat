@@ -505,13 +505,15 @@ function OwnProviderDetail({
         </DialogContent>
       </Dialog>
 
-      <DiscoverModelsDialog
-        configId={config.id}
-        configName={config.name}
-        existingModelIds={config.models.map((model) => model.modelId)}
-        open={discoverOpen}
-        onOpenChange={setDiscoverOpen}
-      />
+      {discoverOpen ? (
+        <DiscoverModelsDialog
+          configId={config.id}
+          configName={config.name}
+          existingModelIds={config.models.map((model) => model.modelId)}
+          open
+          onOpenChange={setDiscoverOpen}
+        />
+      ) : null}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>

@@ -5,6 +5,7 @@ import {
   ownProviderConfigSchema,
   providerConfigListSchema,
   providerModelSchema,
+  syncProviderModelsResponseSchema,
   type AddProviderModelInput,
   type AvailableModel,
   type CreateProviderConfigInput,
@@ -12,6 +13,8 @@ import {
   type OwnProviderConfig,
   type ProviderConfigList,
   type ProviderModel,
+  type SyncProviderModelsInput,
+  type SyncProviderModelsResponse,
   type UpdateProviderConfigInput,
   type UpdateProviderModelInput,
 } from "@/lib/schemas/provider";
@@ -105,6 +108,23 @@ export async function removeProviderModel(
     { method: "DELETE" },
   );
   await parseEmpty(response);
+}
+
+export async function syncProviderModels(
+  configId: string,
+  input: SyncProviderModelsInput,
+): Promise<SyncProviderModelsResponse> {
+  const response = await fetch(
+    `/api/providers/${encodeURIComponent(configId)}/models/sync`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(response, (data) =>
+    syncProviderModelsResponseSchema.parse(data),
+  );
 }
 
 export async function listAvailableModels(): Promise<AvailableModel[]> {

@@ -140,6 +140,21 @@ export const discoverModelsResponseSchema = z.object({
 });
 export type DiscoverModelsResponse = z.infer<typeof discoverModelsResponseSchema>;
 
+export const syncProviderModelsSchema = z.object({
+  add: z.array(z.string().trim().min(1)).default([]),
+  remove: z.array(z.string().trim().min(1)).default([]),
+});
+export type SyncProviderModelsInput = z.infer<typeof syncProviderModelsSchema>;
+
+export const syncProviderModelsResponseSchema = z.object({
+  models: z.array(providerModelSchema),
+  addedCount: z.number().int().nonnegative(),
+  removedCount: z.number().int().nonnegative(),
+});
+export type SyncProviderModelsResponse = z.infer<
+  typeof syncProviderModelsResponseSchema
+>;
+
 export const availableModelSchema = z.object({
   configId: z.string(),
   configName: z.string(),

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import { isStaffRole } from "@/lib/auth-hierarchy";
 import { newId } from "@/lib/id";
@@ -8,20 +8,26 @@ import {
   requiresApiKey,
   type ProviderApiFormat,
 } from "@/lib/provider-format";
-import type {
-  AddProviderModelInput,
-  CreateProviderConfigInput,
-  ModelMetadataFields,
-  OwnProviderConfig,
-  ProviderConfigList,
-  ProviderModel,
-  SharedProviderConfig,
-  UpdateProviderConfigInput,
-  UpdateProviderModelInput,
+import {
+  defaultModelMetadata,
+  SEEDED_REASONING_OPTIONS,
+  type AddProviderModelInput,
+  type CreateProviderConfigInput,
+  type ModelMetadataFields,
+  type OwnProviderConfig,
+  type ProviderConfigList,
+  type ProviderModel,
+  type SharedProviderConfig,
+  type SyncProviderModelsInput,
+  type SyncProviderModelsResponse,
+  type UpdateProviderConfigInput,
+  type UpdateProviderModelInput,
 } from "@/lib/schemas/provider";
-import { SEEDED_REASONING_OPTIONS } from "@/lib/schemas/provider";
 import { fetchServedModelIds } from "@/server/ai/discovery";
-import { fillMetadataForModelId } from "@/server/ai/model-catalog";
+import {
+  fillMetadataForModelId,
+  fillMetadataForModelIds,
+} from "@/server/ai/model-catalog";
 import {
   fillValues,
   hydrateUnsourcedModels,
@@ -566,4 +572,75 @@ export async function discoverProviderModels(
     baseUrl: config.baseUrl,
     apiKey,
   });
+}
+
+export async function syncProviderModels(
+  configId: string,
+  input: SyncProviderModelsInput,
+  actor: Actor,
+): Promise<SyncProviderModelsResponse> {
+  await requireOwnedConfig(configId, actor);
+
+  const removeIds = Array.from(new Set(input.remove));
+  const removeSet = new Set(removeIds);
+  const addIds = Array.from(new Set(input.add)).filter(
+    (id) => !removeSet.has(id),
+  );
+
+  // Resolve catalog metadata outside the transaction: cold lookup performs an
+  // HTTP fetch, which must not hold a PGlite transaction mutex open.
+  const metadataById = await fillMetadataForModelIds(addIds);
+
+  const db = getDb();
+  const { addedCount, removedCount } = await db.transaction(async (tx) => {
+    const deleted =
+      removeIds.length > 0
+        ? await tx
+            .delete(providerModels)
+            .where(
+              and(
+                eq(providerModels.providerConfigId, configId),
+                inArray(providerModels.modelId, removeIds),
+              ),
+            )
+            .returning({ id: providerModels.id })
+        : [];
+
+    const inserted =
+      addIds.length > 0
+        ? await tx
+            .insert(providerModels)
+            .values(
+              addIds.map((modelId) => ({
+                id: newId(),
+                providerConfigId: configId,
+                modelId,
+                ...fillValues(
+                  metadataById.get(modelId) ?? defaultModelMetadata(),
+                ),
+              })),
+            )
+            .onConflictDoNothing({
+              target: [providerModels.providerConfigId, providerModels.modelId],
+            })
+            .returning({ id: providerModels.id })
+        : [];
+
+    return {
+      addedCount: inserted.length,
+      removedCount: deleted.length,
+    };
+  });
+
+  logger.info(
+    { userId: actor.userId, configId, addedCount, removedCount },
+    "provider models synced",
+  );
+
+  const updated = await loadOwnConfig(configId, actor);
+  return {
+    models: updated.models,
+    addedCount,
+    removedCount,
+  };
 }

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fillMetadataForModelId, resetModelCatalogCache } from "./model-catalog";
+import {
+  fillMetadataForModelId,
+  fillMetadataForModelIds,
+  resetModelCatalogCache,
+} from "./model-catalog";
 
 const originalFetch = globalThis.fetch;
 
@@ -289,5 +293,45 @@ describe("fillMetadataForModelId", () => {
       vendorKey: "deepseek",
       metadataSource: "catalog",
     });
+  });
+});
+
+describe("fillMetadataForModelIds", () => {
+  it("fetches the catalog once for a batch and falls back cleanly on failure", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(catalogPayload()));
+    globalThis.fetch = fetchMock;
+
+    const hitMap = await fillMetadataForModelIds([
+      "gpt-4o",
+      "gpt-5",
+      "gpt-4o",
+      "local-llama",
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(hitMap.get("gpt-4o")).toMatchObject({
+      contextTokens: 128000,
+      vendorKey: "openai",
+      metadataSource: "catalog",
+    });
+    expect(hitMap.get("gpt-5")).toMatchObject({
+      contextTokens: 400000,
+      reasoning: true,
+      metadataSource: "catalog",
+    });
+    expect(hitMap.get("local-llama")).toMatchObject({
+      contextTokens: 256000,
+      metadataSource: "default",
+    });
+
+    resetModelCatalogCache();
+    const failingFetch = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    globalThis.fetch = failingFetch;
+
+    const fallbackMap = await fillMetadataForModelIds(["gpt-4o", "gpt-5"]);
+    expect(failingFetch).toHaveBeenCalledTimes(1);
+    expect(fallbackMap.get("gpt-4o")?.metadataSource).toBe("default");
+    expect(fallbackMap.get("gpt-5")?.metadataSource).toBe("default");
   });
 });
