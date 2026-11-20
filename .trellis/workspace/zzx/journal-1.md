@@ -1244,3 +1244,27 @@ Shipped the Capacitor 8 Android shell (11-16-native-mobile) on top of shared she
 ### Status
 
 [OK] **Completed**
+
+
+## Session 46: Sidebar topic pagination and row UX
+<!-- trellis-session: v=2 fp=ebc5451bb29148b5 -->
+
+**Date**: 2026-11-19
+**Task**: Sidebar topic pagination and row UX
+**Branch**: `feat/native-apps`
+
+### Summary
+
+Paginated the assistant pane's topics: favorites load in full, non-favorites page 20 at a time by microsecond-precise keyset cursor with IntersectionObserver auto-load and retry; the tree now carries topicCount and consumers read topic detail. Rows show a compact last-active label, hover-only overlay actions (gradient, round hover, no width), a truncation-gated popover-token title tooltip, and touch long-press menu with a full-title header. Fixed the Base UI modal menu backdrop leaking outside presses through z-indexed sidebar/sheet (Portal relative z-50). Specs: topic-list-pagination, infinite-query pitfalls, backdrop stacking, sidebar topic rows.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d97bd1f` | fix(ui): stack dropdown menu backdrop above z-indexed containers |
+| `3877fc8` | feat(sidebar): paginate assistant topics and redesign topic rows |
+| `d87cccb` | docs(trellis): plan and record sidebar topic pagination |
+
+### Status
+
+[OK] **Completed**
