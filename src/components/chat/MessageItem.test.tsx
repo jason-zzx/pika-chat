@@ -487,6 +487,42 @@ describe("MessageItem editing (edit-and-regenerate)", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
+  it("shows the sent quote, keeps it through an edit, and drops it once removed (R7)", () => {
+    const onEditSubmit = vi.fn();
+    const onQuoteJump = vi.fn();
+    const quote = { messageKey: "g1", text: "the source line", offset: 4 };
+    const message: ChatUIMessage = {
+      id: "user-1",
+      role: "user",
+      parts: [
+        { type: "data-quote", data: quote },
+        { type: "text", text: "why?" },
+      ],
+    };
+    renderEditable(message, { onEditSubmit, onQuoteJump });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Go to the quoted text: the source line",
+      }),
+    );
+    expect(onQuoteJump).toHaveBeenCalledWith(quote);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onEditSubmit).toHaveBeenLastCalledWith(message, [
+      { type: "data-quote", data: quote },
+      { type: "text", text: "why?" },
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove quote" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onEditSubmit).toHaveBeenLastCalledWith(message, [
+      { type: "text", text: "why?" },
+    ]);
+  });
+
   it("pre-stages the version's attachments as removable chips and submits without the removed one (R3)", async () => {
     const onEditSubmit = vi.fn();
     // sizeBytes rides along structurally on persisted file parts (the SDK's

@@ -347,7 +347,10 @@ export async function insertUserMessageRow(
   // file references the UI renders; the model payload is routed separately at
   // send time (`resolveAttachmentsForModel`).
   const parts = input.message.parts.filter(
-    (part) => part.type === "text" || part.type === "file",
+    (part) =>
+      part.type === "text" ||
+      part.type === "file" ||
+      part.type === "data-quote",
   );
   const inserted = await executor
     .insert(chatMessages)
@@ -415,7 +418,10 @@ export async function insertUserMessageVersionRow(
   }
   const id = input.message.id.length > 0 ? input.message.id : newId();
   const parts = input.message.parts.filter(
-    (part) => part.type === "text" || part.type === "file",
+    (part) =>
+      part.type === "text" ||
+      part.type === "file" ||
+      part.type === "data-quote",
   );
   const row = await executor.transaction(async (tx) => {
     await tx

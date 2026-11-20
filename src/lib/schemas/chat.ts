@@ -53,8 +53,23 @@ export const chatMetadataSchema = z.object({
 });
 export type ChatMetadata = z.infer<typeof chatMetadataSchema>;
 
+/**
+ * Quoted excerpt of another message, carried as a `data-quote` part on the
+ * user message that quotes it. `messageKey` is the source row's version-group
+ * key (`groupId ?? id`); `offset` is the excerpt's start within the source
+ * body's concatenated rendered text, so a repeated phrase resolves to the
+ * occurrence that was quoted.
+ */
+const chatQuoteSchema = z.object({
+  messageKey: z.string().min(1),
+  text: z.string().min(1),
+  offset: z.number().int().nonnegative(),
+});
+export type ChatQuote = z.infer<typeof chatQuoteSchema>;
+
 export type ChatDataParts = {
   topic: { topicId: string; streamId: string };
+  quote: ChatQuote;
 };
 
 export type ChatUIMessage = UIMessage<ChatMetadata, ChatDataParts>;
@@ -81,9 +96,15 @@ export const chatFilePartSchema = z.object({
 });
 export type ChatFilePart = z.infer<typeof chatFilePartSchema>;
 
+const chatQuotePartSchema = z.object({
+  type: z.literal("data-quote"),
+  data: chatQuoteSchema,
+});
+
 export const chatRequestPartSchema = z.union([
   chatTextPartSchema,
   chatFilePartSchema,
+  chatQuotePartSchema,
 ]);
 export type ChatRequestPart = z.infer<typeof chatRequestPartSchema>;
 
@@ -92,7 +113,16 @@ export const chatRequestMessageSchema = z.object({
   role: z.literal("user"),
   // `.min(1)` still holds for an attachment-only message: the file part is a
   // part. PRD R4 allows sending attachments with no text.
-  parts: z.array(chatRequestPartSchema).min(1),
+  parts: z
+    .array(chatRequestPartSchema)
+    .min(1)
+    // A quote is context for the user's own text or files: at most one, and
+    // never the whole message.
+    .refine(
+      (parts) =>
+        parts.filter((part) => part.type === "data-quote").length <= 1 &&
+        parts.some((part) => part.type !== "data-quote"),
+    ),
 });
 
 /**
@@ -221,6 +251,7 @@ const chatToolFetchPagePartSchema = toolPartSchema(
 export const chatStoredPartSchema = z.union([
   chatTextPartSchema,
   chatFilePartSchema,
+  chatQuotePartSchema,
   z.object({
     type: z.literal("reasoning"),
     text: z.string(),

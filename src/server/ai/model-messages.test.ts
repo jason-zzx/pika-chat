@@ -149,4 +149,30 @@ describe("replayModelMessages", () => {
     expect(JSON.stringify(converted)).toContain("tool-result");
     expect(converted.some((message) => message.role === "tool")).toBe(true);
   });
+
+  it("turns a quote part into a text part ahead of the user's own text", async () => {
+    const converted = await replayModelMessages([
+      {
+        id: "u1",
+        role: "user",
+        parts: [
+          {
+            type: "data-quote",
+            data: { messageKey: "a1", text: "the quoted bit", offset: 4 },
+          },
+          { type: "text", text: "explain this" },
+        ],
+      },
+    ]);
+
+    expect(converted).toEqual([
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "<quote>\nthe quoted bit\n</quote>" },
+          { type: "text", text: "explain this" },
+        ],
+      },
+    ]);
+  });
 });

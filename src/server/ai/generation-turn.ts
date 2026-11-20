@@ -205,8 +205,10 @@ export async function prepareSendTurn(
   const fileParts = request.message.parts.filter(
     (part) => part.type === "file",
   );
+  // The quote rides between the attachments and the text, so the model reads
+  // it as context right before the user's own words.
   const textParts = request.message.parts.filter(
-    (part) => part.type === "text",
+    (part) => part.type === "data-quote" || part.type === "text",
   );
   let canonicalParts: ChatUIMessage["parts"];
   if (isImage) {
@@ -360,7 +362,12 @@ export async function prepareRegenerateTurn(
     );
     // Canonical parts: the persisted edit version carries the files-table
     // identity of every attachment, not the browser-reported one.
-    editParts = [...owned, ...edit.parts.filter((part) => part.type === "text")];
+    editParts = [
+      ...owned,
+      ...edit.parts.filter(
+        (part) => part.type === "data-quote" || part.type === "text",
+      ),
+    ];
     // The edit becomes the selected version of the clicked user group. The
     // frozen history is the context BEFORE that message, and the edit itself is
     // appended by the executor — exactly once, never twice. The entry to drop

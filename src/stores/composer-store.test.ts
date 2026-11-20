@@ -53,3 +53,26 @@ describe("useComposerStore drafts", () => {
     expect(useComposerStore.getState().searchMode).toBe("off");
   });
 });
+
+describe("useComposerStore quotes", () => {
+  beforeEach(() => {
+    useComposerStore.setState({ quotes: {} });
+  });
+
+  it("holds one quote per draft, replacing on add and clearing on null", () => {
+    const topicA = composerDraftKey("topic-a", "assistant-1");
+    const topicB = composerDraftKey("topic-b", "assistant-1");
+    const first = { messageKey: "m1", text: "first", offset: 0 };
+    const second = { messageKey: "m2", text: "second", offset: 3 };
+
+    useComposerStore.getState().setQuote(topicA, first);
+    useComposerStore.getState().setQuote(topicB, first);
+    useComposerStore.getState().setQuote(topicA, second);
+    expect(useComposerStore.getState().quotes[topicA]).toEqual(second);
+    expect(useComposerStore.getState().quotes[topicB]).toEqual(first);
+
+    useComposerStore.getState().setQuote(topicA, null);
+    expect(useComposerStore.getState().quotes[topicA]).toBeNull();
+    expect(useComposerStore.getState().quotes[topicB]).toEqual(first);
+  });
+});

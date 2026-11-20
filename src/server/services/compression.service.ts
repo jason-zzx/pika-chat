@@ -176,6 +176,8 @@ export function transcriptForSummary(messages: ChatUIMessage[]): string {
     for (const part of message.parts) {
       if (part.type === "text" && part.text.trim().length > 0) {
         chunks.push(part.text);
+      } else if (part.type === "data-quote") {
+        chunks.push(`[Quoting: ${part.data.text}]`);
       } else if (part.type === "file") {
         chunks.push(`[Attachment: ${part.filename ?? "file"}]`);
       }

@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { attachmentLimitFor } from "@/lib/files/constants";
 import { SUPPORTED_FILE_ACCEPT } from "@/lib/files/media-types";
 import { imageCapabilityFor } from "@/lib/image-capabilities";
+import type { ChatQuote } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import type {
   ComposerImageParams,
@@ -46,6 +47,7 @@ import ComposerSelectTrigger from "./ComposerSelectTrigger";
 import ImageParamsPicker from "./ImageParamsPicker";
 import { findAvailableModel } from "./model-pick";
 import ModelPicker from "./ModelPicker";
+import QuoteCard from "./QuoteCard";
 import SearchModePicker from "./SearchModePicker";
 
 const AUTO_EFFORT = "__auto";
@@ -89,6 +91,10 @@ type ComposerProps = {
   onImageParamsChange?: (next: ComposerImageParams) => void;
   /** Bumped by the parent to focus the textarea (e.g. "edit this image"). */
   focusSignal?: number;
+  /** The draft's quote (at most one); it never makes the draft sendable. */
+  quote?: ChatQuote | null;
+  onRemoveQuote?: () => void;
+  onQuoteJump?: (quote: ChatQuote) => void;
 };
 
 export default function Composer({
@@ -117,6 +123,9 @@ export default function Composer({
   imageParams = {},
   onImageParamsChange,
   focusSignal,
+  quote,
+  onRemoveQuote,
+  onQuoteJump,
 }: ComposerProps) {
   const t = useTranslations("Chat.Composer");
   const tCompression = useTranslations("Chat.Compression");
@@ -226,6 +235,15 @@ export default function Composer({
                 />
               ))}
             </div>
+          ) : null}
+          {quote ? (
+            <QuoteCard
+              text={quote.text}
+              onJump={() => onQuoteJump?.(quote)}
+              onRemove={onRemoveQuote}
+              disabled={inFlight}
+              className="mx-3 mt-2"
+            />
           ) : null}
           <Textarea
             ref={textareaRef}

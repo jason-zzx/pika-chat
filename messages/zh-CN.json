@@ -357,6 +357,11 @@
       "collapse": "隐藏{language}译文",
       "expand": "显示{language}译文"
     },
+    "Quote": {
+      "quote": "引用",
+      "jump": "跳转到引用原文：{text}",
+      "remove": "移除引用"
+    },
     "newTopic": "新话题"
   },
   "Topic": {

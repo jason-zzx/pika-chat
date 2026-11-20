@@ -5,6 +5,7 @@ import {
   type StateStorage,
 } from "zustand/middleware";
 
+import type { ChatQuote } from "@/lib/schemas/chat";
 import type { FileExtractionState } from "@/lib/schemas/file";
 import {
   searchModeSchema,
@@ -67,6 +68,10 @@ type ComposerState = {
     key: string,
     updater: (current: StagedAttachment[]) => StagedAttachment[],
   ) => void;
+  /** At most one quote per draft; quoting again replaces it, null removes it.
+   * Session-only like the draft text it belongs to. */
+  quotes: Record<string, ChatQuote | null>;
+  setQuote: (key: string, quote: ChatQuote | null) => void;
   recentAssistantId: string | null;
   setRecentAssistantId: (id: string | null) => void;
   pickedModel: ComposerModelPick | null;
@@ -116,6 +121,11 @@ export const useComposerStore = create<ComposerState>()(
             ...state.attachments,
             [key]: updater(state.attachments[key] ?? []),
           },
+        })),
+      quotes: {},
+      setQuote: (key, quote) =>
+        set((state) => ({
+          quotes: { ...state.quotes, [key]: quote },
         })),
       recentAssistantId: null,
       setRecentAssistantId: (recentAssistantId) => set({ recentAssistantId }),

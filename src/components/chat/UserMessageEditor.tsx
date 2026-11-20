@@ -15,12 +15,14 @@ import { attachmentLimitFor } from "@/lib/files/constants";
 import { SUPPORTED_FILE_ACCEPT } from "@/lib/files/media-types";
 import type {
   ChatFilePart,
+  ChatQuote,
   ChatRequestPart,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
 import type { StagedAttachment } from "@/stores/composer-store";
 
 import AttachmentChip from "./AttachmentChip";
+import QuoteCard from "./QuoteCard";
 import {
   stagedAttachmentSlotCount,
   useComposerAttachments,
@@ -30,9 +32,9 @@ type UserMessageEditorProps = {
   /** The currently shown version: its text pre-fills the textarea and its
    * file parts seed the staged chips. */
   message: ChatUIMessage;
-  /** Hands the new version's parts (files first, then text — the order the
-   * server persists) to the parent, which owns the edit-and-regenerate
-   * request and its failure rollback. */
+  /** Hands the new version's parts (files, then the quote, then text — the
+   * order the server persists) to the parent, which owns the
+   * edit-and-regenerate request and its failure rollback. */
   onSubmit: (parts: ChatRequestPart[]) => void;
   /** Exits the editor without any server write (PRD R4). */
   onCancel: () => void;
@@ -41,6 +43,8 @@ type UserMessageEditorProps = {
    * while an editor is open — the send button holds until it ends instead of
    * silently dropping the edit. */
   locked?: boolean;
+  /** Jump to the seeded quote's source text. */
+  onQuoteJump?: (quote: ChatQuote) => void;
 };
 
 /**
@@ -54,6 +58,7 @@ export default function UserMessageEditor({
   onSubmit,
   onCancel,
   locked = false,
+  onQuoteJump,
 }: UserMessageEditorProps) {
   const tActions = useTranslations("Chat.Actions");
   const tComposer = useTranslations("Chat.Composer");
@@ -65,6 +70,11 @@ export default function UserMessageEditor({
       .filter((part) => part.type === "text")
       .map((part) => part.text)
       .join(""),
+  );
+  // The shown version's quote carries over unless removed; adding a quote
+  // while editing is out of scope.
+  const [quote, setQuote] = useState(
+    () => message.parts.find((part) => part.type === "data-quote")?.data,
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -144,6 +154,7 @@ export default function UserMessageEditor({
           ? { sizeBytes: attachment.sizeBytes }
           : {}),
       })),
+      ...(quote ? [{ type: "data-quote" as const, data: quote }] : []),
       ...(trimmed.length > 0 ? [{ type: "text" as const, text: trimmed }] : []),
     ];
     onSubmit(parts);
@@ -176,6 +187,14 @@ export default function UserMessageEditor({
             />
           ))}
         </div>
+      ) : null}
+      {quote ? (
+        <QuoteCard
+          text={quote.text}
+          onJump={() => onQuoteJump?.(quote)}
+          onRemove={() => setQuote(undefined)}
+          className="mx-1"
+        />
       ) : null}
       <Textarea
         ref={textareaRef}

@@ -794,7 +794,7 @@ describe("ChatView send file parts", () => {
 
     expect(captured.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        files: [
+        parts: [
           expect.objectContaining({
             type: "file",
             url: "/api/files/file-1",
@@ -806,6 +806,42 @@ describe("ChatView send file parts", () => {
       }),
       expect.anything(),
     );
+  });
+
+  it("sends the draft's quote between the files and the text, then clears it", async () => {
+    attachmentMocks.attachments = [
+      {
+        id: "att-1",
+        filename: "notes.txt",
+        mediaType: "text/plain",
+        sizeBytes: 2048,
+        status: "ready",
+        url: "/api/files/file-1",
+      },
+    ];
+    const quote = { messageKey: "g1", text: "answer", offset: 0 };
+    useComposerStore.setState({
+      drafts: { "topic:t1": "why?" },
+      quotes: { "topic:t1": quote },
+    });
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByRole("article", { name: "You" });
+
+    act(() => {
+      composerProps.latest?.onSend?.();
+    });
+
+    expect(captured.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({ type: "file" }),
+          { type: "data-quote", data: quote },
+          { type: "text", text: "why?" },
+        ],
+      }),
+      expect.anything(),
+    );
+    expect(useComposerStore.getState().quotes["topic:t1"]).toBeNull();
   });
 });
 

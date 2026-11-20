@@ -16,6 +16,7 @@ import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
 import type {
   ChatFilePart,
+  ChatQuote,
   ChatRequestPart,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
@@ -46,6 +47,7 @@ import FetchToolCall, { type FetchPageToolPart } from "./FetchToolCall";
 import MessageActions from "./MessageActions";
 import MessageTimestamp from "./MessageTimestamp";
 import MessageUsage from "./MessageUsage";
+import QuoteCard from "./QuoteCard";
 import ReasoningBlock from "./ReasoningBlock";
 import SearchToolCall, { type SearchWebToolPart } from "./SearchToolCall";
 import UserMessageEditor from "./UserMessageEditor";
@@ -438,6 +440,8 @@ type MessageItemProps = {
   /** Search-result deep link target (PRD R4): flash a `--primary` tint
    * while the parent's ~2s highlight window is open. */
   highlighted?: boolean;
+  /** Jump to the source of this message's quote (user rows). */
+  onQuoteJump?: (quote: ChatQuote) => void;
 };
 
 function MessageItem({
@@ -460,6 +464,7 @@ function MessageItem({
   compressedLocked = false,
   itemKey,
   highlighted = false,
+  onQuoteJump,
 }: MessageItemProps) {
   const t = useTranslations("Chat.MessageItem");
   const tAssistant = useTranslations("Assistant");
@@ -487,6 +492,7 @@ function MessageItem({
   const reasoningParts = message.parts.filter(
     (part) => part.type === "reasoning",
   );
+  const quote = message.parts.find((part) => part.type === "data-quote")?.data;
   const hasAnswer = textParts.some((part) => part.text.length > 0);
   const contentBlocks = buildContentBlocks(message.parts);
   // R14: the turn's numbered tool sources, walked in part order; text
@@ -607,6 +613,7 @@ function MessageItem({
               onEditSubmit?.(message, parts);
             }}
             onCancel={() => setEditing(false)}
+            onQuoteJump={onQuoteJump}
           />
         ) : (
           <>
@@ -621,8 +628,19 @@ function MessageItem({
                 ))}
               </div>
             ) : null}
+            {quote ? (
+              <QuoteCard
+                text={quote.text}
+                onJump={() => onQuoteJump?.(quote)}
+                className="w-fit max-w-[min(100%,42rem)]"
+              />
+            ) : null}
             {hasAnswer ? (
-              <div className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3.5 py-2.5 text-base leading-relaxed text-foreground md:px-3 md:py-2 md:text-sm md:leading-5">
+              <div
+                // Only body text is quotable (quote-range.ts).
+                data-quote-body
+                className="max-w-[min(100%,42rem)] rounded-lg bg-muted px-3.5 py-2.5 text-base leading-relaxed text-foreground md:px-3 md:py-2 md:text-sm md:leading-5"
+              >
                 {textParts.map((part, index) => (
                   <p key={index} className="whitespace-pre-wrap">
                     {part.text}
@@ -710,7 +728,11 @@ function MessageItem({
         }
         if (block.kind === "text") {
           return (
-            <div key={block.key} className="w-full text-base md:text-sm">
+            <div
+              key={block.key}
+              data-quote-body
+              className="w-full text-base md:text-sm"
+            >
               <Markdown text={block.text} citations={citations} />
             </div>
           );

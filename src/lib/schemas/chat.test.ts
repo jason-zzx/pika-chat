@@ -4,6 +4,8 @@ import { TRANSLATE_TARGET_LANGUAGE_CODES } from "@/lib/translate/languages";
 
 import {
   chatMetadataSchema,
+  chatRequestMessageSchema,
+  chatStoredPartSchema,
   translateMessageRequestSchema,
   translateMessageResponseSchema,
 } from "./chat";
@@ -64,5 +66,33 @@ describe("translateMessageResponseSchema", () => {
     expect(
       translateMessageResponseSchema.parse({ translation: "Bonjour" }),
     ).toEqual({ translation: "Bonjour" });
+  });
+});
+
+describe("data-quote parts", () => {
+  const quote = {
+    type: "data-quote",
+    data: { messageKey: "g1", text: "quoted", offset: 3 },
+  };
+  const message = (parts: unknown[]) => ({ id: "u1", role: "user", parts });
+
+  it("accepts one quote alongside text or files", () => {
+    expect(
+      chatRequestMessageSchema.safeParse(
+        message([quote, { type: "text", text: "why?" }]),
+      ).success,
+    ).toBe(true);
+    expect(chatStoredPartSchema.parse(quote)).toEqual(quote);
+  });
+
+  it("rejects a quote-only message and a second quote", () => {
+    expect(chatRequestMessageSchema.safeParse(message([quote])).success).toBe(
+      false,
+    );
+    expect(
+      chatRequestMessageSchema.safeParse(
+        message([quote, quote, { type: "text", text: "why?" }]),
+      ).success,
+    ).toBe(false);
   });
 });

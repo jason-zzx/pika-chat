@@ -161,6 +161,18 @@
       background-position: -200% 0;
     }
   }
+
+  --animate-quote-flash: quote-flash 2s ease-out forwards;
+
+  @keyframes quote-flash {
+    0%,
+    40% {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
 }
 
 @utility thin-scrollbar {

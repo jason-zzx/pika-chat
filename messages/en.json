@@ -357,6 +357,11 @@
       "collapse": "Hide the {language} translation",
       "expand": "Show the {language} translation"
     },
+    "Quote": {
+      "quote": "Quote",
+      "jump": "Go to the quoted text: {text}",
+      "remove": "Remove quote"
+    },
     "newTopic": "New topic"
   },
   "Topic": {

@@ -13,9 +13,18 @@ import type { ChatUIMessage } from "@/lib/schemas/chat";
  * assistant tool-call with no matching tool result, and strict vendors then
  * reject every subsequent turn with a 400. Dropping the incomplete call keeps
  * follow-up turns usable; completed tool calls still replay normally.
+ *
+ * A `data-quote` part becomes a text part holding the quoted excerpt, so the
+ * model reads the quote as context while the user's own text stays as typed.
  */
 export function replayModelMessages(
   messages: ChatUIMessage[],
 ): Promise<ModelMessage[]> {
-  return convertToModelMessages(messages, { ignoreIncompleteToolCalls: true });
+  return convertToModelMessages<ChatUIMessage>(messages, {
+    ignoreIncompleteToolCalls: true,
+    convertDataPart: (part) =>
+      part.type === "data-quote"
+        ? { type: "text", text: `<quote>\n${part.data.text}\n</quote>` }
+        : undefined,
+  });
 }

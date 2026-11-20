@@ -53,6 +53,7 @@ import {
 import type {
   ChatFilePart,
   ChatHistoryData,
+  ChatQuote,
   ChatRequest,
   ChatRequestPart,
   ChatUIMessage,
@@ -349,6 +350,8 @@ export default function ChatView({
   const resolvedAssistantId = assistantId ?? recentAssistantId ?? assistants[0]?.id;
   const draftKey = composerDraftKey(activeTopicId, resolvedAssistantId);
   const draft = useComposerStore((state) => state.drafts[draftKey] ?? "");
+  const quote = useComposerStore((state) => state.quotes[draftKey] ?? null);
+  const setQuote = useComposerStore((state) => state.setQuote);
   const imageParams = useComposerStore(
     (state) => state.imageParams[draftKey] ?? EMPTY_IMAGE_PARAMS,
   );
@@ -1483,6 +1486,20 @@ export default function ChatView({
     setComposerFocusSignal((count) => count + 1);
   }
 
+  /** Quote a selection into the active draft (one per draft, replacing). */
+  function handleQuote(next: ChatQuote) {
+    setQuote(draftKey, next);
+    setComposerFocusSignal((count) => count + 1);
+  }
+
+  /** Jump to a quote's source text; unmatched text falls back to the
+   * whole-message flash, which is a no-op for a deleted source. */
+  function handleQuoteJump(target: ChatQuote) {
+    if (!messageListRef.current?.scrollToQuote(target)) {
+      flashMessage(target.messageKey);
+    }
+  }
+
   function handleDragEnter(event: DragEvent<HTMLElement>) {
     if (!isFileDrag(event)) {
       return;
@@ -1582,6 +1599,7 @@ export default function ChatView({
       clearAttachments(draftKey);
     }
     setDraft(draftKey, "");
+    setQuote(draftKey, null);
     const selected = findAvailableModel(models.data, pickedModel);
     const effort = imageMode
       ? undefined
@@ -1616,21 +1634,19 @@ export default function ChatView({
       ...(image ? { image } : {}),
       timeZone: localTimeZone(),
     };
-    const metadata = { createdAt: new Date().toISOString() };
-    // The AI SDK's no-text overload omits the empty text part an attachment-only
-    // message would otherwise carry.
-    if (text.length > 0) {
-      void sendMessage(
-        {
-          text,
-          ...(outgoingFiles.length > 0 ? { files: outgoingFiles } : {}),
-          metadata,
-        },
-        { body },
-      );
-    } else {
-      void sendMessage({ files: outgoingFiles, metadata }, { body });
-    }
+    // Files, then the quote, then the text (omitted for an attachment-only
+    // message) — the order the server persists.
+    void sendMessage(
+      {
+        parts: [
+          ...outgoingFiles,
+          ...(quote ? [{ type: "data-quote" as const, data: quote }] : []),
+          ...(text.length > 0 ? [{ type: "text" as const, text }] : []),
+        ],
+        metadata: { createdAt: new Date().toISOString() },
+      },
+      { body },
+    );
     // A submit is one of the moments the authoritative task list is refreshed
     // (chat task §7): until the response's own `data-topic` arrives, discovery
     // is what tells the sidebar/view that this topic is generating.
@@ -1648,6 +1664,8 @@ export default function ChatView({
   const listOnTranslate = useStableCallback(handleTranslate);
   const listOnEditImage = useStableCallback(handleEditImage);
   const listOnEditSubmit = useStableCallback(handleEditSubmit);
+  const listOnQuote = useStableCallback(handleQuote);
+  const listOnQuoteJump = useStableCallback(handleQuoteJump);
 
   if (topicId && history.isError) {
     return (
@@ -1716,6 +1734,8 @@ export default function ChatView({
             }
             translating={translating}
             highlightKey={highlightKey}
+            onQuote={listOnQuote}
+            onQuoteJump={listOnQuoteJump}
             compression={{
               upToMessageId: topicDetail.data?.summaryUpToMessageId ?? null,
               upToGroupId: topicDetail.data?.summaryUpToGroupId ?? null,
@@ -1792,6 +1812,9 @@ export default function ChatView({
         imageParams={imageParams}
         onImageParamsChange={(next) => setImageParams(draftKey, next)}
         focusSignal={composerFocusSignal}
+        quote={quote}
+        onRemoveQuote={() => setQuote(draftKey, null)}
+        onQuoteJump={handleQuoteJump}
       />
       <ChatMapDialog
         open={chatMapOpen}

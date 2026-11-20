@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type {
   ChatFilePart,
+  ChatQuote,
   ChatRequestPart,
   ChatUIMessage,
 } from "@/lib/schemas/chat";
@@ -25,6 +26,8 @@ import type { TranslateTargetLanguageCode } from "@/lib/translate/languages";
 import CollapseBlock from "./CollapseBlock";
 import Markdown from "./Markdown";
 import MessageItem from "./MessageItem";
+import QuoteSelectionButton from "./QuoteSelectionButton";
+import { findQuoteRanges } from "./quote-range";
 import { SHIMMER_TEXT_CLASS } from "./shimmer";
 
 /** Distance to the bottom (px) that still counts as "at the bottom". Shares
@@ -93,6 +96,20 @@ function CompressionSummary({ summaryText }: { summaryText?: string | null }) {
   );
 }
 
+/** How long a quote jump keeps its highlight; matches the CSS fade. */
+const QUOTE_FLASH_MS = 2000;
+
+/** Compare dataset values instead of building an attribute selector: ids are
+ * arbitrary strings and would need escaping. */
+function findMessageElement(
+  container: HTMLDivElement,
+  key: string,
+): HTMLElement | undefined {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>("[data-message-key]"),
+  ).find((node) => node.dataset.messageKey === key);
+}
+
 /** Scrolls the container to `top`, clamped to the scrollable range. */
 function scrollToPosition(container: HTMLDivElement, top: number) {
   const max = Math.max(0, container.scrollHeight - container.clientHeight);
@@ -105,6 +122,10 @@ function scrollToPosition(container: HTMLDivElement, top: number) {
 export type MessageListHandle = {
   scrollToBottom: () => void;
   scrollToMessage: (key: string) => void;
+  /** Centers and highlights a quote's source text. False when the source
+   * message is gone or the text no longer matches (callers fall back to the
+   * whole-message flash). */
+  scrollToQuote: (quote: ChatQuote) => boolean;
 };
 
 /** History-compression view state (PRD R3/R7/R9/R10). */
@@ -168,6 +189,10 @@ type MessageListProps = {
    * matches flashes an accent background while the parent clears it (~2s).
    * Pure presentation, like the compression marker. */
   highlightKey?: string | null;
+  /** Quote a text selection inside one message body (floating button). */
+  onQuote?: (quote: ChatQuote) => void;
+  /** A sent message's quote card was clicked. */
+  onQuoteJump?: (quote: ChatQuote) => void;
   /** Imperative scroll handle (chat map jumps, scroll-to-latest). */
   ref?: Ref<MessageListHandle>;
 };
@@ -189,6 +214,8 @@ export default function MessageList({
   onEditSubmit,
   compression,
   highlightKey,
+  onQuote,
+  onQuoteJump,
   ref,
 }: MessageListProps) {
   const t = useTranslations("Chat.MessageList");
@@ -207,6 +234,15 @@ export default function MessageList({
   // Whether the view currently sits at the bottom; drives the scroll-to-latest
   // button. Starts true — a freshly opened conversation lands at the bottom.
   const [atBottom, setAtBottom] = useState(true);
+  // Quote-jump highlight: per-line rects relative to the content column, so
+  // they scroll with the text. `id` remounts the overlay to restart the fade.
+  const [quoteFlash, setQuoteFlash] = useState<{
+    id: number;
+    rects: { top: number; left: number; width: number; height: number }[];
+  } | null>(null);
+  const quoteFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   // Set while a smooth "back to latest" scroll is in flight. Intermediate
   // scroll events still measure far from the bottom, so without this the
   // button would flash back on for the whole animation and only disappear
@@ -588,11 +624,7 @@ export default function MessageList({
     // async content (mermaid, images, math) that grows after the jump would
     // yank the view back to the bottom and undo the jump.
     pinnedRef.current = false;
-    // Compare dataset values instead of building an attribute selector: ids
-    // are arbitrary strings and would need escaping.
-    const target = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-message-key]"),
-    ).find((node) => node.dataset.messageKey === key);
+    const target = findMessageElement(container, key);
     // The message may have been deleted while the chat map was open.
     if (!target) {
       return;
@@ -605,10 +637,57 @@ export default function MessageList({
     scrollToPosition(container, top);
   }, []);
 
+  const scrollToQuote = useCallback((quote: ChatQuote) => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    const article = container
+      ? findMessageElement(container, quote.messageKey)
+      : undefined;
+    const ranges = article ? findQuoteRanges(article, quote) : null;
+    if (!container || !content || !ranges) {
+      return false;
+    }
+    // Same pin release as scrollToMessage, before scrolling.
+    pinnedRef.current = false;
+    // Per text node, so fully covered elements contribute their line boxes
+    // rather than one block-sized rect.
+    const lines = ranges.flatMap((range) => Array.from(range.getClientRects()));
+    const top = Math.min(...lines.map((line) => line.top));
+    const bottom = Math.max(...lines.map((line) => line.bottom));
+    const bounds = container.getBoundingClientRect();
+    // Measured before scrolling, like the line rects: a reduced-motion
+    // ("auto") scroll lands synchronously and would shift the origin.
+    const origin = content.getBoundingClientRect();
+    scrollToPosition(
+      container,
+      container.scrollTop +
+        top -
+        bounds.top -
+        (container.clientHeight - (bottom - top)) / 2,
+    );
+    if (quoteFlashTimeoutRef.current !== null) {
+      clearTimeout(quoteFlashTimeoutRef.current);
+    }
+    setQuoteFlash({
+      id: Date.now(),
+      rects: lines.map((line) => ({
+        top: line.top - origin.top,
+        left: line.left - origin.left,
+        width: line.width,
+        height: line.height,
+      })),
+    });
+    quoteFlashTimeoutRef.current = setTimeout(
+      () => setQuoteFlash(null),
+      QUOTE_FLASH_MS,
+    );
+    return true;
+  }, []);
+
   useImperativeHandle(
     ref,
-    () => ({ scrollToBottom, scrollToMessage }),
-    [scrollToBottom, scrollToMessage],
+    () => ({ scrollToBottom, scrollToMessage, scrollToQuote }),
+    [scrollToBottom, scrollToMessage, scrollToQuote],
   );
 
   // Compression lock (PRD R10): every message at or before the persisted
@@ -647,7 +726,7 @@ export default function MessageList({
       >
         <div
           ref={contentRef}
-          className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-5 md:gap-4"
+          className="relative mx-auto flex w-full max-w-[52.5rem] flex-col gap-5 md:gap-4"
         >
           <div className="sr-only" aria-live="polite">
             {streaming ? t("responding") : ""}
@@ -707,6 +786,7 @@ export default function MessageList({
                   itemKey={itemKey}
                   compressedLocked={index <= compressedThroughIndex}
                   highlighted={highlightKey === itemKey}
+                  onQuoteJump={onQuoteJump}
                 />
                 {matchesCompressionBoundary(message) ? (
                   <CompressionSummary summaryText={summaryText} />
@@ -732,8 +812,25 @@ export default function MessageList({
           {tailReserve !== null && lastMessage?.role === "user" ? (
             <div aria-hidden="true" style={{ height: tailReserve }} />
           ) : null}
+          {quoteFlash ? (
+            // Absolute children only: a wrapper element would become a flex
+            // item and add a row gap to the column.
+            <Fragment key={quoteFlash.id}>
+              {quoteFlash.rects.map((rect, index) => (
+                <div
+                  key={index}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute animate-quote-flash rounded-sm bg-primary/20 motion-reduce:animate-none"
+                  style={rect}
+                />
+              ))}
+            </Fragment>
+          ) : null}
         </div>
       </div>
+      {onQuote ? (
+        <QuoteSelectionButton containerRef={containerRef} onQuote={onQuote} />
+      ) : null}
       {!atBottom ? (
         // Overlay spans the whole message area but must not swallow taps on
         // the messages underneath (tap-to-reveal), so only the button itself
