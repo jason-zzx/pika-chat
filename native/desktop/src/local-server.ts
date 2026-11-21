@@ -26,7 +26,7 @@ export function localPaths() {
   const root = join(app.getPath("userData"), "local");
   return {
     root,
-    dbDir: join(root, "db"),
+    dbFile: join(root, "pika-chat.db"),
     filesDir: join(root, "files"),
     logFile: join(root, "server.log"),
     secretsFile: join(root, "secrets.bin"),
@@ -106,7 +106,7 @@ export function createLocalServer() {
 
   const startInternal = async (config: Config, saveConfig: (c: Config) => void): Promise<string> => {
     const paths = localPaths();
-    mkdirSync(paths.dbDir, { recursive: true });
+    mkdirSync(paths.root, { recursive: true });
     mkdirSync(paths.filesDir, { recursive: true });
 
     const serverDir = serverRoot();
@@ -131,7 +131,7 @@ export function createLocalServer() {
         PORT: String(port),
         APP_URL: origin,
         LOCAL_MODE: "1",
-        PGLITE_DATA_DIR: paths.dbDir,
+        DATABASE_PATH: paths.dbFile,
         FILE_STORAGE_DIR: paths.filesDir,
         BETTER_AUTH_SECRET: secrets.authSecret,
         CREDENTIAL_ENCRYPTION_SECRET: secrets.encryptionSecret,
