@@ -36,6 +36,8 @@ export async function register(): Promise<void> {
     const { closeDb, getDb } = await import("@/server/db/client");
     migrate(getDb(), { migrationsFolder: "./src/server/db/migrations" });
 
+    // Before anything else uses the connection: the one-time import holds a
+    // manual SQLite transaction across awaited PostgreSQL reads.
     const { maybeImportPostgres } = await import("@/server/db/import-postgres");
     await maybeImportPostgres();
 

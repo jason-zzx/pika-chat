@@ -19,7 +19,9 @@ const booleanFlag = z.preprocess(
 
 const envSchema = z.object({
   DATABASE_PATH: z.string().min(1),
-  // Optional PostgreSQL connection string used only by the one-time boot importer.
+  // Previous PostgreSQL connection, used only by the one-time boot import.
+  // Filled from DATABASE_URL or the discrete POSTGRES_* variables that
+  // PostgreSQL-based releases accepted (see resolveDatabaseUrl).
   DATABASE_URL: emptyToUndefined(z.string().min(1).optional()),
   CREDENTIAL_ENCRYPTION_SECRET: z.string().min(32),
   BETTER_AUTH_SECRET: z.string().min(32),
@@ -104,6 +106,32 @@ export function isLocalMode(): boolean {
 let cached: Env | undefined;
 
 /**
+ * Resolves the previous PostgreSQL connection string the way PostgreSQL-based
+ * releases did, so an upgraded deployment imports from it without any config
+ * change: `DATABASE_URL` wins, otherwise one is assembled from the discrete
+ * `POSTGRES_*` variables with URL-encoded credentials.
+ */
+export function resolveDatabaseUrl(
+  raw: Record<string, string | undefined> = process.env,
+): string | undefined {
+  if (raw.DATABASE_URL && raw.DATABASE_URL.length > 0) {
+    return raw.DATABASE_URL;
+  }
+  if (raw.POSTGRES_HOST || raw.POSTGRES_USER || raw.POSTGRES_DB) {
+    const user = encodeURIComponent(raw.POSTGRES_USER || "postgres");
+    const pass =
+      raw.POSTGRES_PASSWORD !== undefined
+        ? `:${encodeURIComponent(raw.POSTGRES_PASSWORD)}`
+        : "";
+    const host = raw.POSTGRES_HOST || "localhost";
+    const port = raw.POSTGRES_PORT || "5432";
+    const db = raw.POSTGRES_DB || "pika_chat";
+    return `postgres://${user}${pass}@${host}:${port}/${db}`;
+  }
+  return undefined;
+}
+
+/**
  * Resolves additional trusted origins from `APP_TRUSTED_ORIGINS`.
  * Accepts comma-separated URLs or wildcard patterns (e.g. "http://192.168.1.100:3000,https://*.example.com").
  * Returns an array of trimmed, non-empty origin strings without duplicates.
@@ -127,7 +155,11 @@ export function getEnv(): Env {
     return cached;
   }
 
-  const parsed = envSchema.safeParse(process.env);
+  const dbUrl = resolveDatabaseUrl(process.env);
+  const parsed = envSchema.safeParse({
+    ...process.env,
+    ...(dbUrl ? { DATABASE_URL: dbUrl } : {}),
+  });
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
