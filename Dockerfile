@@ -1,6 +1,5 @@
 FROM docker.io/library/node:22-alpine AS deps
 WORKDIR /app
-RUN apk add --no-cache python3 make g++
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile

@@ -22,7 +22,6 @@
     "electron-updater": "6.8.11"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.2.1",
     "@pika/shell-ui": "workspace:*",
     "@types/node": "22.19.1",
     "electron": "45.3.4",

@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const desktopDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(desktopDir));
@@ -122,91 +122,24 @@ copy(join(repoRoot, ".next", "static"), join(outDir, ".next", "static"));
 copy(join(repoRoot, "public"), join(outDir, "public"));
 copy(join(repoRoot, "src", "server", "db", "migrations"), join(outDir, "src", "server", "db", "migrations"));
 
-function copyFiltered(from, to, skipNames = new Set()) {
-  const real = resolveReal(from);
-  if (!retryFs(() => statSync(real)).isDirectory()) {
-    retryFs(() => copyFileSync(real, to));
-    return;
-  }
-  mkdirSync(to, { recursive: true });
-  for (const entry of retryFs(() => readdirSync(real))) {
-    if (!skipNames.has(entry)) {
-      copyFiltered(join(real, entry), join(to, entry), skipNames);
-    }
-  }
-}
-
-function findBundledBetterSqliteDirs() {
-  const dirs = [];
-  const topLevel = join(destNm, "better-sqlite3");
-  if (existsSync(topLevel)) dirs.push(topLevel);
-
-  const nextNm = join(outDir, ".next", "node_modules");
-  if (existsSync(nextNm)) {
-    for (const entry of readdirSync(nextNm)) {
-      if (entry === "better-sqlite3" || entry.startsWith("better-sqlite3-")) {
-        dirs.push(join(nextNm, entry));
-      }
-    }
-  }
-  return dirs;
-}
-
 const desktopRequire = createRequire(join(desktopDir, "package.json"));
 const electronBin = desktopRequire("electron");
-const { version: electronVersion } = JSON.parse(readFileSync(desktopRequire.resolve("electron/package.json"), "utf8"));
-const rebuildEntry = pathToFileURL(desktopRequire.resolve("@electron/rebuild")).href;
-const { rebuild } = await import(rebuildEntry);
 
-const targetDirs = findBundledBetterSqliteDirs();
+// better-sqlite3 is an N-API addon whose bundled prebuilds load in Electron as-is, so nothing is rebuilt; the smoke
+// check below proves every bundled copy (hoisted package and/or Turbopack alias
+// `.next/node_modules/better-sqlite3-<hash>`) loads under this Electron before the installer is built.
+const outAliasNm = join(outDir, ".next", "node_modules");
+const targetDirs = [
+  ...[join(destNm, "better-sqlite3")].filter((dir) => existsSync(dir)),
+  ...(existsSync(outAliasNm) ? readdirSync(outAliasNm) : [])
+    .filter((entry) => entry === "better-sqlite3" || entry.startsWith("better-sqlite3-"))
+    .map((entry) => join(outAliasNm, entry)),
+];
 if (targetDirs.length === 0) {
   throw new Error(`No better-sqlite3 package found inside ${outDir}; standalone trace may be broken.`);
 }
 
-const rootSqliteDir = resolveReal(join(repoRoot, "node_modules", "better-sqlite3"));
-const nodeAddonApiDir = join(dirname(rootSqliteDir), "node-addon-api");
-if (!existsSync(nodeAddonApiDir)) {
-  throw new Error(`node-addon-api not found alongside ${rootSqliteDir}; cannot rebuild better-sqlite3.`);
-}
-
-const stagingDir = join(desktopDir, ".sqlite-electron-build");
-rmSync(stagingDir, { recursive: true, force: true });
-try {
-  mkdirSync(stagingDir, { recursive: true });
-  writeFileSync(
-    join(stagingDir, "package.json"),
-    JSON.stringify({ name: "pika-sqlite-rebuild", private: true, dependencies: { "better-sqlite3": "*" } }),
-  );
-  // Strip `prebuilds/` and prior `build/` so better-sqlite3's binding.gyp forces a fresh Electron compile.
-  copyFiltered(rootSqliteDir, join(stagingDir, "node_modules", "better-sqlite3"), new Set(["build", "prebuilds", "node_modules"]));
-  copy(nodeAddonApiDir, join(stagingDir, "node_modules", "node-addon-api"));
-
-  await rebuild({
-    buildPath: stagingDir,
-    electronVersion,
-    arch: process.arch,
-    onlyModules: ["better-sqlite3"],
-    force: true,
-    buildFromSource: true,
-  });
-
-  const rebuiltAddon = join(stagingDir, "node_modules", "better-sqlite3", "build", "Release", "better_sqlite3.node");
-  if (!existsSync(rebuiltAddon)) {
-    throw new Error(`@electron/rebuild completed without producing ${rebuiltAddon}`);
-  }
-
-  for (const targetDir of targetDirs) {
-    rmSync(join(targetDir, "prebuilds"), { recursive: true, force: true });
-    rmSync(join(targetDir, "build"), { recursive: true, force: true });
-    mkdirSync(join(targetDir, "build", "Release"), { recursive: true });
-    copyFileSync(rebuiltAddon, join(targetDir, "build", "Release", "better_sqlite3.node"));
-  }
-} finally {
-  rmSync(stagingDir, { recursive: true, force: true });
-}
-
 const smokeScript = `
-const { createRequire } = require("node:module");
 if (!process.versions.electron) throw new Error("Expected Electron runtime");
 const paths = JSON.parse(process.argv[1]);
 for (const modPath of paths) {

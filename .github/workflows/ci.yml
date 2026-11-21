@@ -172,11 +172,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y rpm
 
       - name: Install dependencies
+        # pwsh on Windows checks only the last command's exit code.
+        shell: bash
         run: |
           pnpm install --frozen-lockfile
           pnpm -C native install --frozen-lockfile
 
       - name: Build local standalone server and verify Electron SQLite ABI
+        # pwsh on Windows checks only the last command's exit code.
+        shell: bash
         env:
           DOCKER_BUILD: '1'
           DATABASE_PATH: ':memory:'

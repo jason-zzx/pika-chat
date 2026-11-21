@@ -25,9 +25,8 @@ services:
       - "${PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_PATH=${DATABASE_PATH:-/data/files/pika-chat.db}
-      # Optional one-time PostgreSQL boot importer source (only runs once when target SQLite DB is empty):
-      - DATABASE_URL
+      # Fixed to the mounted volume below; not read from .env, whose DATABASE_PATH is for local development.
+      - DATABASE_PATH=/data/files/pika-chat.db
       - CREDENTIAL_ENCRYPTION_SECRET=${CREDENTIAL_ENCRYPTION_SECRET}
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
       - FILE_STORAGE_DIR=${FILE_STORAGE_DIR:-/data/files}
