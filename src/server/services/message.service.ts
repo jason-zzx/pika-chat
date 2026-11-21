@@ -12,12 +12,9 @@ import {
 } from "@/lib/schemas/chat";
 import type { Actor } from "@/server/auth/actor";
 import { getDb, type DbExecutor, type DbTransaction } from "@/server/db/client";
-import { chatMessages, topics } from "@/server/db/schema";
+import { chatMessages, messageFileRefs, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
-import {
-  deleteFilesIfUnreferenced,
-  fileIdsFromParts,
-} from "@/server/files/file.service";
+import { deleteFilesIfUnreferenced } from "@/server/files/file.service";
 import { lockTopicAndAssertIdle } from "@/server/services/generation-target.service";
 import { findTopicContextForActor } from "@/server/services/topic.service";
 
@@ -373,9 +370,6 @@ export function insertUserMessageRow(
     })
     .returning()
     .get();
-  if (!row) {
-    throw new AppError("INTERNAL", 500, "message.storeFailed");
-  }
   return rowToChatUIMessage(row);
 }
 
@@ -454,9 +448,6 @@ export function insertUserMessageVersionRow(
     },
     { behavior: "immediate" },
   );
-  if (!row) {
-    throw new AppError("INTERNAL", 500, "message.storeFailed");
-  }
   return rowToChatUIMessage(row);
 }
 
@@ -585,9 +576,6 @@ export function insertAssistantRow(
         { behavior: "immediate" },
       )
     : executor.insert(chatMessages).values(values).returning().get();
-  if (!row) {
-    throw new AppError("INTERNAL", 500, "message.storeFailed");
-  }
   return rowToChatUIMessage(row);
 }
 
@@ -731,16 +719,17 @@ export async function deleteMessage(
 ): Promise<{ deleted: true; groupEmpty: boolean }> {
   requireOwnedTopic(input.topicId, actor);
   const db = getDb();
-  // Attachment ids referenced by the row being removed, collected inside the
-  // transaction so the post-commit cleanup sees the reference already gone.
-  let releasedFileIds: string[] = [];
-  const result = db.transaction(
+  const { releasedFileIds, ...result } = db.transaction(
     (tx) => {
       // A running turn owns the topic's context: deleting a message under it
       // would generate against a history that no longer exists (chat task §8).
       lockTopicAndAssertIdle(tx, input.topicId);
       const target = tx
-        .select()
+        .select({
+          id: chatMessages.id,
+          groupId: chatMessages.groupId,
+          isSelected: chatMessages.isSelected,
+        })
         .from(chatMessages)
         .where(
           and(
@@ -756,7 +745,13 @@ export async function deleteMessage(
       }
       // PRD R10: the compressed zone is immutable; check before deleting.
       assertTargetNotCompressed(input.topicId, target.id, undefined, tx);
-      releasedFileIds = fileIdsFromParts(target.parts);
+      // Read before deleting so the cascade does not remove the refs first.
+      const fileIds = tx
+        .select({ fileId: messageFileRefs.fileId })
+        .from(messageFileRefs)
+        .where(eq(messageFileRefs.messageId, target.id))
+        .all()
+        .map((row) => row.fileId);
       tx.delete(chatMessages).where(eq(chatMessages.id, target.id)).run();
       const remaining = tx
         .select()
@@ -778,7 +773,7 @@ export async function deleteMessage(
           .where(eq(chatMessages.id, latest.id))
           .run();
       }
-      return { deleted: true as const, groupEmpty };
+      return { deleted: true as const, groupEmpty, releasedFileIds: fileIds };
     },
     { behavior: "immediate" },
   );

@@ -747,13 +747,11 @@
     },
     "topic": {
       "notFound": "话题不存在",
-      "createFailed": "创建话题失败",
       "nothingToCompress": "没有可压缩的历史消息",
       "compressionMoved": "总结期间对话内容发生了变化，请重试"
     },
     "message": {
       "notFound": "消息不存在",
-      "storeFailed": "保存消息失败",
       "emptyVersionGroup": "版本组为空",
       "compressedLocked": "已压缩的早期历史不可修改",
       "editTargetNotUser": "只能编辑用户消息"
@@ -764,7 +762,6 @@
     "assistant": {
       "notFound": "助手不存在",
       "nameTaken": "已存在同名助手",
-      "createFailed": "创建助手失败",
       "lastOne": "无法删除唯一的助手"
     },
     "provider": {
@@ -815,7 +812,6 @@
       "invalidRequestId": "请求 ID 无效",
       "topicBusy": "该对话仍在生成回复",
       "contextChanged": "对话内容在回复开始前发生了变化，请重试",
-      "createFailed": "无法开始生成回复",
       "interrupted": "生成因服务器重启而中断",
       "notRunning": "该回复尚未在本服务器上运行，请稍后重试"
     },

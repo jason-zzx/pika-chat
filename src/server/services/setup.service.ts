@@ -13,9 +13,8 @@ import {
   throwIfAccountCreateFailed,
 } from "@/server/services/account-create";
 
-// auth.api.createUser and assertUsernameAvailable call getDb(), which would
-// deadlock inside a single-connection PGlite transaction; serialize in-process
-// instead of holding an app_settings row lock.
+// auth.api.createUser is async and cannot run inside a synchronous SQLite
+// transaction; serialize the count-then-create sequence in-process instead.
 let setupQueue: Promise<unknown> = Promise.resolve();
 
 export async function createFirstAdmin(input: CredentialsInput): Promise<{

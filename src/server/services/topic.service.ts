@@ -52,9 +52,6 @@ export async function createTopicForChat(
         .returning(topicColumns)
         .get(),
   });
-  if (!row) {
-    throw new AppError("INTERNAL", 500, "topic.createFailed");
-  }
   logger.info(
     { userId: actor.userId, topicId: row.id, assistantId: assistant.id },
     "topic created",
@@ -69,9 +66,9 @@ const TOPIC_PAGE_SIZE = 20;
  * by `id`. */
 export async function listTopicPage(
   assistantId: string,
-  cursor: [string, string] | null,
+  cursor: [number, string] | null,
   actor: Actor,
-): Promise<{ topics: Topic[]; nextCursor: [string, string] | null }> {
+): Promise<{ topics: Topic[]; nextCursor: [number, string] | null }> {
   await requireOwnedAssistant(assistantId, actor);
   const rows = await getDb()
     .select(topicColumns)
@@ -81,7 +78,7 @@ export async function listTopicPage(
         eq(topics.assistantId, assistantId),
         eq(topics.isFavorite, false),
         cursor
-          ? sql`(${topics.updatedAt}, ${topics.id}) < (${Number(cursor[0])}, ${cursor[1]})`
+          ? sql`(${topics.updatedAt}, ${topics.id}) < (${cursor[0]}, ${cursor[1]})`
           : undefined,
       ),
     )
@@ -91,7 +88,7 @@ export async function listTopicPage(
   const last = rows.length > TOPIC_PAGE_SIZE ? page[page.length - 1] : undefined;
   return {
     topics: page,
-    nextCursor: last ? [String(last.updatedAt.getTime()), last.id] : null,
+    nextCursor: last ? [last.updatedAt.getTime(), last.id] : null,
   };
 }
 
@@ -157,35 +154,28 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
     eq(topics.id, id),
     inArray(topics.assistantId, ownedAssistantIds(actor)),
   );
-  // Deleting a topic cancels its generation (chat task §8): the transaction
-  // takes the parent row lock first, marks every generation of the topic as
-  // target-deleted (active ones stop), and only then removes the rows, so a
-  // concurrent finalize either loses the race (and discards its output) or
-  // commits before the delete removes it. `deleteTopic` is the only writer of
-  // this row, and the message cascade is the child side.
-  let releasedFileIds: string[] = [];
-  const deleted = db.transaction(
+  // Deleting a topic cancels its generation (chat task §8): one immediate
+  // write transaction marks every generation of the topic as target-deleted
+  // (active ones stop) and removes the rows. Write transactions serialize, so
+  // a concurrent finalize either commits before this one (its files are seen
+  // below) or finds the topic gone and discards its output.
+  const releasedFileIds = db.transaction(
     (tx) => {
-      const locked = tx
+      const owner = tx
         .select({ id: topics.id })
         .from(topics)
         .where(owned)
         .get();
-      if (!locked) {
+      if (!owner) {
         throw new AppError("NOT_FOUND", 404, "topic.notFound");
       }
-      // Attachment references are read AFTER taking the immediate write lock,
-      // so a finalize that committed its images just before this transaction is
-      // visible here and its files are cleaned.
-      releasedFileIds = fileIdsForTopics(tx, [id]);
+      const fileIds = fileIdsForTopics(tx, [id]);
       markGenerationsForDeletedTopics(tx, [id]);
-      return tx.delete(topics).where(owned).returning({ id: topics.id }).get();
+      tx.delete(topics).where(owned).run();
+      return fileIds;
     },
     { behavior: "immediate" },
   );
-  if (!deleted) {
-    throw new AppError("NOT_FOUND", 404, "topic.notFound");
-  }
   // After the commit (the deletion is durable), drop the local producer's
   // content and subscriptions and abort it, so it neither keeps calling the
   // provider for a topic nobody can read nor hands late chunks to a client

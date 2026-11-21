@@ -1,6 +1,6 @@
 {
-  "id": "2deef433-2e1e-49f2-846e-107bb8563bc6",
-  "prevId": "2cbc08ec-5f6e-4f8f-a649-e7a40822747b",
+  "id": "6ead9e76-8a01-4616-b103-81b927c7341d",
+  "prevId": "60b59659-2e4a-4f09-b3b2-711742d3ba5f",
   "version": "6",
   "dialect": "sqlite",
   "tables": {
@@ -1466,6 +1466,45 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "postgres_import": {
+      "name": "postgres_import",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        },
+        "source_info": {
+          "name": "source_info",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "row_counts": {
+          "name": "row_counts",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
       "indexes": {},

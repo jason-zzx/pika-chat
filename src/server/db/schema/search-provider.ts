@@ -9,8 +9,6 @@ import {
 import { users } from "./auth";
 import { timestampMsDefaultNow } from "./columns";
 
-export const searchProviders = ["tavily", "exa", "firecrawl", "brave"] as const;
-
 /**
  * Per-user web search provider credentials. Private-only by design (no
  * visibility column — unlike provider_configs these are never shared).
@@ -23,7 +21,9 @@ export const searchProviderSettings = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider", { enum: searchProviders }).notNull(),
+    provider: text("provider", {
+      enum: ["tavily", "exa", "firecrawl", "brave"],
+    }).notNull(),
     encryptedApiKey: text("encrypted_api_key").notNull(),
     apiKeyLastFour: text("api_key_last_four").notNull(),
     baseUrl: text("base_url"),

@@ -9,7 +9,7 @@ import {
   type BetterSQLite3Database,
 } from "drizzle-orm/better-sqlite3";
 
-import { basename, fileExtension } from "@/lib/files/media-types";
+import { fileListCategoryOf } from "@/lib/files/media-types";
 import * as schema from "@/server/db/schema";
 import { getEnv } from "@/server/env";
 
@@ -18,7 +18,7 @@ const shared = globalThis as { sqlite?: Database.Database };
 let db: BetterSQLite3Database<typeof schema> | undefined;
 
 function openSqlite(path: string): Database.Database {
-  if (path !== ":memory:" && !path.startsWith("file:")) {
+  if (path !== ":memory:") {
     mkdirSync(dirname(path), { recursive: true });
   }
   const sqlite = new Database(path);
@@ -26,34 +26,26 @@ function openSqlite(path: string): Database.Database {
   sqlite.pragma("synchronous = NORMAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 5000");
-  sqlite.function("file_basename", { deterministic: true }, (name: unknown) =>
-    typeof name === "string" ? basename(name) : "",
-  );
-  sqlite.function("file_extension", { deterministic: true }, (name: unknown) =>
-    typeof name === "string" ? fileExtension(name) : "",
+  sqlite.function(
+    "file_category",
+    { deterministic: true },
+    (mediaType: string, filename: string) =>
+      fileListCategoryOf({ mediaType, filename }),
   );
   return sqlite;
 }
 
 export function getDb(): BetterSQLite3Database<typeof schema> {
-  if (!db) {
-    // One SQLite handle per process: module reloads (vi.resetModules, Next dev
-    // HMR) must reuse the same instance, or `:memory:` gets a second empty DB
-    // and file DBs open redundant handles.
-    const sqlite = (shared.sqlite ??= openSqlite(getEnv().DATABASE_PATH));
-    db = drizzle(sqlite, { schema });
-  }
-
+  db ??= drizzle(getSqliteClient(), { schema });
   return db;
 }
 
 /** Exposes the underlying better-sqlite3 handle for pragmas and import. */
 export function getSqliteClient(): Database.Database {
-  getDb();
-  if (!shared.sqlite) {
-    throw new Error("SQLite database client failed to initialize");
-  }
-  return shared.sqlite;
+  // One SQLite handle per process: module reloads (vi.resetModules, Next dev
+  // HMR) must reuse the same instance, or `:memory:` gets a second empty DB
+  // and file DBs open redundant handles.
+  return (shared.sqlite ??= openSqlite(getEnv().DATABASE_PATH));
 }
 
 /** Closes the SQLite handle during graceful shutdown. */

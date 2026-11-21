@@ -9,16 +9,6 @@ import {
 import { users } from "./auth";
 import { timestampMs, timestampMsDefaultNow } from "./columns";
 
-export const providerVisibilities = ["private", "shared"] as const;
-
-export const providerApiFormats = [
-  "openai-compatible",
-  "claude",
-  "google",
-] as const;
-
-export const modelMetadataSources = ["catalog", "default", "user"] as const;
-
 export const providerConfigs = sqliteTable(
   "provider_configs",
   {
@@ -28,12 +18,14 @@ export const providerConfigs = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     baseUrl: text("base_url").notNull(),
-    apiFormat: text("api_format", { enum: providerApiFormats })
+    apiFormat: text("api_format", {
+      enum: ["openai-compatible", "claude", "google"],
+    })
       .notNull()
       .default("openai-compatible"),
     encryptedApiKey: text("encrypted_api_key"),
     apiKeyLastFour: text("api_key_last_four"),
-    visibility: text("visibility", { enum: providerVisibilities })
+    visibility: text("visibility", { enum: ["private", "shared"] })
       .notNull()
       .default("private"),
     // Disabled configs keep their rows but vanish from resolveAvailableModels,
@@ -78,7 +70,9 @@ export const providerModels = sqliteTable(
       .notNull()
       .default([]),
     vendorKey: text("vendor_key"),
-    metadataSource: text("metadata_source", { enum: modelMetadataSources }),
+    metadataSource: text("metadata_source", {
+      enum: ["catalog", "default", "user"],
+    }),
     createdAt: timestampMsDefaultNow("created_at"),
     updatedAt: timestampMsDefaultNow("updated_at"),
   },

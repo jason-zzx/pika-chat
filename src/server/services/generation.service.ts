@@ -108,15 +108,12 @@ export type PreparedTurn = {
 };
 
 /**
- * Clock used for the G2 window checks. The database is the single authority:
- * container/host clock drift must not extend or shorten a request key window,
- * so callers default to `databaseNow()` and tests may inject one.
+ * Clock used for the G2 window checks. The embedded database shares the
+ * process clock, so callers default to `systemNow` and tests may inject one.
  */
-export type Clock = () => Promise<Date>;
+export type Clock = () => Date;
 
-export async function databaseNow(): Promise<Date> {
-  return new Date();
-}
+const systemNow: Clock = () => new Date();
 
 export type AdmittedGeneration = {
   generation: GenerationRow;
@@ -230,18 +227,14 @@ export async function listQueuedGenerationIds(): Promise<string[]> {
  * or clock-skewed key can never reach model/attachment validation.
  *
  * "The id's own time" is the UUIDv7 timestamp, and the comparison is made
- * against the DATABASE clock (chat task §4): the browser and the app process
- * are both allowed to drift.
+ * against the server clock (chat task §4): the browser is allowed to drift.
  */
-export async function resolveRequestKey(
-  requestId: string,
-  clock: Clock,
-): Promise<Date> {
+export function resolveRequestKey(requestId: string, clock: Clock): Date {
   const keyTime = requestKeyTime(requestId);
   if (keyTime === null) {
     throw new AppError("VALIDATION_FAILED", 400, "generation.invalidRequestId");
   }
-  const now = await clock();
+  const now = clock();
   const age = now.getTime() - keyTime;
   if (age > REQUEST_KEY_TTL_MS) {
     throw new AppError("VALIDATION_FAILED", 400, "generation.requestExpired", {
@@ -307,14 +300,14 @@ export async function admitTurn(
   actor: Actor,
   options: { clock?: Clock } = {},
 ): Promise<AdmittedGeneration> {
-  const clock = options.clock ?? databaseNow;
+  const clock = options.clock ?? systemNow;
   let requestExpiresAt: Date | null = null;
   if (input.requestId) {
     const existing = await findReceipt(input.requestId, input.requestHash, actor);
     if (existing) {
       return { generation: existing, duplicate: true };
     }
-    requestExpiresAt = await resolveRequestKey(input.requestId, clock);
+    requestExpiresAt = resolveRequestKey(input.requestId, clock);
   }
   const prepared = await prepare();
   return acceptTurn(prepared, actor, {
@@ -324,7 +317,7 @@ export async function admitTurn(
 }
 
 /**
- * Admits one turn: topic-scoped mutex and the single transaction that writes
+ * Admits one turn: the single immediate write transaction that writes
  * the user message, the assistant placeholder and the queued task (chat task §4).
  *
  * Receipt lookup, key-window validation and assistant/topic ownership checks
@@ -395,7 +388,7 @@ async function acceptTurn(
         let topicId = prepared.topicId;
         if (topicId === null) {
           // Fresh topic: id is new.
-          const { result } = insertWithShortId({
+          topicId = insertWithShortId({
             mint: newTopicId,
             insert: (id) =>
               tx
@@ -405,14 +398,9 @@ async function acceptTurn(
                   assistantId: prepared.assistantId,
                   title: prepared.defaultTopicTitle,
                 })
-                .returning({ id: topics.id })
-                .get(),
-          });
-          topicId = result?.id ?? null;
+                .run(),
+          }).id;
           createdTopicId = topicId;
-          if (topicId === null) {
-            throw new AppError("INTERNAL", 500, "topic.createFailed");
-          }
         } else {
           // Immediate write transaction already serializes writers; check
           // parent existence and context validity inside the transaction.
@@ -522,7 +510,7 @@ async function acceptTurn(
           groupCreatedAt: prepared.assistantGroupCreatedAt,
         });
 
-        const generation = tx
+        return tx
           .insert(chatGenerations)
           .values({
             id: newId(),
@@ -540,10 +528,6 @@ async function acceptTurn(
           })
           .returning()
           .get();
-        if (!generation) {
-          throw new AppError("INTERNAL", 500, "generation.createFailed");
-        }
-        return generation;
       },
       { behavior: "immediate" },
     );
@@ -564,10 +548,10 @@ async function acceptTurn(
     if (!isUniqueViolation(caught)) {
       throw caught;
     }
-    // Two races survive the topic lock:
-    // - the same request id admitted concurrently (the loser returns the
-    //   winner's task instead of running the model twice);
-    // - a topic slot taken between the lock release and the insert.
+    // Unique violations the in-transaction checks do not catch first:
+    // - the same request id admitted concurrently on a fresh topic (the loser
+    //   returns the winner's task instead of running the model twice);
+    // - the topic's partial unique active slot.
     if (requestId) {
       const existing = await findGenerationByRequestId(requestId, actor);
       if (existing) {
@@ -586,7 +570,7 @@ async function acceptTurn(
 }
 
 /**
- * In-lock validation of everything `prepare*` froze (chat task §4 step 4):
+ * In-transaction validation of everything `prepare*` froze (chat task §4 step 4):
  *
  * - every frozen history id still exists — a deleted message would change the
  *   context the answer is generated from;
@@ -765,12 +749,12 @@ export type FinalizeResult = {
 /**
  * The single decision point for "this turn ends now" (chat task §5/§8).
  *
- * One transaction locks the parent topic row first (the same parent→child
- * order admission and the delete paths use), then the generation row, then
- * writes the placeholder content and the terminal task state together. That
- * makes stop / finalize / delete mutually exclusive instead of three separate
- * statements that can interleave: whoever commits first wins, the loser
- * writes nothing, and a terminal row is never overwritten.
+ * One immediate write transaction re-reads the parent topic and the
+ * generation row, then writes the placeholder content and the terminal task
+ * state together. Write transactions serialize, which makes stop / finalize /
+ * delete mutually exclusive instead of three separate statements that can
+ * interleave: whoever commits first wins, the loser writes nothing, and a
+ * terminal row is never overwritten.
  *
  * The caller must only publish the finished stream after this returns
  * `settled: true` (chat task §3 — no success signal without a stored answer).
@@ -967,10 +951,10 @@ export async function recoverInterruptedGenerations(): Promise<{
  * still fails the key-age check because its timestamp is in the past.
  */
 export async function purgeTerminalGenerations(
-  clock: Clock = databaseNow,
+  clock: Clock = systemNow,
 ): Promise<number> {
   const db = getDb();
-  const now = await clock();
+  const now = clock();
   const cutoff = new Date(now.getTime() - REQUEST_KEY_TTL_MS);
   const deleted = await db
     .delete(chatGenerations)

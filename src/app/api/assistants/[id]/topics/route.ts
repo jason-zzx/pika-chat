@@ -15,15 +15,7 @@ const cursorSchema = z
       return z.NEVER;
     }
   })
-  .pipe(
-    z.tuple([
-      z
-        .string()
-        .regex(/^\d+$/)
-        .refine((val) => Number.isSafeInteger(Number(val))),
-      z.string(),
-    ]),
-  );
+  .pipe(z.tuple([z.number().int().nonnegative(), z.string()]));
 
 export const GET = withErrorHandling(async (request, context) => {
   const actor = await requireActor(request.headers);

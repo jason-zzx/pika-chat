@@ -10,8 +10,6 @@ import { users } from "./auth";
 import { chatMessages } from "./chat";
 import { timestampMs, timestampMsDefaultNow } from "./columns";
 
-export const fileExtractionStatuses = ["none", "ok", "empty", "failed"] as const;
-
 /**
  * One provider-side upload of this file, as returned by the AI SDK
  * `uploadFile()` for a given provider config. Regenerable cache: our own
@@ -41,7 +39,7 @@ export const files = sqliteTable(
     // Extraction cache: populated at upload time for text-bearing formats.
     extractedText: text("extracted_text"),
     extractionStatus: text("extraction_status", {
-      enum: fileExtractionStatuses,
+      enum: ["none", "ok", "empty", "failed"],
     })
       .notNull()
       .default("none"),

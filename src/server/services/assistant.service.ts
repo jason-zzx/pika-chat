@@ -22,10 +22,7 @@ import {
   deleteFilesIfUnreferenced,
   fileIdsForTopics,
 } from "@/server/files/file.service";
-import {
-  markGenerationsForDeletedTopics,
-  topicIdsForAssistant,
-} from "@/server/services/generation-target.service";
+import { markGenerationsForDeletedTopics } from "@/server/services/generation-target.service";
 
 type AssistantRow = typeof assistants.$inferSelect;
 
@@ -175,8 +172,8 @@ export async function createAssistant(
   try {
     ({ id: createdId } = insertWithShortId({
       mint: newAssistantId,
-      insert: (id) => {
-        const inserted = db
+      insert: (id) =>
+        db
           .insert(assistants)
           .values({
             id,
@@ -187,12 +184,7 @@ export async function createAssistant(
             defaultProviderConfigId: pair.defaultProviderConfigId,
             defaultModelId: pair.defaultModelId,
           })
-          .returning({ id: assistants.id })
-          .get();
-        if (!inserted) {
-          throw new AppError("INTERNAL", 500, "assistant.createFailed");
-        }
-      },
+          .run(),
     }));
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -264,15 +256,12 @@ export async function updateAssistant(
 
 export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
   const db = getDb();
-  let deletedTopicIds: string[] = [];
-  let releasedFileIds: string[] = [];
-  db.transaction(
+  const { deletedTopicIds, releasedFileIds } = db.transaction(
     (tx) => {
       const owned = tx
         .select({ id: assistants.id })
         .from(assistants)
         .where(eq(assistants.ownerId, actor.userId))
-        .orderBy(asc(assistants.id))
         .all();
 
       if (!owned.some((row) => row.id === id)) {
@@ -289,15 +278,20 @@ export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
       // Deleting an assistant deletes its topics (cascade), which must cancel
       // their generations in the same transaction (chat task §8): mark them
       // target-deleted, then let the cascade remove the rows.
-      const topicIds = topicIdsForAssistant(tx, id);
-      releasedFileIds = fileIdsForTopics(tx, topicIds);
+      const topicIds = tx
+        .select({ id: topics.id })
+        .from(topics)
+        .where(eq(topics.assistantId, id))
+        .all()
+        .map((row) => row.id);
+      const fileIds = fileIdsForTopics(tx, topicIds);
       markGenerationsForDeletedTopics(tx, topicIds);
       tx.delete(assistants)
         .where(
           and(eq(assistants.id, id), eq(assistants.ownerId, actor.userId)),
         )
         .run();
-      deletedTopicIds = topicIds;
+      return { deletedTopicIds: topicIds, releasedFileIds: fileIds };
     },
     { behavior: "immediate" },
   );

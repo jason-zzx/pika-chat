@@ -14,10 +14,6 @@ import { users } from "./auth";
 import { timestampMs, timestampMsDefaultNow } from "./columns";
 import { providerConfigs } from "./provider";
 
-export const chatMessageRoles = ["user", "assistant"] as const;
-
-export const chatMessageOutcomes = ["completed", "stopped", "failed"] as const;
-
 export const chatMessages = sqliteTable(
   "chat_messages",
   {
@@ -25,9 +21,9 @@ export const chatMessages = sqliteTable(
     topicId: text("topic_id")
       .notNull()
       .references(() => topics.id, { onDelete: "cascade" }),
-    role: text("role", { enum: chatMessageRoles }).notNull(),
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
     parts: text("parts", { mode: "json" }).notNull(),
-    outcome: text("outcome", { enum: chatMessageOutcomes }),
+    outcome: text("outcome", { enum: ["completed", "stopped", "failed"] }),
     errorMessage: text("error_message"),
     providerConfigId: text("provider_config_id").references(
       () => providerConfigs.id,
@@ -69,18 +65,6 @@ export const chatMessages = sqliteTable(
       .where(sql`is_selected = 1`),
   ],
 );
-
-export const chatGenerationKinds = ["send", "regenerate", "edit"] as const;
-
-export const chatGenerationStatuses = [
-  "queued",
-  "running",
-  "stopping",
-  "completed",
-  "stopped",
-  "failed",
-  "interrupted",
-] as const;
 
 /** Input frozen at admission: everything the executor needs, and nothing it
  * must not hold (no plaintext credentials, binaries or signed URLs). */
@@ -155,8 +139,18 @@ export const chatGenerations = sqliteTable(
     requestId: text("request_id"),
     requestHash: text("request_hash"),
     requestExpiresAt: timestampMs("request_expires_at"),
-    kind: text("kind", { enum: chatGenerationKinds }).notNull(),
-    status: text("status", { enum: chatGenerationStatuses })
+    kind: text("kind", { enum: ["send", "regenerate", "edit"] }).notNull(),
+    status: text("status", {
+      enum: [
+        "queued",
+        "running",
+        "stopping",
+        "completed",
+        "stopped",
+        "failed",
+        "interrupted",
+      ],
+    })
       .notNull()
       .default("queued"),
     // Nulled when the target topic/assistant is deleted; the task itself

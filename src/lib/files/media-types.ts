@@ -75,7 +75,7 @@ const VIDEO_MEDIA_TYPE_SET = new Set<string>(VIDEO_MEDIA_TYPES);
 const OFFICE_MEDIA_TYPE_SET = new Set<string>(OFFICE_MEDIA_TYPES);
 
 /** Text formats accepted by extension even when the browser sends an odd type. */
-export const TEXT_FILE_EXTENSIONS = [
+const TEXT_FILE_EXTENSIONS = [
   // prose / data
   "txt",
   "text",
@@ -150,7 +150,7 @@ export const TEXT_FILE_EXTENSIONS = [
 const TEXT_EXTENSION_SET = new Set<string>(TEXT_FILE_EXTENSIONS);
 
 /** Well-known extensionless text files. */
-export const TEXT_FILE_NAMES = [
+const TEXT_FILE_NAMES = [
   "dockerfile",
   "makefile",
   "procfile",
@@ -188,30 +188,11 @@ const AV_EXTENSION_MEDIA_TYPES: Record<string, string> = {
 };
 
 /**
- * Extensions whose {@link AV_EXTENSION_MEDIA_TYPES} entry is audio. Exported so
- * the SQL category filter can read the same table `classifyFile` does instead
- * of keeping a parallel list.
- */
-export const AUDIO_FILE_EXTENSIONS: readonly string[] = Object.entries(
-  AV_EXTENSION_MEDIA_TYPES,
-)
-  .filter(([, mediaType]) => AUDIO_MEDIA_TYPE_SET.has(mediaType))
-  .map(([extension]) => extension);
-
-/** Extensions whose {@link AV_EXTENSION_MEDIA_TYPES} entry is video. */
-export const VIDEO_FILE_EXTENSIONS: readonly string[] = Object.entries(
-  AV_EXTENSION_MEDIA_TYPES,
-)
-  .filter(([, mediaType]) => VIDEO_MEDIA_TYPE_SET.has(mediaType))
-  .map(([extension]) => extension);
-
-/**
  * Extensions `classifyFile` trusts for office/ebook classification when the
- * browser sends no usable media type. Kept as constants so the classifier and
- * the SQL category predicate read one list.
+ * browser sends no usable media type.
  */
-export const OFFICE_FILE_EXTENSIONS: readonly string[] = ["pptx"];
-export const EBOOK_FILE_EXTENSIONS: readonly string[] = ["epub"];
+const OFFICE_FILE_EXTENSIONS: readonly string[] = ["pptx"];
+const EBOOK_FILE_EXTENSIONS: readonly string[] = ["epub"];
 
 /** Canonical audio/video media type for a filename, or `null` when unknown. */
 export function avMediaTypeForExtension(filename: string): string | null {
@@ -242,7 +223,7 @@ export function normalizeMediaType(mediaType: string): string {
 }
 
 /** Basename of a path-ish filename (`a/b/c.txt` → `c.txt`). */
-export function basename(filename: string): string {
+function basename(filename: string): string {
   const slash = Math.max(filename.lastIndexOf("/"), filename.lastIndexOf("\\"));
   return filename.slice(slash + 1);
 }
@@ -360,21 +341,6 @@ export const FILE_LIST_CATEGORY_LABEL_KEYS = {
   audio: "categoryAudio",
   video: "categoryVideo",
 } as const;
-
-/**
- * Every media type `classifyFile` recognizes *by type*. A stored row whose
- * `media_type` is in this union never reaches the extension fallbacks, so the
- * SQL category predicate uses it as the same "type match wins" guard the
- * classifier applies.
- */
-export const CLASSIFIED_MEDIA_TYPES: readonly string[] = [
-  ...IMAGE_MEDIA_TYPES,
-  PDF_MEDIA_TYPE,
-  ...OFFICE_MEDIA_TYPES,
-  EPUB_MEDIA_TYPE,
-  ...AUDIO_MEDIA_TYPES,
-  ...VIDEO_MEDIA_TYPES,
-];
 
 /**
  * Coarse list category a stored attachment belongs to, derived from

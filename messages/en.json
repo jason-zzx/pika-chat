@@ -747,13 +747,11 @@
     },
     "topic": {
       "notFound": "Topic not found",
-      "createFailed": "Failed to create topic",
       "nothingToCompress": "There is no earlier history to compress",
       "compressionMoved": "The conversation changed while it was being summarized; try again"
     },
     "message": {
       "notFound": "Message not found",
-      "storeFailed": "Failed to store message",
       "emptyVersionGroup": "Empty version group",
       "compressedLocked": "Compressed history cannot be changed",
       "editTargetNotUser": "Only user messages can be edited"
@@ -764,7 +762,6 @@
     "assistant": {
       "notFound": "Assistant not found",
       "nameTaken": "An assistant with this name already exists",
-      "createFailed": "Failed to create assistant",
       "lastOne": "Cannot delete your only assistant"
     },
     "provider": {
@@ -815,7 +812,6 @@
       "invalidRequestId": "Invalid request id",
       "topicBusy": "This conversation is still generating a reply",
       "contextChanged": "This conversation changed while the reply was starting; try again",
-      "createFailed": "Failed to start the reply",
       "interrupted": "Generation was interrupted by a server restart",
       "notRunning": "The reply is not running on this server; retry in a moment"
     },

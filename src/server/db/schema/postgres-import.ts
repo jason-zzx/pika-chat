@@ -15,7 +15,7 @@ export type PostgresImportSourceInfo = {
  */
 export const postgresImport = sqliteTable("postgres_import", {
   id: text("id").primaryKey(),
-  importedAt: timestampMsDefaultNow("imported_at").notNull(),
+  importedAt: timestampMsDefaultNow("imported_at"),
   sourceInfo: text("source_info", { mode: "json" })
     .$type<PostgresImportSourceInfo>()
     .notNull(),

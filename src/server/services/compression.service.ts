@@ -242,12 +242,7 @@ export async function compressTopicHistory(
   }
   const db = getDb();
   if (input.exclusive) {
-    db.transaction(
-      (tx) => {
-        lockTopicAndAssertIdle(tx, input.topicId);
-      },
-      { behavior: "immediate" },
-    );
+    lockTopicAndAssertIdle(db, input.topicId);
     const plan = await planCompression(input, actor);
     return db.transaction(
       (tx) => {
@@ -259,16 +254,11 @@ export async function compressTopicHistory(
     );
   }
   // Auto: assert the topic is idle EXCEPT for the turn asking for the summary,
-  // then summarize without holding a lock (the model call must not block other
-  // topics or this topic's own terminal write).
-  db.transaction(
-    (tx) => {
-      lockTopicAndAssertIdle(tx, input.topicId, {
-        exceptGenerationId: input.exceptGenerationId,
-      });
-    },
-    { behavior: "immediate" },
-  );
+  // then summarize outside any transaction (the model call must not block
+  // other topics or this topic's own terminal write).
+  lockTopicAndAssertIdle(db, input.topicId, {
+    exceptGenerationId: input.exceptGenerationId,
+  });
   const plan = await planCompression(input, actor);
   writeSummary(db, input.topicId, actor, plan);
   return plan.result;

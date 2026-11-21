@@ -6,7 +6,7 @@ import type { ChatChunk, LiveStreamState } from "@/server/ai/generation-stream";
  * In-process registry of live generations (chat task §3 "进程内活跃任务").
  *
  * Deliberately a process-local map with no persistence: generation *identity*
- * and durable state live in PostgreSQL, while this holds only what a live
+ * and durable state live in SQLite, while this holds only what a live
  * subscriber needs — the current message state, the abort handle and the
  * attached subscribers. One application instance owns its live turns;
  * cross-instance takeover is out of scope by design.

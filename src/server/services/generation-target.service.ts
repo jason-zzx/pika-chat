@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import type { DbExecutor } from "@/server/db/client";
 import { chatGenerations, topics } from "@/server/db/schema";
@@ -63,25 +63,13 @@ export function markGenerationsForDeletedTopics(
     .run();
 }
 
-export function topicIdsForAssistant(
-  tx: DbExecutor,
-  assistantId: string,
-): string[] {
-  const rows = tx
-    .select({ id: topics.id })
-    .from(topics)
-    .where(eq(topics.assistantId, assistantId))
-    .orderBy(asc(topics.id))
-    .all();
-  return rows.map((row) => row.id);
-}
-
 /**
  * Context mutations (delete/select version, manual compression) are refused
  * while the topic has an active turn (chat task §8): the running answer was
  * generated from a specific version selection, so changing the selection or
- * the summary underneath it would make history and the reply disagree. Runs
- * inside the caller's synchronous immediate transaction.
+ * the summary underneath it would make history and the reply disagree. The
+ * authoritative check runs inside the write transaction that performs the
+ * mutation.
  */
 export function lockTopicAndAssertIdle(
   tx: DbExecutor,

@@ -217,12 +217,13 @@ async function persistReference(
   configId: string,
   record: ProviderFileReference,
 ): Promise<void> {
-  const jsonPath = `$."${configId.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
   try {
+    // `json_set` replaces this key's value whole; `json_patch` would deep-merge
+    // it and drop the null `expiresAt`.
     await getDb()
       .update(files)
       .set({
-        providerReferences: sql`json_set(${files.providerReferences}, ${jsonPath}, json(${JSON.stringify(record)}))`,
+        providerReferences: sql`json_set(${files.providerReferences}, ${`$."${configId}"`}, json(${JSON.stringify(record)}))`,
       })
       .where(eq(files.id, fileId));
   } catch (error) {

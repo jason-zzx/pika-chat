@@ -28,7 +28,7 @@ export async function usageBytes(userId: string): Promise<number> {
     })
     .from(files)
     .where(eq(files.userId, userId));
-  return Number(rows[0]?.total ?? 0);
+  return rows[0]?.total ?? 0;
 }
 
 /**

@@ -5,10 +5,8 @@ import {
   desc,
   eq,
   inArray,
-  like,
   lt,
   not,
-  or,
   sql,
   type SQL,
 } from "drizzle-orm";
@@ -19,26 +17,13 @@ import {
 } from "@/lib/files/constants";
 import { formatBytes } from "@/lib/files/format";
 import {
-  AUDIO_FILE_EXTENSIONS,
-  AUDIO_MEDIA_TYPES,
   avMediaTypeForExtension,
-  CLASSIFIED_MEDIA_TYPES,
   classifyFile,
-  EBOOK_FILE_EXTENSIONS,
-  EPUB_MEDIA_TYPE,
   type FileCategory,
   fileExtension,
   type FileListCategory,
   FILE_URL_PREFIX,
-  IMAGE_MEDIA_TYPES,
   normalizeMediaType,
-  OFFICE_FILE_EXTENSIONS,
-  OFFICE_MEDIA_TYPES,
-  PDF_MEDIA_TYPE,
-  TEXT_FILE_EXTENSIONS,
-  TEXT_FILE_NAMES,
-  VIDEO_FILE_EXTENSIONS,
-  VIDEO_MEDIA_TYPES,
 } from "@/lib/files/media-types";
 import { newId } from "@/lib/id";
 import type { ChatFilePart } from "@/lib/schemas/chat";
@@ -113,34 +98,6 @@ export const PRESIGN_EXPIRES_SEC = 900;
 
 export function fileUrl(fileId: string): string {
   return `${FILE_URL_PREFIX}${fileId}`;
-}
-
-/**
- * Extracts attachment ids from persisted message parts. Reads raw JSON rather
- * than the parsed schema so a file part written by a newer deploy is still
- * reclaimable after a rollback.
- */
-export function fileIdsFromParts(parts: unknown): string[] {
-  if (!Array.isArray(parts)) {
-    return [];
-  }
-  const ids = new Set<string>();
-  for (const part of parts) {
-    if (typeof part !== "object" || part === null) {
-      continue;
-    }
-    const record = part as Record<string, unknown>;
-    if (record.type !== "file" || typeof record.url !== "string") {
-      continue;
-    }
-    if (
-      record.url.startsWith(FILE_URL_PREFIX) &&
-      record.url.length > FILE_URL_PREFIX.length
-    ) {
-      ids.add(record.url.slice(FILE_URL_PREFIX.length));
-    }
-  }
-  return [...ids];
 }
 
 /** Placeholder browsers send for content they cannot sniff. It says nothing. */
@@ -628,10 +585,10 @@ export async function resolveOwnedFileParts(
  * sweep: true when a persisted message still points at this row's file id.
  */
 function referencedByMessageSql(): SQL<boolean> {
-  return sql<boolean>`exists (
+  return sql`exists (
     select 1 from ${messageFileRefs}
     where ${eq(messageFileRefs.fileId, files.id)}
-  )`;
+  )`.mapWith(Boolean);
 }
 
 /**
@@ -654,71 +611,6 @@ export function fileIdsForTopics(
   return rows.map((row) => row.fileId);
 }
 
-/** Lowercased, path-less filename of the current row. */
-function basenameSql(): SQL<string> {
-  return sql<string>`lower(file_basename(${files.filename}))`;
-}
-
-/**
- * Lowercased extension of the current row's filename, mirroring
- * `fileExtension()`: empty when there is no dot or when the only dot starts the
- * name (a dotfile like `.gitignore` has no extension).
- */
-function extensionSql(): SQL<string> {
-  return sql<string>`file_extension(${files.filename})`;
-}
-
-/**
- * `mediaType`/extension predicate for one coarse list category, mirroring
- * `fileListCategoryOf` → `classifyFile` exactly: a recognized media type wins,
- * and only an unclassified type falls through to the extension rules in the
- * same order (office/ebook extension, then audio/video extension, then text).
- * Every table it reads is exported from `@/lib/files/media-types`, so a row's
- * badge and its filter membership cannot drift.
- */
-function categoryCondition(category: FileListCategory): SQL {
-  const typeIn = (types: readonly string[]) =>
-    inArray(files.mediaType, [...types]);
-  const classified = typeIn(CLASSIFIED_MEDIA_TYPES);
-  const notClassified = not(classified);
-  const extensionIn = (extensions: readonly string[]) =>
-    inArray(extensionSql(), [...extensions]);
-  // Extension rules only apply to a row whose media type classified nothing.
-  const byExtension = (condition: SQL | undefined) =>
-    and(notClassified, condition);
-
-  if (category === "image") {
-    return typeIn(IMAGE_MEDIA_TYPES);
-  }
-
-  const avAudio = extensionIn(AUDIO_FILE_EXTENSIONS);
-  const avVideo = extensionIn(VIDEO_FILE_EXTENSIONS);
-
-  if (category === "audio") {
-    return or(typeIn(AUDIO_MEDIA_TYPES), byExtension(avAudio))!;
-  }
-  if (category === "video") {
-    return or(typeIn(VIDEO_MEDIA_TYPES), byExtension(avVideo))!;
-  }
-
-  // document = pdf + office + ebook + text. The text rule runs last in
-  // `classifyFile`, so an audio/video extension has to be excluded from it:
-  // `text/plain` named `clip.mp4` is a video, not a document.
-  const text = or(
-    extensionIn(TEXT_FILE_EXTENSIONS),
-    inArray(basenameSql(), [...TEXT_FILE_NAMES]),
-    like(files.mediaType, "text/%"),
-  )!;
-  return or(
-    typeIn([PDF_MEDIA_TYPE]),
-    typeIn(OFFICE_MEDIA_TYPES),
-    typeIn([EPUB_MEDIA_TYPE]),
-    byExtension(extensionIn(OFFICE_FILE_EXTENSIONS)),
-    byExtension(extensionIn(EBOOK_FILE_EXTENSIONS)),
-    byExtension(and(not(or(avAudio, avVideo)!), text)),
-  )!;
-}
-
 /**
  * Newest-first page of the actor's attachments, plus the filtered row count and
  * the actor's whole storage usage. Ownership is never broader than the actor:
@@ -734,7 +626,10 @@ export async function listFilesForActor(
   const offset = Math.max(opts.offset, 0);
   const owner = eq(files.userId, actor.userId);
   const where = opts.category
-    ? and(owner, categoryCondition(opts.category))
+    ? and(
+        owner,
+        sql`file_category(${files.mediaType}, ${files.filename}) = ${opts.category}`,
+      )
     : owner;
 
   const [rows, countRows, totalBytes] = await Promise.all([
@@ -773,9 +668,9 @@ export async function listFilesForActor(
       sizeBytes: row.sizeBytes,
       extractionStatus: row.extractionStatus,
       createdAt: row.createdAt.toISOString(),
-      referenced: Boolean(row.referenced),
+      referenced: row.referenced,
     })),
-    totalCount: Number(countRows[0]?.total ?? 0),
+    totalCount: countRows[0]?.total ?? 0,
     totalBytes,
   };
 }
@@ -786,19 +681,20 @@ export async function listFilesForActor(
  * is gone. Uses the indexed `message_file_refs` table, matching
  * {@link referencedByMessageSql} and the orphan sweep.
  */
-async function isFileReferenced(fileId: string): Promise<boolean> {
-  const row = getDb()
-    .select({ fileId: messageFileRefs.fileId })
-    .from(messageFileRefs)
-    .where(eq(messageFileRefs.fileId, fileId))
-    .limit(1)
-    .get();
-  return row !== undefined;
+function isFileReferenced(fileId: string): boolean {
+  return (
+    getDb()
+      .select({ fileId: messageFileRefs.fileId })
+      .from(messageFileRefs)
+      .where(eq(messageFileRefs.fileId, fileId))
+      .limit(1)
+      .get() !== undefined
+  );
 }
 
 export async function deleteFile(id: string, actor: Actor): Promise<void> {
   const file = await getFileForActor(id, actor);
-  if (await isFileReferenced(id)) {
+  if (isFileReferenced(id)) {
     throw new AppError("CONFLICT", 409, "file.inUse");
   }
   // Object first: a storage failure aborts with the row still present and
@@ -838,7 +734,7 @@ export async function deleteFilesIfUnreferenced(
         .where(and(eq(files.id, id), eq(files.userId, actor.userId)))
         .limit(1);
       const row = rows[0];
-      if (!row || (await isFileReferenced(id))) {
+      if (!row || isFileReferenced(id)) {
         continue;
       }
       await getFileStorage().delete(row.storageKey);
