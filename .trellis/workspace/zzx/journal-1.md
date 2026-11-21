@@ -1291,3 +1291,42 @@ Added message text quoting: select text in an assistant/user message body to sho
 ### Status
 
 [OK] **Completed**
+
+
+## Session 48: SQLite migration
+<!-- trellis-session: v=2 fp=7b26a99fae27e398 -->
+
+**Date**: 2026-11-21
+**Task**: SQLite migration
+**Branch**: `feat/native-apps`
+
+### Summary
+
+Replaced PostgreSQL (server) and PGlite (desktop local mode) with embedded SQLite (better-sqlite3 + Drizzle sqlite-core). Rewrote 14 transaction sites and helpers to synchronous immediate transactions without .for("update"); ported search (LIKE ESCAPE), file_category UDF, json_set merges, [updatedAtMs, id] keyset cursors, and SQLITE_CONSTRAINT_PRIMARYKEY short-id retries. Added trigger-maintained message_file_refs so deleteTopic/deleteAssistant, orphan sweep, and in-use checks read indexed refs without scanning chat_messages.parts. Added one-time PostgreSQL boot importer (DATABASE_URL or POSTGRES_* -> postgres_import marker), switched Vitest integration tests to per-worker :memory: SQLite, updated Docker/compose/desktop/CI (bundled prebuilds with Electron smoke check), and synced specs and READMEs (leaving CHANGELOGs untouched). Deferred pre-release checks: CI desktop-smoke matrix and manual v0.4.2 PostgreSQL upgrade import.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e5d0f4` | chore(db): swap pglite for better-sqlite3 and switch config to DATABASE_PATH |
+| `b70daa4` | feat(db): port schema to sqlite-core and generate baseline + refs trigger migrations |
+| `785a5fe` | feat(db): switch client and boot migration to better-sqlite3 |
+| `cb976bc` | refactor(db): convert transactions to synchronous immediate SQLite tx |
+| `5d3ae7a` | refactor(db): port PostgreSQL queries, cursors, and JSON merges to SQLite |
+| `dc631aa` | refactor(files): query indexed message_file_refs for file reference checks |
+| `d7d9362` | test(db): switch vitest integration harness and suite to :memory: SQLite |
+| `2ed41eb` | feat(db): add one-time PostgreSQL to SQLite boot importer |
+| `764ab9a` | build(docker): switch containers and compose stacks to SQLite |
+| `d4ebb24` | feat(desktop): switch local server to SQLite and rebuild better-sqlite3 for Electron ABI |
+| `58905d4` | ci: switch workflows to SQLite and add manual desktop-smoke matrix |
+| `5edc06d` | docs: update READMEs, changelogs, and backend specs for SQLite |
+| `17980a1` | refactor(db): fold postgres_import into baseline migration and simplify sqlite services |
+| `253b05b` | feat(db): support legacy POSTGRES_* vars in boot importer |
+| `7047d3b` | test(db): split vitest unit/integration env and streamline SQLite tests |
+| `9d819f5` | build(docker,desktop): use better-sqlite3 prebuilds and update deploy/CI configs |
+| `eb81439` | docs: revert changelog edits and sync READMEs, specs, and sqlite-migration task |
+| `9721bb5` | docs(trellis): update sqlite-migration specs and checklist for v0.4.2 upgrade check |
+
+### Status
+
+[OK] **Completed**

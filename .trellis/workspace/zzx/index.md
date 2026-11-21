@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 47
-- **Last Active**: 2026-11-19
+- **Total Sessions**: 48
+- **Last Active**: 2026-11-21
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1293 | Active |
+| `journal-1.md` | ~1332 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 48 | 2026-11-21 | SQLite migration | `4e5d0f4`, `b70daa4`, `785a5fe`, `cb976bc`, `5d3ae7a`, `dc631aa`, `d7d9362`, `2ed41eb`, `764ab9a`, `d4ebb24`, `58905d4`, `5edc06d`, `17980a1`, `253b05b`, `7047d3b`, `9d819f5`, `eb81439`, `9721bb5` | `feat/native-apps` |
 | 47 | 2026-11-19 | Message text quote | `becad69`, `cef6c97` | `feat/native-apps` |
 | 46 | 2026-11-19 | Sidebar topic pagination and row UX | `d97bd1f`, `3877fc8`, `d87cccb` | `feat/native-apps` |
 | 45 | 2026-11-19 | Mobile shell remote mode (Android) & mobile web fixes | `5dbb8ff`, `5128ade`, `6ce8ee3`, `324a6e6`, `cd4e6bf`, `ec35ee5`, `3f6f349`, `50bc7c9`, `a896cdc`, `79e86e4` | `feat/native-apps` |
