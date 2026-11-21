@@ -15,24 +15,8 @@ jobs:
     name: Pre-release Quality Checks
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: pika
-          POSTGRES_PASSWORD: pika
-          POSTGRES_DB: pika_chat_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
-      DATABASE_URL: postgres://pika:pika@localhost:5432/pika_chat_test
-      TEST_DATABASE_URL: postgres://pika:pika@localhost:5432/pika_chat_test
+      DATABASE_PATH: ':memory:'
       CREDENTIAL_ENCRYPTION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef
       BETTER_AUTH_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef
 
@@ -155,21 +139,22 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
 
-      - name: Install root dependencies and build local standalone server
+      - name: Install root and native dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -C native install --frozen-lockfile
+
+      - name: Build local standalone server and rebuild SQLite for Electron
         # Next.js evaluates server modules during `next build` page-data collection;
         # pass dummy values matching Dockerfile so CI builds succeed without secrets.
         env:
           DOCKER_BUILD: '1'
-          DATABASE_URL: postgres://build:build@localhost:5432/build
+          DATABASE_PATH: ':memory:'
           CREDENTIAL_ENCRYPTION_SECRET: build-dummy-credential-encryption-secret-min32
           BETTER_AUTH_SECRET: build-dummy-better-auth-secret-min-32-chars
         run: |
-          pnpm install --frozen-lockfile
           pnpm build
           node native/desktop/scripts/build-server.mjs
-
-      - name: Install native dependencies
-        run: pnpm -C native install --frozen-lockfile
 
       - name: Build and package desktop app
         env:

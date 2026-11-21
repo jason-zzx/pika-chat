@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,24 +16,8 @@ jobs:
     name: Test & Quality Checks
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: pika
-          POSTGRES_PASSWORD: pika
-          POSTGRES_DB: pika_chat_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
-      DATABASE_URL: postgres://pika:pika@localhost:5432/pika_chat_test
-      TEST_DATABASE_URL: postgres://pika:pika@localhost:5432/pika_chat_test
+      DATABASE_PATH: ':memory:'
       CREDENTIAL_ENCRYPTION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef
       BETTER_AUTH_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef
 
@@ -60,11 +45,6 @@ jobs:
 
       - name: Run unit & integration tests
         run: pnpm test
-
-      - name: Run integration tests on PGlite
-        run: pnpm vitest run --project integration
-        env:
-          PGLITE_DATA_DIR: memory://
 
   native:
     name: Native Shell Checks
@@ -152,3 +132,61 @@ jobs:
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  desktop-smoke:
+    name: Desktop Packaging Smoke (${{ matrix.os }})
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            args: --linux AppImage deb rpm --x64
+          - os: windows-latest
+            args: --win nsis --x64
+          - os: macos-15-intel
+            args: --mac dmg --x64
+          - os: macos-latest
+            args: --mac dmg --arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            native/pnpm-lock.yaml
+
+      - name: Install rpm tooling
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -C native install --frozen-lockfile
+
+      - name: Build local standalone server and verify Electron SQLite ABI
+        env:
+          DOCKER_BUILD: '1'
+          DATABASE_PATH: ':memory:'
+          CREDENTIAL_ENCRYPTION_SECRET: build-dummy-credential-encryption-secret-min32
+          BETTER_AUTH_SECRET: build-dummy-better-auth-secret-min-32-chars
+        run: |
+          pnpm build
+          node native/desktop/scripts/build-server.mjs
+
+      - name: Package desktop app (dry-run, publish never)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: pnpm -C native/desktop dist ${{ matrix.args }}
