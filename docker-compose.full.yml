@@ -1,20 +1,6 @@
 name: pika-chat
 
 services:
-  postgres:
-    image: docker.io/library/postgres:17-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-pika}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pika}
-      POSTGRES_DB: ${POSTGRES_DB:-pika_chat}
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pika} -d ${POSTGRES_DB:-pika_chat}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   rustfs:
     image: docker.io/rustfs/rustfs:latest
     environment:
@@ -39,7 +25,9 @@ services:
       - "${PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:-postgres://${POSTGRES_USER:-pika}:${POSTGRES_PASSWORD:-pika}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-pika_chat}}
+      - DATABASE_PATH=${DATABASE_PATH:-/data/files/pika-chat.db}
+      # Optional one-time PostgreSQL boot importer source (only runs once when target SQLite DB is empty):
+      - DATABASE_URL
       - CREDENTIAL_ENCRYPTION_SECRET=${CREDENTIAL_ENCRYPTION_SECRET}
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
       - FILE_STORAGE_DIR=${FILE_STORAGE_DIR:-/data/files}
@@ -54,12 +42,9 @@ services:
     volumes:
       - files_prod_data:/data/files
     depends_on:
-      postgres:
-        condition: service_healthy
       rustfs:
         condition: service_healthy
 
 volumes:
-  postgres_prod_data:
   rustfs_data:
   files_prod_data:

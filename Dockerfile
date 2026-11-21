@@ -1,5 +1,6 @@
 FROM docker.io/library/node:22-alpine AS deps
 WORKDIR /app
+RUN apk add --no-cache python3 make g++
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -14,11 +15,10 @@ COPY . .
 # Next.js evaluates server components at build time to collect page data.
 # Pass dummy values inline to satisfy validation during `next build` without
 # exposing dummy secrets in image layer ENV metadata (which triggers Buildx SecretsUsedInArgOrEnv warnings).
-RUN DATABASE_URL="postgres://build:build@localhost:5432/build" \
+RUN DATABASE_PATH=":memory:" \
     CREDENTIAL_ENCRYPTION_SECRET="build-dummy-credential-encryption-secret-min32" \
     BETTER_AUTH_SECRET="build-dummy-better-auth-secret-min-32-chars" \
     pnpm build
-RUN pnpm exec esbuild scripts/migrate.ts --bundle --platform=node --format=esm --outfile=migrate.mjs
 
 FROM docker.io/library/node:22-alpine AS runner
 WORKDIR /app
@@ -26,6 +26,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV DATABASE_PATH=/data/files/pika-chat.db
 
 # Attachment volume mountpoint: created here with nextjs ownership so the
 # named volume (docker-compose.*.yml) is writable by the unprivileged
@@ -39,8 +40,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/src/server/db/migrations ./src/server/db/migrations
-COPY --from=builder --chown=nextjs:nodejs /app/migrate.mjs ./migrate.mjs
 
 USER nextjs
 EXPOSE 3000
-CMD ["sh", "-c", "node migrate.mjs && node server.js"]
+CMD ["node", "server.js"]
