@@ -4,8 +4,9 @@
 
 Applies to send, regenerate, edit-and-regenerate, image turns, stream resume,
 stop/delete, and process startup/shutdown. The server process owns inference;
-HTTP responses are subscribers. One application instance, PostgreSQL, no Redis
-or separate worker. Different topics run independently; no global/actor cap.
+HTTP responses are subscribers. One application instance, embedded SQLite
+(`better-sqlite3`), no Redis or separate worker. Different topics run
+independently; no global/actor cap.
 
 Primary owners:
 - `services/generation.service.ts`: admission, receipts, durable transitions.
@@ -220,20 +221,21 @@ index for queued/running/stopping). `chat_messages` gains nullable
 - `generation-execution.integration.test.ts`: real runner with local provider,
   edit context once, automatic compression, five independent topics, metadata,
   terminal-write failures and lost acknowledgements, stop/delete/image races.
-- `generation-runner.integration.test.ts`: actual PostgreSQL locks for starting
-  claims, checkpoint/finalization ordering, explicit runner stop, boot recovery
-  and slow-subscriber isolation; no sleep-only proof.
+- `generation-runner.integration.test.ts`: generation claim/completion/stop
+  lifecycle, boot recovery, finalized-image reclamation on topic/assistant
+  delete, and slow-subscriber isolation without sleep-only proof.
 - Real Next process validation: SIGTERM after an observed persisted checkpoint,
-  restart and assert unchanged saved parts, interrupted state and no additional
-  provider call. Also cover exit before the first checkpoint (empty placeholder
-  is valid). Test dev/start without installing signal hooks; direct runner-stop
-  tests do not establish framework exit behavior.
+  restart pointing at the same isolated DB (`DATABASE_PATH`), and assert
+  unchanged saved parts, interrupted state, and no additional provider call.
+  Also cover exit before the first checkpoint (empty placeholder is valid). Test
+  dev/start without installing signal hooks; direct runner-stop tests do not
+  establish framework exit behavior.
 - Pool/ChatView/account tests: seed-before-resume, 204 reseed, one reconnect,
   retained target after network failure, account-key isolation. Real QueryClient
   tests cover hidden suppression, one return-visible fetch, resumed active
   polling, idle rediscovery, and disabled/anonymous queries staying inactive.
-- `env.test.ts` currently imports real instrumentation in its runner-boot case:
-  even a unit run needs explicit isolated `DATABASE_URL`/`TEST_DATABASE_URL`
+- `env.test.ts` imports real instrumentation in its runner-boot case:
+  even a unit run needs explicit isolated `DATABASE_PATH` (`":memory:"`)
   with migrated schema and no queued work. Never let this test inherit an
   application DB; it can execute boot recovery.
 - Release validation: isolated DB, original image migration/stop/restart,

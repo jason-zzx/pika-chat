@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/React-19-61dafb?logo=react" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8?logo=tailwindcss" alt="Tailwind CSS v4" />
-  <img src="https://img.shields.io/badge/Drizzle_ORM-PostgreSQL-c5f74f?logo=drizzle" alt="Drizzle ORM" />
+  <img src="https://img.shields.io/badge/Drizzle_ORM-SQLite-c5f74f?logo=drizzle" alt="Drizzle ORM" />
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker" alt="Docker Ready" />
 </p>
 
@@ -130,7 +130,7 @@
 
 ### 方案 1：生产环境全能一体化部署（`docker-compose.full.yml`，推荐）
 
-通过 Docker 一键拉起应用服务、PostgreSQL 数据库及 RustFS（S3 兼容附件存储），内置数据卷持久化并自动执行数据库版本迁移。默认直接拉取官方预构建镜像（`ghcr.io/jason-zzx/pika-chat:latest`），无需本地编译。
+通过 Docker 一键拉起应用服务（内置 SQLite 数据库并默认持久化在 `/data/files/pika-chat.db`）及 RustFS（S3 兼容附件存储），内置数据卷持久化并在启动时自动执行数据库迁移。默认直接拉取官方预构建镜像（`ghcr.io/jason-zzx/pika-chat:latest`），无需本地编译。
 
 1. **克隆项目代码**：
    ```bash
@@ -146,11 +146,10 @@
    ```bash
    openssl rand -base64 48
    ```
-   编辑 `.env` 文件，填入生成的随机密钥及数据库密码：
+   编辑 `.env` 文件，填入生成的随机密钥：
    ```env
    CREDENTIAL_ENCRYPTION_SECRET=你生成的加密密钥
    BETTER_AUTH_SECRET=你生成的会话签名密钥
-   POSTGRES_PASSWORD=自定义数据库密码
    ```
 
 3. **启动全套生产服务**：
@@ -163,9 +162,9 @@
 
 ---
 
-### 方案 2：生产环境独立应用部署（`docker-compose.standalone.yml`，自带数据库）
+### 方案 2：生产环境独立应用部署（`docker-compose.standalone.yml`）
 
-若您已有外部 PostgreSQL 实例（如云数据库 RDS、Supabase、Neon 或自建数据库集群），以及可选的外部 S3 对象存储，可通过 `docker-compose.standalone.yml` 单独启动应用服务，不创建任何多余的本地容器：
+通过 `docker-compose.standalone.yml` 单独启动应用容器（内置 SQLite 存储于 `/data/files/pika-chat.db`），搭配本地磁盘或可选外部 S3 对象存储，无需多余容器：
 
 1. **克隆项目代码**：
    ```bash
@@ -177,18 +176,8 @@
    ```bash
    cp .env.example .env
    ```
-   编辑 `.env` 文件配置外部数据库连接信息与密钥：
+   编辑 `.env` 文件配置实例密钥与可选外部 S3 存储：
    ```env
-   # 方式一：直接提供完整的数据库连接串
-   DATABASE_URL=postgres://user:password@your-pg-host:5432/pika_chat
-
-   # 方式二：或者提供分立的连接变量（系统会自动对特殊字符密码进行 URL 编码）
-   # POSTGRES_HOST=your-pg-host
-   # POSTGRES_PORT=5432
-   # POSTGRES_USER=user
-   # POSTGRES_PASSWORD=password
-   # POSTGRES_DB=pika_chat
-
    CREDENTIAL_ENCRYPTION_SECRET=你生成的加密密钥
    BETTER_AUTH_SECRET=你生成的会话签名密钥
 
@@ -196,7 +185,14 @@
    # S3_BUCKET=my-bucket
    # S3_ACCESS_KEY_ID=...
    # S3_SECRET_ACCESS_KEY=...
+
+   # 可选：从旧版 PostgreSQL 升级时的一次性启动导入源
+   # DATABASE_URL=postgres://user:password@your-pg-host:5432/pika_chat
    ```
+
+   > **从旧版 PostgreSQL 升级？** 在首次以空白 SQLite 文件（`/data/files/pika-chat.db`）启动时配置 `DATABASE_URL`。系统会在启动阶段以只读事务一次性读取 PostgreSQL 并原子导入 SQLite（自动校验表列、外键与行数），随后写入导入标记并在后续重启自动跳过。迁移完成后可移除 `DATABASE_URL` 并下线 PostgreSQL；若目标 SQLite 已有数据或表结构不匹配，启动会直接拒绝并报错，避免误覆盖数据。
+   >
+   > **数据备份**：备份 `/data/files` 数据卷（`files_prod_data`）前建议先停止容器，或执行 `sqlite3 /data/files/pika-chat.db ".backup ..."` 生成一致性快照，以保留完整的主数据库与 WAL 日志状态。
 
 3. **启动独立应用服务**：
    ```bash
@@ -205,12 +201,11 @@
 
 ---
 
-### 方案 3：本地开发环境搭建（`docker-compose.dev.yml`）
+### 方案 3：本地开发环境搭建
 
 #### 环境要求
 - **Node.js**: >= 22
 - **pnpm**: 11.9+
-- **Docker** 或 **Podman**（用于拉起本地 PostgreSQL 开发数据库）
 
 #### 操作步骤
 
@@ -225,24 +220,14 @@
    ```bash
    cp .env.example .env
    ```
-   编辑 `.env` 文件，填入通过 `openssl rand -base64 48` 生成的随机安全密钥。
+   编辑 `.env` 文件，保留默认的 `DATABASE_PATH=.data/pika-chat.db`（或按需指定路径），并填入通过 `openssl rand -base64 48` 生成的随机安全密钥。
 
-3. **启动本地 PostgreSQL 开发数据库**：
-   ```bash
-   docker compose -f docker-compose.dev.yml up -d
-   ```
-
-4. **执行数据库结构迁移**：
-   ```bash
-   pnpm db:migrate
-   ```
-
-5. **启动前端开发服务**：
+3. **启动开发服务**（启动时会自动应用 SQLite 迁移，也可随时执行 `pnpm db:migrate`）：
    ```bash
    pnpm dev
    ```
 
-6. 浏览器打开 **`http://localhost:3000/setup`** 完成初始管理员创建。
+4. 浏览器打开 **`http://localhost:3000/setup`** 完成初始管理员创建。
 
 ---
 
@@ -265,7 +250,7 @@ Android 应用（APK，Android 7.0+）可连接一个或多个已部署的 Pika 
 Electron 桌面客户端支持 Windows、macOS 与 Linux，既可在本地“此电脑”模式免配置直接运行 Pika Chat，也可连接一个或多个已部署的远程服务器，并提供托盘图标、全局显示/隐藏快捷键、回复完成通知和自动更新。
 
 - **下载**：前往 [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases)，获取 Windows 安装包（`.exe`）、macOS `.dmg`（Intel 与 Apple Silicon）、Linux `.AppImage` / `.deb` / `.rpm`。
-- **本地使用（“此电脑”）**：首次启动选择“在此电脑上使用”，即可启动内置本地服务（内嵌 PGlite 数据库与 Next 独立服务端），仅监听 `127.0.0.1`。对话记录、上传文件、密钥凭据与日志均保存在系统应用数据目录（`<userData>/local/`）中，应用升级时保留不变。
+- **本地使用（“此电脑”）**：首次启动选择“在此电脑上使用”，即可启动内置本地服务（内嵌 SQLite 数据库与 Next 独立服务端），仅监听 `127.0.0.1`。对话记录、上传文件、密钥凭据与日志均保存在系统应用数据目录（`<userData>/local/`）中，应用升级时保留不变。
 - **连接远程服务器**：可选择“连接到服务器”，或随时通过侧边栏服务器切换器、账户菜单或托盘切换。每个服务器拥有独立的登录会话；本地与远程数据相互独立，切换时互不影响，本地服务会在后台保持运行直到退出应用。
 - **更新**：Windows 与 Linux 在应用内更新；`.deb` / `.rpm` 在选择“重启并安装”时会要求输入管理员密码；macOS 会弹出提示并跳转到新版本发布页。
 - **Windows**：安装包未签名，出现 SmartScreen 提示时点击“更多信息” → “仍要运行”。
@@ -275,9 +260,9 @@ Electron 桌面客户端支持 Windows、macOS 与 Linux，既可在本地“此
 开发桌面应用（`native/` 下为独立的 pnpm 工作区）：
 
 ```bash
-DOCKER_BUILD=1 pnpm build
-node native/desktop/scripts/build-server.mjs
+DOCKER_BUILD=1 DATABASE_PATH=:memory: pnpm build
 pnpm -C native install --frozen-lockfile
+node native/desktop/scripts/build-server.mjs
 pnpm -C native -r typecheck && pnpm -C native -r test
 pnpm -C native/desktop start                          # 连接本地或远程服务器运行
 pnpm -C native/desktop dist --linux AppImage deb rpm  # 本地打包
@@ -291,12 +276,8 @@ Pika Chat 通过根目录 `.env` 文件或容器环境进行配置：
 
 | 变量名称 | 是否必填 | 默认值 | 说明 |
 |---|:---:|:---:|---|
-| `DATABASE_URL` | **是\*** | — | PostgreSQL 连接字符串（例如：`postgres://pika:pika@localhost:5432/pika_chat`）。\*亦可改用分立的 `POSTGRES_*` 变量。 |
-| `POSTGRES_HOST` | 否 | `localhost` / `postgres` | 外部 PostgreSQL 服务器主机名（未提供 `DATABASE_URL` 时生效）。 |
-| `POSTGRES_PORT` | 否 | `5432` | 外部 PostgreSQL 端口号。 |
-| `POSTGRES_USER` | 否 | `postgres` / `pika` | 数据库用户名（自动 URL 编码）。 |
-| `POSTGRES_PASSWORD` | 否 | — | 数据库连接密码（自动 URL 编码）。 |
-| `POSTGRES_DB` | 否 | `pika_chat` | 数据库名称。 |
+| `DATABASE_PATH` | **是** | `/data/files/pika-chat.db`（Docker） | SQLite 数据库文件路径（`.env.example` 默认为 `.data/pika-chat.db`，测试可使用 `:memory:`）。 |
+| `DATABASE_URL` | 否 | — | 可选的 PostgreSQL 一次性启动导入源连接串（`postgres://...`）。仅在目标 SQLite 为空且无导入标记时执行一次自动导入，完成后可移除。 |
 | `CREDENTIAL_ENCRYPTION_SECRET` | **是** | — | 用于对模型 API Key 执行 AES-256-GCM 落库加密的密钥（至少 32 字符）。**请务必妥善备份**，一旦丢失将永久无法解密已存凭据。 |
 | `BETTER_AUTH_SECRET` | **是** | — | 用于签名 Better Auth 会话令牌的加密密钥（至少 32 字符）。 |
 | `APP_URL` | 否 | `http://localhost:3000` | 部署站点的公网访问 URL。在反向代理或自定义域名环境下建议显式配置。 |
@@ -310,7 +291,6 @@ Pika Chat 通过根目录 `.env` 文件或容器环境进行配置：
 | `S3_SECRET_ACCESS_KEY` | 使用 S3 时必填 | — | S3 访问凭据 Secret Access Key。 |
 | `S3_DIRECT_ACCESS` | 否 | 关闭 | 设置为 `1` 或 `true` 开启客户端直传直链模式（前端通过预签名 POST 直传、预签名 302 GET 直接访问）。`0`/`false`/不设置即为关闭。需配合 `S3_BUCKET` 使用。 |
 | `PIKA_IMAGE` | 否 | `ghcr.io/jason-zzx/pika-chat:latest` | Compose 编排中拉取的应用容器镜像地址与标签。 |
-| `TEST_DATABASE_URL` | 仅测试环境 | — | 运行 Vitest 集成测试专用的测试数据库连接字符串（如 `postgres://pika:pika@localhost:5432/pika_chat_test`）。 |
 
 ---
 
@@ -355,13 +335,13 @@ Pika Chat 通过根目录 `.env` 文件或容器环境进行配置：
 - **全栈框架**：[Next.js 16](https://nextjs.org/)（App Router 架构，支持 Standalone 独立输出）
 - **前端交互与 UI**：[React 19](https://react.dev/)、[Base UI](https://base-ui.com/)、[Tailwind CSS v4](https://tailwindcss.com/)、[Lucide React](https://lucide.dev/)
 - **模型与推理集成**：[Vercel AI SDK](https://sdk.vercel.ai/)（`ai`、`@ai-sdk/openai-compatible`、`@ai-sdk/anthropic`、`@ai-sdk/google`）
-- **数据库与持久化**：[PostgreSQL 17](https://www.postgresql.org/)、[Drizzle ORM](https://orm.drizzle.team/)、[postgres.js](https://github.com/porsager/postgres)
+- **数据库与持久化**：[SQLite](https://www.sqlite.org/)（[better-sqlite3](https://github.com/WiseLibs/better-sqlite3)）、[Drizzle ORM](https://orm.drizzle.team/)
 - **身份认证体系**：[Better Auth](https://better-auth.com/)（内置 TOTP 两步验证）
 - **富文本与公式解析**：[Streamdown](https://github.com/streamdown/streamdown)、KaTeX 数学公式、Mermaid 图表、`@streamdown/cjk` 文本优化
 - **文档提取工具集**：`unpdf` (PDF)、`mammoth` (DOCX)、`xlsx` (Excel)、`jszip` (EPUB/PPTX)
 - **对象存储适配**：`@aws-sdk/client-s3`、`@aws-sdk/s3-presigned-post`、`@aws-sdk/s3-request-presigner`
 - **国际化引擎**：[next-intl](https://next-intl.dev/)
-- **测试框架**：[Vitest](https://vitest.dev/)、React Testing Library、PostgreSQL 真实集成测试套件
+- **测试框架**：[Vitest](https://vitest.dev/)、React Testing Library、`:memory:` SQLite 集成测试套件
 
 ---
 
@@ -376,7 +356,7 @@ pnpm lint
 # TypeScript 严格类型检查
 pnpm typecheck
 
-# 单元测试与集成测试全量验证（需确保本地 Postgres 已启动）
+# 单元测试与集成测试全量验证
 pnpm test
 ```
 

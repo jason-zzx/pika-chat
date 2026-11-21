@@ -60,15 +60,17 @@ is easy to break.
 - Base: a topic touched between page 1 and page 2 moves above the cursor. It
   leaves the later pages and shows up on a refetched page 1. No row is
   duplicated, and no untouched row is skipped.
-- Bad: a millisecond JS `Date` cursor. `defaultNow()` writes microseconds, so
-  rows that share a millisecond with the boundary row get skipped or repeated.
+- Bad: an ISO-string or truncated second-precision cursor — SQLite
+  `updated_at` stores integer epoch milliseconds, and rows inside the same
+  millisecond tie-break deterministically by `id desc`.
 
 ### 6. Tests Required
 
 `topic.service.integration.test.ts`:
 - page sizes 20 / 20 / 5, null last cursor, exact order;
 - touch between pages: no duplicates, every untouched row seen once;
-- microsecond-spaced rows inside one millisecond across the page-20 boundary;
+- 25 rows sharing the exact same millisecond across the page-20 boundary
+  ordered by `(updated_at desc, id desc)`;
 - identical `updated_at` broken by `id`;
 - favorites excluded from pages, favorites list complete past 20;
 - foreign assistant → `NOT_FOUND` for both reads.
@@ -80,27 +82,25 @@ is easy to break.
 #### Wrong
 
 ```ts
-// JS Date truncates Postgres µs to ms: rows in the same ms are skipped.
+// ISO strings or sub-ms assumptions mismatch SQLite integer ms keyset compares:
 nextCursor: [last.updatedAt.toISOString(), last.id]
 ```
 
 #### Correct
 
 ```ts
-.select({ ...topicColumns, updatedAtText: sql<string>`${topics.updatedAt}::text` })
-// ...
-nextCursor: last ? [last.updatedAtText, last.id] : null
+// Epoch-ms string matches integer `updated_at` column directly; validated as safe int in route Zod:
+nextCursor: last ? [String(last.updatedAt.getTime()), last.id] : null
 ```
 
 ---
 
 ## Index column order
 
-Drizzle's `.desc()` defaults to `NULLS LAST`. Postgres's plain `ORDER BY … DESC`
-means `NULLS FIRST`, so an index built with plain `.desc()` does not match the
-query's sort and the planner falls back to an explicit sort. Declare
-`.desc().nullsFirst()` for every DESC index column that a plain `desc()`
-ORDER BY must ride, even when the columns are `NOT NULL`.
+SQLite composite indexes for `(updated_at DESC, id DESC)` must declare
+explicit descending SQL expressions (`sql\`updated_at desc\``, `sql\`id desc\``)
+in Drizzle (`topics_assistant_list_idx`), matching the query's `orderBy` so
+`EXPLAIN QUERY PLAN` uses `COVERING INDEX` without a temp B-tree sort.
 
 ---
 

@@ -20,7 +20,7 @@ prefill).
 // src/lib/schemas/model-preferences.ts (isomorphic)
 modelPairSchema: { providerConfigId, modelId }
 modelPreferencesSchema: { chat?, title?, compression?, translation? }  // each nullish
-parseModelPreferences(raw: unknown): ModelPreferences   // dirty jsonb → {}
+parseModelPreferences(raw: unknown): ModelPreferences   // dirty JSON → {}
 
 // src/server/services/model-preferences.service.ts
 getModelPreferences(userId): Promise<ModelPreferences>
@@ -28,7 +28,7 @@ updateModelPreferences(input, actor): Promise<ModelPreferences>
 resolveModelPreference(actor, purpose): Promise<ModelPair | null>  // never throws
 ```
 
-DB: `users.model_preferences jsonb` nullable — one column for all four
+DB: `users.model_preferences` (`text` JSON) nullable — one column for all four
 slots, `null` = no preferences. The value domain is guarded by zod on
 read/write (same style as the theme columns), so manually edited or
 future-shaped data degrades to empty preferences instead of breaking reads.
@@ -82,7 +82,7 @@ keep sending them as the fallback.
 
 - `model-preferences.service.integration.test.ts`: store/read-back,
   whole-set replacement with slot clearing, 400 on unavailable or foreign
-  pairs, dirty-jsonb degradation, `resolveModelPreference` null on
+  pairs, dirty-JSON degradation, `resolveModelPreference` null on
   unset/stale (stored value left untouched).
 - `api/account/model-preferences/route.test.ts`: GET ownership, PATCH
   replace/clear, zod 400, service 400 mapping, 401.

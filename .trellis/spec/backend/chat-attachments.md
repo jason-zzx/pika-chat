@@ -72,8 +72,7 @@ maxFileBytes(): number          // FILE_UPLOAD_MAX_MB (1..100) or 20 MiB
 isS3DirectAccessEnabled(): boolean  // S3_DIRECT_ACCESS truthy; boot pairs it with S3 storage (fail-fast), so runtime need not re-check S3_BUCKET
 
 // files/quota.ts
-usageBytes(userId): Promise<number>            // SUM(size_bytes) over the actor's rows, coalesce 0
-                                               // (postgres-js has no int8 parser → narrowed in the module)
+usageBytes(userId): Promise<number>            // coalesce(sum(size_bytes), 0) over the actor's rows
 effectiveQuotaBytes(actor): Promise<number | null>
   // users.file_quota_bytes ?? app_settings.file_storage_quota_bytes ?? null (= unlimited)
 assertUploadQuota(actor, incomingBytes): Promise<void>
@@ -112,14 +111,14 @@ DB (`files`, migration `0015` + `0016`):
 | `size_bytes` | `integer` | ≤ `maxFileBytes()` at write time |
 | `storage_key` | `text` UNIQUE | `<userId>/<fileId>.<ext>` — ext from the original filename (lowercase, `[a-z0-9]`, ≤10 chars); readability only |
 | `extracted_text` | `text` NULL | extraction cache, written at upload |
-| `extraction_status` | `file_extraction_status` enum (`none`/`ok`/`empty`/`failed`) | `none` = image, audio, video |
-| `extraction_truncated` | `boolean` | true when text hit `MAX_EXTRACTED_CHARS` |
-| `provider_references` | `jsonb` NOT NULL DEFAULT `'{}'` | `Record<providerConfigId, { reference, uploadedAt, expiresAt }>` — regenerable cache, merged per config |
+| `extraction_status` | `file_extraction_status` text enum (`none`/`ok`/`empty`/`failed`) | `none` = image, audio, video |
+| `extraction_truncated` | `integer` boolean (`0` / `1`) | true when text hit `MAX_EXTRACTED_CHARS` |
+| `provider_references` | `text` JSON NOT NULL DEFAULT `'{}'` | `Record<providerConfigId, { reference, uploadedAt, expiresAt }>` — regenerable cache, merged per config via `json_set` |
 
-`provider_configs.files_api_unsupported_at` (`timestamptz`, nullable) is the
+`provider_configs.files_api_unsupported_at` (SQLite `integer` ms timestamp, nullable) is the
 negative cache for the Files API; it is cleared whenever `baseUrl`, the api key,
 or `apiFormat` change.
-| `created_at` / `updated_at` | `timestamptz` | `updated_at` refreshed by the extraction write |
+| `created_at` / `updated_at` | `integer` epoch ms (`timestampMsDefaultNow`) | `updated_at` refreshed by the extraction write |
 
 `app_settings.file_storage_quota_bytes` (bigint, nullable, DDL default
 `5368709120` = 5 GiB) is the instance-wide default quota; `users.file_quota_bytes`
@@ -159,9 +158,12 @@ desc, id desc`), offset-paginated. Query: `offset` (default 0, clamped ≥ 0),
 
 `totalCount` follows the category filter ("N in this category"); `totalBytes`
 is the actor's whole usage (`usageBytes(actor.userId)`, the same value the
-limits endpoint reports) and **does not** change with the filter. `referenced`
-comes from the same jsonb EXISTS predicate the orphan sweep uses, so "in use"
-means exactly "the sweep would spare it". Malformed `offset`/`limit` fall back
+limits endpoint reports) and **does not** change with the filter. `referenced` comes from an `EXISTS` predicate over the trigger-maintained
+`message_file_refs` table (`WITHOUT ROWID`), the same table the orphan sweep
+and `deleteFile` use, so "in use" means exactly "the sweep would spare it".
+`deleteTopic` and `deleteAssistant` select released attachment ids from
+`message_file_refs` inside the deletion transaction (never scanning
+`chat_messages.parts`). Malformed `offset`/`limit` fall back
 to defaults (`catch`), an unknown `category` 400s — pagination knobs are
 cosmetic, a bad category is a client bug.
 
@@ -173,7 +175,8 @@ of one classification: a real `deck.pptx` or `notes.txt` often arrives as
 The predicate is built from the same exported tables `classifyFile` reads
 (`CLASSIFIED_MEDIA_TYPES`, `TEXT_FILE_EXTENSIONS`, `TEXT_FILE_NAMES`,
 `AUDIO_FILE_EXTENSIONS`, `VIDEO_FILE_EXTENSIONS`, `OFFICE_FILE_EXTENSIONS`,
-`EBOOK_FILE_EXTENSIONS`) with the same precedence and the same guards:
+`EBOOK_FILE_EXTENSIONS`) via deterministic `file_basename` / `file_extension`
+SQLite UDFs (`client.ts`) with the same precedence and guards:
 extension fallbacks apply only to rows **no** media-type set matched, and the
 text branch additionally excludes audio/video extensions (a `text/plain`
 `clip.mp4` is a video). The equivalence is locked by a table-driven test that
@@ -375,9 +378,8 @@ const dataUrl = `data:${row.mediaType};base64,${(await getFileStorage().get(row.
 
 ```ts
 // Persisting raw extractor output: pdf.js emits NUL bytes for some embedded
-// fonts (math glyphs), and Postgres `text` columns reject 0x00 — the
-// extraction-cache UPDATE fails with `invalid byte sequence for encoding
-// "UTF8"` and the row is left as a status=none orphan.
+// fonts (math glyphs) — strip 0x00 at extraction so stored text and JSON
+// stay clean across SQLite and PostgreSQL upgrades.
 await db.update(files).set({ extractedText: result.text });
 ```
 
@@ -599,7 +601,7 @@ reservation**: the worst case is a small overshoot bounded by the per-file
 limit, and the operator contract is "expected growth", not an exact ledger.
 Quota input is MB at every boundary (UI + admin schemas) and bytes in the DB;
 `parseQuotaMb` and `MAX_QUOTA_MB` are the shared conversion and ceiling, so a
-silly number is a 400, not a Postgres bigint error.
+silly number is a 400, not a DB integer-overflow error.
 
 **Provider cleanup is event-driven, never a reconciliation UI.** Deletes are
 recorded per reference and retried in a bounded loop; there is no admin

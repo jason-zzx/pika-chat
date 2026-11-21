@@ -36,7 +36,7 @@ quotes: Record<string, ChatQuote | null>; setQuote(key, quote | null)
 replayModelMessages → convertToModelMessages<ChatUIMessage>(…, { convertDataPart })
 ```
 
-No DB column: the quote lives in the user message row's `parts` jsonb.
+No DB column: the quote lives in the user message row's `parts` JSON.
 
 ### 3. Contracts
 

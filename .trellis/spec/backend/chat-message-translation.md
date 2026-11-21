@@ -31,7 +31,7 @@ buildTranslateInstructions(targetLang: TranslateTargetLanguageCode): string
 translateMessage(input, actor): Promise<{ translation: string }>
 ```
 
-DB: `chat_messages.translations jsonb` nullable — a language→text map on the
+DB: `chat_messages.translations` (`text` JSON) nullable — a language→text map on the
 message **version row** (versions are independent, per
 [chat-message-versions.md](./chat-message-versions.md)).
 
@@ -39,7 +39,7 @@ message **version row** (versions are independent, per
 
 - `POST /api/translate` is cache-first: an existing
   `translations[targetLang]` returns immediately and never calls the model.
-- Persistence merges by key (`jsonb ||`) — translating a second language must
+- Persistence merges by key via SQLite `json_set(coalesce(translations, '{}'), ...)` — translating a second language must
   not drop the first. Never replace the whole object.
 - The client also pre-checks the cache (`ChatView.handleTranslate`) so a repeat
   tap costs no request; the server check is the authority.

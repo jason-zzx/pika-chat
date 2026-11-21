@@ -13,15 +13,17 @@ UI, or the `?m=` message-anchor navigation.
 - **Ownership**: both queries filter by `assistants.ownerId = actor.userId`
   in the WHERE clause (topics join assistants directly; messages join
   topics + assistants). No fetch-then-check.
-- **Matching is ILIKE with literal semantics**: `%`, `_`, and `\` are escaped
-  (`escapeIlike`), so user input never acts as a wildcard. Postgres
-  `standard_conforming_strings=on` + drizzle parameter binding make this
-  safe; do not switch to `parts::text` matching — JSON keys are English and
-  would false-positive on Latin queries.
-- **Message match scope**: `jsonb_array_elements(parts)` where
-  `p->>'type' = 'text'`; reasoning, tool payloads, and attachment text are
-  deliberately excluded. Only `is_selected = true` rows match — an
-  unselected version's content is not what the user sees when they land.
+- **Matching is case-insensitive LIKE (ASCII-only in SQLite) with literal semantics**:
+  `%`, `_`, and `\` are escaped (`escapeLike`), so user input never acts as a
+  wildcard, via `LIKE ... ESCAPE '\'` + drizzle parameter binding. Do not
+  switch to raw `parts` text matching — JSON keys are English and would
+  false-positive on Latin queries.
+- **Message match scope**: `json_each(parts)` with `CASE WHEN p.type = 'object'
+  AND p.value->>'type' = 'text' THEN p.value->>'text' END` (non-object array
+  elements would raise `malformed JSON` without the `p.type = 'object'`
+  guard); reasoning, tool payloads, and attachment text are deliberately
+  excluded. Only `is_selected = 1` rows match — an unselected version's
+  content is not what the user sees when they land.
 - **Snippet is app-side**: the SQL returns `parts` for the ≤20 hit rows and
   `uiPartsFromJson` + the shared `windowAroundMatch` (exported from
   `src/lib/schemas/search.ts` alongside `SNIPPET_*` / `TITLE_*`) reproduce

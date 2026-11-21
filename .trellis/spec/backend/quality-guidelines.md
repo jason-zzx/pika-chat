@@ -63,7 +63,7 @@ Do not mock the thing under test. Mock the network boundary — the LLM provider
 call — and let the database be real in integration tests.
 
 **Integration tests must never reach real object storage.** The database is
-isolated per run (`TEST_DATABASE_URL`), but `getFileStorage()` reads the same
+isolated per worker (`DATABASE_PATH=":memory:"`), but `getFileStorage()` reads the same
 `S3_*` env as production — unmocked, an integration test writes fixture objects
 into the operator's real bucket (this actually happened: hundreds of leftover
 objects in a user's rustfs bucket, 2026-09-14). The integration project's

@@ -49,8 +49,8 @@ one endpoint format, chosen at create/edit time.
 
 ### Storage
 
-`provider_configs.api_format` is a `pgEnum("provider_api_format", …)`,
-`NOT NULL DEFAULT 'openai-compatible'` (migration `0014_pale_mongu.sql`). The
+`provider_configs.api_format` is a `text("api_format", { enum: providerApiFormats })`,
+`NOT NULL DEFAULT 'openai-compatible'`. The
 default means pre-existing rows need no backfill and behave exactly as before.
 
 ### Single source of truth

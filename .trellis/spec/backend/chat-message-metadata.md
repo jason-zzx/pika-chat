@@ -3,8 +3,7 @@
 > Cross-layer contract for per-message assistant/user metadata — landed with
 > `09-04-chat-message-meta` (`createdAt`, `reasoningMs`); earlier fields:
 > `providerConfigId`, `modelId`, `finishReason`, `outcome`, `errorMessage`;
-> `usage` (jsonb, replaced the old `totalTokens` column) landed with
-> `11-15-message-token-stats`.
+> `usage` (JSON text column, replacing the old `totalTokens` column).
 
 ## Scenario: adding or consuming a per-message metadata field
 
@@ -22,8 +21,8 @@ them together or the live and reloaded views disagree.
   `.optional()`; extend, never narrow existing fields. `ChatUIMessage =
   UIMessage<ChatMetadata, ChatDataParts>`.
 - DB: nullable columns on `chatMessages` (`src/server/db/schema/chat.ts`) +
-  drizzle migration (`pnpm db:generate` / `pnpm db:migrate`). `createdAt` is
-  the exception: column already exists (`timestamptz notNull defaultNow()`).
+  drizzle migration (`pnpm db:generate`). `createdAt` is
+  the exception: column already exists (`timestampMsDefaultNow("created_at").notNull()`).
 - Service: `metadataFromRow(row)` rebuilds `ChatMetadata` from columns —
   **per role**: user rows get `{ createdAt, translations? }`, assistant rows
   get the full set. (`translations` is a per-version language→text map added
@@ -161,7 +160,7 @@ writer.write({ type: "message-metadata", messageMetadata: { ...metadata, reasoni
 ### 1. Scope / Trigger
 
 Changing what the model row's usage stats show, how they are measured, or how
-they are stored. `usage` is a jsonb column + nested metadata object, unlike
+they are stored. `usage` is a JSON text column + nested metadata object, unlike
 the flat per-field columns above, because it is display-only and never queried.
 
 ### 2. Signatures
@@ -171,9 +170,7 @@ the flat per-field columns above, because it is display-only and never queried.
   `cacheReadTokens`, `cacheWriteTokens`, `durationMs`, `ttftMs`, `outputMs`.
   `chatMetadataSchema.usage` is optional; there is **no** top-level
   `totalTokens` any more.
-- DB: `chat_messages.usage jsonb` typed `$type<ChatUsage>()`. Migration
-  `0028` added it, backfilled `{ totalTokens }` from `total_tokens`, then
-  dropped `total_tokens`.
+- DB: `chat_messages.usage` (`text` JSON) typed `$type<ChatUsage>()`.
 - Capture: `streamText({ onLanguageModelCallEnd })` in
   `src/server/ai/generation-turn.ts` accumulates per model call; the finish
   `messageMetadata` emits `usage`. UI: `src/components/chat/MessageUsage.tsx`.

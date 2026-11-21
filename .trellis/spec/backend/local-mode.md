@@ -1,118 +1,60 @@
-# Local Mode Contract
+# Local Mode (Electron Embedded Server & Single-SQLite Runtime)
 
-> Env-gated desktop local mode: in-process PGlite database, boot-time
-> migration and single-admin provisioning, graceful `parentPort` shutdown, and
-> hidden multi-user/account UI. Landed with `11-16-native-desktop-local`.
+> Env-gated desktop local mode: in-process SQLite (`better-sqlite3`) database,
+> boot-time auto-migration, silent local-admin provisioning, and auth/settings UI
+> lockdown.
 
-## Scenario: touching `PGLITE_DATA_DIR`, `LOCAL_MODE`, or local-mode boot/UI gating
+## Scenario: touching `DATABASE_PATH`, `LOCAL_MODE`, desktop packaging, or local-mode boot/UI gating
 
 ### 1. Scope / Trigger
 
-Any change to `PGLITE_DATA_DIR`, `LOCAL_MODE`, `LOCAL_ADMIN_PASSWORD`,
-`src/server/db/client.ts` driver switching, boot provisioning/shutdown in
-`src/instrumentation.ts`, or local-mode prop gating in `(app)/layout.tsx` and
-its child navigation components.
-
-**Two separate switches:**
-
-- `PGLITE_DATA_DIR` selects the in-process PGlite driver (`drizzle-orm/pglite`)
-  instead of `postgres-js`, and makes `DATABASE_URL` optional in `env.ts`. The
-  PGlite CI job sets `PGLITE_DATA_DIR=memory://` without `LOCAL_MODE`.
-- `LOCAL_MODE` gates product behaviour (boot migration, single super-admin
-  provisioning, `parentPort` shutdown hook, hidden Account/Users UI and
-  sign-out) and **requires** both `PGLITE_DATA_DIR` and
-  `LOCAL_ADMIN_PASSWORD`.
+Any change to `DATABASE_PATH`, `DATABASE_URL` (PostgreSQL boot importer),
+`LOCAL_MODE`, `LOCAL_ADMIN_PASSWORD`, `src/server/db/client.ts`,
+`src/server/services/setup.service.ts` (`ensureLocalAdmin`),
+`native/desktop/src/local-server.ts`, `native/desktop/scripts/build-server.mjs`,
+or local-mode UI conditionals.
 
 ### 2. Signatures
 
-- Env (`src/server/env.ts`):
-  - `PGLITE_DATA_DIR`: optional non-empty string (`memory://` or directory path).
-    When unset, `DATABASE_URL` is required via schema `superRefine`.
-  - `LOCAL_MODE`: `booleanFlag` (`"1" | "true"` enables; `"0" | "false" | ""`
-    normalizes to unset).
-  - `LOCAL_ADMIN_PASSWORD`: optional non-empty string; required at boot when
-    `LOCAL_MODE` is enabled.
-  - `isLocalMode(): boolean`.
-- DB (`src/server/db/client.ts`):
-  - `getDb(): PgDatabase<PgQueryResultHKT, typeof schema>` — caches the `PGlite`
-    instance on `globalThis.pglite` so HMR / module resets never open a second
-    handle against the same data directory.
-  - `closeDb(): Promise<void>` — closes `globalThis.pglite` and clears the
-    cached references (local-mode shutdown only).
-  - `executeRows<T>(result: unknown): T[]` — normalizes `postgres-js` array
-    results and PGlite `{ rows }` results.
-- Provisioning (`src/server/services/setup.service.ts`):
-  - `ensureLocalAdmin(password: string): Promise<void>` — idempotent; when
-    `users` is empty, creates `local` / `local@pika.local` (`role: "super_admin"`)
-    and sets `app_settings.file_storage_quota_bytes = null` (unlimited).
-- UI gating (server-to-client props, no client context):
-  - `(app)/layout.tsx` passes `local={isLocalMode()}` to `AppShell` →
-    `AppSidebar` → `AssistantTree` / `SettingsNav` and `SidebarUserMenu`.
-  - `/settings/account` and `/settings/users` redirect to `/settings/general`
-    when `isLocalMode()` is true.
+- `src/server/env.ts` (`envSchema`):
+  - `DATABASE_PATH`: **required** non-empty string — SQLite database path (or `":memory:"` for ephemeral builds/tests; defaults to `/data/files/pika-chat.db` in Docker and `<userData>/local/pika-chat.db` in desktop local mode).
+  - `DATABASE_URL`: optional `postgres://...` URI used strictly for one-time PostgreSQL boot import (`src/server/db/import-postgres.ts`).
+  - `LOCAL_MODE`: optional env flag parsed with `envBoolean`. When set, activates desktop local mode; UI hides `/setup`, sign-in/sign-up, sign-out, 2FA, and user management while silently signing Electron into the seeded `local` super-admin account.
+  - `LOCAL_ADMIN_PASSWORD`: optional string (min 16 chars), **required** at boot whenever `LOCAL_MODE` is enabled.
+- `src/server/db/client.ts`:
+  - `getDb(): BetterSQLite3Database<typeof schema>` — lazily opens and caches a single `better-sqlite3` instance on `globalThis.sqlite` with `WAL`, `synchronous = NORMAL`, `foreign_keys = ON`, `busy_timeout = 5000`, and deterministic `file_basename` / `file_extension` UDFs.
+  - `getSqliteClient(): Database.Database` — returns the underlying `better-sqlite3` connection for pragmas/manual transactions.
+  - `closeDb(): void` — closes `globalThis.sqlite` cleanly (checkpoints WAL on quit) and resets the cached Drizzle wrapper.
+- `native/desktop/src/local-server.ts`:
+  - `localPaths()` puts SQLite at `<userData>/local/pika-chat.db` (`dbFile`) and passes `DATABASE_PATH: paths.dbFile` with a stripped `INHERITED_ENV` whitelist (never forwarding `DATABASE_URL` or host overrides). Prior pre-release `<userData>/local/db/` PGlite folders are left untouched.
+- `native/desktop/scripts/build-server.mjs`:
+  - Flattens standalone `node_modules` & `.next/node_modules` aliases, strips `prebuilds/`, compiles `better-sqlite3` for Electron's headers via `@electron/rebuild`, installs `build/Release/better_sqlite3.node`, and runs an `ELECTRON_RUN_AS_NODE=1` smoke check before exiting.
 
 ### 3. Contracts
 
-| Concern | Rule |
+| Concern | Contract |
 |---|---|
-| Driver isolation | Only `src/server/db/client.ts` switches on `PGLITE_DATA_DIR`; services stay driver-neutral via `PgDatabase` and `executeRows()` |
-| PGlite concurrency | Single connection on Node main thread; never call `getDb()` or await network I/O inside `db.transaction()` |
-| Boot order | `instrumentation.ts` validates env → `getFileStorage()` → (if local) validate `PGLITE_DATA_DIR` / `LOCAL_ADMIN_PASSWORD` → PGlite `migrate()` → `ensureLocalAdmin()` → register `parentPort` `"shutdown"` handler → `startGenerationRunner()` |
-| Shutdown | Electron sends `"shutdown"` via `utilityProcess.postMessage`; server calls `closeDb()` then `process.exit(0)` |
-| Storage quota | Global `app_settings.file_storage_quota_bytes` is cleared to `null` at provisioning; local user has unlimited storage |
-| Hidden UI | `showUsers` is `false`, `SettingsNav` omits `Account` and `Users`, `SidebarUserMenu` omits sign-out and shows `native.serverName` without `host:port` |
-| No API blocks | Account/user endpoints are not blocked server-side in local mode because the server binds `127.0.0.1` and only the local user has the session |
+| Single engine | Both server (`node server.js`), desktop local mode, and Vitest integration tests use `better-sqlite3` (`sqlite-core` schema + unified migrations under `src/server/db/migrations`) |
+| Write concurrency | Use synchronous `db.transaction(fn, { behavior: "immediate" })` instead of async transactions or `SELECT ... FOR UPDATE`; never `await` I/O inside a transaction |
+| Boot order | `instrumentation.ts` validates env → `S3_DIRECT_ACCESS` / `DEMO_MODE` guards → `getFileStorage()` → `migrate(getDb(), ...)` → `maybeImportPostgres()` → (if `LOCAL_MODE`) validate `LOCAL_ADMIN_PASSWORD`, `ensureLocalAdmin()`, register `parentPort` `"shutdown"` handler calling `closeDb()` → `startGenerationRunner()` |
+| Electron native ABI | `pnpm -C native install --frozen-lockfile` must run **before** `node native/desktop/scripts/build-server.mjs` so `@electron/rebuild` and the target `electron` binary are present for ABI compilation and the `ELECTRON_RUN_AS_NODE=1` smoke check |
 
 ### 4. Validation & Error Matrix
 
 | Condition | Result |
 |---|---|
-| `DATABASE_URL` and `PGLITE_DATA_DIR` both unset | `getEnv()` throws `Invalid environment` |
-| `LOCAL_MODE=1` without `PGLITE_DATA_DIR` | `register()` boot error |
+| `DATABASE_PATH` unset or empty | `getEnv()` throws `Invalid environment` |
 | `LOCAL_MODE=1` without `LOCAL_ADMIN_PASSWORD` | `register()` boot error |
-| Non-`nodejs` `NEXT_RUNTIME` | `register()` skips Node-only boot checks and runner |
-| `/settings/account` or `/settings/users` in `LOCAL_MODE=1` | Server redirect to `/settings/general` |
+| Desktop `better-sqlite3` ABI mismatch in `build-server.mjs` | `ELECTRON_RUN_AS_NODE=1` smoke check fails build immediately |
 
-### 5. Good/Base/Bad Cases
+### 5. Good / Base / Bad Cases
 
-- Good: first local boot migrates empty `db/`, creates `local` super admin,
-  clears global quota to `null`, and subsequent boots leave existing users and
-  data untouched.
-- Base: `PGLITE_DATA_DIR` unset — `postgres-js` is used unchanged and `isLocalMode()`
-  is `false`.
-- Bad: calling `getDb()` inside a `db.transaction()` callback — deadlocks PGlite's
-  exclusive transaction mutex permanently.
+- Good: Desktop spawns `utilityProcess` with `LOCAL_MODE=1`, `DATABASE_PATH=<userData>/local/pika-chat.db`, `LOCAL_ADMIN_PASSWORD=<secret>`, and a whitelisted environment that strips any host `DATABASE_URL`.
+- Base: Server deployment sets `DATABASE_PATH=/data/files/pika-chat.db` with `LOCAL_MODE` unset; `DATABASE_URL` triggers a one-time PG import only while `postgres_import` marker is absent and the target DB has no user data.
+- Bad: Leaving `prebuilds/` unstripped after `@electron/rebuild` without running `ELECTRON_RUN_AS_NODE=1` verification, or placing `node native/desktop/scripts/build-server.mjs` before `pnpm -C native install --frozen-lockfile` in CI.
 
-### 6. Tests Required
+### 6. Tests & CI Verification
 
-- `src/server/env.test.ts`: `PGLITE_DATA_DIR` allows omitted `DATABASE_URL`;
-  `register()` rejects `LOCAL_MODE` without `PGLITE_DATA_DIR` or
-  `LOCAL_ADMIN_PASSWORD`.
-- `src/server/services/local-setup.service.integration.test.ts`:
-  `ensureLocalAdmin()` creates the super admin once, sets global quota to `null`,
-  is idempotent, and allows username sign-in with unlimited effective quota.
-- `src/components/layout/SettingsNav.test.tsx` & `SidebarUserMenu.test.tsx`:
-  `local` prop hides Account/Users tabs, hides Sign out, and renders plain
-  `serverName`.
-- CI: `test-pglite` job runs `PGLITE_DATA_DIR=memory:// pnpm vitest run --project integration`.
-
-### 7. Wrong vs Correct
-
-#### Wrong
-
-```ts
-// Deadlocks on PGlite: getDb() waits for the mutex held by db.transaction().
-await db.transaction(async (tx) => {
-  await assertUsernameAvailable(username); // internally calls getDb()
-});
-```
-
-#### Correct
-
-```ts
-// Thread `tx` through every helper called inside a transaction, or run
-// multi-step operations outside the lock with conditional writes.
-await db.transaction(async (tx) => {
-  await assertTargetNotCompressed(topicId, targetId, undefined, tx);
-});
-```
+- `src/server/env.test.ts`: `DATABASE_PATH` required, `DATABASE_URL` optional, `register()` rejects `LOCAL_MODE` without `LOCAL_ADMIN_PASSWORD`.
+- `node native/desktop/scripts/build-server.mjs`: built-in `ELECTRON_RUN_AS_NODE=1` smoke check loads every bundled `better-sqlite3` module inside Electron and runs `select sqlite_version()`.
+- `.github/workflows/ci.yml`: `desktop-smoke` (`workflow_dispatch`-only 4-OS matrix) exercises `pnpm build`, `build-server.mjs`, and `pnpm -C native/desktop dist` across Linux, Windows, macOS Intel, and macOS Apple Silicon.

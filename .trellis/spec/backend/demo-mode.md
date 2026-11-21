@@ -41,7 +41,7 @@ come from the `super_admin` account. Operator signs in at `/sign-in?admin=1`.
   `DEMO_MAX_OUTPUT_TOKENS`=16384, `CLIENT_IP_HEADER` (required in demo —
   boot fails in `src/instrumentation.ts`). `isDemoMode()`.
 - DB: `users.is_anonymous boolean not null default false`;
-  `demo_usage_counters(subject, day date, kind, count)` PK
+  `demo_usage_counters(subject, day text, kind, count)` PK
   `(subject, day, kind)`. `subject` = userId | `ip:<addr>` | `global`;
   `kind` = `model | search | upload | guest`.
 - Service: `consumeDemoQuota({ subject, kind, limit, day?, tx? }) → boolean`
@@ -65,7 +65,7 @@ come from the `super_admin` account. Operator signs in at `/sign-in?admin=1`.
 | Guest creation | `POST /api/auth/sign-in/anonymous`; `databaseHooks.user.create.before` fills `username` (`users.username` is NOT NULL, the plugin omits it) |
 | IP | Read from `CLIENT_IP_HEADER` only (single value, proxy-overwritten). better-auth `getIP` returns null for multi-hop XFF; `trustedProxyHeaders` does not affect client IP |
 | Model calls | Counted inside `acceptTurn` tx after the duplicate-receipt return → rollback refunds. Send/regenerate/edit/image count; title/compression/translation do not |
-| Concurrency | Guest row `for update` + at most one active generation per guest (409 `demo.busy`) |
+| Concurrency | Immediate SQLite write transaction (`{ behavior: "immediate" }`) + at most one active generation per guest (409 `demo.busy`) |
 | Search/fetch | Both tools consume one `search` counter before the provider call; over limit → tool output `{ error: "limit_reached", attemptedProviders: [] }` |
 | Uploads | `uploadFile` (skipped when `skipSizeLimit`, i.e. generated images) and `completeFile` (discards the direct upload before throwing) |
 | Storage | `effectiveQuotaBytes` returns `DEMO_GUEST_STORAGE_MB` for guests |

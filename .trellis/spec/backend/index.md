@@ -1,7 +1,7 @@
 # Backend Development Guidelines
 
 > Server-side conventions for pika-chat: Route Handlers, service layer,
-> Drizzle/PostgreSQL, and auth.
+> Drizzle/SQLite, and auth.
 
 ---
 
@@ -30,7 +30,7 @@ Divergences recorded after the scaffold:
 |---|---|
 | Framework | Next.js 16 App Router, Node runtime |
 | Language | TypeScript, strict |
-| Database | PostgreSQL |
+| Database | SQLite (`better-sqlite3`) |
 | ORM / migrations | Drizzle ORM + drizzle-kit |
 | Auth | Better Auth (database session + bearer plugin + admin plugin) |
 | LLM | Vercel AI SDK (`ai@7`, `@ai-sdk/*@4`) |
@@ -69,10 +69,10 @@ review blocker, not a style nit.
 | [Database Guidelines](./database-guidelines.md) | Drizzle schema, migrations, ownership isolation, credential encryption |
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
 | [Chat Generation Lifecycle](./chat-generation-lifecycle.md) | Single-instance background execution, admission/receipts, connect-time auth, current-state SSE resume, checkpoints and restart recovery |
-| [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit, `usage` jsonb (token/cache/TPS capture per apiFormat) |
+| [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit, `usage` JSON (token/cache/TPS capture per apiFormat) |
 | [Chat Message Versions](./chat-message-versions.md) | Regenerate-as-versions contract: group_id/is_selected, selected-version view, regenerate/select/delete endpoints, reseed rule |
 | [Chat History Compression](./chat-history-compression.md) | Rolling summary + inclusive boundary on `topics`, token heuristic + 80% threshold, `historySummary` injection, both streaming routes must trim, failure degrades |
-| [Chat Message Translation](./chat-message-translation.md) | Per-message-version `translations` jsonb map, cache-first `/api/translate`, key-merge persistence, shared language list |
+| [Chat Message Translation](./chat-message-translation.md) | Per-message-version `translations` JSON map, cache-first `/api/translate`, key-merge persistence, shared language list |
 | [Chat Message Quote](./chat-message-quote.md) | Cross-layer `data-quote` part (files → quote → text order, request refine, `convertDataPart` replay), `data-quote-body` quotable marker, offset-first range matching, overlay highlight, whole-message fallback |
 | [Model Preferences](./model-preferences.md) | Four user-level default-model slots on `users.model_preferences`, save-time availability check, use-time silent fallback matrix |
 | [Chat Attachments](./chat-attachments.md) | File upload/download/delete endpoints, `files` table, local-disk `FileStorage`, extraction cache, capability routing (`inputModalities`) and the `Errors.file.*` matrix |

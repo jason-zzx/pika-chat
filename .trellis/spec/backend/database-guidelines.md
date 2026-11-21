@@ -1,17 +1,21 @@
 # Database Guidelines
 
-> Drizzle ORM against PostgreSQL. Schema, migrations, ownership isolation, and
-> credential handling.
+> Drizzle ORM against embedded SQLite (`better-sqlite3`). Schema, migrations,
+> ownership isolation, synchronous transactions, and credential handling.
 
 ---
 
 ## Engine
 
-PostgreSQL only. There is no SQLite path and no dual-dialect abstraction, so
-dialect-specific features are fair game: `jsonb`, full-text search, and
-`pgvector` when a later phase needs it.
+SQLite only (`better-sqlite3` + `drizzle-orm/better-sqlite3`). There is no
+multi-dialect abstraction — SQLite-specific features (`WITHOUT ROWID`,
+triggers updating `message_file_refs`, `json_each`, `json_set`, deterministic
+UDFs, and `{ behavior: "immediate" }` write transactions) are used directly.
 
-Deployment is Docker Compose — the app container plus a `postgres` container.
+Deployment runs the app container directly (`DATABASE_PATH=/data/files/pika-chat.db`
+in Docker, `<userData>/local/pika-chat.db` in desktop local mode), with optional
+one-time PostgreSQL boot import (`src/server/db/import-postgres.ts`) when
+`DATABASE_URL` is configured against an empty SQLite database.
 
 ---
 
@@ -27,9 +31,9 @@ points at the single schema file.
 | Column name | `snake_case` — `created_at` |
 | Drizzle export | `camelCase`, plural — `chatMessages` |
 | Primary key | `text` id, application-generated UUIDv7 (`newId()`); URL-exposed entities use prefixed short ids instead — see below |
-| Timestamps | `timestamp with time zone`, not naive |
+| Timestamps | Integer epoch milliseconds (`timestampMs` / `timestampMsDefaultNow` via `unixepoch('subsec') * 1000`) |
 | Every table | `created_at`, and `updated_at` where mutable |
-| Enums | PostgreSQL enum via `pgEnum`, not free-text |
+| Enums | `text({ enum: tuple })` paired with exported tuple constants, validated by Zod at the boundary |
 
 > **Exception — adapter-owned tables.** When a third-party adapter writes the
 > rows (Better Auth's `two_factors`), the table mirrors that library's declared
@@ -169,25 +173,27 @@ Therefore:
 
 ---
 
-## Transactions and PGlite
+## Transactions and Single-Writer SQLite
 
-When `PGLITE_DATA_DIR` is set (desktop local mode and the PGlite CI job), the
-process runs a single embedded PGlite connection on the Node main thread:
+The Node process runs a single `better-sqlite3` connection on `globalThis.sqlite`
+with `WAL`, `synchronous = NORMAL`, `foreign_keys = ON`, and `busy_timeout = 5000`:
 
-- **Never call `getDb()` inside a `db.transaction` callback.** PGlite holds an
-  exclusive mutex for the entire transaction; any `getDb()` query inside it
-  waits on the same mutex and deadlocks the server permanently. Always thread
-  the `tx` executor into helpers used inside a transaction.
-- **Never await network calls (LLM providers, HTTP, S3) inside a transaction.**
-  Holding a PGlite transaction open across I/O stalls every other query in the
-  process. Check preconditions under lock, run the network call outside any
-  transaction, then re-check and write conditionally under lock.
-- **Read raw `execute()` results through `executeRows()`**
-  (`src/server/db/client.ts`). postgres-js returns a row array, PGlite returns
-  `{ rows }`; indexing the result directly breaks on one of them.
+- **Transactions are synchronous (`db.transaction(fn, { behavior: "immediate" })`).**
+  `better-sqlite3` throws if a transaction callback returns a Promise. Thread the
+  synchronous `tx` (`DbTransaction` / `DbExecutor`) into helpers and finish queries
+  with `.get()` / `.all()` / `.run()`; reserve `behavior: "immediate"` for write
+  transactions to prevent `SQLITE_BUSY` upgrades under read concurrency.
+- **Never perform network I/O inside a transaction.** Validate preconditions or
+  admit state inside one short `immediate` transaction, run LLM/S3/HTTP I/O
+  outside any transaction, then commit state in another short `immediate`
+  transaction.
+- **Boot-time auto-migration & triggers.** `instrumentation.ts` runs `migrate(getDb(), ...)`
+  on every startup (including `:memory:` test workers). Custom SQL migrations
+  (`0001_message_file_refs_triggers.sql`) maintain trigger-indexed lookup tables,
+  and subsequent `pnpm db:generate` runs expect zero diff unless schema changed.
 - **Hand-written SQL migrations must separate multiple statements with
-  `--> statement-breakpoint`.** The PGlite migrator executes each chunk through
-  the extended protocol, which rejects multi-statement chunks (`42601`).
+  `--> statement-breakpoint`** so Drizzle's SQLite migrator executes each chunk
+  cleanly.
 
 ## Forbidden
 

@@ -65,10 +65,6 @@ unban.
 `canAdminister` is a pure function in `src/lib/auth-hierarchy.ts` so the UI
 can hide the same actions the hook would reject.
 
-A SQL data migration promotes the earliest `users.created_at` row to
-`super_admin` when no such row exists, so instances that ran setup before
-this rule still have exactly one super admin.
-
 ## What is wrapped, and what is not
 
 Sign-in, sign-out, get-session, password change, and `/api/auth/admin/*` are

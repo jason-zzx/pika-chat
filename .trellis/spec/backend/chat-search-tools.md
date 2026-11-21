@@ -17,7 +17,7 @@ parts → UI — change them together.
 ### 2. Signatures
 
 - DB: `searchProviderSettings` (`src/server/db/schema/search-provider.ts`) —
-  `userId` FK cascade, `provider` pgEnum (`tavily`/`exa`/`firecrawl`/`brave`),
+  `userId` FK cascade, `provider` text enum (`tavily`/`exa`/`firecrawl`/`brave`),
   `encryptedApiKey` + `apiKeyLastFour`, nullable `baseUrl`, `position`
   integer; unique `(userId, provider)`, index `(userId, position)`. No
   `visibility` — private-only by design. Exception: demo guests resolve the operator's credentials (see [Demo Mode](./demo-mode.md)).
@@ -183,7 +183,7 @@ parts → UI — change them together.
   rendering contract in — and leaving openai-compatible on a different
   mechanism than the other two.
 - **Part rendering**: `tool-searchWeb` / `tool-fetchPage` parts persist in
-  `parts` jsonb via the state-discriminated union in
+  `parts` JSON via the state-discriminated union in
   `chatStoredPartSchema`. `MessageItem` renders parts interleaved in part
   order (adjacent reasoning parts still group into one block; `step-start`
   skipped). `SearchToolCall` / `FetchToolCall` take a `streaming` prop: an
@@ -231,7 +231,7 @@ parts → UI — change them together.
 
 ### 5. Good / Base / Bad Cases
 
-- Good: new search provider → add pgEnum value + adapter + `provider-meta`
+- Good: new search provider → add enum tuple value (`searchProviders`) + adapter + `provider-meta`
   entry + fixtures/tests; chain, service, UI pick it up generically.
 - Base: legacy message rows have no tool parts; unknown/malformed persisted
   parts are dropped per-item on load (`uiPartsFromJson`), never failing the

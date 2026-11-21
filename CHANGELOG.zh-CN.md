@@ -5,6 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Highlights
+
+- **统一嵌入式 SQLite 数据库（`better-sqlite3`）**：将容器部署中的 PostgreSQL 与桌面端本地模式及 CI 中的 PGlite 统一替换为单一嵌入式 `better-sqlite3` 数据库，通过 `DATABASE_PATH` 配置（Docker 默认为 `/data/files/pika-chat.db`，桌面本地模式为 `<userData>/local/pika-chat.db`），启用 WAL 模式、同步 `immediate` 写事务、启动自动迁移，以及由触发器维护的 `message_file_refs` 附件引用索引表。
+- **PostgreSQL 一次性自动升级导入**：首次以空白 SQLite 数据库启动且配置了 `DATABASE_URL` 时，启动阶段会以只读快照读取原 PostgreSQL 数据并原子校验表列、外键与行数后写入 SQLite 及 `postgres_import` 标记；若目标 SQLite 非空或表结构不匹配则直接拒绝启动，避免误覆盖数据。
+
+### Feats
+
+- **SQLite 适配与索引优化**：全量将 Drizzle Schema 迁至 `sqlite-core` 毫秒整型时间戳；注册确定性 `file_basename` / `file_extension` UDF 支持附件过滤；保留 `(updated_at, id)` 游标分页与 `json_set` 多语言/供应商引用合并；为 `chat_messages` 增加 `AFTER INSERT` 与 `AFTER UPDATE OF parts` 触发器以维护 `WITHOUT ROWID` 索引表 `message_file_refs`。
+- **精简 Docker 与 Compose 编排**：移除 `docker-compose.full.yml` 中的 `postgres` 容器与数据卷，删除 `docker-compose.dev.yml`、`docker/postgres/` 与 `scripts/migrate.ts`，直接将 SQLite 持久化至 `/data/files/pika-chat.db` 并由 `node server.js` 启动自动迁移。
+- **桌面端本地模式与 Electron ABI 编译验证**：将桌面端本地模式（`native/desktop`）从 PGlite（`<userData>/local/db/`）切换至 SQLite（`<userData>/local/pika-chat.db`，不自动迁移 rc.1 预发布 PGlite 目录），在 `build-server.mjs` 中集成 `@electron/rebuild` 编译与 `ELECTRON_RUN_AS_NODE=1` 冒烟校验。
+
+### Dev
+
+- 将 Vitest 集成测试（`vitest.integration.sqlite.ts`）与 GitHub Actions（`ci.yml`、`release.yml`）全面切换为每 Worker 独立的 `:memory:` SQLite 数据库，移除 PostgreSQL 服务容器与 PGlite 任务，并在 `ci.yml` 新增仅限手动触发（`workflow_dispatch`）的四平台 `desktop-smoke` 打包验证矩阵。
+- 同步更新后台技术规范文档、`README.md`、`README.zh-CN.md` 与 `.env.example` 中的 `DATABASE_PATH` 配置说明及旧版 PostgreSQL 升级指引（`DATABASE_URL`）。
+
 ## [1.0.0-rc.1] - 2026-11-19
 
 ### Highlights

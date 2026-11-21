@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/React-19-61dafb?logo=react" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8?logo=tailwindcss" alt="Tailwind CSS v4" />
-  <img src="https://img.shields.io/badge/Drizzle_ORM-PostgreSQL-c5f74f?logo=drizzle" alt="Drizzle ORM" />
+  <img src="https://img.shields.io/badge/Drizzle_ORM-SQLite-c5f74f?logo=drizzle" alt="Drizzle ORM" />
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker" alt="Docker Ready" />
 </p>
 
@@ -130,7 +130,7 @@ Try Pika Chat directly in your browser without creating an account: **[https://p
 
 ### Option 1: Production All-in-One (`docker-compose.full.yml`, Recommended)
 
-Runs Pika Chat, PostgreSQL, and RustFS (S3-compatible attachment storage) together in an all-in-one stack with persistent volumes and automatic migrations on boot. Pulls the official prebuilt image (`ghcr.io/jason-zzx/pika-chat:latest`) by default.
+Runs Pika Chat (with embedded SQLite stored on the `/data/files` volume at `/data/files/pika-chat.db`) and RustFS (S3-compatible attachment storage) together with persistent volumes and automatic database migrations on boot. Pulls the official prebuilt image (`ghcr.io/jason-zzx/pika-chat:latest`) by default.
 
 1. **Clone the repository**:
    ```bash
@@ -150,7 +150,6 @@ Runs Pika Chat, PostgreSQL, and RustFS (S3-compatible attachment storage) togeth
    ```env
    CREDENTIAL_ENCRYPTION_SECRET=your-generated-encryption-secret
    BETTER_AUTH_SECRET=your-generated-auth-secret
-   POSTGRES_PASSWORD=your-db-password
    ```
 
 3. **Launch all-in-one stack**:
@@ -165,7 +164,7 @@ Runs Pika Chat, PostgreSQL, and RustFS (S3-compatible attachment storage) togeth
 
 ### Option 2: Production Standalone (`docker-compose.standalone.yml`)
 
-If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neon, or self-hosted) and optional external S3 storage, run the application container alone without launching redundant local containers:
+Run the application container alone without launching redundant storage containers — using embedded SQLite (`/data/files/pika-chat.db`) and local disk or optional external S3 storage:
 
 1. **Clone the repository**:
    ```bash
@@ -177,18 +176,8 @@ If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neo
    ```bash
    cp .env.example .env
    ```
-   Edit `.env` to connect to your external PostgreSQL database:
+   Edit `.env` to set your instance secrets and optional external S3 storage:
    ```env
-   # Method A: Provide a single connection string
-   DATABASE_URL=postgres://user:password@your-pg-host:5432/pika_chat
-
-   # Method B: Or provide discrete variables (credentials are automatically URL-encoded)
-   # POSTGRES_HOST=your-pg-host
-   # POSTGRES_PORT=5432
-   # POSTGRES_USER=user
-   # POSTGRES_PASSWORD=password
-   # POSTGRES_DB=pika_chat
-
    CREDENTIAL_ENCRYPTION_SECRET=your-generated-encryption-secret
    BETTER_AUTH_SECRET=your-generated-auth-secret
 
@@ -196,7 +185,14 @@ If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neo
    # S3_BUCKET=my-bucket
    # S3_ACCESS_KEY_ID=...
    # S3_SECRET_ACCESS_KEY=...
+
+   # Optional one-time upgrade import from an earlier PostgreSQL deployment:
+   # DATABASE_URL=postgres://user:password@your-pg-host:5432/pika_chat
    ```
+
+   > **Upgrading from PostgreSQL?** Set `DATABASE_URL` in `.env` on your first boot against a fresh SQLite file (`/data/files/pika-chat.db`). Pika Chat reads PostgreSQL once on startup, copies all rows into SQLite inside an atomic transaction (verifying columns, foreign keys, and row counts), and skips on future boots. Remove `DATABASE_URL` and decommission PostgreSQL once the import finishes. Existing data in a non-empty SQLite file or schema mismatches cause startup to fail loudly rather than overwriting data.
+   >
+   > **Backups**: Stop the container or run `sqlite3 /data/files/pika-chat.db ".backup ..."` alongside backing up the `/data/files` volume (`files_prod_data`) so the main database file and WAL journal stay consistent with local attachments.
 
 3. **Launch standalone application**:
    ```bash
@@ -205,12 +201,11 @@ If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neo
 
 ---
 
-### Option 3: Local Development (`docker-compose.dev.yml`)
+### Option 3: Local Development
 
 #### Prerequisites
 - **Node.js**: >= 22
 - **pnpm**: 11.9+
-- **Docker** or **Podman** (for local PostgreSQL database)
 
 #### Step-by-Step
 
@@ -225,24 +220,14 @@ If you already have an existing PostgreSQL database (e.g. AWS RDS, Supabase, Neo
    ```bash
    cp .env.example .env
    ```
-   Open `.env` and set `CREDENTIAL_ENCRYPTION_SECRET` and `BETTER_AUTH_SECRET` with values from `openssl rand -base64 48`.
+   Open `.env`, keep `DATABASE_PATH=.data/pika-chat.db` (or choose another path), and set `CREDENTIAL_ENCRYPTION_SECRET` and `BETTER_AUTH_SECRET` with values from `openssl rand -base64 48`.
 
-3. **Start local PostgreSQL development database**:
-   ```bash
-   docker compose -f docker-compose.dev.yml up -d
-   ```
-
-4. **Run database migrations**:
-   ```bash
-   pnpm db:migrate
-   ```
-
-5. **Start development server**:
+3. **Start development server** (SQLite migrations run automatically at startup, or run `pnpm db:migrate` manually):
    ```bash
    pnpm dev
    ```
 
-6. Visit **`http://localhost:3000/setup`** to complete initial administrator initialization.
+4. Visit **`http://localhost:3000/setup`** to complete initial administrator initialization.
 
 ---
 
@@ -265,7 +250,7 @@ Developing the Android app: see [`native/mobile/README.md`](native/mobile/README
 A native desktop client (Electron) for Windows, macOS, and Linux runs Pika Chat locally on this computer with no server setup or connects to one or more remote Pika Chat servers, and adds a tray icon, a global show/hide hotkey, reply notifications, and auto-update.
 
 - **Download** from the [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) page: Windows installer (`.exe`), macOS `.dmg` (Intel and Apple Silicon), Linux `.AppImage`, `.deb`, or `.rpm`.
-- **Use locally ("This computer")**: choose "Use on this computer" on first launch to start a bundled local server (embedded PGlite database + Next standalone server) bound to `127.0.0.1` only. Conversations, uploaded files, credentials, and logs are stored locally under your OS app data directory (`<userData>/local/`) and survive app updates.
+- **Use locally ("This computer")**: choose "Use on this computer" on first launch to start a bundled local server (embedded SQLite database + Next standalone server) bound to `127.0.0.1` only. Conversations, uploaded files, credentials, and logs are stored locally under your OS app data directory (`<userData>/local/`) and survive app updates.
 - **Connect to remote servers**: choose "Connect to a server" or switch anytime from the sidebar server switcher, account menu, or tray. Each server keeps its own sign-in session; switching between local and remote keeps both sides' data intact, and the local server stays running in the background until you quit.
 - **Updates**: Windows and Linux update in-app. `.deb` / `.rpm` installs ask for your administrator password when you choose "Restart and install". On macOS the app shows a prompt linking to the new release.
 - **Windows**: builds are unsigned; on the SmartScreen dialog choose "More info" → "Run anyway".
@@ -275,9 +260,9 @@ A native desktop client (Electron) for Windows, macOS, and Linux runs Pika Chat 
 Developing the desktop app (separate pnpm workspace under `native/`):
 
 ```bash
-DOCKER_BUILD=1 pnpm build
-node native/desktop/scripts/build-server.mjs
+DOCKER_BUILD=1 DATABASE_PATH=:memory: pnpm build
 pnpm -C native install --frozen-lockfile
+node native/desktop/scripts/build-server.mjs
 pnpm -C native -r typecheck && pnpm -C native -r test
 pnpm -C native/desktop start                          # run against local or remote servers
 pnpm -C native/desktop dist --linux AppImage deb rpm  # local package build
@@ -291,12 +276,8 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 
 | Variable | Required | Default | Description |
 |---|:---:|:---:|---|
-| `DATABASE_URL` | **Yes\*** | — | PostgreSQL connection URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat`). \*Alternatively, provide discrete `POSTGRES_*` variables. |
-| `POSTGRES_HOST` | No | `localhost` / `postgres` | Hostname of external PostgreSQL server (used when `DATABASE_URL` is omitted). |
-| `POSTGRES_PORT` | No | `5432` | Port of external PostgreSQL server. |
-| `POSTGRES_USER` | No | `postgres` / `pika` | Username for PostgreSQL (auto-encoded). |
-| `POSTGRES_PASSWORD` | No | — | Password for PostgreSQL (auto-encoded). |
-| `POSTGRES_DB` | No | `pika_chat` | Database name. |
+| `DATABASE_PATH` | **Yes** | `/data/files/pika-chat.db` (Docker) | Filesystem path to the SQLite database file (`.data/pika-chat.db` in `.env.example`, or `:memory:` for ephemeral runs). |
+| `DATABASE_URL` | No | — | Optional one-time PostgreSQL boot importer URI (`postgres://...`). Imports once when the SQLite target is empty, records `postgres_import`, and skips afterwards. |
 | `CREDENTIAL_ENCRYPTION_SECRET` | **Yes** | — | Secret key (min 32 chars) used for AES-256-GCM encryption of provider API keys at rest. **Do not lose this**; losing it orphans stored credentials permanently. |
 | `BETTER_AUTH_SECRET` | **Yes** | — | Secret key (min 32 chars) used for signing Better Auth session tokens. |
 | `APP_URL` | No | `http://localhost:3000` | Canonical public URL of your deployment. Required when deployed behind reverse proxies. |
@@ -310,7 +291,6 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 | `S3_SECRET_ACCESS_KEY` | If S3 set | — | S3 secret access key credential. |
 | `S3_DIRECT_ACCESS` | No | off | Set to `1` or `true` to enable direct browser S3 uploads (presigned POST) and downloads (presigned 302 GET), bypassing server transfer. `0`/`false`/unset disables. Requires `S3_BUCKET`. |
 | `PIKA_IMAGE` | No | `ghcr.io/jason-zzx/pika-chat:latest` | Container image tag override in Docker Compose. |
-| `TEST_DATABASE_URL` | Dev only | — | Dedicated test database URI (e.g. `postgres://pika:pika@localhost:5432/pika_chat_test`) for running Vitest integration tests. |
 
 ---
 
@@ -355,13 +335,13 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 - **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Standalone output)
 - **UI Library**: [React 19](https://react.dev/), [Base UI](https://base-ui.com/), [Tailwind CSS v4](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
 - **AI Integration**: [Vercel AI SDK](https://sdk.vercel.ai/) (`ai`, `@ai-sdk/openai-compatible`, `@ai-sdk/anthropic`, `@ai-sdk/google`)
-- **Database & ORM**: [PostgreSQL 17](https://www.postgresql.org/), [Drizzle ORM](https://orm.drizzle.team/), [postgres.js](https://github.com/porsager/postgres)
+- **Database & ORM**: [SQLite](https://www.sqlite.org/) ([better-sqlite3](https://github.com/WiseLibs/better-sqlite3)), [Drizzle ORM](https://orm.drizzle.team/)
 - **Authentication**: [Better Auth](https://better-auth.com/) with TOTP Two-Factor Authentication
 - **Content & Markdown**: [Streamdown](https://github.com/streamdown/streamdown), KaTeX, Mermaid, `@streamdown/cjk`, `@streamdown/math`, `@streamdown/mermaid`
 - **Document Extractors**: `unpdf` (PDF), `mammoth` (DOCX), `xlsx` (Excel), `jszip` (EPUB/PPTX)
 - **Object Storage**: `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-post`, `@aws-sdk/s3-request-presigner`
 - **Internationalization**: [next-intl](https://next-intl.dev/)
-- **Testing**: [Vitest](https://vitest.dev/), React Testing Library, PostgreSQL integration test harness
+- **Testing**: [Vitest](https://vitest.dev/), React Testing Library, `:memory:` SQLite integration test harness
 
 ---
 
@@ -376,7 +356,7 @@ pnpm lint
 # TypeScript static type check
 pnpm typecheck
 
-# Full unit and integration test suite (requires local Postgres running)
+# Full unit and integration test suite
 pnpm test
 ```
 
