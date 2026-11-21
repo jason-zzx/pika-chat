@@ -1,56 +1,70 @@
 import "server-only";
 
-import { PGlite } from "@electric-sql/pglite";
-import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
+import Database from "better-sqlite3";
+import {
+  drizzle,
+  type BetterSQLite3Database,
+} from "drizzle-orm/better-sqlite3";
+
+import { basename, fileExtension } from "@/lib/files/media-types";
 import * as schema from "@/server/db/schema";
 import { getEnv } from "@/server/env";
 
-let db: PgDatabase<PgQueryResultHKT, typeof schema> | undefined;
+const shared = globalThis as { sqlite?: Database.Database };
 
-const shared = globalThis as { pglite?: PGlite };
+let db: BetterSQLite3Database<typeof schema> | undefined;
 
-function databaseUrl(): string {
-  const env = getEnv();
-  if (process.env.VITEST && env.TEST_DATABASE_URL) {
-    return env.TEST_DATABASE_URL;
+function openSqlite(path: string): Database.Database {
+  if (path !== ":memory:" && !path.startsWith("file:")) {
+    mkdirSync(dirname(path), { recursive: true });
   }
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required when PGLITE_DATA_DIR is unset");
-  }
-  return env.DATABASE_URL;
+  const sqlite = new Database(path);
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("synchronous = NORMAL");
+  sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("busy_timeout = 5000");
+  sqlite.function("file_basename", { deterministic: true }, (name: unknown) =>
+    typeof name === "string" ? basename(name) : "",
+  );
+  sqlite.function("file_extension", { deterministic: true }, (name: unknown) =>
+    typeof name === "string" ? fileExtension(name) : "",
+  );
+  return sqlite;
 }
 
-export function getDb(): PgDatabase<PgQueryResultHKT, typeof schema> {
+export function getDb(): BetterSQLite3Database<typeof schema> {
   if (!db) {
-    const dataDir = process.env.PGLITE_DATA_DIR;
-    // One PGlite per process: module reloads (vi.resetModules, Next dev HMR)
-    // must reuse the same instance, or they get a second, empty database.
-    db = dataDir
-      ? drizzlePglite((shared.pglite ??= new PGlite(dataDir)), { schema })
-      : drizzle(postgres(databaseUrl()), { schema });
+    // One SQLite handle per process: module reloads (vi.resetModules, Next dev
+    // HMR) must reuse the same instance, or `:memory:` gets a second empty DB
+    // and file DBs open redundant handles.
+    const sqlite = (shared.sqlite ??= openSqlite(getEnv().DATABASE_PATH));
+    db = drizzle(sqlite, { schema });
   }
 
   return db;
 }
 
-/** Closes the embedded PGlite instance during graceful local-mode shutdown. */
-export async function closeDb(): Promise<void> {
-  await shared.pglite?.close();
+/** Exposes the underlying better-sqlite3 handle for pragmas and import. */
+export function getSqliteClient(): Database.Database {
+  getDb();
+  if (!shared.sqlite) {
+    throw new Error("SQLite database client failed to initialize");
+  }
+  return shared.sqlite;
 }
 
-/** Driver-neutral normalization for `db.execute()` (postgres-js returns a row array, PGlite returns `{ rows }`). */
-export function executeRows<T extends Record<string, unknown>>(
-  result: unknown,
-): T[] {
-  return (Array.isArray(result) ? result : (result as { rows: T[] }).rows) as T[];
+/** Closes the SQLite handle during graceful shutdown. */
+export function closeDb(): void {
+  shared.sqlite?.close();
+  shared.sqlite = undefined;
+  db = undefined;
 }
 
-/** The pooled client, as a type (services accept `tx` to join a transaction). */
-export type DbClient = ReturnType<typeof getDb>;
+export type DbClient = BetterSQLite3Database<typeof schema>;
 export type DbTransaction = Parameters<
   Parameters<DbClient["transaction"]>[0]
 >[0];
+export type DbExecutor = DbClient | DbTransaction;

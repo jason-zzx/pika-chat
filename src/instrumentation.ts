@@ -1,7 +1,7 @@
 /**
  * Runs once when the Node.js server boots. Validates the environment and the
  * attachment-storage backend selection eagerly so a misconfiguration (a
- * missing DATABASE_URL, an S3_BUCKET without credentials) fails at startup
+ * missing DATABASE_PATH, an S3_BUCKET without credentials) fails at startup
  * with a readable error instead of surfacing on the first request that
  * happens to touch the lazy singletons.
  *
@@ -32,30 +32,23 @@ export async function register(): Promise<void> {
     }
     getFileStorage();
 
+    const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
+    const { closeDb, getDb } = await import("@/server/db/client");
+    migrate(getDb(), { migrationsFolder: "./src/server/db/migrations" });
+
     if (env.LOCAL_MODE !== undefined) {
-      if (!env.PGLITE_DATA_DIR) {
-        throw new Error(
-          "LOCAL_MODE is enabled but PGLITE_DATA_DIR is not configured",
-        );
-      }
       if (!env.LOCAL_ADMIN_PASSWORD) {
         throw new Error(
           "LOCAL_MODE is enabled but LOCAL_ADMIN_PASSWORD is not configured",
         );
       }
-      const { migrate } = await import("drizzle-orm/pglite/migrator");
-      const { closeDb, getDb } = await import("@/server/db/client");
       const { ensureLocalAdmin } = await import(
         "@/server/services/setup.service"
-      );
-      await migrate(
-        getDb() as unknown as Parameters<typeof migrate>[0],
-        { migrationsFolder: "./src/server/db/migrations" },
       );
       await ensureLocalAdmin(env.LOCAL_ADMIN_PASSWORD);
 
       // Electron's utilityProcess.parentPort delivers "shutdown" on every OS;
-      // on Windows kill() gives PGlite no chance to close cleanly.
+      // on Windows kill() gives SQLite no chance to checkpoint WAL cleanly.
       const parentPort = (
         process as NodeJS.Process & {
           parentPort?: {
@@ -65,7 +58,8 @@ export async function register(): Promise<void> {
       ).parentPort;
       parentPort?.on("message", (event) => {
         if (event.data === "shutdown") {
-          void closeDb().finally(() => process.exit(0));
+          closeDb();
+          process.exit(0);
         }
       });
     }

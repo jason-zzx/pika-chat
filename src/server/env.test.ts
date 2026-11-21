@@ -5,12 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 try {
   process.loadEnvFile(".env");
 } catch {
-  process.env.DATABASE_PATH ??= ":memory:";
   process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
   process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
     "test-credential-encryption-secret-min-32";
 }
-process.env.DATABASE_PATH ??= ":memory:";
+// Never inherit a real application DB path from `.env`: `register()` runs
+// boot migrations and generation recovery.
+process.env.DATABASE_PATH = ":memory:";
 
 const MANAGED = [
   "DATABASE_URL",

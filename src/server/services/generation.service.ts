@@ -15,7 +15,7 @@ import {
   type GenerationSummary,
 } from "@/lib/schemas/generation";
 import type { Actor } from "@/server/auth/actor";
-import { executeRows, getDb, type DbTransaction } from "@/server/db/client";
+import { getDb, type DbTransaction } from "@/server/db/client";
 import {
   chatGenerations,
   chatMessages,
@@ -116,17 +116,7 @@ export type PreparedTurn = {
 export type Clock = () => Promise<Date>;
 
 export async function databaseNow(): Promise<Date> {
-  const rows = executeRows<{ now: Date | string }>(
-    await getDb().execute<{ now: Date | string }>(sql`select now() as now`),
-  );
-  const value = rows[0]?.now;
-  // postgres-js hands back the raw column value (a Date when the type parser
-  // is registered, otherwise the text form); accept both.
-  const date = value instanceof Date ? value : new Date(String(value ?? ""));
-  if (Number.isNaN(date.getTime())) {
-    throw new AppError("INTERNAL", 500, "generic");
-  }
-  return date;
+  return new Date();
 }
 
 export type AdmittedGeneration = {

@@ -242,7 +242,7 @@ export function normalizeMediaType(mediaType: string): string {
 }
 
 /** Basename of a path-ish filename (`a/b/c.txt` → `c.txt`). */
-function basename(filename: string): string {
+export function basename(filename: string): string {
   const slash = Math.max(filename.lastIndexOf("/"), filename.lastIndexOf("\\"));
   return filename.slice(slash + 1);
 }
