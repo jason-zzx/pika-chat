@@ -20,8 +20,8 @@ The connection comes from `resolveDatabaseUrl()` (`src/server/env.ts`):
 `DATABASE_URL`, else one assembled from the discrete `POSTGRES_*` variables that
 PostgreSQL-based releases accepted, so an upgrade needs no config change. These
 variables are legacy-only: compose files, `.env.example` and the README do not
-mention them. A source whose columns differ from the v0.4.0 – v1.0.0-rc.1 schema
-(migration 0028) is refused with "upgrade to v0.4.2 first".
+mention them. A source whose columns differ from the v0.4.0 – v0.4.2 schema
+(migration 0028, shared by v1.0.0-rc.1) is refused with "upgrade to v0.4.2 first".
 
 ---
 

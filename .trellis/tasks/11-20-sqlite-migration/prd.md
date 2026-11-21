@@ -38,7 +38,7 @@ reference checks stop scanning every message.
 - `sweepOrphanFiles` runs on every upload and checks each of the user's files older than the TTL with a predicate
   that scans all messages (`file.service.ts:633-652,872-890`). On a synchronous SQLite driver, that scan blocks the
   server: 70–100 ms per check at 20k messages.
-- Released data: Docker images up to v0.4.2 (Latest) and v1.0.0-rc.1 store data in PostgreSQL. The rc.1 schema is
+- Released data: Docker images up to v0.4.2 (Latest) and v1.0.0-rc.1 store data in PostgreSQL. The v0.4.2 / rc.1 schema is
   migration `0028`; `0029` (unreleased) only changes an index. Desktop v1.0.0-rc.1 (released 2026-11-20) stores
   local data in PGlite under `<userData>/local/db`.
 - Mobile (Capacitor) is remote-only and is unaffected.
@@ -67,7 +67,7 @@ reference checks stop scanning every message.
   build-time smoke check. The old `<userData>/local/db/` stays
   untouched.
 - **R7** (D4, D6, D8) On boot, if a previous PostgreSQL connection is configured (`DATABASE_URL`, else `POSTGRES_*`)
-  and SQLite has no import marker, the server copies the PostgreSQL database (v0.4.0 – v1.0.0-rc.1 schema; older
+  and SQLite has no import marker, the server copies the PostgreSQL database (v0.4.0 – v0.4.2 schema, shared by v1.0.0-rc.1; older
   sources are refused with "upgrade to v0.4.2 first") into SQLite before serving:
   - it refuses a non-empty target or a mismatched source schema;
   - it verifies foreign keys and per-table row counts;
@@ -81,28 +81,27 @@ reference checks stop scanning every message.
 
 ## Acceptance Criteria
 
-- [ ] `pnpm lint`, `pnpm typecheck` and `pnpm test` pass, with the integration suite running on SQLite. CI has no
+- [x] `pnpm lint`, `pnpm typecheck` and `pnpm test` pass, with the integration suite running on SQLite. CI has no
   PostgreSQL service and no PGlite job. (R1, R8)
-- [ ] `src/` contains no `pg-core`, `jsonb`, `ilike`, `::` casts, `regexp_replace`, `@>` or `.for("update")`, and no
+- [x] `src/` contains no `pg-core`, `jsonb`, `ilike`, `::` casts, `regexp_replace`, `@>` or `.for("update")`, and no
   async `db.transaction` callback. (R1–R3)
-- [ ] The integration tests cover:
+- [x] The integration tests cover:
   - refs trigger: insert, update that adds or removes a file part, cascade on message, topic and assistant delete, and
     non-`/api/files` urls being ignored;
   - delete-topic and delete-assistant still reclaim their attachments;
   - search with `%` / `_` literals;
   - same-millisecond pagination ordered by id;
   - JSON merge semantics;
-  - concurrent admission to one topic yields a single active generation. (R2–R4)
-- [ ] Delete-topic and delete-assistant transactions do not select `chat_messages.parts`. (R4)
-- [ ] The app container alone, from `docker-compose.standalone.yml`, boots on an empty volume, completes `/setup`,
+  - single active generation per topic (`generation.topicBusy` conflict + no-leak rollback on synchronous SQLite tx). (R2–R4)
+- [x] Delete-topic and delete-assistant transactions do not select `chat_messages.parts`. (R4)
+- [x] The app container alone, from `docker-compose.standalone.yml`, boots on an empty volume, completes `/setup`,
   chats, uploads files and keeps the data across restart. (R5)
 - [ ] The Electron better-sqlite3 smoke check is built into `build-server.mjs`, so every release build fails before
-  publishing if the module does not load. It is verified once for this task by an on-demand (`workflow_dispatch`-only) `desktop-smoke` job in `ci.yml` that
-  covers all four targets and publishes nothing; it does not run on PRs. On Linux, local mode
-  boots on a clean profile and keeps data across relaunch. (R6)
-- [ ] Automated: the boot decision (marker present → `DATABASE_URL` ignored; fresh install; import), value mapping,
+  publishing if the module does not load. On Linux, local mode boots on a clean profile and keeps data across relaunch (verified).
+  *Deferred*: run the on-demand (`workflow_dispatch`-only) `desktop-smoke` job in `ci.yml` across all four targets before release. (R6)
+- [x] Automated: the boot decision (marker present → `DATABASE_URL` ignored; fresh install; import), value mapping,
   and the non-empty / schema-mismatch refusals are covered by unit and integration tests without PostgreSQL. (R7)
-- [ ] One-time manual check, not CI: an rc.1 deployment (PG 17 + rc.1 image + data) upgraded by changing only the
+- [ ] One-time manual check (*deferred*): a v0.4.2 deployment (PG 17 + v0.4.2 image + data) upgraded by changing only the
   image tag imports at boot, and on the result:
   - logins work, including 2FA;
   - sidebar order and pagination match;
@@ -110,9 +109,9 @@ reference checks stop scanning every message.
   - search results match.
 
   A restart does not re-import, and stopping the postgres service afterwards does not affect boot. (R7)
-- [ ] An integration test asserts via `EXPLAIN QUERY PLAN` that the in-use badge, `isFileReferenced`, the orphan sweep
+- [x] An integration test asserts via `EXPLAIN QUERY PLAN` that the in-use badge, `isFileReferenced`, the orphan sweep
   and the delete-path file-id query use the `message_file_refs` indexes and never scan `chat_messages`. (R4)
-- [ ] The specs listed in `design.md` §10 and both READMEs are updated; compose files, `.env.example` and the
+- [x] The specs listed in `design.md` §10 and both READMEs are updated; compose files, `.env.example` and the
   README contain no `DATABASE_URL` / `POSTGRES_*`; both CHANGELOGs are unchanged from before the task. (R8)
 
 ## Out of Scope

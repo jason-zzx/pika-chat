@@ -159,7 +159,7 @@ English and has no effect on CJK, but becomes case-sensitive for non-ASCII lette
      count, because the source row replaces it.
   2. Connect to PG with `max: 1`. For every copied table (all SQLite tables except `postgres_import` and the derived
      `message_file_refs`), compare its column set (`pragma table_info`) with the PG `information_schema.columns`. A
-     mismatch is refused with "upgrade to v0.4.2 first so PostgreSQL is on the expected schema". Both 0028 (v0.4.0 – rc.1)
+     mismatch is refused with "upgrade to v0.4.2 first so PostgreSQL is on the expected schema". Both 0028 (v0.4.0 – v0.4.2)
      and 0029 qualify, because 0029 only changes an index.
   3. Set `pragma foreign_keys = off`, then run a manual `BEGIN` / `COMMIT` across the async PG reads. This is safe
      only because Next awaits `register()` before serving requests, so nothing else touches the connection during the
@@ -212,7 +212,7 @@ English and has no effect on CJK, but becomes case-sensitive for non-ASCII lette
   check the Electron better-sqlite3 build before tagging. `release.yml` runs the same smoke check inside
   `build-server.mjs` on every release. Do not dispatch `release.yml` from a branch: its Docker job pushes and can tag
   `latest`.
-- Not in CI by design: the upgrade import from a real rc.1 PostgreSQL. It is a one-time path that needs the old image,
+- Not in CI by design: the upgrade import from a real v0.4.2 PostgreSQL. It is a one-time path that needs the old image,
   a PG service and real data, so it is covered by the manual check in `implement.md`.
 
 ## 10. Docs and specs

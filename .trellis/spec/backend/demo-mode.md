@@ -124,7 +124,7 @@ await increment(userId, "model");
 
 ```ts
 // One atomic statement inside the admission tx; rollback refunds.
-if (!(await consumeDemoQuota({ subject: userId, kind: "model", limit, tx }))) {
+if (!consumeDemoQuota({ subject: userId, kind: "model", limit, tx })) {
   throw new AppError("RATE_LIMITED", 429, "demo.modelLimit");
 }
 ```

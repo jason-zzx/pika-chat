@@ -594,8 +594,8 @@ if (data.byteLength > maxFileBytes()) {
 - **Filtering the file list by `mediaType` alone.** Browsers report
   `application/octet-stream` for pptx/epub/txt often enough that
   `classifyFile` falls back to the extension; a type-only predicate then hides
-  rows whose badge says "document". Reuse the exported classification tables
-  and mirror `classifyFile`'s precedence instead of hand-writing a second list.
+  rows whose badge says "document". Keep filtering through the `file_category`
+  SQLite UDF wrapping `fileListCategoryOf` so filter and badge stay identical.
 
 ### Design Decisions
 
