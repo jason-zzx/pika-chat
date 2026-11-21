@@ -17,7 +17,7 @@ import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import {
   deleteFilesIfUnreferenced,
-  fileIdsFromParts,
+  fileIdsForTopics,
 } from "@/server/files/file.service";
 import { requireOwnedAssistant } from "@/server/services/assistant.service";
 import { markGenerationsForDeletedTopics } from "@/server/services/generation-target.service";
@@ -163,7 +163,7 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
   // concurrent finalize either loses the race (and discards its output) or
   // commits before the delete removes it. `deleteTopic` is the only writer of
   // this row, and the message cascade is the child side.
-  let messageRows: { parts: unknown }[] = [];
+  let releasedFileIds: string[] = [];
   const deleted = db.transaction(
     (tx) => {
       const locked = tx
@@ -177,11 +177,7 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
       // Attachment references are read AFTER taking the immediate write lock,
       // so a finalize that committed its images just before this transaction is
       // visible here and its files are cleaned.
-      messageRows = tx
-        .select({ parts: chatMessages.parts })
-        .from(chatMessages)
-        .where(eq(chatMessages.topicId, id))
-        .all();
+      releasedFileIds = fileIdsForTopics(tx, [id]);
       markGenerationsForDeletedTopics(tx, [id]);
       return tx.delete(topics).where(owned).returning({ id: topics.id }).get();
     },
@@ -199,10 +195,7 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
   );
   discardGenerationsForTopic(id);
   // References are gone now; drop whatever no other message still needs.
-  await deleteFilesIfUnreferenced(
-    messageRows.flatMap((row) => fileIdsFromParts(row.parts)),
-    actor,
-  );
+  await deleteFilesIfUnreferenced(releasedFileIds, actor);
   logger.info({ userId: actor.userId, topicId: id }, "topic deleted");
 }
 

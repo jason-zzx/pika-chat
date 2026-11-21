@@ -11,7 +11,6 @@ import {
   or,
   sql,
   type SQL,
-  type SQLWrapper,
 } from "drizzle-orm";
 
 import {
@@ -49,8 +48,8 @@ import type {
   PresignedUpload,
 } from "@/lib/schemas/file";
 import type { Actor } from "@/server/auth/actor";
-import { getDb } from "@/server/db/client";
-import { chatMessages, files } from "@/server/db/schema";
+import { getDb, type DbExecutor } from "@/server/db/client";
+import { chatMessages, files, messageFileRefs } from "@/server/db/schema";
 import { getEnv } from "@/server/env";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
@@ -625,31 +624,34 @@ export async function resolveOwnedFileParts(
 }
 
 /**
- * The one definition of "a message part references this file": jsonb
- * containment of `{ url: "/api/files/<id>" }` against a message's `parts`.
- * The list's in-use badge, {@link isFileReferenced} and the orphan sweep all
- * build on it, so the three cannot disagree about what a reference is.
+ * EXISTS over `message_file_refs` for the list's in-use badge and the orphan
+ * sweep: true when a persisted message still points at this row's file id.
  */
-function messageReferencesFileSql(
-  parts: SQLWrapper,
-  fileId: SQLWrapper,
-): SQL<boolean> {
-  return sql<boolean>`${parts} @> jsonb_build_array(
-    jsonb_build_object('url', ${FILE_URL_PREFIX} || ${fileId})
+function referencedByMessageSql(): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1 from ${messageFileRefs}
+    where ${eq(messageFileRefs.fileId, files.id)}
   )`;
 }
 
 /**
- * EXISTS over `chat_messages` for the list's in-use badge: true when a
- * persisted message still points at this row's file id. Interpolating
- * `files.id` renders it qualified in the select list, matching the sweeper's
- * predicate.
+ * Distinct attachment ids referenced by any message in `topicIds`, read from
+ * the indexed `message_file_refs` table without scanning `chat_messages.parts`.
  */
-function referencedByMessageSql(): SQL<boolean> {
-  return sql<boolean>`exists (
-    select 1 from chat_messages cm
-    where ${messageReferencesFileSql(sql`cm.parts`, files.id)}
-  )`;
+export function fileIdsForTopics(
+  executor: DbExecutor,
+  topicIds: string[],
+): string[] {
+  if (topicIds.length === 0) {
+    return [];
+  }
+  const rows = executor
+    .selectDistinct({ fileId: messageFileRefs.fileId })
+    .from(messageFileRefs)
+    .innerJoin(chatMessages, eq(chatMessages.id, messageFileRefs.messageId))
+    .where(inArray(chatMessages.topicId, topicIds))
+    .all();
+  return rows.map((row) => row.fileId);
 }
 
 /** Lowercased, path-less filename of the current row. */
@@ -771,7 +773,7 @@ export async function listFilesForActor(
       sizeBytes: row.sizeBytes,
       extractionStatus: row.extractionStatus,
       createdAt: row.createdAt.toISOString(),
-      referenced: row.referenced,
+      referenced: Boolean(row.referenced),
     })),
     totalCount: Number(countRows[0]?.total ?? 0),
     totalBytes,
@@ -781,16 +783,17 @@ export async function listFilesForActor(
 /**
  * True when any persisted message still references the attachment. Not scoped
  * to the owner: a file referenced by anyone must survive until that reference
- * is gone. Built from the same jsonb predicate as {@link referencedByMessageSql}
- * and the sweep, so all three agree by construction.
+ * is gone. Uses the indexed `message_file_refs` table, matching
+ * {@link referencedByMessageSql} and the orphan sweep.
  */
 async function isFileReferenced(fileId: string): Promise<boolean> {
-  const rows = await getDb()
-    .select({ id: chatMessages.id })
-    .from(chatMessages)
-    .where(messageReferencesFileSql(chatMessages.parts, sql`${fileId}`))
-    .limit(1);
-  return rows.length > 0;
+  const row = getDb()
+    .select({ fileId: messageFileRefs.fileId })
+    .from(messageFileRefs)
+    .where(eq(messageFileRefs.fileId, fileId))
+    .limit(1)
+    .get();
+  return row !== undefined;
 }
 
 export async function deleteFile(id: string, actor: Actor): Promise<void> {

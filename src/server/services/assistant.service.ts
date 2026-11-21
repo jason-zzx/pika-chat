@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import {
   DEFAULT_ASSISTANT_ICON,
@@ -13,12 +13,15 @@ import { newAssistantId } from "@/lib/id";
 import { resolveAvailableModels } from "@/server/ai/model-resolution";
 import type { Actor } from "@/server/auth/actor";
 import { getDb } from "@/server/db/client";
-import { assistants, chatMessages, topics } from "@/server/db/schema";
+import { assistants, topics } from "@/server/db/schema";
 import { insertWithShortId } from "@/server/db/short-id-insert";
 import { isUniqueViolation } from "@/server/db/unique-violation";
 import { AppError } from "@/server/errors";
 import { logger } from "@/server/logger";
-import { deleteFilesIfUnreferenced, fileIdsFromParts } from "@/server/files/file.service";
+import {
+  deleteFilesIfUnreferenced,
+  fileIdsForTopics,
+} from "@/server/files/file.service";
 import {
   markGenerationsForDeletedTopics,
   topicIdsForAssistant,
@@ -262,7 +265,7 @@ export async function updateAssistant(
 export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
   const db = getDb();
   let deletedTopicIds: string[] = [];
-  let messageRows: { parts: unknown }[] = [];
+  let releasedFileIds: string[] = [];
   db.transaction(
     (tx) => {
       const owned = tx
@@ -287,13 +290,7 @@ export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
       // their generations in the same transaction (chat task §8): mark them
       // target-deleted, then let the cascade remove the rows.
       const topicIds = topicIdsForAssistant(tx, id);
-      if (topicIds.length > 0) {
-        messageRows = tx
-          .select({ parts: chatMessages.parts })
-          .from(chatMessages)
-          .where(inArray(chatMessages.topicId, topicIds))
-          .all();
-      }
+      releasedFileIds = fileIdsForTopics(tx, topicIds);
       markGenerationsForDeletedTopics(tx, topicIds);
       tx.delete(assistants)
         .where(
@@ -310,9 +307,6 @@ export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
   for (const topicId of deletedTopicIds) {
     discardGenerationsForTopic(topicId);
   }
-  await deleteFilesIfUnreferenced(
-    messageRows.flatMap(row => fileIdsFromParts(row.parts)),
-    actor,
-  );
+  await deleteFilesIfUnreferenced(releasedFileIds, actor);
   logger.info({ userId: actor.userId, assistantId: id }, "assistant deleted");
 }
