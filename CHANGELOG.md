@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.2] - 2026-11-21
+
+### Highlights
+
+- **Single Embedded SQLite Database (`better-sqlite3`) & Automatic PostgreSQL Upgrade**: Replaced PostgreSQL (Docker deployments) and embedded PGlite (desktop local mode and CI) with a single embedded `better-sqlite3` database configured via `DATABASE_PATH` (defaulting to `/data/files/pika-chat.db` on the existing `/data/files` volume in Docker and `<userData>/local/pika-chat.db` in desktop local mode), removing the separate database container. Existing PostgreSQL instances (`v0.4.0`–`v1.0.0-rc.1`) automatically import into SQLite on first boot when keeping their previous compose file and `DATABASE_URL` / `POSTGRES_*` configuration.
+- **Message Text Quoting & Jump-to-Source**: Select text in any user or assistant message body to show a floating **Quote** button, attach the excerpt as an atomic card in the composer (passed to the model as `<quote>` context while keeping your typed message intact), and click any quote card to center and flash-highlight the exact source passage.
+- **Paginated Sidebar Topics & Quieter Topic Rows**: Assistant topic lists now load favorites in full and non-favorite topics in pages of 20 with infinite scroll, compact relative last-active timestamps, hover-overlay actions on pointer devices, and long-press menus on touch devices.
+
+### Feats
+
+- **Embedded SQLite Engine & Upgrade Importer**:
+  - **SQLite Runtime & Indexing**: Configured `better-sqlite3` with WAL mode, `foreign_keys = ON`, `busy_timeout = 5000`, synchronous `immediate` write transactions, automatic boot-time schema migrations, a deterministic `file_category` SQLite UDF for attachment filtering, `(updated_at, id)` keyset cursor pagination, `json_set` merges, and `AFTER INSERT` / `AFTER UPDATE OF parts` triggers on `chat_messages` maintaining the `WITHOUT ROWID` `message_file_refs` index table so attachment reference checks and topic/assistant deletions never scan message payloads.
+  - **One-Time PostgreSQL Boot Importer**: When `DATABASE_URL` or legacy `POSTGRES_*` variables are configured and SQLite has no `postgres_import` marker, startup reads PostgreSQL in a single read-only `repeatable read` snapshot, validates columns against the `v0.4.0`–`v1.0.0-rc.1` schema (instructing older instances to upgrade to `v0.4.2` first), copies all tables in one transaction, verifies per-table row counts and `PRAGMA foreign_key_check`, and records the import marker without modifying PostgreSQL (refusing non-empty SQLite targets or mismatched schemas; once imported, subsequent boots ignore PostgreSQL settings).
+  - **Docker & Compose Simplification**: Removed the `postgres` service and `postgres_prod_data` volume from `docker-compose.full.yml`, removed `docker-compose.dev.yml`, `docker/postgres/`, and `scripts/migrate.ts`, and started the container directly with `node server.js` using boot-time instrumentation migrations.
+  - **Desktop Local Mode (`native/desktop`)**: Switched local mode from PGlite to SQLite (`<userData>/local/pika-chat.db`), added graceful SQLite WAL checkpoint shutdown via `utilityProcess.parentPort`, and verified `better-sqlite3` N-API prebuild loading under Electron in `build-server.mjs`.
+- **Message Text Quoting**:
+  - Added a floating **Quote** button (`QuoteSelectionButton`) positioned above single-message body selections (or below when near the top of the scroll container and on touch devices), attaching one removable two-line `QuoteCard` per draft while still requiring text or attachments to send.
+  - Persists quotes as `data-quote` message parts (replayed to models as `<quote>` text context, rendered above sent user bubbles, and removable during in-place user message editing), and jumps back to the exact occurrence by stored offset with whole-message flash fallback when edited or unmatched.
+- **Paginated Sidebar Topics & Row Redesign**:
+  - Replaced full-tree topic preloading with `topicCount` metadata in `GET /api/assistants`, dedicated `GET /api/assistants/[id]/topics/favorites`, and cursor-paginated `GET /api/assistants/[id]/topics` (20 rows per page, auto-loading on scroll with Retry on error), while keeping chat header titles, desktop notifications, and delete-assistant topic counts accurate for unloaded topics.
+  - Added minute-ticking relative last-active labels (`formatTopicAge`, replaced by a spinner while streaming), pointer hover/focus overlay actions that do not shift title truncation, truncated-title tooltips, and a ~500 ms touch long-press menu with a full-title header and native selection suppression.
+- **Batch Upstream Model Sync**:
+  - Upgraded provider model discovery ("Fetch from upstream") into a two-tab comparison dialog (**Available** and **Not returned**) with **Keep all** / **Uncheck all** batch controls, an empty-upstream warning, and atomic `POST /api/providers/[id]/models/sync` batch additions/removals using single-pass catalog metadata lookup.
+- **About Settings Page & Native Client Version**:
+  - Added **Settings → About** (`/settings/about`) with version summary, Local/Demo mode badge, one-click **Copy version**, project/release/issue links, and MIT License details; exposed `window.pikaNative.appVersion` in Electron (`preload-remote.ts`) and Android (`RemoteBridge.kt`) so remote native clients show both Server version and Client version.
+
+### Fixes
+
+- **Dropdown Menu Backdrop Stacking**: Set `relative z-50` on `DropdownMenuContent`'s `MenuPrimitive.Portal` so modal dropdown backdrops stack properly above z-indexed containers such as the sidebar and mobile sheets.
+- **Unified Hover & Search Palette Interactions**: Unified row hover highlights across the sidebar user/settings row, assistant profile/delete row, `ToolCallShell` overlay headers, `QuoteCard` jump button, and `ProviderConfigsScreen` model delete buttons (`XIcon` with dark-mode contrast); synced `SearchDialog` active highlight with pointer hover and added an inline clear button.
+- **Consistent Dialogs & Confirmations**: Aligned `ExternalLinkDialog` with standard `AlertDialog` primitives and extended it to `SearchToolCall` result links; replaced `window.prompt()` password resets in `AdminUsersScreen` with a validated password `Dialog` (plus destructive `Ban` styling and table row hover), added delete confirmations in `SearchProvidersScreen` and manual context compression confirmations in `ChatView`, and aligned `TwoFactorCard` with `SettingsSection` / `SettingsCard`.
+- **Settings Layout, Sidebar & Editor Ergonomics**: Hid the redundant desktop top header (`md:hidden`) in Settings while keeping the mobile drawer trigger, kept the Settings sidebar expanded without overwriting the chat view's collapsed state, improved `SidebarMenu` spacing (`md:gap-0.5`), fixed `PaneHeader` title truncation and icon-collapsed states (`ThemeControl`, `LoadingRows`, hidden topics group), refined `Composer` / `UserMessageEditor` focus rings and mobile hit targets, prevented vertical layout jumps during file selection in `FilesList`, and disabled **Reset all** in `ModelPreferencesScreen` when no defaults are set.
+- **Native Shell UI (`native/shell-ui`)**: Unified full-row hover and layered action highlights on server list rows, replaced `window.confirm()` server removal with a styled in-app `<dialog>`, suppressed the initial auto-focus ring on the server list, restored `cursor: pointer`, collapsed empty status messages, and added pending feedback while checking for updates.
+
+### Dev
+
+- Switched Vitest integration tests (`:memory:` SQLite per worker) and GitHub Actions (`ci.yml`, `release.yml`) to SQLite, removing the PostgreSQL service container and separate PGlite job, dropping build-time C++ compilation tools from `Dockerfile`, and adding a `workflow_dispatch`-only 4-target `desktop-smoke` packaging matrix in `ci.yml`.
+
 ## [1.0.0-rc.1] - 2026-11-19
 
 ### Highlights

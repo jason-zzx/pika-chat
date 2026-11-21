@@ -5,6 +5,44 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [1.0.0-rc.2] - 2026-11-21
+
+### Highlights
+
+- **统一嵌入式 SQLite 数据库（`better-sqlite3`）与 PostgreSQL 自动升级导入**：将容器部署中的 PostgreSQL 与桌面端本地模式及 CI 中的 PGlite 统一替换为单一嵌入式 `better-sqlite3` 数据库，通过 `DATABASE_PATH` 配置（Docker 默认为现有 `/data/files` 数据卷上的 `/data/files/pika-chat.db`，桌面本地模式为 `<userData>/local/pika-chat.db`），无需单独运行数据库容器。`v0.4.0`–`v1.0.0-rc.1` 的 PostgreSQL 实例在首次启动时保持原有 compose 文件与 `DATABASE_URL` / `POSTGRES_*` 配置即可自动将数据导入 SQLite。
+- **消息文本引用与定位跳转**：在任意用户或助手消息正文中选中文本即可显示浮动**引用**按钮，将摘录作为独立卡片附着到输入框（作为 `<quote>` 上下文传给模型，同时保持用户输入文本原样不变），点击引用卡片即可居中定位并高亮闪烁原始文本段落。
+- **侧边栏话题分页加载与更清爽的话题行交互**：助手侧边栏现全量加载收藏话题，并以每页 20 条滚动分页加载普通话题，同时提供紧凑的相对最后活跃时间、指针设备悬停浮层操作按钮与触屏长按菜单。
+
+### Feats
+
+- **嵌入式 SQLite 引擎与升级导入器**：
+  - **SQLite 运行时与索引优化**：为 `better-sqlite3` 启用 WAL 模式、`foreign_keys = ON`、`busy_timeout = 5000`、同步 `immediate` 写事务与启动自动迁移；注册确定性 `file_category` UDF 支持附件分类筛选，保留 `(updated_at, id)` 游标分页与 `json_set` 增量合并，并为 `chat_messages` 添加 `AFTER INSERT` 与 `AFTER UPDATE OF parts` 触发器维护 `WITHOUT ROWID` 索引表 `message_file_refs`，使附件引用检查与话题/助手删除直接查询索引表而非扫描消息正文。
+  - **PostgreSQL 一次性启动导入**：当配置了 `DATABASE_URL` 或旧版 `POSTGRES_*` 变量且 SQLite 中尚无 `postgres_import` 标记时，启动阶段会在单个只读 `repeatable read` 快照中读取 PostgreSQL，校验列结构是否匹配 `v0.4.0`–`v1.0.0-rc.1`（更早版本会提示先升级至 `v0.4.2`），在单事务内复制全部数据表，校验每张表的行数与 `PRAGMA foreign_key_check` 并写入导入标记；全程不写入 PostgreSQL，目标 SQLite 非空或表结构不匹配时直接拒绝启动，导入完成后后续启动将忽略 PostgreSQL 配置。
+  - **精简 Docker 与 Compose 编排**：移除 `docker-compose.full.yml` 中的 `postgres` 服务与 `postgres_prod_data` 数据卷，删除 `docker-compose.dev.yml`、`docker/postgres/` 与 `scripts/migrate.ts`，容器直接通过 `node server.js` 启动并在 instrumentation 阶段完成自动迁移。
+  - **桌面端本地模式（`native/desktop`）**：将本地模式从 PGlite 切换至 SQLite（`<userData>/local/pika-chat.db`），通过 `utilityProcess.parentPort` 优雅关闭并完成 WAL checkpoint，并在 `build-server.mjs` 中内置 Electron 环境下 `better-sqlite3` N-API 预编译产物的加载冒烟校验。
+- **消息文本引用**：
+  - 在单条消息正文中选区时，在选区上方（靠近视口顶部或触屏设备上则在下方）显示浮动**引用**按钮（`QuoteSelectionButton`），每份草稿最多附带一张可移除的两行预览 `QuoteCard`，且仅含引用时不允许发送。
+  - 引用以 `data-quote` part 持久化并作为 `<quote>` 上下文回放给模型，在已发送用户气泡上方展示，且在就地编辑用户消息时支持移除；点击卡片可按记录偏移量定位回源文本并用逐行高亮闪烁（若源消息已编辑或无法匹配，则回退为整条消息闪烁）。
+- **侧边栏话题分页与行设计重构**：
+  - 将 `GET /api/assistants` 改为返回包含 `topicCount` 的助手列表，拆出 `GET /api/assistants/[id]/topics/favorites` 与游标分页的 `GET /api/assistants/[id]/topics`（每页 20 条，滚到底部自动加载，失败时展示重试按钮），并确保未在侧边栏加载的话题仍能正确显示聊天页标题、桌面完成通知及删除助手时的话题数统计。
+  - 话题行右侧展示每分钟自动刷新的紧凑相对活跃时间（`formatTopicAge`，流式生成中切换为加载动画），指针设备悬停或聚焦时以右对齐浮层展示收藏与 `...` 按钮而不挤动标题截断，截断标题悬停展示完整标题 Tooltip；触屏设备隐藏行内按钮，长按约 500 ms 弹出带完整标题头部的操作菜单并屏蔽系统选区与默认菜单。
+- **批量同步上游模型列表**：
+  - 将服务商「从上游获取」升级为双页签对比弹窗（**现有模型**与**未返回模型**），支持**全部保留** / **全部取消勾选**快捷操作、上游返回 0 个模型时的风险提示，以及通过 `POST /api/providers/[id]/models/sync` 在单事务内原子完成批量新增与移除（整批仅加载一次目录元数据）。
+- **「关于」设置页与原生客户端版本展示**：
+  - 新增**设置 → 关于**（`/settings/about`）页面，展示当前版本、本地/演示模式徽章、一键**复制版本信息**按钮、GitHub 仓库/发布日志/问题反馈入口与 MIT 开源协议信息；同时在桌面端（`preload-remote.ts`）与 Android 端（`RemoteBridge.kt`）注入 `window.pikaNative.appVersion`，远程连接时可同时查看并复制服务端与客户端版本号。
+
+### Fixes
+
+- **下拉菜单遮罩层级**：为 `DropdownMenuContent` 的 `MenuPrimitive.Portal` 补充 `relative z-50`，避免模态下拉菜单遮罩被侧边栏或移动端抽屉等带 `z-index` 的容器遮挡或错层。
+- **统一悬停高亮与搜索面板交互**：统一侧边栏用户/设置行、助手资料/删除行、`ToolCallShell` 浮层头部、`QuoteCard` 跳转按钮与 `ProviderConfigsScreen` 模型删除按钮（改用 `XIcon` 并修复暗色对比度）的行级与按钮悬停状态；让 `SearchDialog` 的键盘高亮与鼠标悬停保持同步，并在搜索框内增加一键清空按钮。
+- **弹窗规范与确认流程统一**：将 `ExternalLinkDialog` 重构为标准 `AlertDialog` 组件并扩展至 `SearchToolCall` 搜索结果链接；将 `AdminUsersScreen` 的密码重置从 `window.prompt()` 改为带校验的 `Dialog` 表单（并为「封禁」操作补充危险样式与表格行悬停），为 `SearchProvidersScreen` 删除操作与 `ChatView` 手动压缩历史新增 `AlertDialog` 二次确认，并将 `TwoFactorCard` 对齐至 `SettingsSection` / `SettingsCard` 结构。
+- **设置页布局、侧边栏与编辑器细节**：在桌面端设置页隐藏冗余的 `<InsetHeader />`（保留移动端抽屉入口），进入 `/settings/*` 时保持桌面端侧边栏展开且不覆盖聊天页原有的折叠状态；微调 `SidebarMenu` 间距（`md:gap-0.5`），修复 `PaneHeader` 长标题换行及图标折叠状态（`ThemeControl`、`LoadingRows` 与话题分组），优化 `Composer` / `UserMessageEditor` 聚焦环与移动端触控热区，修复 `FilesList` 勾选文件时的纵向跳动，并在未配置任何默认模型时禁用 `ModelPreferencesScreen` 的**全部重置**按钮。
+- **原生壳界面（`native/shell-ui`）**：统一服务器列表整行悬停与右侧操作按钮的叠层悬停效果，将移除服务器的 `window.confirm()` 替换为自定义样式的 `<dialog>` 确认弹窗，去除进入列表时的默认首行焦点框并收敛到 `:focus-visible`，恢复 `cursor: pointer`，折叠空状态提示占位，并在检查更新时显示进行中状态。
+
+### Dev
+
+- 将 Vitest 集成测试（每 Worker 独立 `:memory:` SQLite）与 GitHub Actions（`ci.yml`、`release.yml`）全面切换为 SQLite，移除 PostgreSQL 服务容器与单独的 PGlite 任务，精简 `Dockerfile` 中不再需要的 C++ 编译工具链，并在 `ci.yml` 新增仅限手动触发（`workflow_dispatch`）的四平台 `desktop-smoke` 打包验证矩阵。
+
 ## [1.0.0-rc.1] - 2026-11-19
 
 ### Highlights
