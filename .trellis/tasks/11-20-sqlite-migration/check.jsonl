@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify schema conventions, ownership filters and transaction rules after the port"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "Verify single-active-generation, claim and finalize invariants survive removal of row locks"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "Verify in-use badge, isFileReferenced, orphan sweep and delete cleanup semantics"}
+{"file": ".trellis/spec/backend/topic-list-pagination.md", "reason": "Verify no skipped/duplicated rows across pages"}
+{"file": ".trellis/spec/backend/search.md", "reason": "Verify literal matching and text-part-only scope"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Lint, typecheck, tests and forbidden patterns"}
+{"file": ".trellis/tasks/11-20-sqlite-migration/research/sqlite-benchmark.md", "reason": "Performance expectations for reference checks and writes"}

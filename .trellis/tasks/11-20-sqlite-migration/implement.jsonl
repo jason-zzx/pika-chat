@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend stack, layering constraints, pre-development checklist"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Schema/migration/ownership rules being rewritten for SQLite; transactions section"}
+{"file": ".trellis/spec/backend/local-mode.md", "reason": "Local mode boot, driver switch and shutdown contract that changes from PGlite to SQLite"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "Admission/claim/finalize invariants that row locks currently guard"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "File reference predicate, orphan sweep, cascade cleanup semantics replaced by message_file_refs"}
+{"file": ".trellis/spec/backend/topic-list-pagination.md", "reason": "Keyset cursor precision contract that changes to ms + id"}
+{"file": ".trellis/spec/backend/search.md", "reason": "ILIKE literal-escape and text-part scope contract ported to LIKE ESCAPE + json_each"}
+{"file": ".trellis/spec/backend/demo-mode.md", "reason": "Atomic daily demo counters (raw upsert) and guest purge"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Lint/type/test requirements and forbidden patterns"}
+{"file": ".trellis/tasks/11-20-sqlite-migration/research/sqlite-benchmark.md", "reason": "Driver choice evidence, benchmark numbers, refs table/trigger SQL"}
+{"file": ".trellis/tasks/archive/2026-11/11-16-native-desktop-local/research/pglite-spike.md", "reason": "Prior driver-migration findings: transaction sites, driver result-shape and migration pitfalls"}

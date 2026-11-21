@@ -185,14 +185,7 @@ Run the application container alone without launching redundant storage containe
    # S3_BUCKET=my-bucket
    # S3_ACCESS_KEY_ID=...
    # S3_SECRET_ACCESS_KEY=...
-
-   # Optional one-time upgrade import from an earlier PostgreSQL deployment:
-   # DATABASE_URL=postgres://user:password@your-pg-host:5432/pika_chat
    ```
-
-   > **Upgrading from PostgreSQL?** Set `DATABASE_URL` in `.env` on your first boot against a fresh SQLite file (`/data/files/pika-chat.db`). Pika Chat reads PostgreSQL once on startup, copies all rows into SQLite inside an atomic transaction (verifying columns, foreign keys, and row counts), and skips on future boots. Remove `DATABASE_URL` and decommission PostgreSQL once the import finishes. Existing data in a non-empty SQLite file or schema mismatches cause startup to fail loudly rather than overwriting data.
-   >
-   > **Backups**: Stop the container or run `sqlite3 /data/files/pika-chat.db ".backup ..."` alongside backing up the `/data/files` volume (`files_prod_data`) so the main database file and WAL journal stay consistent with local attachments.
 
 3. **Launch standalone application**:
    ```bash
@@ -228,6 +221,39 @@ Run the application container alone without launching redundant storage containe
    ```
 
 4. Visit **`http://localhost:3000/setup`** to complete initial administrator initialization.
+
+---
+
+## Data, Backups & Upgrades
+
+An instance keeps all of its data in the `/data/files` volume (`files_prod_data`, named `pika-chat_files_prod_data` by Docker): the SQLite database `pika-chat.db` with its `pika-chat.db-wal` / `pika-chat.db-shm` files, and attachments stored on local disk. Attachments stored in S3 live in the bucket. Keep `CREDENTIAL_ENCRYPTION_SECRET` with your backups: without it, stored provider API keys cannot be decrypted.
+
+### Backups
+
+- **While stopped**: stop the app, copy the whole volume, then start it again:
+  ```bash
+  docker compose -f docker-compose.full.yml stop app
+  docker run --rm -v pika-chat_files_prod_data:/data -v "$PWD":/backup alpine tar czf /backup/pika-chat-data.tgz -C /data .
+  docker compose -f docker-compose.full.yml start app
+  ```
+- **While running**: make a consistent copy of the database with `sqlite3 /data/files/pika-chat.db ".backup <target-file>"`, then copy the attachments. The app image does not include the `sqlite3` CLI, so run it from another container or host that mounts the volume. Copying only `pika-chat.db` from a running instance can miss the newest writes, which are still in `pika-chat.db-wal`.
+
+### Upgrading from PostgreSQL
+
+Releases up to v1.0.0-rc.1 stored data in PostgreSQL. This version copies that database into SQLite by itself on its first boot:
+
+1. **Change only the image.** Keep your current compose file and `.env` (or your existing container environment) unchanged for this first boot, so PostgreSQL keeps running and its connection settings still reach the app. If you pin the image with `PIKA_IMAGE`, set the new tag, then pull and restart with the compose file you deployed with:
+   ```bash
+   docker compose -f docker-compose.full.yml pull
+   docker compose -f docker-compose.full.yml up -d
+   ```
+2. **The import runs at boot.** When the server finds the previous PostgreSQL connection settings and SQLite has no import marker, it reads PostgreSQL in one read-only snapshot, copies every table into `/data/files/pika-chat.db` in a single transaction, checks row counts and foreign keys, records the marker, and only then starts serving. The logs report each table. PostgreSQL is never written to.
+3. **If the import fails**, the server does not start and logs the reason (for example, PostgreSQL is unreachable or the SQLite database already holds data). SQLite stays empty, so fixing the cause and restarting tries again. PostgreSQL must be on the v0.4.0 – v1.0.0-rc.1 schema; upgrade older instances to v0.4.2 first.
+4. **After the import**, later boots ignore the PostgreSQL settings. Switch to the current compose file (it has no `postgres` service) and run `docker compose -f docker-compose.full.yml up -d --remove-orphans`. Keep the old PostgreSQL volume until you have checked your data; going back only takes the previous image and compose file.
+
+> **Switch compose files only after the import.** The current compose files no longer connect to PostgreSQL, so booting with them first starts a fresh install, and once `/setup` is completed the import refuses the non-empty database. To recover, stop the app, delete `pika-chat.db*` from the volume, and start again with your previous compose file.
+
+The desktop app does not migrate local-mode data from v1.0.0-rc.1: local mode starts with a fresh database at `<userData>/local/pika-chat.db`, and the old data stays untouched in `<userData>/local/db/`.
 
 ---
 
@@ -276,8 +302,7 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 
 | Variable | Required | Default | Description |
 |---|:---:|:---:|---|
-| `DATABASE_PATH` | **Yes** | `/data/files/pika-chat.db` (Docker) | Filesystem path to the SQLite database file (`.data/pika-chat.db` in `.env.example`, or `:memory:` for ephemeral runs). |
-| `DATABASE_URL` | No | — | Optional one-time PostgreSQL boot importer URI (`postgres://...`). Imports once when the SQLite target is empty, records `postgres_import`, and skips afterwards. |
+| `DATABASE_PATH` | **Yes** | `/data/files/pika-chat.db` (Docker) | Path of the SQLite database file (`.data/pika-chat.db` in `.env.example` for local development, `:memory:` for throwaway runs). The compose files fix it to `/data/files/pika-chat.db` on the mounted volume. |
 | `CREDENTIAL_ENCRYPTION_SECRET` | **Yes** | — | Secret key (min 32 chars) used for AES-256-GCM encryption of provider API keys at rest. **Do not lose this**; losing it orphans stored credentials permanently. |
 | `BETTER_AUTH_SECRET` | **Yes** | — | Secret key (min 32 chars) used for signing Better Auth session tokens. |
 | `APP_URL` | No | `http://localhost:3000` | Canonical public URL of your deployment. Required when deployed behind reverse proxies. |

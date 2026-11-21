@@ -231,7 +231,7 @@ parts → UI — change them together.
 
 ### 5. Good / Base / Bad Cases
 
-- Good: new search provider → add enum tuple value (`searchProviders`) + adapter + `provider-meta`
+- Good: new search provider → add enum value on `search_provider_settings.provider` + adapter + `provider-meta`
   entry + fixtures/tests; chain, service, UI pick it up generically.
 - Base: legacy message rows have no tool parts; unknown/malformed persisted
   parts are dropped per-item on load (`uiPartsFromJson`), never failing the

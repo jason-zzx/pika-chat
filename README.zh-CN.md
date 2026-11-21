@@ -185,14 +185,7 @@
    # S3_BUCKET=my-bucket
    # S3_ACCESS_KEY_ID=...
    # S3_SECRET_ACCESS_KEY=...
-
-   # 可选：从旧版 PostgreSQL 升级时的一次性启动导入源
-   # DATABASE_URL=postgres://user:password@your-pg-host:5432/pika_chat
    ```
-
-   > **从旧版 PostgreSQL 升级？** 在首次以空白 SQLite 文件（`/data/files/pika-chat.db`）启动时配置 `DATABASE_URL`。系统会在启动阶段以只读事务一次性读取 PostgreSQL 并原子导入 SQLite（自动校验表列、外键与行数），随后写入导入标记并在后续重启自动跳过。迁移完成后可移除 `DATABASE_URL` 并下线 PostgreSQL；若目标 SQLite 已有数据或表结构不匹配，启动会直接拒绝并报错，避免误覆盖数据。
-   >
-   > **数据备份**：备份 `/data/files` 数据卷（`files_prod_data`）前建议先停止容器，或执行 `sqlite3 /data/files/pika-chat.db ".backup ..."` 生成一致性快照，以保留完整的主数据库与 WAL 日志状态。
 
 3. **启动独立应用服务**：
    ```bash
@@ -228,6 +221,39 @@
    ```
 
 4. 浏览器打开 **`http://localhost:3000/setup`** 完成初始管理员创建。
+
+---
+
+## 数据、备份与升级
+
+实例的全部数据都保存在 `/data/files` 数据卷中（`files_prod_data`，Docker 中的卷名为 `pika-chat_files_prod_data`）：SQLite 数据库 `pika-chat.db` 及其 `pika-chat.db-wal` / `pika-chat.db-shm` 文件，以及存放在本地磁盘的附件。使用 S3 时，附件保存在存储桶中。请将 `CREDENTIAL_ENCRYPTION_SECRET` 与备份一同保管：缺少它，已保存的模型供应商 API Key 将无法解密。
+
+### 数据备份
+
+- **停机备份**：停止应用，复制整个数据卷，然后重新启动：
+  ```bash
+  docker compose -f docker-compose.full.yml stop app
+  docker run --rm -v pika-chat_files_prod_data:/data -v "$PWD":/backup alpine tar czf /backup/pika-chat-data.tgz -C /data .
+  docker compose -f docker-compose.full.yml start app
+  ```
+- **在线备份**：使用 `sqlite3 /data/files/pika-chat.db ".backup <目标文件>"` 生成数据库的一致性副本，再复制附件。应用镜像不包含 `sqlite3` 命令行工具，请在挂载了该数据卷的其他容器或宿主机上执行。运行中只复制 `pika-chat.db` 可能会漏掉仍在 `pika-chat.db-wal` 中的最新写入。
+
+### 从 PostgreSQL 升级
+
+v1.0.0-rc.1 及更早的版本将数据保存在 PostgreSQL 中。本版本首次启动时会自动将该数据库复制到 SQLite：
+
+1. **只更换镜像。** 首次启动时保持现有的 compose 文件与 `.env`（或现有的容器环境变量）不变，让 PostgreSQL 继续运行、其连接配置仍能传入应用。如果通过 `PIKA_IMAGE` 固定了镜像版本，请先改为新版本标签，然后使用您部署时所用的 compose 文件拉取并重启：
+   ```bash
+   docker compose -f docker-compose.full.yml pull
+   docker compose -f docker-compose.full.yml up -d
+   ```
+2. **启动时自动导入。** 当服务端读到原有的 PostgreSQL 连接配置且 SQLite 中没有导入标记时，会在一个只读快照中读取 PostgreSQL，在单个事务内将所有表复制到 `/data/files/pika-chat.db`，校验行数与外键并写入导入标记，之后才开始对外提供服务。日志会逐表报告进度。整个过程不会写入 PostgreSQL。
+3. **导入失败时**，服务端不会启动，并在日志中给出原因（例如 PostgreSQL 无法连接，或 SQLite 数据库中已有数据）。SQLite 保持为空，排除原因后重启即会重新尝试。PostgreSQL 必须处于 v0.4.0 – v1.0.0-rc.1 的数据库结构；更早的实例请先升级到 v0.4.2。
+4. **导入完成后**，之后的启动都会忽略 PostgreSQL 的配置。此时可切换到当前版本的 compose 文件（其中已没有 `postgres` 服务）并执行 `docker compose -f docker-compose.full.yml up -d --remove-orphans`。在确认数据无误前请保留旧的 PostgreSQL 数据卷；回退只需换回之前的镜像与 compose 文件。
+
+> **请在导入完成后再切换 compose 文件。** 当前版本的 compose 文件不再连接 PostgreSQL，若直接用它们首次启动，服务端会作为全新安装启动；完成 `/setup` 后数据库不再为空，导入会被拒绝。补救方法：停止应用，删除数据卷中的 `pika-chat.db*`，再用之前的 compose 文件重新启动。
+
+桌面端不会迁移 v1.0.0-rc.1 本地模式的数据：本地模式将使用位于 `<userData>/local/pika-chat.db` 的全新数据库，旧数据原样保留在 `<userData>/local/db/` 中。
 
 ---
 
@@ -276,8 +302,7 @@ Pika Chat 通过根目录 `.env` 文件或容器环境进行配置：
 
 | 变量名称 | 是否必填 | 默认值 | 说明 |
 |---|:---:|:---:|---|
-| `DATABASE_PATH` | **是** | `/data/files/pika-chat.db`（Docker） | SQLite 数据库文件路径（`.env.example` 默认为 `.data/pika-chat.db`，测试可使用 `:memory:`）。 |
-| `DATABASE_URL` | 否 | — | 可选的 PostgreSQL 一次性启动导入源连接串（`postgres://...`）。仅在目标 SQLite 为空且无导入标记时执行一次自动导入，完成后可移除。 |
+| `DATABASE_PATH` | **是** | `/data/files/pika-chat.db`（Docker） | SQLite 数据库文件路径（`.env.example` 中为本地开发用的 `.data/pika-chat.db`，临时运行可使用 `:memory:`）。compose 文件将其固定为挂载数据卷上的 `/data/files/pika-chat.db`。 |
 | `CREDENTIAL_ENCRYPTION_SECRET` | **是** | — | 用于对模型 API Key 执行 AES-256-GCM 落库加密的密钥（至少 32 字符）。**请务必妥善备份**，一旦丢失将永久无法解密已存凭据。 |
 | `BETTER_AUTH_SECRET` | **是** | — | 用于签名 Better Auth 会话令牌的加密密钥（至少 32 字符）。 |
 | `APP_URL` | 否 | `http://localhost:3000` | 部署站点的公网访问 URL。在反向代理或自定义域名环境下建议显式配置。 |

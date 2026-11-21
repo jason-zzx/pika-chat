@@ -5,24 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Highlights
-
-- **Single Embedded SQLite Engine (`better-sqlite3`)**: Replaced PostgreSQL (Docker deployments) and embedded PGlite (desktop local mode and CI) with a single embedded `better-sqlite3` database configured via `DATABASE_PATH` (defaulting to `/data/files/pika-chat.db` in Docker and `<userData>/local/pika-chat.db` in desktop local mode), with WAL mode, synchronous immediate write transactions, boot-time automatic migrations, and trigger-maintained `message_file_refs` indexes for attachment checks.
-- **One-Time PostgreSQL Upgrade Importer**: Setting `DATABASE_URL` on first boot against an empty SQLite database automatically reads PostgreSQL once in a read-only snapshot, validates schema columns and foreign keys, verifies row counts, and writes an atomic `postgres_import` marker (refusing non-empty SQLite targets or mismatched schemas).
-
-### Feats
-
-- **SQLite Port & Indexing**: Ported Drizzle schemas to `sqlite-core` with integer millisecond timestamps, registered deterministic `file_basename` / `file_extension` SQLite UDFs for file filtering, preserved `(updated_at, id)` keyset cursor pagination, updated per-language JSON merges via `json_set`, and added `AFTER INSERT` / `AFTER UPDATE OF parts` triggers on `chat_messages` maintaining the `WITHOUT ROWID` `message_file_refs` index.
-- **Docker & Compose Simplification**: Removed the `postgres` service container from `docker-compose.full.yml`, removed `docker-compose.dev.yml`, `docker/postgres/`, and `scripts/migrate.ts`, persisted SQLite directly on `/data/files/pika-chat.db`, and started the container directly with `node server.js` via Next instrumentation boot migrations.
-- **Desktop Local Mode Rebuild & Smoke Check**: Switched desktop local mode (`native/desktop`) from PGlite (`<userData>/local/db/`) to SQLite (`<userData>/local/pika-chat.db`, leaving prior pre-release PGlite directories untouched), compiled `better-sqlite3` against Electron ABI via `@electron/rebuild` in `build-server.mjs`, and added a built-in `ELECTRON_RUN_AS_NODE=1` smoke verification.
-
-### Dev
-
-- Switched Vitest integration tests (`vitest.integration.sqlite.ts`) and GitHub Actions (`ci.yml`, `release.yml`) to per-worker `:memory:` SQLite databases, dropping the PostgreSQL service container and separate PGlite job, and added a `workflow_dispatch`-only 4-target `desktop-smoke` packaging matrix in `ci.yml`.
-- Updated backend specs, `README.md`, `README.zh-CN.md`, and `.env.example` for SQLite configuration (`DATABASE_PATH`) and PostgreSQL upgrade instructions (`DATABASE_URL`).
-
 ## [1.0.0-rc.1] - 2026-11-19
 
 ### Highlights

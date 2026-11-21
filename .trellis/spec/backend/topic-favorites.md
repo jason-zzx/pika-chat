@@ -16,9 +16,8 @@ topic-scoped mutations do not reshuffle the sidebar.
 
 ### 2. Signatures
 
-- DB: `topics.isFavorite` → `boolean("is_favorite").notNull().default(false)`
-  (`src/server/db/schema/assistant.ts`). Migration
-  `0012_bouncy_genesis.sql`, drizzle-kit generated.
+- DB: `topics.isFavorite` → `integer("is_favorite", { mode: "boolean" }).notNull().default(false)`
+  (`src/server/db/schema/assistant.ts`), baseline migration `0000`.
 - Service: `setTopicFavorite(id: string, input: SetTopicFavoriteInput, actor: Actor): Promise<Topic>`
   (`src/server/services/topic.service.ts`).
 - API: `PATCH /api/topics/[id]/favorite` — body `{ favorite: boolean }`,

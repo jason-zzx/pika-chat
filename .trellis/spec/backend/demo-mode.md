@@ -40,13 +40,13 @@ come from the `super_admin` account. Operator signs in at `/sign-in?admin=1`.
   `DEMO_GUESTS_PER_IP_DAILY`=5, `DEMO_GLOBAL_DAILY_MODEL_CALLS`=2000,
   `DEMO_MAX_OUTPUT_TOKENS`=16384, `CLIENT_IP_HEADER` (required in demo —
   boot fails in `src/instrumentation.ts`). `isDemoMode()`.
-- DB: `users.is_anonymous boolean not null default false`;
-  `demo_usage_counters(subject, day text, kind, count)` PK
+- DB: `users.is_anonymous` (`integer` boolean, not null, default false);
+  `demo_usage_counters(subject, day text 'YYYY-MM-DD' UTC, kind, count)` PK
   `(subject, day, kind)`. `subject` = userId | `ip:<addr>` | `global`;
   `kind` = `model | search | upload | guest`.
-- Service: `consumeDemoQuota({ subject, kind, limit, day?, tx? }) → boolean`
-  (atomic `insert … on conflict … do update … where count < limit
-  returning`); `consumeGuestModelTurnQuota(userId, tx)` (guest + global,
+- Service: `consumeDemoQuota({ subject, kind, limit, day?, tx? }) → boolean`,
+  synchronous so it can run inside the admission transaction (atomic
+  `insert … on conflict … do update … where count < limit returning`); `consumeGuestModelTurnQuota(userId, tx)` (guest + global,
   throws); `getGuestUsage(userId)`; `purgeInactiveGuests(now?)`
   (`demo-cleanup.service.ts`); `resolveOperatorId() → string` (the
   `super_admin`; throws if absent — setup guarantees it before any guest).

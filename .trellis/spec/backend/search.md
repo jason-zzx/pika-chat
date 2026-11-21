@@ -13,17 +13,24 @@ UI, or the `?m=` message-anchor navigation.
 - **Ownership**: both queries filter by `assistants.ownerId = actor.userId`
   in the WHERE clause (topics join assistants directly; messages join
   topics + assistants). No fetch-then-check.
-- **Matching is case-insensitive LIKE (ASCII-only in SQLite) with literal semantics**:
-  `%`, `_`, and `\` are escaped (`escapeLike`), so user input never acts as a
-  wildcard, via `LIKE ... ESCAPE '\'` + drizzle parameter binding. Do not
+- **Matching is SQLite `LIKE` with literal semantics**: `%`, `_`, and `\`
+  are escaped (`escapeLike`) and the pattern is a bound parameter used as
+  `like ? escape '\'`, so user input never acts as a wildcard. `LIKE` folds
+  case for ASCII letters only: English matches case-insensitively, CJK is
+  unaffected, and non-ASCII letters (`É`/`é`, Cyrillic) match
+  case-sensitively. This is an accepted trade-off of the SQLite switch; do
+  not add `lower()`/ICU workarounds without a product decision. Do not
   switch to raw `parts` text matching — JSON keys are English and would
   false-positive on Latin queries.
-- **Message match scope**: `json_each(parts)` with `CASE WHEN p.type = 'object'
-  AND p.value->>'type' = 'text' THEN p.value->>'text' END` (non-object array
-  elements would raise `malformed JSON` without the `p.type = 'object'`
-  guard); reasoning, tool payloads, and attachment text are deliberately
-  excluded. Only `is_selected = 1` rows match — an unselected version's
-  content is not what the user sees when they land.
+- **Message match scope**: `exists (select 1 from json_each(parts) p …)`
+  where the element is an object, `p.value->>'type' = 'text'`, and
+  `p.value->>'text'` (a JSON string) matches. Every `->>` sits behind a
+  `CASE WHEN p.type = 'object'` guard, because `->>` on a non-object array
+  element raises `malformed JSON`. Reasoning, tool payloads, and attachment
+  text are deliberately excluded. Only `is_selected = 1` rows match — an
+  unselected version's content is not what the user sees when they land.
+  The search is a linear scan of the actor's selected messages on the main
+  thread (FTS5 is deferred).
 - **Snippet is app-side**: the SQL returns `parts` for the ≤20 hit rows and
   `uiPartsFromJson` + the shared `windowAroundMatch` (exported from
   `src/lib/schemas/search.ts` alongside `SNIPPET_*` / `TITLE_*`) reproduce

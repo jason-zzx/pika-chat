@@ -1,43 +1,70 @@
-# Local Mode (Electron Embedded Server & Single-SQLite Runtime)
+# Local Mode Contract
 
-> Env-gated desktop local mode: in-process SQLite (`better-sqlite3`) database,
-> boot-time auto-migration, silent local-admin provisioning, and auth/settings UI
-> lockdown.
+> Env-gated desktop local mode: the bundled Next standalone server on an
+> embedded SQLite file, single-admin provisioning, graceful `parentPort`
+> shutdown, and hidden multi-user/account UI. Landed with
+> `11-16-native-desktop-local`; moved from PGlite to SQLite with
+> `11-20-sqlite-migration`.
 
-## Scenario: touching `DATABASE_PATH`, `LOCAL_MODE`, desktop packaging, or local-mode boot/UI gating
+## Scenario: touching `LOCAL_MODE`, the desktop server env/packaging, or local-mode boot/UI gating
 
 ### 1. Scope / Trigger
 
-Any change to `DATABASE_PATH`, `DATABASE_URL` (PostgreSQL boot importer),
-`LOCAL_MODE`, `LOCAL_ADMIN_PASSWORD`, `src/server/db/client.ts`,
-`src/server/services/setup.service.ts` (`ensureLocalAdmin`),
-`native/desktop/src/local-server.ts`, `native/desktop/scripts/build-server.mjs`,
-or local-mode UI conditionals.
+Any change to `LOCAL_MODE`, `LOCAL_ADMIN_PASSWORD`, boot provisioning/shutdown
+in `src/instrumentation.ts`, `ensureLocalAdmin`, local-mode prop gating in
+`(app)/layout.tsx` and its child navigation components,
+`native/desktop/src/local-server.ts`, or
+`native/desktop/scripts/build-server.mjs`.
+
+Local mode is not a separate database path any more. Server, desktop and tests
+all run the same `better-sqlite3` client, schema and migrations (see
+[Database Guidelines](./database-guidelines.md)); local mode only chooses where
+the file lives and switches product behaviour.
 
 ### 2. Signatures
 
-- `src/server/env.ts` (`envSchema`):
-  - `DATABASE_PATH`: **required** non-empty string — SQLite database path (or `":memory:"` for ephemeral builds/tests; defaults to `/data/files/pika-chat.db` in Docker and `<userData>/local/pika-chat.db` in desktop local mode).
-  - `DATABASE_URL`: optional `postgres://...` URI used strictly for one-time PostgreSQL boot import (`src/server/db/import-postgres.ts`).
-  - `LOCAL_MODE`: optional env flag parsed with `envBoolean`. When set, activates desktop local mode; UI hides `/setup`, sign-in/sign-up, sign-out, 2FA, and user management while silently signing Electron into the seeded `local` super-admin account.
-  - `LOCAL_ADMIN_PASSWORD`: optional string (min 16 chars), **required** at boot whenever `LOCAL_MODE` is enabled.
-- `src/server/db/client.ts`:
-  - `getDb(): BetterSQLite3Database<typeof schema>` — lazily opens and caches a single `better-sqlite3` instance on `globalThis.sqlite` with `WAL`, `synchronous = NORMAL`, `foreign_keys = ON`, `busy_timeout = 5000`, and deterministic `file_basename` / `file_extension` UDFs.
-  - `getSqliteClient(): Database.Database` — returns the underlying `better-sqlite3` connection for pragmas/manual transactions.
-  - `closeDb(): void` — closes `globalThis.sqlite` cleanly (checkpoints WAL on quit) and resets the cached Drizzle wrapper.
-- `native/desktop/src/local-server.ts`:
-  - `localPaths()` puts SQLite at `<userData>/local/pika-chat.db` (`dbFile`) and passes `DATABASE_PATH: paths.dbFile` with a stripped `INHERITED_ENV` whitelist (never forwarding `DATABASE_URL` or host overrides). Prior pre-release `<userData>/local/db/` PGlite folders are left untouched.
-- `native/desktop/scripts/build-server.mjs`:
-  - Flattens standalone `node_modules` & `.next/node_modules` aliases, strips `prebuilds/`, compiles `better-sqlite3` for Electron's headers via `@electron/rebuild`, installs `build/Release/better_sqlite3.node`, and runs an `ELECTRON_RUN_AS_NODE=1` smoke check before exiting.
+- Env (`src/server/env.ts`):
+  - `DATABASE_PATH`: required non-empty string. The desktop passes
+    `<userData>/local/pika-chat.db`.
+  - `LOCAL_MODE`: `booleanFlag` (`"1" | "true"` enables; `"0" | "false" | ""`
+    normalizes to unset).
+  - `LOCAL_ADMIN_PASSWORD`: optional non-empty string; required at boot when
+    `LOCAL_MODE` is enabled.
+  - `isLocalMode(): boolean`.
+- DB (`src/server/db/client.ts`): `closeDb(): void` closes the cached
+  `globalThis.sqlite` handle (the last close checkpoints the WAL) and clears the
+  Drizzle wrapper; only the local-mode shutdown hook calls it.
+- Provisioning (`src/server/services/setup.service.ts`):
+  - `ensureLocalAdmin(password: string): Promise<void>` — idempotent; when
+    `users` is empty, sets `app_settings.file_storage_quota_bytes = null`
+    (unlimited) first, then creates `local` / `local@pika.local`
+    (`role: "super_admin"`).
+- UI gating (server-to-client props, no client context):
+  - `(app)/layout.tsx` passes `local={isLocalMode()}` to `AppShell` →
+    `AppSidebar` → `AssistantTree` / `SettingsNav` and `SidebarUserMenu`.
+  - `/settings/account` and `/settings/users` redirect to `/settings/general`
+    when `isLocalMode()` is true.
+- Desktop (`native/desktop/src/local-server.ts`): `localPaths()` returns
+  `root = <userData>/local`, `dbFile = <root>/pika-chat.db`, `filesDir`,
+  `logFile`, `secretsFile`. The child env is the `INHERITED_ENV` whitelist plus
+  `LOCAL_MODE=1`, `DATABASE_PATH=dbFile`, `FILE_STORAGE_DIR`, the secrets and
+  `LOCAL_ADMIN_PASSWORD`; the user's `DATABASE_URL`, `S3_*`, `NODE_OPTIONS`
+  etc. are never inherited, so the PostgreSQL import never runs in local mode.
 
 ### 3. Contracts
 
-| Concern | Contract |
+| Concern | Rule |
 |---|---|
-| Single engine | Both server (`node server.js`), desktop local mode, and Vitest integration tests use `better-sqlite3` (`sqlite-core` schema + unified migrations under `src/server/db/migrations`) |
-| Write concurrency | Use synchronous `db.transaction(fn, { behavior: "immediate" })` instead of async transactions or `SELECT ... FOR UPDATE`; never `await` I/O inside a transaction |
-| Boot order | `instrumentation.ts` validates env → `S3_DIRECT_ACCESS` / `DEMO_MODE` guards → `getFileStorage()` → `migrate(getDb(), ...)` → `maybeImportPostgres()` → (if `LOCAL_MODE`) validate `LOCAL_ADMIN_PASSWORD`, `ensureLocalAdmin()`, register `parentPort` `"shutdown"` handler calling `closeDb()` → `startGenerationRunner()` |
-| Electron native ABI | `pnpm -C native install --frozen-lockfile` must run **before** `node native/desktop/scripts/build-server.mjs` so `@electron/rebuild` and the target `electron` binary are present for ABI compilation and the `ELECTRON_RUN_AS_NODE=1` smoke check |
+| Boot order | `register()`: env checks (`S3_DIRECT_ACCESS`, `DEMO_MODE`) → `getFileStorage()` → `migrate()` (every mode) → `maybeImportPostgres()` (no-op without a `DATABASE_URL` / `POSTGRES_*` connection) → if local: require `LOCAL_ADMIN_PASSWORD`, `ensureLocalAdmin()`, register the `parentPort` `"shutdown"` handler → `startGenerationRunner()` |
+| Shutdown | Electron sends `"shutdown"` via `utilityProcess.postMessage`; the server calls `closeDb()` then `process.exit(0)`. On Windows `kill()` would give SQLite no chance to close cleanly |
+| Data location | `<userData>/local/pika-chat.db` (+ `-wal` / `-shm`), created with its parent on first boot. The rc.1 PGlite directory `<userData>/local/db/` is neither read, migrated nor deleted, so a downgrade to rc.1 still finds its data |
+| Storage quota | Global `app_settings.file_storage_quota_bytes` is cleared to `null` at provisioning; the local user has unlimited storage |
+| Hidden UI | `showUsers` is `false`, `SettingsNav` omits `Account` and `Users`, `SidebarUserMenu` omits sign-out and shows `native.serverName` without `host:port` |
+| No API blocks | Account/user endpoints are not blocked server-side in local mode because the server binds `127.0.0.1` and only the local user has the session |
+| Native module | Nothing is compiled. better-sqlite3 13 is an N-API addon whose package ships prebuilds (`prebuilds/<linux\|linuxmusl\|darwin\|win32>-<x64\|arm64>.node`), and its loader uses them whenever no `build/Release` binary exists. `pnpm-workspace.yaml` sets `allowBuilds: better-sqlite3: false`, so installs never run its `node-gyp` script (the Docker image needs no compiler). `build-server.mjs` runs `ELECTRON_RUN_AS_NODE=1 electron -e`, which requires every bundled copy (top-level and `.next/node_modules/better-sqlite3-<hash>` alias), opens `:memory:` and queries `sqlite_version()`; any failure fails the build. `pnpm -C native install` must run first (it provides `electron`) |
+
+The smoke check is the packaging guarantee and must never be skipped: it is
+what catches a better-sqlite3 upgrade that drops N-API or a prebuild target.
 
 ### 4. Validation & Error Matrix
 
@@ -45,16 +72,54 @@ or local-mode UI conditionals.
 |---|---|
 | `DATABASE_PATH` unset or empty | `getEnv()` throws `Invalid environment` |
 | `LOCAL_MODE=1` without `LOCAL_ADMIN_PASSWORD` | `register()` boot error |
-| Desktop `better-sqlite3` ABI mismatch in `build-server.mjs` | `ELECTRON_RUN_AS_NODE=1` smoke check fails build immediately |
+| Non-`nodejs` `NEXT_RUNTIME` | `register()` skips Node-only boot checks, migration and runner |
+| `/settings/account` or `/settings/users` in `LOCAL_MODE=1` | Server redirect to `/settings/general` |
+| Bundled `better-sqlite3` fails to load in Electron | `build-server.mjs` exits non-zero before packaging |
 
-### 5. Good / Base / Bad Cases
+### 5. Good/Base/Bad Cases
 
-- Good: Desktop spawns `utilityProcess` with `LOCAL_MODE=1`, `DATABASE_PATH=<userData>/local/pika-chat.db`, `LOCAL_ADMIN_PASSWORD=<secret>`, and a whitelisted environment that strips any host `DATABASE_URL`.
-- Base: Server deployment sets `DATABASE_PATH=/data/files/pika-chat.db` with `LOCAL_MODE` unset; `DATABASE_URL` triggers a one-time PG import only while `postgres_import` marker is absent and the target DB has no user data.
-- Bad: Leaving `prebuilds/` unstripped after `@electron/rebuild` without running `ELECTRON_RUN_AS_NODE=1` verification, or placing `node native/desktop/scripts/build-server.mjs` before `pnpm -C native install --frozen-lockfile` in CI.
+- Good: first local boot creates `<userData>/local/pika-chat.db`, migrates it,
+  creates the `local` super admin and clears the global quota to `null`;
+  later boots leave existing users and data untouched.
+- Base: `LOCAL_MODE` unset — the same client and migrations run against the
+  server's `DATABASE_PATH`, and `isLocalMode()` is `false`.
+- Bad: forwarding the user's shell env to the child. A `DATABASE_URL` there
+  would trigger a PostgreSQL import into the local database on first boot.
 
-### 6. Tests & CI Verification
+### 6. Tests Required
 
-- `src/server/env.test.ts`: `DATABASE_PATH` required, `DATABASE_URL` optional, `register()` rejects `LOCAL_MODE` without `LOCAL_ADMIN_PASSWORD`.
-- `node native/desktop/scripts/build-server.mjs`: built-in `ELECTRON_RUN_AS_NODE=1` smoke check loads every bundled `better-sqlite3` module inside Electron and runs `select sqlite_version()`.
-- `.github/workflows/ci.yml`: `desktop-smoke` (`workflow_dispatch`-only 4-OS matrix) exercises `pnpm build`, `build-server.mjs`, and `pnpm -C native/desktop dist` across Linux, Windows, macOS Intel, and macOS Apple Silicon.
+- `src/server/env.test.ts`: `DATABASE_PATH` required, `DATABASE_URL` optional;
+  `register()` rejects `LOCAL_MODE` without `LOCAL_ADMIN_PASSWORD`.
+- `src/server/services/local-setup.service.integration.test.ts`:
+  `ensureLocalAdmin()` creates the super admin once, sets the global quota to
+  `null`, is idempotent, and allows username sign-in with unlimited effective
+  quota.
+- `src/components/layout/SettingsNav.test.tsx` & `SidebarUserMenu.test.tsx`:
+  the `local` prop hides Account/Users tabs, hides Sign out, and renders plain
+  `serverName`.
+- Packaging: the built-in smoke check in `build-server.mjs` runs in every
+  release build; the `workflow_dispatch`-only `desktop-smoke` job in `ci.yml`
+  runs `pnpm build`, `build-server.mjs` and `dist` on all four desktop targets
+  without publishing.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// Inheriting the whole shell env: DATABASE_URL, S3_* or DEMO_MODE from the
+// user's terminal reconfigure the local server.
+utilityProcess.fork(serverJs, [], { env: { ...process.env, LOCAL_MODE: "1" } });
+```
+
+#### Correct
+
+```ts
+// Whitelist what the platform needs, then set every server variable explicitly.
+env: {
+  ...Object.fromEntries(INHERITED_ENV.flatMap((key) => (process.env[key] === undefined ? [] : [[key, process.env[key]]]))),
+  LOCAL_MODE: "1",
+  DATABASE_PATH: paths.dbFile,
+  FILE_STORAGE_DIR: paths.filesDir,
+}
+```

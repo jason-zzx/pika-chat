@@ -158,8 +158,8 @@ screen.
   `config.json`, and reuses it on later starts unless it is already taken, so
   origin-scoped `localStorage` (drafts, composer settings, sidebar state)
   survives restarts.
-- Secrets and storage: `<userData>/local/` holds `db/`, `files/`, `server.log`,
-  and `secrets.bin` (`BETTER_AUTH_SECRET`, `CREDENTIAL_ENCRYPTION_SECRET`,
+- Secrets and storage: `<userData>/local/` holds `pika-chat.db` (+ `-wal` /
+  `-shm`), `files/`, `server.log`, and `secrets.bin` (`BETTER_AUTH_SECRET`, `CREDENTIAL_ENCRYPTION_SECRET`,
   `LOCAL_ADMIN_PASSWORD` encrypted with Electron `safeStorage`). Decryption
   failure surfaces as a shell error and never silently regenerates secrets.
 - Session and lifecycle: `connect("local")` waits for `/api/health`, signs into
@@ -170,7 +170,8 @@ screen.
   `location.replace()` as `will-navigate`. Switching
   to a remote server or closing to tray leaves the local server running so
   background generations finish; `before-quit` posts `"shutdown"` over
-  `parentPort`, waiting up to 5 s for PGlite to close before killing. An update
+  `parentPort`, waiting up to 5 s for the server to close SQLite before
+  killing. An update
   install shuts the local server down **before** `quitAndInstall()`: the NSIS
   installer starts inside that call and force-kills every `Pika Chat.exe`
   (utility processes included) within ~2.6 s, and the server's open files would
@@ -184,9 +185,14 @@ screen.
   Next copies the developer's `.env` into standalone, which would ship
   `DATABASE_URL`, secrets and S3 keys inside a locally built installer. Only
   packages something links to are hoisted: a package nothing links to (e.g.
-  pglite) is loaded only through its Turbopack alias
+  `better-sqlite3`) is loaded only through its Turbopack alias
   (`.next/node_modules/<pkg>-<hash>`), which is already a full copy, so hoisting
-  it as well would ship it twice (~20 MB). Mac release builds split
+  it as well would ship it twice. Nothing is recompiled: `better-sqlite3` is
+  an N-API addon whose bundled prebuild for the host OS/arch loads in Electron
+  as-is. The script fails the build unless an `ELECTRON_RUN_AS_NODE=1` smoke
+  check can load every bundled copy and query `:memory:` — see
+  [Local Mode](../backend/local-mode.md). `pnpm -C native install` must run
+  before it. Mac release builds split
   into `macos-15-intel` (`--x64`) and `macos-latest` (`--arm64`) because `sharp`
   native binaries are arch-specific.
 

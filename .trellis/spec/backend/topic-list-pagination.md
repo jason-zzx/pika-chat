@@ -17,18 +17,19 @@ is easy to break.
 ### 2. Signatures
 
 - DB: `topics_assistant_list_idx` on
-  `(assistant_id, is_favorite, updated_at DESC NULLS FIRST, id DESC NULLS FIRST)`
-  (`src/server/db/schema/assistant.ts`, migration `0029_zippy_bloodscream.sql`).
-  It replaced `topics_assistant_id_idx`; its `assistant_id` prefix still serves
-  FK cascades and `topicIdsForAssistant`.
+  `(assistant_id, is_favorite, updated_at desc, id desc)`
+  (`src/server/db/schema/assistant.ts`, baseline migration `0000`). Its
+  `assistant_id` prefix also serves FK cascades and assistant deletion, so
+  there is no separate `assistant_id` index.
 - Service (`src/server/services/topic.service.ts`):
-  - `listTopicPage(assistantId: string, cursor: [string, string] | null, actor: Actor): Promise<{ topics: Topic[]; nextCursor: [string, string] | null }>`
+  - `listTopicPage(assistantId: string, cursor: [number, string] | null, actor: Actor): Promise<{ topics: Topic[]; nextCursor: [number, string] | null }>`
   - `listFavoriteTopics(assistantId: string, actor: Actor): Promise<Topic[]>`
 - API:
   - `GET /api/assistants/[id]/topics?cursor=<opaque>` → `{ topics: Topic[], nextCursor: string | null }`
   - `GET /api/assistants/[id]/topics/favorites` → `{ topics: Topic[] }`
 - Tree: `GET /api/assistants` → `assistantSchema` has `topicCount: number`, no
-  `topics` (`count(topics.id)::int` over a LEFT JOIN + GROUP BY).
+  `topics` (`count(topics.id)` over a LEFT JOIN + GROUP BY; SQLite returns an
+  integer, no cast).
 - Detail: `topicDetailSchema` / `findTopicDetailForActor` carry `assistantId`
   (the notification path needs it for topics the sidebar has not loaded).
 
@@ -37,10 +38,12 @@ is easy to break.
 - Page: `is_favorite = false`, `ORDER BY updated_at DESC, id DESC`,
   `LIMIT 21`. Server constant `TOPIC_PAGE_SIZE = 20`; the 21st row only signals
   `nextCursor` and is never returned. The client never sends a limit.
-- Cursor (wire): `base64url(JSON.stringify([updatedAtText, id]))` of the last
-  returned row, opaque to the client. `updatedAtText` is `updated_at::text`
-  selected next to the row. The comparison is
-  `(updated_at, id) < (${at}::timestamptz, ${id})`.
+- Cursor (wire): `base64url(JSON.stringify([updatedAtMs, id]))` of the last
+  returned row, opaque to the client. `updatedAtMs` is
+  `row.updatedAt.getTime()`, the exact integer `updated_at` stores
+  (epoch ms), so the cursor loses nothing and same-millisecond rows tie-break
+  by `id`. The comparison is the SQLite row value
+  `(updated_at, id) < (${at}, ${id})`.
 - Favorites: every `is_favorite = true` row of the assistant, same order, no
   limit (favorites are few and must all be visible).
 - Both endpoints call `requireOwnedAssistant` first.
@@ -49,7 +52,7 @@ is easy to break.
 
 | Condition | Result |
 |---|---|
-| Malformed cursor (not base64url JSON `[string, string]`) | Zod 400 at the route via `withErrorHandling` |
+| Malformed cursor (not base64url JSON `[non-negative safe integer, string]`) | Zod 400 at the route via `withErrorHandling`. A pre-SQLite cursor (`updated_at::text`) is rejected the same way; the client refetches page 1 |
 | Assistant missing or owned by another user | `AppError("NOT_FOUND", 404, "assistant.notFound")` |
 | Unauthenticated | `requireActor` → 401 |
 | Last page | `nextCursor: null` |
@@ -71,7 +74,6 @@ is easy to break.
 - touch between pages: no duplicates, every untouched row seen once;
 - 25 rows sharing the exact same millisecond across the page-20 boundary
   ordered by `(updated_at desc, id desc)`;
-- identical `updated_at` broken by `id`;
 - favorites excluded from pages, favorites list complete past 20;
 - foreign assistant → `NOT_FOUND` for both reads.
 
@@ -89,18 +91,21 @@ nextCursor: [last.updatedAt.toISOString(), last.id]
 #### Correct
 
 ```ts
-// Epoch-ms string matches integer `updated_at` column directly; validated as safe int in route Zod:
-nextCursor: last ? [String(last.updatedAt.getTime()), last.id] : null
+// Epoch-ms integer matches `updated_at` column directly; validated by route Zod:
+nextCursor: last ? [last.updatedAt.getTime(), last.id] : null
 ```
 
 ---
 
 ## Index column order
 
-SQLite composite indexes for `(updated_at DESC, id DESC)` must declare
-explicit descending SQL expressions (`sql\`updated_at desc\``, `sql\`id desc\``)
-in Drizzle (`topics_assistant_list_idx`), matching the query's `orderBy` so
-`EXPLAIN QUERY PLAN` uses `COVERING INDEX` without a temp B-tree sort.
+`topics_assistant_list_idx` declares its sort columns as raw SQL
+(`sql\`updated_at desc\``, `sql\`id desc\``) in Drizzle, matching the
+query's `orderBy(desc(updatedAt), desc(id))`. Both the page and the favorites
+query plan as `SEARCH topics USING INDEX topics_assistant_list_idx
+(assistant_id=? AND is_favorite=? [AND (updated_at,id)<(?,?)])` with no
+`USE TEMP B-TREE FOR ORDER BY`. SQLite indexes have no `NULLS FIRST/LAST`
+clause; these columns are `NOT NULL`, so none is needed.
 
 ---
 

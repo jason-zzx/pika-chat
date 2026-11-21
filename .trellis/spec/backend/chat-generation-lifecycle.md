@@ -37,7 +37,7 @@ nullable topic/assistant/message associations, kind/status, target-deleted flag,
 error, and timestamps. Routes use `requireActor`/`requireParam`; all task reads
 filter `userId`.
 
-DB: migration `0025_steady_sway.sql`, `chat_generations` in
+DB: baseline migration `0000`, `chat_generations` in
 `src/server/db/schema/chat.ts`. Statuses: `queued`, `running`, `stopping`,
 `completed`, `stopped`, `failed`, `interrupted`. Unique request receipt per
 `(user_id, request_id)` and one active generation per topic (partial unique
@@ -55,11 +55,20 @@ index for queued/running/stopping). `chat_messages` gains nullable
   computed expiry to private `acceptTurn`. Keep the receipt recheck under an
   existing-topic lock and the unique-conflict winner lookup for concurrent
   fresh-topic requests; these are not redundant preflight.
-- New UUIDv7 keys are accepted from DB now minus 24h through plus 5min.
+- New UUIDv7 keys are accepted from app-clock now (synchronous
+  `Clock = () => Date`, default `systemNow`; tests inject one; the embedded
+  database shares the process clock) minus 24h through plus 5min.
   Existing active receipts remain valid regardless of age. Terminal cleanup
   waits until both `finishedAt + 24h` and key expiry have passed; an expired
   key cannot recreate a task after receipt deletion. Target deletion retains
   only a minimal tombstone until expiry.
+- "Lock" in this spec means one synchronous `db.transaction(…, { behavior:
+  "immediate" })` on the single better-sqlite3 connection; there is no
+  `SELECT … FOR UPDATE`. The callback cannot await, so no other query
+  interleaves with its check and write. That, plus the partial unique index,
+  keeps one active generation per topic, makes the queued-to-running claim
+  exclusive, and orders delete against finalize. See
+  [Database Guidelines](./database-guidelines.md).
 - Preflight has no business writes. Admission locks the topic, checks the
   prepared history/summary still matches, and atomically writes the user/edit,
   assistant placeholder and task. Stable message/group IDs exist before SSE.
@@ -180,8 +189,9 @@ index for queued/running/stopping). `chat_messages` gains nullable
 - Persistent DB failure keeps the topic occupied until save succeeds or the
   process exits; next boot recovers from the last persisted checkpoint. No
   zero-tail-loss guarantee or cross-instance takeover.
-- Migration is additive and normal image startup runs it. Rollback keeps new
-  schema and saved messages; an old binary cannot perform new task recovery.
+- Migrations run in `register()` on every boot before the runner starts.
+  Rolling back past the SQLite switch means the previous image on its
+  PostgreSQL database, which never receives writes made after the import.
 
 ## 4. Validation & Error Matrix
 

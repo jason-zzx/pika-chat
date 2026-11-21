@@ -9,8 +9,9 @@ A provider config can be switched off without deleting it.
 
 ### Storage
 
-`provider_configs.enabled` is `boolean NOT NULL DEFAULT true` (migration
-`0020_next_triton.sql`); the DDL default onboards existing rows as enabled.
+`provider_configs.enabled` is an `integer` boolean, `NOT NULL DEFAULT true`
+(baseline migration `0000`); the default makes every new or imported row
+without an explicit value enabled.
 
 ### Contracts
 

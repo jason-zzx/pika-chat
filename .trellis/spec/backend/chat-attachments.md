@@ -101,7 +101,7 @@ deleteProviderFileReferences(file: ProviderReferencedFile): Promise<void>  // ne
 processDeleteRetries(): Promise<void>                          // runs at the end of sweepOrphanFiles
 ```
 
-DB (`files`, migration `0015` + `0016`):
+DB (`files`, baseline migration `0000`):
 
 | Column | Type | Notes |
 |---|---|---|
@@ -120,13 +120,13 @@ negative cache for the Files API; it is cleared whenever `baseUrl`, the api key,
 or `apiFormat` change.
 | `created_at` / `updated_at` | `integer` epoch ms (`timestampMsDefaultNow`) | `updated_at` refreshed by the extraction write |
 
-`app_settings.file_storage_quota_bytes` (bigint, nullable, DDL default
+`app_settings.file_storage_quota_bytes` (`integer`, nullable, DDL default
 `5368709120` = 5 GiB) is the instance-wide default quota; `users.file_quota_bytes`
-(bigint, nullable) is the per-user override. A `null` override follows the
+(`integer`, nullable) is the per-user override. A `null` override follows the
 global; both `null` = unlimited. The DDL default is what an existing deployment
 inherits on migration — the out-of-box posture is a 5 GiB cap, not unlimited.
 
-`provider_file_delete_retries` (migration `0017`) is the transient queue for
+`provider_file_delete_retries` (baseline migration `0000`) is the transient queue for
 provider-side deletes that failed with a retryable status: `id` PK,
 `provider_config_id`, `provider_file_id`, `attempts`, `next_retry_at`,
 `last_status`, `created_at`. Deliberately **no FK** to `provider_configs` — a
@@ -167,21 +167,45 @@ and `deleteFile` use, so "in use" means exactly "the sweep would spare it".
 to defaults (`catch`), an unknown `category` 400s — pagination knobs are
 cosmetic, a bad category is a client bug.
 
-**The category filter must mirror `classifyFile`, extension fallback
-included.** The badge on a row and the filter that hides it are two renderings
-of one classification: a real `deck.pptx` or `notes.txt` often arrives as
+**Attachment references live in `message_file_refs`, maintained by
+triggers.** `message_file_refs(message_id → chat_messages.id ON DELETE
+CASCADE, file_id, PK(message_id, file_id)) WITHOUT ROWID` plus
+`message_file_refs_file_idx` on `file_id`; no FK to `files` (a reference is a
+URL in `parts`). The `chat_messages_file_refs_ai` (`AFTER INSERT`) and
+`chat_messages_file_refs_au` (`AFTER UPDATE OF parts`) triggers in custom
+migration `0001_message_file_refs_triggers.sql` are the **single definition**
+of "a message references a file": every top-level object part whose `url` is a
+JSON string matching `GLOB '/api/files/?*'` (case-sensitive) contributes
+`substr(url, 12)`; the update trigger deletes the message's refs first. Message
+writers stay unchanged — never insert into the table by hand. Message,
+topic, and assistant deletes cascade the refs away.
+
+- Consumers read only this table, never `parts`: the list's `referenced`
+  badge and the orphan sweep (`EXISTS` on `file_id`), `isFileReferenced`
+  (`deleteFile`'s 409 check and `deleteFilesIfUnreferenced`),
+  `deleteMessage` (PK lookup on `message_id`), and
+  `fileIdsForTopics(tx, topicIds)`, which `deleteTopic` / `deleteAssistant`
+  call **inside** their delete transaction (refs join `chat_messages` on
+  `topic_id`) before the cascade removes the rows. After commit they hand the
+  ids to `deleteFilesIfUnreferenced`.
+- drizzle-kit does not model triggers. Changing the URL prefix
+  (`FILE_URL_PREFIX`) or the match rule needs a new custom migration
+  (`drizzle-kit generate --custom`) that drops and recreates both triggers and
+  backfills the table.
+- The PostgreSQL boot import does not copy this table: the insert trigger
+  fills it as `chat_messages` rows land.
+
+**The category filter calls `fileListCategoryOf` directly via a SQLite UDF.**
+The badge on a row and the filter that hides it are two renderings of one
+classification: a real `deck.pptx` or `notes.txt` often arrives as
 `application/octet-stream`, and `script.py` as `application/x-python`, so a
 `mediaType IN (…)`-only predicate drops rows that display a "document" badge.
-The predicate is built from the same exported tables `classifyFile` reads
-(`CLASSIFIED_MEDIA_TYPES`, `TEXT_FILE_EXTENSIONS`, `TEXT_FILE_NAMES`,
-`AUDIO_FILE_EXTENSIONS`, `VIDEO_FILE_EXTENSIONS`, `OFFICE_FILE_EXTENSIONS`,
-`EBOOK_FILE_EXTENSIONS`) via deterministic `file_basename` / `file_extension`
-SQLite UDFs (`client.ts`) with the same precedence and guards:
-extension fallbacks apply only to rows **no** media-type set matched, and the
-text branch additionally excludes audio/video extensions (a `text/plain`
-`clip.mp4` is a video). The equivalence is locked by a table-driven test that
-compares the filter result against per-row `fileListCategoryOf` for every
-category — see Tests Required.
+`client.ts` registers deterministic `file_category(media_type, filename)`
+wrapping `fileListCategoryOf`, and `listFilesForActor` filters with
+`file_category(files.media_type, files.filename) = category`, so filter
+membership and row badges share one implementation by construction. The
+equivalence is locked by a table-driven test that compares the filter result
+against per-row `fileListCategoryOf` for every category — see Tests Required.
 
 **`GET /api/files/limits`** — authenticated; the client's only source of truth
 for pre-upload checks (the limit is runtime config, not a compile-time
@@ -337,6 +361,13 @@ a hard error, not a degraded text part.
   24 h orphan sweep preserving referenced files.
 - `api/chat/route.test.ts`: attachment resolution failure leaves neither a user
   message nor a new topic.
+- `message-file-refs.integration.test.ts` (real DB): the triggers on insert and
+  on an update that adds or removes a file part, non-`/api/files` and
+  malformed parts ignored, cascade on message/topic/assistant delete,
+  delete-topic / delete-assistant / orphan sweep still reclaiming their files,
+  and `EXPLAIN QUERY PLAN` for the badge, `isFileReferenced`, the sweep, and
+  the delete-path query using `message_file_refs` indexes with no
+  `SCAN chat_messages`.
 - `quota.integration.test.ts` (real DB): usage sum, precedence matrix
   (override / global / both null), the `used + incoming == quota` boundary, and
   a rejected relay upload leaving no object and no row.
@@ -378,8 +409,9 @@ const dataUrl = `data:${row.mediaType};base64,${(await getFileStorage().get(row.
 
 ```ts
 // Persisting raw extractor output: pdf.js emits NUL bytes for some embedded
-// fonts (math glyphs) — strip 0x00 at extraction so stored text and JSON
-// stay clean across SQLite and PostgreSQL upgrades.
+// fonts (math glyphs). SQLite stores 0x00 inside `text`, but its string
+// functions (`like`, `length`, `substr`) stop at the first NUL, and the text
+// is replayed into model prompts.
 await db.update(files).set({ extractedText: result.text });
 ```
 

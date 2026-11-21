@@ -66,7 +66,7 @@ review blocker, not a style nit.
 |-------|-------------|
 | [Directory Structure](./directory-structure.md) | Layering, where code goes, the transport/domain split |
 | [Auth Guidelines](./auth-guidelines.md) | Actor contract, headerless `createUser`, cookie-cache prohibition, adding a Better Auth plugin (schema → migration → adapter map → client), TOTP 2FA contract and its cookie-bound challenge |
-| [Database Guidelines](./database-guidelines.md) | Drizzle schema, migrations, ownership isolation, credential encryption |
+| [Database Guidelines](./database-guidelines.md) | SQLite engine, Drizzle schema, boot migrations, synchronous `immediate` transactions (the event loop is the lock), PostgreSQL boot import constraint, ownership isolation, credential encryption |
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
 | [Chat Generation Lifecycle](./chat-generation-lifecycle.md) | Single-instance background execution, admission/receipts, connect-time auth, current-state SSE resume, checkpoints and restart recovery |
 | [Chat Message Metadata](./chat-message-metadata.md) | Cross-layer per-message metadata contract: schema, columns, live-stream vs persisted, early `message-metadata` emit, `usage` JSON (token/cache/TPS capture per apiFormat) |
@@ -80,9 +80,10 @@ review blocker, not a style nit.
 | [Chat Search Tools](./chat-search-tools.md) | Search provider settings, searchWeb tool + fallback chain, searchMode wiring, builtin fetch injection, tool-part persistence/replay/rendering |
 | [Provider Configs](./provider-configs.md) | Endpoint `apiFormat` (openai-compatible / claude / google), the api-key requirement rule, per-format provider construction + discovery, `addProviderModel` optional metadata overrides vs catalog fill, `metadataSource` marking, `vendorKey` null-vs-undefined |
 | [Topic Favorites](./topic-favorites.md) | `topics.is_favorite` column, PATCH favorite endpoint, `topics.updatedAt` last-active semantics (which mutations may bump it) |
-| [Topic List Pagination](./topic-list-pagination.md) | Tree carries `topicCount` not topics; favorites endpoint (full) + non-favorites keyset pages (20, µs-precise `updated_at::text` cursor); `NULLS FIRST` index ordering; consumers read topic detail, never the sidebar cache |
-| [Search](./search.md) | Sidebar full-text search: ILIKE literal semantics, text-part-only match scope, selected-version filter, snippet duality, `?m=` navigation anchor |
+| [Topic List Pagination](./topic-list-pagination.md) | Tree carries `topicCount` not topics; favorites endpoint (full) + non-favorites keyset pages (20, epoch-ms `updated_at` + `id` cursor); index sort order matches the query; consumers read topic detail, never the sidebar cache |
+| [Search](./search.md) | Sidebar full-text search: `LIKE … ESCAPE` literal semantics (ASCII-only case folding), text-part-only match scope, selected-version filter, snippet duality, `?m=` navigation anchor |
 | [Demo Mode](./demo-mode.md) | `DEMO_MODE` gating rule (process vs `actor.isGuest`), anonymous guests + IP cap, atomic daily counters, operator inheritance, 7-day guest purge |
+| [Local Mode](./local-mode.md) | Desktop `LOCAL_MODE`: `<userData>/local/pika-chat.db`, whitelisted child env, single-admin provisioning, `parentPort` shutdown, hidden Account/Users UI, Electron `better-sqlite3` build + smoke check |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logs, levels, redaction |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, types, tests, forbidden patterns |
 

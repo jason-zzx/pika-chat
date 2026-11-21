@@ -29,8 +29,8 @@ getting the invariants wrong corrupts what the model sees as context.
 - No version-number column: `versionIndex` is derived from the
   `createdAt, id` ordering inside the group (versions are append-only, so
   the rank is stable).
-- `chat_messages.group_created_at` (timestamptz, NOT NULL, default
-  `now()`): the group's **stable position anchor**, set at group creation
+- `chat_messages.group_created_at` (integer epoch ms, NOT NULL, DB default
+  = current time): the group's **stable position anchor**, set at group creation
   and inherited by every later version (version inserts read it from a
   sibling row inside the deselect+insert transaction). Group display
   position = `groupCreatedAt`, never a version's own `createdAt` —
