@@ -23,6 +23,11 @@ export {
   type ProviderFileReference,
 } from "./file";
 export {
+  POSTGRES_IMPORT_ROW_ID,
+  postgresImport,
+  type PostgresImportSourceInfo,
+} from "./postgres-import";
+export {
   modelMetadataSources,
   providerApiFormats,
   providerConfigs,

@@ -36,6 +36,9 @@ export async function register(): Promise<void> {
     const { closeDb, getDb } = await import("@/server/db/client");
     migrate(getDb(), { migrationsFolder: "./src/server/db/migrations" });
 
+    const { maybeImportPostgres } = await import("@/server/db/import-postgres");
+    await maybeImportPostgres();
+
     if (env.LOCAL_MODE !== undefined) {
       if (!env.LOCAL_ADMIN_PASSWORD) {
         throw new Error(

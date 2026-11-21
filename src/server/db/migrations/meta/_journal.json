@@ -15,6 +15,13 @@
       "when": 1795233882496,
       "tag": "0001_message_file_refs_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795235843915,
+      "tag": "0002_add_postgres_import",
+      "breakpoints": true
     }
   ]
 }
