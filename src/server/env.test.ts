@@ -5,13 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 try {
   process.loadEnvFile(".env");
 } catch {
-  process.env.DATABASE_URL ??= "postgres://pika:pika@localhost:5432/pika_chat";
+  process.env.DATABASE_PATH ??= ":memory:";
   process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
   process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
     "test-credential-encryption-secret-min-32";
 }
+process.env.DATABASE_PATH ??= ":memory:";
 
 const MANAGED = [
+  "DATABASE_URL",
   "FILE_UPLOAD_MAX_MB",
   "S3_DIRECT_ACCESS",
   "S3_BUCKET",
@@ -29,7 +31,6 @@ const MANAGED = [
   "DEMO_GLOBAL_DAILY_MODEL_CALLS",
   "DEMO_MAX_OUTPUT_TOKENS",
   "CLIENT_IP_HEADER",
-  "PGLITE_DATA_DIR",
   "LOCAL_MODE",
   "LOCAL_ADMIN_PASSWORD",
   "NEXT_RUNTIME",
@@ -161,35 +162,30 @@ describe("register boot guard", () => {
     await expect(register()).rejects.toThrow(/CLIENT_IP_HEADER/);
   });
 
-  it("refuses LOCAL_MODE without PGLITE_DATA_DIR", async () => {
-    process.env.NEXT_RUNTIME = "nodejs";
-    process.env.LOCAL_MODE = "1";
-    process.env.LOCAL_ADMIN_PASSWORD = "local-secret-password";
-    vi.resetModules();
-    const { register } = await import("@/instrumentation");
-    await expect(register()).rejects.toThrow(/PGLITE_DATA_DIR/);
-  });
-
   it("refuses LOCAL_MODE without LOCAL_ADMIN_PASSWORD", async () => {
     process.env.NEXT_RUNTIME = "nodejs";
     process.env.LOCAL_MODE = "1";
-    process.env.PGLITE_DATA_DIR = "memory://";
     vi.resetModules();
     const { register } = await import("@/instrumentation");
     await expect(register()).rejects.toThrow(/LOCAL_ADMIN_PASSWORD/);
   });
 
-  it("allows DATABASE_URL to be omitted when PGLITE_DATA_DIR is set", async () => {
-    const savedDbUrl = process.env.DATABASE_URL;
-    delete process.env.DATABASE_URL;
+  it("requires DATABASE_PATH and treats DATABASE_URL as optional", async () => {
+    const savedDbPath = process.env.DATABASE_PATH;
     try {
-      process.env.PGLITE_DATA_DIR = "memory://";
+      delete process.env.DATABASE_PATH;
       const { getEnv } = await loadEnvModule();
-      expect(getEnv().PGLITE_DATA_DIR).toBe("memory://");
-      expect(getEnv().DATABASE_URL).toBeUndefined();
+      expect(() => getEnv()).toThrow(/DATABASE_PATH/);
+
+      process.env.DATABASE_PATH = ":memory:";
+      const { getEnv: getEnvWithPath } = await loadEnvModule();
+      expect(getEnvWithPath().DATABASE_PATH).toBe(":memory:");
+      expect(getEnvWithPath().DATABASE_URL).toBeUndefined();
     } finally {
-      if (savedDbUrl !== undefined) {
-        process.env.DATABASE_URL = savedDbUrl;
+      if (savedDbPath !== undefined) {
+        process.env.DATABASE_PATH = savedDbPath;
+      } else {
+        delete process.env.DATABASE_PATH;
       }
     }
   });
@@ -216,45 +212,6 @@ describe("register boot guard", () => {
     vi.resetModules();
     const { register } = await import("@/instrumentation");
     await expect(register()).resolves.toBeUndefined();
-  });
-});
-
-describe("resolveDatabaseUrl", () => {
-  it("prioritizes DATABASE_URL if set", async () => {
-    const { resolveDatabaseUrl } = await loadEnvModule();
-    expect(
-      resolveDatabaseUrl({
-        DATABASE_URL: "postgres://direct:secret@custom:5432/mydb",
-        POSTGRES_HOST: "other",
-      }),
-    ).toBe("postgres://direct:secret@custom:5432/mydb");
-  });
-
-  it("assembles connection URI from discrete variables with encoding", async () => {
-    const { resolveDatabaseUrl } = await loadEnvModule();
-    expect(
-      resolveDatabaseUrl({
-        POSTGRES_USER: "my/user",
-        POSTGRES_PASSWORD: "p@ss:word#123",
-        POSTGRES_HOST: "pg.internal",
-        POSTGRES_PORT: "5433",
-        POSTGRES_DB: "custom_db",
-      }),
-    ).toBe("postgres://my%2Fuser:p%40ss%3Aword%23123@pg.internal:5433/custom_db");
-  });
-
-  it("uses sensible defaults for omitted discrete variables", async () => {
-    const { resolveDatabaseUrl } = await loadEnvModule();
-    expect(
-      resolveDatabaseUrl({
-        POSTGRES_HOST: "192.168.1.50",
-      }),
-    ).toBe("postgres://postgres@192.168.1.50:5432/pika_chat");
-  });
-
-  it("returns undefined when no database variables exist", async () => {
-    const { resolveDatabaseUrl } = await loadEnvModule();
-    expect(resolveDatabaseUrl({})).toBeUndefined();
   });
 });
 

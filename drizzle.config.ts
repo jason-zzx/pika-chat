@@ -1,15 +1,15 @@
 import { defineConfig } from "drizzle-kit";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required to run drizzle-kit");
+const databasePath = process.env.DATABASE_PATH;
+if (!databasePath) {
+  throw new Error("DATABASE_PATH is required to run drizzle-kit");
 }
 
 export default defineConfig({
   schema: "./src/server/db/schema",
   out: "./src/server/db/migrations",
-  dialect: "postgresql",
+  dialect: "sqlite",
   dbCredentials: {
-    url: databaseUrl,
+    url: databasePath,
   },
 });

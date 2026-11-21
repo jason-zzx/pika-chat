@@ -18,9 +18,9 @@ const booleanFlag = z.preprocess(
 );
 
 const envSchema = z.object({
+  DATABASE_PATH: z.string().min(1),
+  // Optional PostgreSQL connection string used only by the one-time boot importer.
   DATABASE_URL: emptyToUndefined(z.string().min(1).optional()),
-  PGLITE_DATA_DIR: emptyToUndefined(z.string().min(1).optional()),
-  TEST_DATABASE_URL: z.string().min(1).optional(),
   CREDENTIAL_ENCRYPTION_SECRET: z.string().min(32),
   BETTER_AUTH_SECRET: z.string().min(32),
   // Public canonical URL of this instance.
@@ -84,19 +84,11 @@ const envSchema = z.object({
   // Single-value header the reverse proxy overwrites with the peer address
   // (e.g. `x-real-ip`, `cf-connecting-ip`). Required when DEMO_MODE is set.
   CLIENT_IP_HEADER: emptyToUndefined(z.string().trim().min(1).optional()),
-  // Desktop local mode: runs in-process against PGlite with auto-provisioned
+  // Desktop local mode: runs in-process against SQLite with auto-provisioned
   // single admin user and hidden multi-user/account management UI. Requires
-  // PGLITE_DATA_DIR and LOCAL_ADMIN_PASSWORD — enforced in instrumentation.ts.
+  // LOCAL_ADMIN_PASSWORD — enforced in instrumentation.ts.
   LOCAL_MODE: emptyToUndefined(booleanFlag),
   LOCAL_ADMIN_PASSWORD: emptyToUndefined(z.string().min(1).optional()),
-}).superRefine((data, ctx) => {
-  if (!data.PGLITE_DATA_DIR && !data.DATABASE_URL) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["DATABASE_URL"],
-      message: "DATABASE_URL is required unless PGLITE_DATA_DIR is set",
-    });
-  }
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -110,31 +102,6 @@ export function isLocalMode(): boolean {
 }
 
 let cached: Env | undefined;
-
-/**
- * Resolves the database connection string. If `DATABASE_URL` is omitted,
- * assembles one from discrete `POSTGRES_*` environment variables with proper
- * URL encoding for credentials.
- */
-export function resolveDatabaseUrl(
-  raw: Record<string, string | undefined> = process.env,
-): string | undefined {
-  if (raw.DATABASE_URL && raw.DATABASE_URL.length > 0) {
-    return raw.DATABASE_URL;
-  }
-  if (raw.POSTGRES_HOST || raw.POSTGRES_USER || raw.POSTGRES_DB) {
-    const user = encodeURIComponent(raw.POSTGRES_USER || "postgres");
-    const pass =
-      raw.POSTGRES_PASSWORD !== undefined
-        ? `:${encodeURIComponent(raw.POSTGRES_PASSWORD)}`
-        : "";
-    const host = raw.POSTGRES_HOST || "localhost";
-    const port = raw.POSTGRES_PORT || "5432";
-    const db = raw.POSTGRES_DB || "pika_chat";
-    return `postgres://${user}${pass}@${host}:${port}/${db}`;
-  }
-  return undefined;
-}
 
 /**
  * Resolves additional trusted origins from `APP_TRUSTED_ORIGINS`.
@@ -160,11 +127,7 @@ export function getEnv(): Env {
     return cached;
   }
 
-  const dbUrl = resolveDatabaseUrl(process.env);
-  const parsed = envSchema.safeParse({
-    ...process.env,
-    ...(dbUrl ? { DATABASE_URL: dbUrl } : {}),
-  });
+  const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
