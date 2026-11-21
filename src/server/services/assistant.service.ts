@@ -44,7 +44,7 @@ async function selectTree(actor: Actor, assistantId?: string): Promise<Assistant
       systemPrompt: assistants.systemPrompt,
       defaultProviderConfigId: assistants.defaultProviderConfigId,
       defaultModelId: assistants.defaultModelId,
-      topicCount: sql<number>`count(${topics.id})::int`,
+      topicCount: sql<number>`count(${topics.id})`,
     })
     .from(assistants)
     .leftJoin(topics, eq(topics.assistantId, assistants.id))

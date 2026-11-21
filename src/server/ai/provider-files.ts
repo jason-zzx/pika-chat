@@ -47,10 +47,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Runtime guard for a stored record. jsonb content is not validated by the
+ * Runtime guard for a stored record. JSON content is not validated by the
  * driver, and a malformed entry must read as "no reference" rather than crash
  * the send path. Shared with the provider-delete retry queue, which reads the
- * same jsonb and must not trust it either.
+ * same JSON column and must not trust it either.
  */
 export function parseProviderFileReference(
   value: unknown,
@@ -217,11 +217,12 @@ async function persistReference(
   configId: string,
   record: ProviderFileReference,
 ): Promise<void> {
+  const jsonPath = `$."${configId.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
   try {
     await getDb()
       .update(files)
       .set({
-        providerReferences: sql`${files.providerReferences} || ${JSON.stringify({ [configId]: record })}::jsonb`,
+        providerReferences: sql`json_set(${files.providerReferences}, ${jsonPath}, json(${JSON.stringify(record)}))`,
       })
       .where(eq(files.id, fileId));
   } catch (error) {

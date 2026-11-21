@@ -21,5 +21,10 @@ function walkCauseChain(
 }
 
 export function isUniqueViolation(error: unknown): boolean {
-  return walkCauseChain(error, (node) => node.code === "23505");
+  return walkCauseChain(
+    error,
+    (node) =>
+      node.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+      node.code === "SQLITE_CONSTRAINT_PRIMARYKEY",
+  );
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import {
   type MessageHit,
@@ -21,10 +21,9 @@ import { uiPartsFromJson } from "@/server/services/message.service";
 
 const RESULT_LIMIT = 20;
 
-/** ILIKE treats `%` and `_` as wildcards and `\` as the default escape
- * character (Postgres `standard_conforming_strings=on`), so all three must
- * be escaped for a literal match. */
-function escapeIlike(query: string): string {
+/** LIKE treats `%` and `_` as wildcards, so `%`, `_`, and `\` are escaped
+ * for literal matching with `ESCAPE '\'`. */
+function escapeLike(query: string): string {
   return query.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
@@ -35,7 +34,7 @@ export async function searchForActor(
   actor: Actor,
   query: string,
 ): Promise<SearchResponse> {
-  const pattern = `%${escapeIlike(query)}%`;
+  const pattern = `%${escapeLike(query)}%`;
   const db = getDb();
 
   const topicHits = await db
@@ -43,7 +42,10 @@ export async function searchForActor(
     .from(topics)
     .innerJoin(assistants, eq(assistants.id, topics.assistantId))
     .where(
-      and(eq(assistants.ownerId, actor.userId), ilike(topics.title, pattern)),
+      and(
+        eq(assistants.ownerId, actor.userId),
+        sql`${topics.title} like ${pattern} escape '\\'`,
+      ),
     )
     .orderBy(desc(topics.updatedAt))
     .limit(RESULT_LIMIT);
@@ -69,8 +71,9 @@ export async function searchForActor(
         // would land on different content than the snippet promised.
         eq(chatMessages.isSelected, true),
         sql`exists (
-          select 1 from jsonb_array_elements(${chatMessages.parts}) p
-          where p->>'type' = 'text' and p->>'text' ilike ${pattern}
+          select 1 from json_each(${chatMessages.parts}) p
+          where (case when p.type = 'object' then p.value->>'type' end) = 'text'
+            and (case when p.type = 'object' and json_type(p.value, '$.text') = 'text' then p.value->>'text' end) like ${pattern} escape '\\'
         )`,
       ),
     )

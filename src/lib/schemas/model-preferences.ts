@@ -8,7 +8,7 @@ export const modelPairSchema = z.object({
 export type ModelPair = z.infer<typeof modelPairSchema>;
 
 /**
- * Per-user default model preferences, stored as one jsonb column on `users`.
+ * Per-user default model preferences, stored as one JSON column on `users`.
  * Each slot is independently settable; `null` clears a slot. Read back with
  * `parseModelPreferences` so dirty data degrades to empty preferences.
  */
@@ -31,7 +31,7 @@ export function pairOrNull(input: {
     : null;
 }
 
-/** Dirty jsonb (manually edited, or a future-removed shape) → empty prefs. */
+/** Dirty JSON (manually edited, or a future-removed shape) → empty prefs. */
 export function parseModelPreferences(raw: unknown): ModelPreferences {
   const parsed = modelPreferencesSchema.safeParse(raw ?? {});
   return parsed.success ? parsed.data : {};

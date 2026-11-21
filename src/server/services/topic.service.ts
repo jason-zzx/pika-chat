@@ -64,9 +64,9 @@ export async function createTopicForChat(
 
 const TOPIC_PAGE_SIZE = 20;
 
-/** `cursor` is `[updated_at::text, id]` of the last row of the previous page.
- * `updated_at` travels as text because Postgres stores microseconds and a JS
- * Date would truncate to milliseconds, skipping rows that share one. */
+/** `cursor` is `[updatedAtMs, id]` of the last row of the previous page.
+ * SQLite stores timestamps in milliseconds, so epoch ms is exact; ties break
+ * by `id`. */
 export async function listTopicPage(
   assistantId: string,
   cursor: [string, string] | null,
@@ -74,14 +74,14 @@ export async function listTopicPage(
 ): Promise<{ topics: Topic[]; nextCursor: [string, string] | null }> {
   await requireOwnedAssistant(assistantId, actor);
   const rows = await getDb()
-    .select({ ...topicColumns, updatedAtText: sql<string>`${topics.updatedAt}::text` })
+    .select(topicColumns)
     .from(topics)
     .where(
       and(
         eq(topics.assistantId, assistantId),
         eq(topics.isFavorite, false),
         cursor
-          ? sql`(${topics.updatedAt}, ${topics.id}) < (${cursor[0]}::timestamptz, ${cursor[1]})`
+          ? sql`(${topics.updatedAt}, ${topics.id}) < (${Number(cursor[0])}, ${cursor[1]})`
           : undefined,
       ),
     )
@@ -90,14 +90,8 @@ export async function listTopicPage(
   const page = rows.slice(0, TOPIC_PAGE_SIZE);
   const last = rows.length > TOPIC_PAGE_SIZE ? page[page.length - 1] : undefined;
   return {
-    topics: page.map((row) => ({
-      id: row.id,
-      title: row.title,
-      isFavorite: row.isFavorite,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    })),
-    nextCursor: last ? [last.updatedAtText, last.id] : null,
+    topics: page,
+    nextCursor: last ? [String(last.updatedAt.getTime()), last.id] : null,
   };
 }
 

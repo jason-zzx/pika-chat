@@ -19,13 +19,12 @@ import { AppError } from "@/server/errors";
  * Total bytes the actor's attachments occupy, referenced by a message or not —
  * "how much storage do I use" from the user's point of view. Pending direct
  * uploads carry `sizeBytes = 0` until completed, so they naturally contribute
- * nothing. `SUM` of an integer column is `bigint`; postgres-js has no int8
- * parser, so the value arrives as a string and is narrowed here.
+ * nothing.
  */
 export async function usageBytes(userId: string): Promise<number> {
   const rows = await getDb()
     .select({
-      total: sql<string>`coalesce(sum(${files.sizeBytes}), 0)::bigint`,
+      total: sql<number>`coalesce(sum(${files.sizeBytes}), 0)`,
     })
     .from(files)
     .where(eq(files.userId, userId));

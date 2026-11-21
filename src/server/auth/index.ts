@@ -116,7 +116,7 @@ export function createAuthInstance() {
     baseURL: appUrl,
     secret: currentEnv.BETTER_AUTH_SECRET,
     database: drizzleAdapter(getDb(), {
-      provider: "pg",
+      provider: "sqlite",
       schema: {
         user: users,
         session: sessions,

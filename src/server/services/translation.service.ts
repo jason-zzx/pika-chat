@@ -39,7 +39,7 @@ export function buildTranslateInstructions(
 
 /**
  * Translates one message version into `targetLang` with the caller's current
- * chat model and persists the result on the row's `translations` jsonb.
+ * chat model and persists the result on the row's `translations` JSON map.
  * A cached translation for the same language is returned without calling the
  * model again (PRD R4).
  */
@@ -131,12 +131,13 @@ export async function translateMessage(
     throw new AppError("PROVIDER_ERROR", 502, "provider.unexpectedResponse");
   }
 
-  // Merge only the target-language key (jsonb `||` is per-key last-write),
-  // so concurrent translations of other languages on the row survive.
+  // Merge only the target-language key, so concurrent translations of other
+  // languages on the row survive.
+  const jsonPath = `$."${input.targetLang}"`;
   await db
     .update(chatMessages)
     .set({
-      translations: sql`coalesce(${chatMessages.translations}, '{}'::jsonb) || ${JSON.stringify({ [input.targetLang]: translation })}::jsonb`,
+      translations: sql`json_set(coalesce(${chatMessages.translations}, '{}'), ${jsonPath}, ${translation})`,
     })
     .where(eq(chatMessages.id, row.id));
 

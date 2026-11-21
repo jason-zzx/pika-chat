@@ -117,7 +117,7 @@ export function fileUrl(fileId: string): string {
 }
 
 /**
- * Extracts attachment ids from persisted message parts. Reads raw jsonb rather
+ * Extracts attachment ids from persisted message parts. Reads raw JSON rather
  * than the parsed schema so a file part written by a newer deploy is still
  * reclaimable after a rollback.
  */
@@ -652,14 +652,9 @@ function referencedByMessageSql(): SQL<boolean> {
   )`;
 }
 
-/** Basename of a stored filename, mirroring `basename()` in media-types.ts. */
-const FILENAME_BASENAME_PATTERN = "^.*[/\\\\]";
-/** Last dotted segment, applied only once the basename has a non-leading dot. */
-const FILENAME_EXTENSION_PATTERN = "^.*\\.";
-
 /** Lowercased, path-less filename of the current row. */
 function basenameSql(): SQL<string> {
-  return sql<string>`lower(regexp_replace(${files.filename}, ${FILENAME_BASENAME_PATTERN}, ''))`;
+  return sql<string>`lower(file_basename(${files.filename}))`;
 }
 
 /**
@@ -668,12 +663,7 @@ function basenameSql(): SQL<string> {
  * name (a dotfile like `.gitignore` has no extension).
  */
 function extensionSql(): SQL<string> {
-  const base = basenameSql();
-  return sql<string>`case
-    when strpos(substr(${base}, 2), '.') > 0
-      then regexp_replace(${base}, ${FILENAME_EXTENSION_PATTERN}, '')
-    else ''
-  end`;
+  return sql<string>`file_extension(${files.filename})`;
 }
 
 /**
@@ -765,7 +755,7 @@ export async function listFilesForActor(
     // A separate count, not a window over the page: an offset past the end
     // would otherwise report 0 instead of the real filtered total.
     getDb()
-      .select({ total: sql<string>`count(*)::int` })
+      .select({ total: sql<number>`count(*)` })
       .from(files)
       .where(where),
     // Usage answers "how much storage do I use", so the category selection

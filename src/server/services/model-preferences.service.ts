@@ -32,7 +32,7 @@ function pairIsAvailable(
   );
 }
 
-/** Reads one user's model preferences; dirty jsonb degrades to empty prefs. */
+/** Reads one user's model preferences; dirty JSON degrades to empty prefs. */
 export async function getModelPreferences(
   userId: string,
 ): Promise<ModelPreferences> {
