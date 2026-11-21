@@ -212,7 +212,7 @@ describe("search.service", () => {
     expect(own.messages).toHaveLength(1);
   });
 
-  it("matches % and _ literally, not as wildcards", async () => {
+  it("matches %, _ and \\ literally, not as wildcards or escapes", async () => {
     const { userActor } = await seedActors();
     const assistant = await createAssistant(
       { name: "Owner", icon: "✨" },
@@ -221,7 +221,12 @@ describe("search.service", () => {
     const topic = await createTopicForChat(
       { assistantId: assistant.id },
       userActor,
-      DEFAULT_TITLE,
+      "Plan 100% ready",
+    );
+    await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+      "Plan 100x ready",
     );
     await insertMessage({
       topicId: topic.id,
@@ -241,9 +246,29 @@ describe("search.service", () => {
     const percent = await searchForActor(userActor, "100%");
     expect(percent.messages).toHaveLength(1);
     expect(percent.messages[0]?.snippet).toContain("100%");
+    expect(percent.topics.map((hit) => hit.title)).toEqual(["Plan 100% ready"]);
 
     const underscore = await searchForActor(userActor, "100_");
     expect(underscore.messages).toHaveLength(0);
+    expect(underscore.topics).toHaveLength(0);
+
+    // An unescaped backslash would escape the next character: `C:\t` would
+    // then match the literal `C:t` instead of the path.
+    await insertMessage({
+      topicId: topic.id,
+      role: "user",
+      parts: textParts("Saved under C:\\temp"),
+      createdAt: new Date("2026-01-03T00:00:00Z"),
+    });
+    await insertMessage({
+      topicId: topic.id,
+      role: "user",
+      parts: textParts("Saved under C:temp"),
+      createdAt: new Date("2026-01-04T00:00:00Z"),
+    });
+    const backslash = await searchForActor(userActor, "C:\\t");
+    expect(backslash.messages).toHaveLength(1);
+    expect(backslash.messages[0]?.snippet).toContain("C:\\temp");
   });
 
   it("builds an asymmetric snippet window (R7c): ~16 chars head, ~120 total", async () => {

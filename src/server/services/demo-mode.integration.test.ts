@@ -408,7 +408,7 @@ describe("demo mode end-to-end integration", () => {
         requestHash: "h1",
       }),
       guestActor,
-      { clock: async () => new Date(0x019a00000000) },
+      { clock: () => new Date(0x019a00000000) },
     );
     expect(turn1.duplicate).toBe(false);
 

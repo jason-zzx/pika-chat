@@ -100,7 +100,10 @@ describe("generation admission", () => {
     await admitPrepared(preparedTurn({ assistantId, topicId, userMessageId: "u-a1" }), actor);
     await expect(
       admitPrepared(preparedTurn({ assistantId, topicId, userMessageId: "u-a2" }), actor),
-    ).rejects.toMatchObject({ status: 409 });
+    ).rejects.toMatchObject({ status: 409, messageKey: "generation.topicBusy" });
+    expect(
+      await db.select().from(chatMessages).where(eq(chatMessages.topicId, topicId)),
+    ).toHaveLength(2);
     // Deleting, switching versions or manually compressing would change the
     // context the active turn was planned against.
     await expect(
@@ -482,7 +485,7 @@ describe("generation lifecycle", () => {
     expect(await purgeTerminalGenerations()).toBe(0);
 
     const later = new Date(Date.now() + REQUEST_KEY_TTL_MS + 60_000);
-    const purged = await purgeTerminalGenerations(async () => later);
+    const purged = await purgeTerminalGenerations(() => later);
     expect(purged).toBe(1);
     expect(await generationRow(generation.id)).toBeUndefined();
   });
@@ -551,10 +554,9 @@ describe("generation admission ordering", () => {
 
   it("uses the injected clock for the key window, not the process clock", async () => {
     const { actor, assistantId } = await seedChat(unreachableProvider);
-    // The app process thinks it is ~29 days behind the database clock: this id
-    // looks "far in the future" to it, while the database sees a fresh key.
-    const ahead = async () =>
-      new Date(Date.now() + 29 * 24 * 60 * 60 * 1000);
+    // The process clock is ~29 days behind the injected one: this id looks
+    // "far in the future" to it, while the injected clock sees a fresh key.
+    const ahead = () => new Date(Date.now() + 29 * 24 * 60 * 60 * 1000);
     const keyMs = Date.now() + 29 * 24 * 60 * 60 * 1000 - 2 * 60 * 60 * 1000;
     const requestId = uuidv7({ msecs: keyMs });
 
@@ -564,12 +566,11 @@ describe("generation admission ordering", () => {
         { requestId, requestHash: "hash-send" },
         async () => preparedTurn({ assistantId }),
         actor,
-        { clock: async () => new Date() },
+        { clock: () => new Date() },
       ),
     ).rejects.toMatchObject({ messageKey: "generation.requestClockAhead" });
 
-    // …the clock it is given decides, and production always passes the
-    // database clock.
+    // …the clock it is given decides.
     const admitted = await admitTurn(
       { requestId, requestHash: "hash-send" },
       async () => preparedTurn({ assistantId }),

@@ -1,17 +1,9 @@
+import { inspect } from "node:util";
+
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-try {
-  process.loadEnvFile(".env");
-} catch {
-  // Fall back to test defaults below when no .env is present.
-}
-process.env.DATABASE_PATH ??= ":memory:";
-process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
-process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
-  "test-credential-encryption-secret-min-32";
 
 import {
   importFromPostgres,
@@ -19,52 +11,61 @@ import {
   PG_IMPORT_TABLES,
   type OpenPostgresSource,
   type PostgresImportSource,
-  sanitizeSourceInfo,
 } from "./import-postgres";
 import { APP_SETTINGS_ROW_ID } from "./schema/app-settings";
 import { POSTGRES_IMPORT_ROW_ID } from "./schema/postgres-import";
 
-function openMigratedMemorySqlite(): Database.Database {
+// Port 1 refuses connections immediately, so the real postgres.js client
+// fails fast without a PostgreSQL server.
+const UNREACHABLE_URL = "postgres://pika:super-secret@127.0.0.1:1/pika_chat";
+
+type TableRows = Record<string, Record<string, unknown>[]>;
+
+const openDbs: Database.Database[] = [];
+
+function freshSqlite(): Database.Database {
   const sqlite = new Database(":memory:");
   sqlite.pragma("foreign_keys = ON");
   migrate(drizzle(sqlite), { migrationsFolder: "./src/server/db/migrations" });
+  openDbs.push(sqlite);
   return sqlite;
 }
 
-function sqliteColumnsMap(sqlite: Database.Database): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const table of PG_IMPORT_TABLES) {
-    const rows = sqlite
-      .prepare(`pragma table_info("${table}")`)
-      .all() as Array<{ name: string }>;
-    out[table] = rows.map((row) => row.name);
-  }
-  return out;
+// What `information_schema.columns` reports for a PostgreSQL database on the
+// final schema: the same column set as the migrated SQLite tables.
+function finalSchemaColumns(sqlite: Database.Database): Record<string, string[]> {
+  return Object.fromEntries(
+    PG_IMPORT_TABLES.map((table) => [
+      table,
+      sqlite
+        .prepare<[], string>(`select name from pragma_table_info('${table}')`)
+        .pluck()
+        .all(),
+    ]),
+  );
 }
 
-function createFakeOpenSource(
-  tableData: Partial<Record<(typeof PG_IMPORT_TABLES)[number], Record<string, unknown>[]>>,
-  options?: {
-    columnsOverride?: Record<string, string[]>;
-    onStream?: (table: string) => void;
-  },
-): { openSource: OpenPostgresSource; calls: number } {
+function fakeSource(
+  columns: Record<string, string[]>,
+  rows: TableRows,
+): { openSource: OpenPostgresSource; opened: number; batchSizes: number[] } {
   const tracker = {
-    calls: 0,
+    opened: 0,
+    batchSizes: [] as number[],
     openSource: (async (_url, fn) => {
-      tracker.calls += 1;
+      tracker.opened += 1;
       const source: PostgresImportSource = {
         async listColumns() {
-          return options?.columnsOverride ?? {};
+          return columns;
         },
         async countRows(table) {
-          return (tableData[table] ?? []).length;
+          return (rows[table] ?? []).length;
         },
         async streamRows(table, batchSize, onBatch) {
-          options?.onStream?.(table);
-          const rows = tableData[table] ?? [];
-          for (let offset = 0; offset < rows.length; offset += batchSize) {
-            onBatch(rows.slice(offset, offset + batchSize));
+          tracker.batchSizes.push(batchSize);
+          const tableRows = rows[table] ?? [];
+          for (let offset = 0; offset < tableRows.length; offset += batchSize) {
+            onBatch(tableRows.slice(offset, offset + batchSize));
           }
         },
       };
@@ -74,72 +75,147 @@ function createFakeOpenSource(
   return tracker;
 }
 
-describe("import-postgres", () => {
-  const openDbs: Database.Database[] = [];
-  const originalDatabaseUrl = process.env.DATABASE_URL;
+function count(sqlite: Database.Database, table: string): number | undefined {
+  return sqlite
+    .prepare<[], number>(`select count(*) from "${table}"`)
+    .pluck()
+    .get();
+}
 
-  afterEach(() => {
-    for (const sqlite of openDbs.splice(0)) {
-      sqlite.close();
-    }
-    if (originalDatabaseUrl === undefined) {
-      delete process.env.DATABASE_URL;
-    } else {
-      process.env.DATABASE_URL = originalDatabaseUrl;
-    }
-    vi.resetModules();
-  });
+function foreignKeysOn(sqlite: Database.Database): unknown {
+  return sqlite.pragma("foreign_keys", { simple: true });
+}
 
-  function freshSqlite(): Database.Database {
-    const sqlite = openMigratedMemorySqlite();
-    openDbs.push(sqlite);
-    return sqlite;
+const createdAt = new Date("2026-06-01T10:00:00.123Z");
+
+const sourceAppSettings = {
+  id: APP_SETTINGS_ROW_ID,
+  allow_registration: true,
+  file_storage_quota_bytes: "5368709120",
+  created_at: createdAt,
+  updated_at: createdAt,
+};
+
+const sourceUser = {
+  id: "u1",
+  name: "Admin",
+  email: "admin@test",
+  email_verified: true,
+  two_factor_enabled: false,
+  image: null,
+  username: "admin",
+  display_username: "Admin",
+  role: "super_admin",
+  is_anonymous: false,
+  file_quota_bytes: "1073741824",
+  theme_mode: "dark",
+  theme_preset: "ocean",
+  model_preferences: { chat: { providerConfigId: "p1", modelId: "gpt-4o" } },
+  banned: false,
+  ban_reason: null,
+  ban_expires: null,
+  created_at: createdAt,
+  updated_at: createdAt,
+};
+
+afterEach(() => {
+  for (const sqlite of openDbs.splice(0)) {
+    sqlite.close();
   }
+  delete process.env.DATABASE_URL;
+  vi.resetModules();
+});
 
-  it("sanitizes PostgreSQL URLs without leaking credentials or query parameters", () => {
+describe("value mapping", () => {
+  it("maps postgres.js values onto the SQLite column storage form", () => {
+    expect(mapPgValueToSqlite("boolean", true)).toBe(1);
+    expect(mapPgValueToSqlite("boolean", false)).toBe(0);
+    expect(mapPgValueToSqlite("date", createdAt)).toBe(createdAt.getTime());
+    // PostgreSQL `date` is a UTC-midnight Date; the SQLite column is text.
     expect(
-      sanitizeSourceInfo("postgres://pika:super-secret@pg.internal:5432/pika_chat?sslmode=require"),
-    ).toEqual({ host: "pg.internal:5432", database: "pika_chat" });
-    expect(sanitizeSourceInfo("not-a-url")).toEqual({
-      host: null,
-      database: null,
-    });
-  });
-
-  it("converts PostgreSQL column values to SQLite representations cleanly", () => {
-    expect(mapPgValueToSqlite("boolean", true, "b")).toBe(1);
-    expect(mapPgValueToSqlite("boolean", false, "b")).toBe(0);
-    expect(mapPgValueToSqlite("boolean", null, "b")).toBeNull();
-
-    const ts = new Date("2026-01-15T12:30:00.123Z");
-    expect(mapPgValueToSqlite("date", ts, "ts")).toBe(ts.getTime());
-    expect(mapPgValueToSqlite("number", "5368709120", "quota")).toBe(5368709120);
-    expect(mapPgValueToSqlite("number", BigInt(1024), "quota")).toBe(1024);
-
-    expect(
-      mapPgValueToSqlite("string", new Date("2026-11-13T00:00:00.000Z"), "day"),
+      mapPgValueToSqlite("string", new Date("2026-11-13T00:00:00.000Z")),
     ).toBe("2026-11-13");
-    expect(mapPgValueToSqlite("json", { chat: { providerConfigId: "p1", modelId: "m1" } }, "prefs")).toBe(
-      '{"chat":{"providerConfigId":"p1","modelId":"m1"}}',
-    );
-    expect(mapPgValueToSqlite("json", "plain-json-string", "j")).toBe(
-      '"plain-json-string"',
-    );
-    expect(() => mapPgValueToSqlite("number", "not-an-int", "n")).toThrow();
+    // int8 arrives as a string.
+    expect(mapPgValueToSqlite("number", "5368709120")).toBe(5368709120);
+    expect(mapPgValueToSqlite("number", 42)).toBe(42);
+    expect(mapPgValueToSqlite("string", "text")).toBe("text");
+    for (const dataType of ["boolean", "date", "json", "number", "string"]) {
+      expect(mapPgValueToSqlite(dataType, null)).toBeNull();
+    }
   });
 
-  it("skips cleanly on boot when DATABASE_URL is unset", async () => {
-    delete process.env.DATABASE_URL;
-    vi.resetModules();
-    const { maybeImportPostgres: freshMaybeImport } = await import("./import-postgres");
+  it("stringifies JSON by column type, so jsonb scalars stay valid JSON", () => {
+    expect(mapPgValueToSqlite("json", { a: { b: [1] } })).toBe('{"a":{"b":[1]}}');
+    expect(mapPgValueToSqlite("json", ["text", "image"])).toBe('["text","image"]');
+    expect(mapPgValueToSqlite("json", "plain")).toBe('"plain"');
+    expect(mapPgValueToSqlite("json", 7)).toBe("7");
+    expect(mapPgValueToSqlite("json", false)).toBe("false");
+  });
+});
 
-    expect(await freshMaybeImport()).toEqual({
+describe("table coverage", () => {
+  it("copies every migrated table except the SQLite-only refs and marker", () => {
+    const sqlite = freshSqlite();
+    const tables = sqlite
+      .prepare<[], string>(
+        "select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != '__drizzle_migrations'",
+      )
+      .pluck()
+      .all();
+    expect([...PG_IMPORT_TABLES].sort()).toEqual(
+      tables.filter((name) => name !== "message_file_refs" && name !== "postgres_import").sort(),
+    );
+  });
+});
+
+describe("boot decision", () => {
+  it("does nothing on a fresh install without DATABASE_URL", async () => {
+    const { maybeImportPostgres } = await import("./import-postgres");
+    expect(await maybeImportPostgres()).toEqual({
       status: "skipped",
       reason: "noDatabaseUrl",
     });
   });
 
-  it("refuses to import into a non-empty SQLite target", async () => {
+  it("ignores DATABASE_URL once the marker exists, without connecting", async () => {
+    process.env.DATABASE_URL = UNREACHABLE_URL;
+    const { getDb, getSqliteClient } = await import("./client");
+    migrate(getDb(), { migrationsFolder: "./src/server/db/migrations" });
+    const sqlite = getSqliteClient();
+    sqlite
+      .prepare("insert into postgres_import (id, source_info, row_counts) values (?, '{}', '{}')")
+      .run(POSTGRES_IMPORT_ROW_ID);
+    try {
+      const { maybeImportPostgres } = await import("./import-postgres");
+      expect(await maybeImportPostgres()).toEqual({
+        status: "skipped",
+        reason: "alreadyImported",
+      });
+    } finally {
+      sqlite.prepare("delete from postgres_import").run();
+    }
+  });
+
+  it("fails with a readable error when PostgreSQL is unreachable and leaves SQLite untouched", async () => {
+    const sqlite = freshSqlite();
+    const error: unknown = await importFromPostgres(UNREACHABLE_URL, {
+      sqlite,
+    }).catch((reason: unknown) => reason);
+    expect(error).toMatchObject({
+      message: expect.stringMatching(
+        /Keep PostgreSQL running with its existing connection settings for the first boot/,
+      ),
+      cause: { code: "ECONNREFUSED" },
+    });
+    // Boot failures are printed with their cause chain.
+    expect(inspect(error)).not.toContain("super-secret");
+    expect(count(sqlite, "postgres_import")).toBe(0);
+    expect(foreignKeysOn(sqlite)).toBe(1);
+  });
+});
+
+describe("refusals", () => {
+  it("refuses a non-empty target before opening PostgreSQL", async () => {
     const sqlite = freshSqlite();
     const now = Date.now();
     sqlite
@@ -147,444 +223,211 @@ describe("import-postgres", () => {
         "insert into users (id, name, email, username, role, email_verified, banned, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run("u1", "Alice", "alice@test", "alice", "super_admin", 1, 0, now, now);
-
-    const tracker = createFakeOpenSource({}, { columnsOverride: sqliteColumnsMap(sqlite) });
+    const source = fakeSource(finalSchemaColumns(sqlite), {});
     await expect(
-      importFromPostgres("postgres://u:p@localhost:5432/pika", {
-        sqlite,
-        openSource: tracker.openSource,
-      }),
-    ).rejects.toThrow(/target SQLite table "users" is not empty/i);
-    expect(tracker.calls).toBe(0);
-
-    // Non-default app_settings row is also rejected.
-    const sqlite2 = freshSqlite();
-    sqlite2
-      .prepare(
-        "insert into app_settings (id, allow_registration, created_at, updated_at) values (?, ?, ?, ?)",
-      )
-      .run("custom-row", 0, now, now);
-    await expect(
-      importFromPostgres("postgres://u:p@localhost:5432/pika", {
-        sqlite: sqlite2,
-        openSource: tracker.openSource,
-      }),
-    ).rejects.toThrow(/target SQLite table "app_settings" is not empty/i);
+      importFromPostgres(UNREACHABLE_URL, { sqlite, openSource: source.openSource }),
+    ).rejects.toThrow(/SQLite table "users" already holds data/);
+    expect(source.opened).toBe(0);
   });
 
-  it("refuses when PostgreSQL schema columns do not match SQLite", async () => {
+  it("refuses a PostgreSQL schema that is not on the final migration", async () => {
     const sqlite = freshSqlite();
-    const cols = sqliteColumnsMap(sqlite);
-    cols.topics = (cols.topics ?? []).filter((c) => c !== "summary_text");
-    cols.topics.push("legacy_col");
-
-    const tracker = createFakeOpenSource({}, { columnsOverride: cols });
+    const changed = finalSchemaColumns(sqlite);
+    changed.topics = (changed.topics ?? [])
+      .filter((name) => name !== "summary_text")
+      .concat("legacy_col");
     await expect(
-      importFromPostgres("postgres://u:p@localhost:5432/pika", {
+      importFromPostgres(UNREACHABLE_URL, {
         sqlite,
-        openSource: tracker.openSource,
+        openSource: fakeSource(changed, {}).openSource,
       }),
-    ).rejects.toThrow(/Schema mismatch for table "topics"/i);
-  });
+    ).rejects.toThrow(
+      /"topics" is not on the expected schema \(missing columns: \[summary_text\]; unexpected columns: \[legacy_col\]\)\. Upgrade to v0\.4\.2 first/,
+    );
 
-  it("imports all tables in 1000-row batches, triggers message_file_refs, writes marker, and skips re-runs", async () => {
+    const olderRelease = Object.fromEntries(
+      Object.entries(finalSchemaColumns(sqlite)).filter(
+        ([table]) => table !== "chat_generations",
+      ),
+    );
+    await expect(
+      importFromPostgres(UNREACHABLE_URL, {
+        sqlite,
+        openSource: fakeSource(olderRelease, {}).openSource,
+      }),
+    ).rejects.toThrow(/"chat_generations" is not on the expected schema/);
+    expect(count(sqlite, "postgres_import")).toBe(0);
+    expect(foreignKeysOn(sqlite)).toBe(1);
+  });
+});
+
+describe("import", () => {
+  it("copies rows in 1,000-row batches, fills message_file_refs, and writes the marker", async () => {
     const sqlite = freshSqlite();
-    const cols = sqliteColumnsMap(sqlite);
-    const createdAt = new Date("2026-06-01T10:00:00.123Z");
     const counters = Array.from({ length: 1_250 }, (_, index) => ({
       subject: `guest-${index}`,
       day: new Date("2026-11-13T00:00:00.000Z"),
       kind: "model",
       count: index + 1,
     }));
-
-    const tracker = createFakeOpenSource(
-      {
-        app_settings: [
-          {
-            id: APP_SETTINGS_ROW_ID,
-            allow_registration: true,
-            file_storage_quota_bytes: "5368709120",
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        users: [
-          {
-            id: "u1",
-            name: "Admin",
-            email: "admin@test",
-            email_verified: true,
-            two_factor_enabled: false,
-            image: null,
-            username: "admin",
-            display_username: "Admin",
-            role: "super_admin",
-            is_anonymous: false,
-            file_quota_bytes: "1073741824",
-            theme_mode: "dark",
-            theme_preset: "ocean",
-            model_preferences: { chat: { providerConfigId: "p1", modelId: "gpt-4o" } },
-            banned: false,
-            ban_reason: null,
-            ban_expires: null,
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        sessions: [
-          {
-            id: "s1",
-            expires_at: new Date("2026-07-01T00:00:00.000Z"),
-            token: "tok-1",
-            created_at: createdAt,
-            updated_at: createdAt,
-            ip_address: "127.0.0.1",
-            user_agent: "vitest",
-            user_id: "u1",
-            impersonated_by: null,
-          },
-        ],
-        accounts: [
-          {
-            id: "acc1",
-            issuer: "credential",
-            account_id: "u1",
-            provider_id: "credential",
-            user_id: "u1",
-            access_token: null,
-            refresh_token: null,
-            id_token: null,
-            access_token_expires_at: null,
-            refresh_token_expires_at: null,
-            scope: null,
-            password: "hash",
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        verifications: [
-          {
-            id: "v1",
-            identifier: "admin@test",
-            value: "code",
-            expires_at: createdAt,
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        two_factors: [
-          {
-            id: "tf1",
-            secret: "sec",
-            backup_codes: "codes",
-            user_id: "u1",
-            verified: true,
-            failed_verification_count: 0,
-            locked_until: null,
-          },
-        ],
-        provider_configs: [
-          {
-            id: "p1",
-            owner_id: "u1",
-            name: "OpenAI",
-            base_url: "https://api.openai.com/v1",
-            api_format: "openai-compatible",
-            encrypted_api_key: "enc",
-            api_key_last_four: "1234",
-            visibility: "shared",
-            enabled: true,
-            files_api_unsupported_at: null,
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        provider_models: [
-          {
-            id: "pm1",
-            provider_config_id: "p1",
-            model_id: "gpt-4o",
-            context_tokens: 128_000,
-            output_tokens: 4_096,
-            input_modalities: ["text", "image"],
-            output_modalities: ["text"],
-            reasoning: false,
-            reasoning_options: [],
-            vendor_key: "openai",
-            metadata_source: "manual",
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        assistants: [
-          {
-            id: "agt_1",
-            owner_id: "u1",
-            name: "Default",
-            icon: "✨",
-            system_prompt: null,
-            default_provider_config_id: "p1",
-            default_model_id: "gpt-4o",
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        topics: [
-          {
-            id: "tpc_1",
-            assistant_id: "agt_1",
-            title: "Imported Topic",
-            is_favorite: true,
-            summary_text: null,
-            summary_up_to_message_id: null,
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        chat_messages: [
-          {
-            id: "msg_1",
-            topic_id: "tpc_1",
-            role: "user",
-            parts: [
-              { type: "file", url: "/api/files/f1", mediaType: "image/png", filename: "a.png" },
-              { type: "text", text: "See attached" },
-            ],
-            outcome: null,
-            error_message: null,
-            provider_config_id: null,
-            model_id: null,
-            reasoning_ms: null,
-            usage: null,
-            finish_reason: null,
-            translations: { "zh-CN": { text: "见附件" } },
-            group_id: "msg_1",
-            is_selected: true,
-            created_at: createdAt,
-            group_created_at: createdAt,
-          },
-        ],
-        chat_generations: [
-          {
-            id: "gen_1",
-            user_id: "u1",
-            request_id: "req_1",
-            request_hash: "hash",
-            request_expires_at: createdAt,
-            kind: "send",
-            status: "completed",
-            topic_id: "tpc_1",
-            assistant_message_id: "msg_1",
-            target_deleted_at: null,
-            input: { topicId: "tpc_1" },
-            error_message: null,
-            created_at: createdAt,
-            updated_at: createdAt,
-            started_at: createdAt,
-            finished_at: createdAt,
-          },
-        ],
-        files: [
-          {
-            id: "f1",
-            user_id: "u1",
-            filename: "a.png",
-            media_type: "image/png",
-            size_bytes: "1234",
-            storage_key: "u1/f1.png",
-            extracted_text: null,
-            extraction_status: "none",
-            extraction_truncated: false,
-            provider_references: { p1: { reference: { google: "files/1" } } },
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        provider_file_delete_retries: [
-          {
-            id: "r1",
-            provider_config_id: "p1",
-            provider_file_id: "files/old",
-            attempts: 1,
-            next_retry_at: createdAt,
-            last_status: 503,
-            created_at: createdAt,
-          },
-        ],
-        search_provider_settings: [
-          {
-            id: "sp1",
-            user_id: "u1",
-            provider: "brave",
-            encrypted_api_key: "enc",
-            api_key_last_four: "9999",
-            base_url: null,
-            position: 0,
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        demo_usage_counters: counters,
-      },
-      { columnsOverride: cols },
-    );
-
-    const first = await importFromPostgres("postgres://pika:secret@pg-host:5432/pika_prod", {
-      sqlite,
-      openSource: tracker.openSource,
+    const source = fakeSource(finalSchemaColumns(sqlite), {
+      app_settings: [sourceAppSettings],
+      users: [sourceUser],
+      assistants: [
+        {
+          id: "agt_1",
+          owner_id: "u1",
+          name: "Default",
+          icon: "✨",
+          system_prompt: null,
+          default_provider_config_id: null,
+          default_model_id: null,
+          created_at: createdAt,
+          updated_at: createdAt,
+        },
+      ],
+      topics: [
+        {
+          id: "tpc_1",
+          assistant_id: "agt_1",
+          title: "Imported Topic",
+          is_favorite: true,
+          summary_text: null,
+          summary_up_to_message_id: null,
+          created_at: createdAt,
+          updated_at: createdAt,
+        },
+      ],
+      chat_messages: [
+        {
+          id: "msg_1",
+          topic_id: "tpc_1",
+          role: "user",
+          parts: [
+            { type: "file", url: "/api/files/f1", mediaType: "image/png", filename: "a.png" },
+            { type: "text", text: "See attached" },
+          ],
+          outcome: null,
+          error_message: null,
+          provider_config_id: null,
+          model_id: null,
+          reasoning_ms: null,
+          usage: null,
+          finish_reason: null,
+          translations: { "zh-CN": { text: "见附件" } },
+          group_id: "msg_1",
+          is_selected: true,
+          created_at: createdAt,
+          group_created_at: createdAt,
+        },
+      ],
+      files: [
+        {
+          id: "f1",
+          user_id: "u1",
+          filename: "a.png",
+          media_type: "image/png",
+          size_bytes: 1234,
+          storage_key: "u1/f1.png",
+          extracted_text: null,
+          extraction_status: "none",
+          extraction_truncated: false,
+          provider_references: { p1: { reference: { google: "files/1" } } },
+          created_at: createdAt,
+          updated_at: createdAt,
+        },
+      ],
+      demo_usage_counters: counters,
     });
+
+    const first = await importFromPostgres(
+      "postgres://pika:secret@pg-host:5432/pika_prod",
+      { sqlite, openSource: source.openSource },
+    );
     expect(first).toMatchObject({
       status: "imported",
-      messageFileRefs: 1,
+      rowCounts: { users: 1, chat_messages: 1, demo_usage_counters: 1_250 },
     });
-    expect(tracker.calls).toBe(1);
-
-    const settings = sqlite
-      .prepare("select allow_registration, file_storage_quota_bytes from app_settings where id = ?")
-      .get(APP_SETTINGS_ROW_ID) as {
-      allow_registration: number;
-      file_storage_quota_bytes: number;
-    };
-    expect(settings).toEqual({
-      allow_registration: 1,
-      file_storage_quota_bytes: 5368709120,
-    });
+    expect(source.batchSizes.every((size) => size === 1_000)).toBe(true);
+    expect(foreignKeysOn(sqlite)).toBe(1);
 
     expect(
-      (sqlite.prepare("select count(*) as c from demo_usage_counters").get() as { c: number }).c,
-    ).toBe(1_250);
+      sqlite
+        .prepare("select allow_registration, file_storage_quota_bytes from app_settings")
+        .all(),
+    ).toEqual([{ allow_registration: 1, file_storage_quota_bytes: 5368709120 }]);
+    expect(count(sqlite, "demo_usage_counters")).toBe(1_250);
     expect(
       sqlite.prepare("select day from demo_usage_counters where subject = 'guest-0'").get(),
     ).toEqual({ day: "2026-11-13" });
     expect(
-      sqlite.prepare("select file_id from message_file_refs where message_id = 'msg_1'").get(),
-    ).toEqual({ file_id: "f1" });
+      sqlite.prepare("select created_at, is_favorite from topics").get(),
+    ).toEqual({ created_at: createdAt.getTime(), is_favorite: 1 });
+    expect(
+      sqlite.prepare("select translations ->> '$.zh-CN.text' as text from chat_messages").get(),
+    ).toEqual({ text: "见附件" });
+    expect(sqlite.prepare("select message_id, file_id from message_file_refs").all()).toEqual([
+      { message_id: "msg_1", file_id: "f1" },
+    ]);
 
     const marker = sqlite
-      .prepare("select id, source_info, row_counts from postgres_import where id = ?")
-      .get(POSTGRES_IMPORT_ROW_ID) as {
-      id: string;
-      source_info: string;
-      row_counts: string;
-    };
-    expect(marker.id).toBe(POSTGRES_IMPORT_ROW_ID);
-    expect(JSON.parse(marker.source_info)).toEqual({
+      .prepare<[], { source_info: string; row_counts: string }>(
+        "select source_info, row_counts from postgres_import",
+      )
+      .get();
+    expect(JSON.parse(marker?.source_info ?? "")).toEqual({
       host: "pg-host:5432",
       database: "pika_prod",
     });
-    expect(marker.source_info).not.toContain("secret");
-    expect(JSON.parse(marker.row_counts)).toMatchObject({
+    expect(marker?.source_info).not.toContain("secret");
+    expect(JSON.parse(marker?.row_counts ?? "")).toMatchObject({
       users: 1,
       demo_usage_counters: 1_250,
     });
-
-    // Second run sees marker and skips without touching PG.
-    const second = await importFromPostgres("postgres://pika:secret@pg-host:5432/pika_prod", {
-      sqlite,
-      openSource: tracker.openSource,
-    });
-    expect(second).toEqual({ status: "skipped", reason: "alreadyImported" });
-    expect(tracker.calls).toBe(1);
   });
 
-  it("rolls back completely when foreign_key_check fails or streaming aborts", async () => {
+  it("rolls back everything on a failed copy, so the next boot retries", async () => {
     const sqlite = freshSqlite();
-    const cols = sqliteColumnsMap(sqlite);
-    const createdAt = new Date("2026-06-01T10:00:00.000Z");
-
-    const tracker = createFakeOpenSource(
-      {
-        app_settings: [
-          {
-            id: APP_SETTINGS_ROW_ID,
-            allow_registration: true,
-            file_storage_quota_bytes: "5368709120",
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        // Topic references nonexistent assistant_id -> fails PRAGMA foreign_key_check.
-        topics: [
-          {
-            id: "tpc_orphan",
-            assistant_id: "missing_agt",
-            title: "Orphan",
-            is_favorite: false,
-            summary_text: null,
-            summary_up_to_message_id: null,
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-      },
-      { columnsOverride: cols },
-    );
+    const columns = finalSchemaColumns(sqlite);
 
     await expect(
-      importFromPostgres("postgres://pika:secret@pg:5432/pika", {
+      importFromPostgres(UNREACHABLE_URL, {
         sqlite,
-        openSource: tracker.openSource,
+        openSource: fakeSource(columns, {
+          app_settings: [sourceAppSettings],
+          topics: [
+            {
+              id: "tpc_orphan",
+              assistant_id: "missing_agt",
+              title: "Orphan",
+              is_favorite: false,
+              summary_text: null,
+              summary_up_to_message_id: null,
+              created_at: createdAt,
+              updated_at: createdAt,
+            },
+          ],
+        }).openSource,
       }),
-    ).rejects.toThrow(/Foreign key check failed/i);
-
-    // Marker not written, orphan topic rolled back, seeded app_settings intact!
+    ).rejects.toThrow(/Foreign key check failed .* first in "topics" referencing "assistants"/);
+    expect(count(sqlite, "topics")).toBe(0);
+    expect(count(sqlite, "postgres_import")).toBe(0);
+    // The seeded row is back: the delete that preceded the copy rolled back.
     expect(
-      sqlite.prepare("select count(*) as c from postgres_import").get(),
-    ).toEqual({ c: 0 });
-    expect(
-      sqlite.prepare("select count(*) as c from topics").get(),
-    ).toEqual({ c: 0 });
-    expect(
-      sqlite.prepare("select allow_registration from app_settings where id = ?").get(APP_SETTINGS_ROW_ID),
-    ).toEqual({ allow_registration: 0 });
+      sqlite.prepare("select id, allow_registration from app_settings").all(),
+    ).toEqual([{ id: APP_SETTINGS_ROW_ID, allow_registration: 0 }]);
+    expect(foreignKeysOn(sqlite)).toBe(1);
+    expect(sqlite.inTransaction).toBe(false);
 
-    // Stream error mid-import also rolls back cleanly.
-    const failingOpenSource: OpenPostgresSource = async (_url, fn) =>
-      fn({
-        async listColumns() {
-          return cols;
-        },
-        async countRows(table) {
-          return table === "users" ? 1 : 0;
-        },
-        async streamRows(table, _batchSize, onBatch) {
-          if (table === "users") {
-            onBatch([
-              {
-                id: "u-partial",
-                name: "Partial",
-                email: "partial@test",
-                email_verified: true,
-                two_factor_enabled: false,
-                image: null,
-                username: "partial",
-                display_username: "Partial",
-                role: "user",
-                is_anonymous: false,
-                file_quota_bytes: null,
-                theme_mode: "system",
-                theme_preset: "default",
-                model_preferences: {},
-                banned: false,
-                ban_reason: null,
-                ban_expires: null,
-                created_at: createdAt,
-                updated_at: createdAt,
-              },
-            ]);
-            throw new Error("pg connection dropped mid-stream");
-          }
-        },
-      });
-
-    await expect(
-      importFromPostgres("postgres://pika:secret@pg:5432/pika", {
+    expect(
+      await importFromPostgres(UNREACHABLE_URL, {
         sqlite,
-        openSource: failingOpenSource,
+        openSource: fakeSource(columns, {
+          app_settings: [sourceAppSettings],
+          users: [sourceUser],
+        }).openSource,
       }),
-    ).rejects.toThrow("pg connection dropped mid-stream");
-    expect(sqlite.prepare("select count(*) as c from users").get()).toEqual({ c: 0 });
-    expect(sqlite.prepare("select count(*) as c from postgres_import").get()).toEqual({ c: 0 });
+    ).toMatchObject({ status: "imported", rowCounts: { users: 1 } });
+    expect(count(sqlite, "postgres_import")).toBe(1);
   });
 });

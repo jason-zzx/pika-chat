@@ -2,18 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_MAX_FILE_BYTES } from "@/lib/files/constants";
 
-// `getEnv()` validates the whole environment, so the required variables have to
-// exist before the cases reload the modules.
-try {
-  process.loadEnvFile(".env");
-} catch {
-  // Fall back to test defaults below when no .env is present.
-}
-process.env.DATABASE_PATH ??= ":memory:";
-process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
-process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
-  "test-credential-encryption-secret-min-32";
-
 const MANAGED = ["FILE_UPLOAD_MAX_MB", "S3_DIRECT_ACCESS"] as const;
 
 let saved: Record<string, string | undefined> = {};

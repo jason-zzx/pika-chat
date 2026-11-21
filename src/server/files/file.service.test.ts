@@ -2,49 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { Actor } from "@/server/auth/actor";
 
-import { fileIdsFromParts, fileUrl, storageKeyFor, uploadFile } from "./file.service";
+import { fileUrl, storageKeyFor, uploadFile } from "./file.service";
 import { maxFileBytes } from "./limits";
-
-// `maxFileBytes()` reads the environment through `getEnv()`, which validates
-// the whole schema, so the required variables have to exist before the upload
-// cases run.
-try {
-  process.loadEnvFile(".env");
-} catch {
-  // Fall back to test defaults below when no .env is present.
-}
-process.env.DATABASE_PATH ??= ":memory:";
-process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
-process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
-  "test-credential-encryption-secret-min-32";
 
 const actor: Actor = { userId: "user-1", role: "user" };
 
 describe("fileUrl", () => {
   it("builds the canonical attachment path", () => {
     expect(fileUrl("abc")).toBe("/api/files/abc");
-  });
-});
-
-describe("fileIdsFromParts", () => {
-  it("collects, dedupes, and filters file parts", () => {
-    expect(
-      fileIdsFromParts([
-        { type: "file", url: "/api/files/a" },
-        { type: "text", text: "hi" },
-        { type: "file", url: "/api/files/a" },
-        { type: "file", url: "/api/files/b", mediaType: "image/png" },
-        { type: "file", url: "https://evil.example/c" },
-        { type: "file" },
-        null,
-        "nope",
-      ]),
-    ).toEqual(["a", "b"]);
-  });
-
-  it("returns [] for a non-array payload", () => {
-    expect(fileIdsFromParts(null)).toEqual([]);
-    expect(fileIdsFromParts({})).toEqual([]);
   });
 });
 

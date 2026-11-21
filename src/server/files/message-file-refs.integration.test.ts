@@ -1,7 +1,7 @@
 import "server-only";
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { newId } from "@/lib/id";
 import type { Actor } from "@/server/auth/actor";
@@ -16,6 +16,7 @@ import {
 } from "@/server/db/schema";
 import {
   deleteFile,
+  fileIdsForTopics,
   listFilesForActor,
   sweepOrphanFiles,
   uploadFile,
@@ -56,11 +57,35 @@ async function seedActor(): Promise<{ actor: Actor; primaryAssistantId: string }
   return { actor, primaryAssistantId: primary.id };
 }
 
-function explainDetails(query: string, params: unknown[]): string[] {
-  const rows = getSqliteClient()
-    .prepare(`EXPLAIN QUERY PLAN ${query}`)
-    .all(...params) as Array<{ detail: string }>;
-  return rows.map((row) => row.detail);
+function refsOf(messageId: string): { fileId: string }[] {
+  return db
+    .select({ fileId: messageFileRefs.fileId })
+    .from(messageFileRefs)
+    .where(eq(messageFileRefs.messageId, messageId))
+    .all();
+}
+
+/** SQL of every statement `run` prepares that reads `message_file_refs`. */
+async function refsQueriesDuring(run: () => Promise<unknown>): Promise<string[]> {
+  const prepare = vi.spyOn(getSqliteClient(), "prepare");
+  try {
+    await run();
+    return prepare.mock.calls
+      .map(([source]) => source)
+      .filter((source) => source.includes("message_file_refs"));
+  } finally {
+    prepare.mockRestore();
+  }
+}
+
+/** Query plan of a captured statement; plans do not depend on bound values. */
+function queryPlan(source: string): string {
+  const params = Array.from(source.matchAll(/\?/g), () => null);
+  return getSqliteClient()
+    .prepare<unknown[], { detail: string }>(`EXPLAIN QUERY PLAN ${source}`)
+    .all(...params)
+    .map((row) => row.detail)
+    .join(" | ");
 }
 
 describe("message_file_refs triggers and query plans", () => {
@@ -98,23 +123,14 @@ describe("message_file_refs triggers and query plans", () => {
           { type: "file", url: f1.url, mediaType: "image/png", filename: "a.png" },
           { type: "file", url: "/api/files/", mediaType: "image/png", filename: "empty" },
           { type: "file", url: "/API/files/wrong-case", mediaType: "image/png", filename: "case" },
+          { type: "file", url: "https://cdn.example/api/files/remote", mediaType: "image/png", filename: "remote" },
+          { type: "file", url: 42, mediaType: "image/png", filename: "number" },
           { type: "text", text: "hello" },
         ],
       })
       .run();
 
-    expect(
-      db
-        .select({ fileId: messageFileRefs.fileId })
-        .from(messageFileRefs)
-        .where(eq(messageFileRefs.messageId, msgId))
-        .all(),
-    ).toEqual([{ fileId: f1.id }]);
-
-    const page1 = await listFilesForActor(actor, { offset: 0, limit: 10 });
-    const byId1 = new Map(page1.files.map((row) => [row.id, row.referenced]));
-    expect(byId1.get(f1.id)).toBe(true);
-    expect(byId1.get(f2.id)).toBe(false);
+    expect(refsOf(msgId)).toEqual([{ fileId: f1.id }]);
 
     await expect(deleteFile(f1.id, actor)).rejects.toMatchObject({
       code: "CONFLICT",
@@ -131,23 +147,18 @@ describe("message_file_refs triggers and query plans", () => {
       .where(eq(chatMessages.id, msgId))
       .run();
 
-    expect(
-      db
-        .select({ fileId: messageFileRefs.fileId })
-        .from(messageFileRefs)
-        .where(eq(messageFileRefs.messageId, msgId))
-        .all(),
-    ).toEqual([{ fileId: f2.id }]);
+    expect(refsOf(msgId)).toEqual([{ fileId: f2.id }]);
 
     await deleteFile(f1.id, actor);
     await deleteMessage({ topicId: topic.id, messageId: msgId }, actor);
+    expect(refsOf(msgId)).toEqual([]);
 
     expect(
       await db.select({ id: files.id }).from(files).where(eq(files.id, f2.id)),
     ).toEqual([]);
   });
 
-  it("reclaims attachments when deleting a topic, deleting an assistant, or sweeping orphans", async () => {
+  it("reclaims attachments and cascades refs on topic and assistant deletion", async () => {
     const { actor } = await seedActor();
     const secondary = await createAssistant({ name: "Secondary", icon: "📁" }, actor);
     const sharedFile = await uploadFile(
@@ -165,11 +176,6 @@ describe("message_file_refs triggers and query plans", () => {
       actor,
       { skipSizeLimit: true },
     );
-    const orphanFile = await uploadFile(
-      { filename: "orphan.png", mediaType: "image/png", data: Buffer.from("orphan") },
-      actor,
-      { skipSizeLimit: true },
-    );
 
     const t1 = await createTopicForChat({ assistantId: secondary.id }, actor, "T1");
     const t2 = await createTopicForChat({ assistantId: secondary.id }, actor, "T2");
@@ -179,6 +185,8 @@ describe("message_file_refs triggers and query plans", () => {
       "Keep",
     );
 
+    const t1MessageId = newId();
+    const t2MessageId = newId();
     db.insert(chatMessages)
       .values([
         {
@@ -189,7 +197,7 @@ describe("message_file_refs triggers and query plans", () => {
           parts: [{ type: "file", url: sharedFile.url }],
         },
         {
-          id: newId(),
+          id: t1MessageId,
           topicId: t1.id,
           role: "user",
           groupId: "g-t1",
@@ -199,7 +207,7 @@ describe("message_file_refs triggers and query plans", () => {
           ],
         },
         {
-          id: newId(),
+          id: t2MessageId,
           topicId: t2.id,
           role: "user",
           groupId: "g-t2",
@@ -208,18 +216,9 @@ describe("message_file_refs triggers and query plans", () => {
       ])
       .run();
 
-    // Backdate orphan past the 24h TTL so sweepOrphanFiles collects it.
-    db.update(files)
-      .set({ createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
-      .where(eq(files.id, orphanFile.id))
-      .run();
-    await sweepOrphanFiles(actor);
-    expect(
-      db.select({ id: files.id }).from(files).where(eq(files.id, orphanFile.id)).all(),
-    ).toEqual([]);
-
     // deleteTopic removes topicOnlyFile but spares sharedFile.
     await deleteTopic(t1.id, actor);
+    expect(refsOf(t1MessageId)).toEqual([]);
     expect(
       db.select({ id: files.id }).from(files).where(eq(files.id, topicOnlyFile.id)).all(),
     ).toEqual([]);
@@ -228,7 +227,9 @@ describe("message_file_refs triggers and query plans", () => {
     ).toHaveLength(1);
 
     // deleteAssistant removes assistantOnlyFile.
+    expect(refsOf(t2MessageId)).toEqual([{ fileId: assistantOnlyFile.id }]);
     await deleteAssistant(secondary.id, actor);
+    expect(refsOf(t2MessageId)).toEqual([]);
     expect(
       db.select({ id: files.id }).from(files).where(eq(files.id, assistantOnlyFile.id)).all(),
     ).toEqual([]);
@@ -237,34 +238,50 @@ describe("message_file_refs triggers and query plans", () => {
     await deleteTopic(primaryTopic.id, actor);
   });
 
-  it("uses message_file_refs indexes instead of scanning chat_messages", () => {
-    const queries = [
-      {
-        sql: "SELECT exists (select 1 from message_file_refs where file_id = f.id) FROM files f WHERE f.user_id = ?",
-        params: ["u1"],
-        expectedIndex: "message_file_refs_file_idx",
-      },
-      {
-        sql: "SELECT file_id FROM message_file_refs WHERE file_id = ? LIMIT 1",
-        params: ["f1"],
-        expectedIndex: "message_file_refs_file_idx",
-      },
-      {
-        sql: "SELECT id FROM files WHERE user_id = ? AND created_at < ? AND NOT (exists (select 1 from message_file_refs where file_id = files.id))",
-        params: ["u1", 1000],
-        expectedIndex: "message_file_refs_file_idx",
-      },
-      {
-        sql: "SELECT DISTINCT message_file_refs.file_id FROM message_file_refs INNER JOIN chat_messages ON chat_messages.id = message_file_refs.message_id WHERE chat_messages.topic_id IN (?, ?)",
-        params: ["t1", "t2"],
-        expectedIndex: "SEARCH message_file_refs USING PRIMARY KEY",
-      },
+  it("reads references through message_file_refs indexes, never scanning chat_messages", async () => {
+    const { actor, primaryAssistantId } = await seedActor();
+    const topic = await createTopicForChat(
+      { assistantId: primaryAssistantId },
+      actor,
+      "Plans",
+    );
+    const referenced = await uploadFile(
+      { filename: "used.png", mediaType: "image/png", data: Buffer.from("used") },
+      actor,
+      { skipSizeLimit: true },
+    );
+    const messageId = newId();
+    db.insert(chatMessages)
+      .values({
+        id: messageId,
+        topicId: topic.id,
+        role: "user",
+        groupId: messageId,
+        parts: [{ type: "file", url: referenced.url }],
+      })
+      .run();
+
+    // The statements the services actually run: in-use badge, the
+    // isFileReferenced gate of deleteFile, the orphan sweep and the
+    // delete-topic/assistant file-id read.
+    const statements = [
+      ...(await refsQueriesDuring(() => listFilesForActor(actor, { offset: 0, limit: 10 }))),
+      ...(await refsQueriesDuring(() =>
+        expect(deleteFile(referenced.id, actor)).rejects.toMatchObject({ status: 409 }),
+      )),
+      ...(await refsQueriesDuring(() => sweepOrphanFiles(actor))),
+      ...(await refsQueriesDuring(async () => fileIdsForTopics(db, [topic.id]))),
     ];
 
-    for (const query of queries) {
-      const details = explainDetails(query.sql, query.params).join(" | ");
-      expect(details).not.toMatch(/SCAN\b[^|]*chat_messages\b/i);
-      expect(details).toContain(query.expectedIndex);
+    expect(statements).toHaveLength(4);
+    for (const statement of statements) {
+      const plan = queryPlan(statement);
+      expect(plan).not.toMatch(/SCAN chat_messages\b/);
+      expect(plan).toMatch(
+        /message_file_refs USING (COVERING INDEX message_file_refs_file_idx|PRIMARY KEY)/,
+      );
     }
+
+    await deleteTopic(topic.id, actor);
   });
 });

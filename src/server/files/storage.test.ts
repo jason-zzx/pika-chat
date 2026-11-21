@@ -18,18 +18,6 @@ import {
   S3FileStorage,
 } from "./storage";
 
-// `getEnv()` validates the whole environment, so the required variables have
-// to exist before the backend-selection cases reload the module.
-try {
-  process.loadEnvFile(".env");
-} catch {
-  // Fall back to test defaults below when no .env is present.
-}
-process.env.DATABASE_PATH ??= ":memory:";
-process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
-process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
-  "test-credential-encryption-secret-min-32";
-
 const { send, s3ClientConfigs, createPresignedPost, getSignedUrl } =
   vi.hoisted(() => ({
     send: vi.fn<(command: unknown) => Promise<unknown>>(),

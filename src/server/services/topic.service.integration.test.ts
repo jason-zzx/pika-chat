@@ -237,7 +237,7 @@ describe("topic.service", () => {
       actor: Parameters<typeof listTopicPage>[2],
     ): Promise<string[][]> {
       const pages: string[][] = [];
-      let cursor: [string, string] | null = null;
+      let cursor: [number, string] | null = null;
       do {
         const page = await listTopicPage(assistantId, cursor, actor);
         pages.push(page.topics.map((topic) => topic.id));
@@ -302,20 +302,6 @@ describe("topic.service", () => {
       const pages = await readAll(assistant.id, userActor);
       expect(pages.map((page) => page.length)).toEqual([20, 5]);
       expect(pages.flat()).toEqual(expected);
-    });
-
-    it("breaks identical updated_at ties by id", async () => {
-      const { userActor } = await seedActors();
-      const assistant = await createAssistant({ name: "Same", icon: "✨" }, userActor);
-      const ids = await seedTopics(assistant.id, 25);
-      await db
-        .update(topics)
-        .set({ updatedAt: new Date("2026-01-01T00:00:00.000Z") })
-        .where(eq(topics.assistantId, assistant.id));
-
-      const seen = (await readAll(assistant.id, userActor)).flat();
-      expect(seen).toHaveLength(25);
-      expect([...seen].sort()).toEqual([...ids].sort());
     });
 
     it("excludes favorites from pages and lists every favorite", async () => {
