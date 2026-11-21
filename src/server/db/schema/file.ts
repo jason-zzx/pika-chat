@@ -1,23 +1,16 @@
-import { sql } from "drizzle-orm";
 import {
-  boolean,
   index,
   integer,
-  jsonb,
-  pgEnum,
-  pgTable,
+  primaryKey,
+  sqliteTable,
   text,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/sqlite-core";
 
 import { users } from "./auth";
-import { timestamptz } from "./columns";
+import { chatMessages } from "./chat";
+import { timestampMs, timestampMsDefaultNow } from "./columns";
 
-export const fileExtractionStatus = pgEnum("file_extraction_status", [
-  "none",
-  "ok",
-  "empty",
-  "failed",
-]);
+export const fileExtractionStatuses = ["none", "ok", "empty", "failed"] as const;
 
 /**
  * One provider-side upload of this file, as returned by the AI SDK
@@ -34,7 +27,7 @@ export type ProviderFileReference = {
   expiresAt: string | null;
 };
 
-export const files = pgTable(
+export const files = sqliteTable(
   "files",
   {
     id: text("id").primaryKey(),
@@ -47,22 +40,49 @@ export const files = pgTable(
     storageKey: text("storage_key").notNull().unique(),
     // Extraction cache: populated at upload time for text-bearing formats.
     extractedText: text("extracted_text"),
-    extractionStatus: fileExtractionStatus("extraction_status")
+    extractionStatus: text("extraction_status", {
+      enum: fileExtractionStatuses,
+    })
       .notNull()
       .default("none"),
-    extractionTruncated: boolean("extraction_truncated").notNull().default(false),
+    extractionTruncated: integer("extraction_truncated", { mode: "boolean" })
+      .notNull()
+      .default(false),
     // Provider Files API references, keyed by provider config id — the same
     // bytes uploaded to two accounts are two independent references, and
     // writing one must never drop the others.
-    providerReferences: jsonb("provider_references")
+    providerReferences: text("provider_references", { mode: "json" })
       .$type<Record<string, ProviderFileReference>>()
       .notNull()
-      .default(sql`'{}'::jsonb`),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
+      .default({}),
+    createdAt: timestampMsDefaultNow("created_at"),
     // Refreshed when the extraction cache is written after upload.
-    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    updatedAt: timestampMsDefaultNow("updated_at"),
   },
   (table) => [index("files_user_idx").on(table.userId)],
+);
+
+/**
+ * Indexed attachment references maintained by SQLite triggers on
+ * `chat_messages` (`AFTER INSERT` / `AFTER UPDATE OF parts`), plus FK cascade
+ * on message delete. No FK to `files` — a reference is a `/api/files/<id>` URL
+ * in `parts`.
+ */
+export const messageFileRefs = sqliteTable(
+  "message_file_refs",
+  {
+    messageId: text("message_id")
+      .notNull()
+      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    fileId: text("file_id").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.messageId, table.fileId],
+      name: "message_file_refs_pk",
+    }),
+    index("message_file_refs_file_idx").on(table.fileId),
+  ],
 );
 
 /**
@@ -76,15 +96,15 @@ export const files = pgTable(
  * which the project already triggers on every upload; there is no background
  * timer infrastructure.
  */
-export const providerFileDeleteRetries = pgTable("provider_file_delete_retries", {
+export const providerFileDeleteRetries = sqliteTable("provider_file_delete_retries", {
   id: text("id").primaryKey(),
   providerConfigId: text("provider_config_id").notNull(),
   /** Provider-side file id, e.g. Anthropic's `file_…`. */
   providerFileId: text("provider_file_id").notNull(),
   /** Failed retries so far. 5 is the ceiling before the entry is abandoned. */
   attempts: integer("attempts").notNull().default(0),
-  nextRetryAt: timestamptz("next_retry_at").notNull(),
+  nextRetryAt: timestampMs("next_retry_at").notNull(),
   /** HTTP status of the most recent attempt; null when there was none. */
   lastStatus: integer("last_status"),
-  createdAt: timestamptz("created_at").notNull().defaultNow(),
+  createdAt: timestampMsDefaultNow("created_at"),
 });

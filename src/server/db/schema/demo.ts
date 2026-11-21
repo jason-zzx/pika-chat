@@ -1,10 +1,10 @@
-import { date, integer, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const demoUsageCounters = pgTable(
+export const demoUsageCounters = sqliteTable(
   "demo_usage_counters",
   {
     subject: text("subject").notNull(),
-    day: date("day", { mode: "string" }).notNull(),
+    day: text("day").notNull(),
     kind: text("kind").notNull(),
     count: integer("count").notNull(),
   },

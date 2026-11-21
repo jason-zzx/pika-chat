@@ -1,1 +1,0 @@
-ALTER TABLE "chat_messages" ADD COLUMN "reasoning_ms" integer;

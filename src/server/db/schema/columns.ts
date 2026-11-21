@@ -1,4 +1,10 @@
-import { timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { integer } from "drizzle-orm/sqlite-core";
 
-export const timestamptz = (name: string) =>
-  timestamp(name, { withTimezone: true, mode: "date" });
+export const timestampMs = (name: string) =>
+  integer(name, { mode: "timestamp_ms" });
+
+export const timestampMsDefaultNow = (name: string) =>
+  integer(name, { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(cast(unixepoch('subsec') * 1000 as integer))`);

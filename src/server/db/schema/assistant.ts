@@ -1,10 +1,17 @@
-import { boolean, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 import { users } from "./auth";
-import { timestamptz } from "./columns";
+import { timestampMsDefaultNow } from "./columns";
 import { providerConfigs } from "./provider";
 
-export const assistants = pgTable(
+export const assistants = sqliteTable(
   "assistants",
   {
     id: text("id").primaryKey(),
@@ -19,15 +26,15 @@ export const assistants = pgTable(
       { onDelete: "set null" },
     ),
     defaultModelId: text("default_model_id"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    createdAt: timestampMsDefaultNow("created_at"),
+    updatedAt: timestampMsDefaultNow("updated_at"),
   },
   (table) => [
     uniqueIndex("assistants_owner_name_uidx").on(table.ownerId, table.name),
   ],
 );
 
-export const topics = pgTable(
+export const topics = sqliteTable(
   "topics",
   {
     id: text("id").primaryKey(),
@@ -35,21 +42,23 @@ export const topics = pgTable(
       .notNull()
       .references(() => assistants.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
-    isFavorite: boolean("is_favorite").notNull().default(false),
+    isFavorite: integer("is_favorite", { mode: "boolean" })
+      .notNull()
+      .default(false),
     // Rolling history-compression state (会话历史压缩): the summary covers
     // every message up to and including summaryUpToMessageId. All nullable —
     // a topic without them behaves exactly as before.
     summaryText: text("summary_text"),
     summaryUpToMessageId: text("summary_up_to_message_id"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    createdAt: timestampMsDefaultNow("created_at"),
+    updatedAt: timestampMsDefaultNow("updated_at"),
   },
   (table) => [
     index("topics_assistant_list_idx").on(
       table.assistantId,
       table.isFavorite,
-      table.updatedAt.desc().nullsFirst(),
-      table.id.desc().nullsFirst(),
+      sql`updated_at desc`,
+      sql`id desc`,
     ),
   ],
 );

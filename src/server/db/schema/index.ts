@@ -6,25 +6,27 @@ export {
 } from "./app-settings";
 export { accounts, sessions, twoFactors, users, verifications } from "./auth";
 export {
-  chatGenerationKind,
-  chatGenerationStatus,
+  chatGenerationKinds,
+  chatGenerationStatuses,
   chatGenerations,
-  chatMessageOutcome,
-  chatMessageRole,
+  chatMessageOutcomes,
+  chatMessageRoles,
   chatMessages,
   type ChatGenerationInput,
 } from "./chat";
 export { demoUsageCounters } from "./demo";
 export {
-  fileExtractionStatus,
+  fileExtractionStatuses,
   files,
+  messageFileRefs,
   providerFileDeleteRetries,
   type ProviderFileReference,
 } from "./file";
 export {
-  modelMetadataSource,
+  modelMetadataSources,
+  providerApiFormats,
   providerConfigs,
   providerModels,
-  providerVisibility,
+  providerVisibilities,
 } from "./provider";
-export { searchProvider, searchProviderSettings } from "./search-provider";
+export { searchProviderSettings, searchProviders } from "./search-provider";
