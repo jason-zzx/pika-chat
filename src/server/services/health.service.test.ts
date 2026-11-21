@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import pkg from "../../../package.json";
 
 vi.mock("@/server/db/client", () => ({
-  getDb: () => ({ execute: async () => [] }),
+  getDb: () => ({ get: () => ({ 1: 1 }) }),
 }));
 
 import { checkHealth } from "./health.service";

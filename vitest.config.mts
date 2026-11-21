@@ -46,11 +46,10 @@ export default defineConfig({
           name: "integration",
           environment: "node",
           include: ["src/**/*.integration.test.ts"],
-          globalSetup: "./vitest.integration.setup.ts",
           setupFiles: [
             "./vitest.integration.env.ts",
             "./vitest.integration.storage.ts",
-            "./vitest.integration.pglite.ts",
+            "./vitest.integration.sqlite.ts",
           ],
           testTimeout: 30_000,
           fileParallelism: false,

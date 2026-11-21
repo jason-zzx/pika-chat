@@ -3,16 +3,16 @@ import { describe, expect, it } from "vitest";
 import { insertWithShortId } from "./short-id-insert";
 
 function uniqueViolation(): Error {
-  const error = new Error("duplicate key") as Error & { code: string };
-  error.code = "23505";
+  const error = new Error("UNIQUE constraint failed") as Error & { code: string };
+  error.code = "SQLITE_CONSTRAINT_UNIQUE";
   return error;
 }
 
 describe("insertWithShortId", () => {
-  it("returns the minted id and insert result on first success", async () => {
-    const out = await insertWithShortId({
+  it("returns the minted id and insert result on first success", () => {
+    const out = insertWithShortId({
       mint: () => "agt_first",
-      insert: async (id) => ({ insertedId: id }),
+      insert: (id) => ({ insertedId: id }),
     });
     expect(out).toEqual({
       id: "agt_first",
@@ -20,15 +20,15 @@ describe("insertWithShortId", () => {
     });
   });
 
-  it("re-mints and retries on a unique violation", async () => {
+  it("re-mints and retries on a unique violation", () => {
     const minted: string[] = [];
-    const out = await insertWithShortId({
+    const out = insertWithShortId({
       mint: () => {
         const id = `tpc_${minted.length + 1}`;
         minted.push(id);
         return id;
       },
-      insert: async (id) => {
+      insert: (id) => {
         if (id === "tpc_1") {
           throw uniqueViolation();
         }
@@ -39,31 +39,31 @@ describe("insertWithShortId", () => {
     expect(minted).toEqual(["tpc_1", "tpc_2"]);
   });
 
-  it("rethrows non-unique errors without retrying", async () => {
+  it("rethrows non-unique errors without retrying", () => {
     let attempts = 0;
-    await expect(
+    expect(() =>
       insertWithShortId({
         mint: () => "agt_x",
-        insert: async () => {
+        insert: () => {
           attempts += 1;
           throw new Error("connection lost");
         },
       }),
-    ).rejects.toThrow("connection lost");
+    ).toThrow("connection lost");
     expect(attempts).toBe(1);
   });
 
-  it("gives up after three attempts when every minted id collides", async () => {
+  it("gives up after three attempts when every minted id collides", () => {
     let attempts = 0;
-    await expect(
+    expect(() =>
       insertWithShortId({
         mint: () => "agt_x",
-        insert: async () => {
+        insert: () => {
           attempts += 1;
           throw uniqueViolation();
         },
       }),
-    ).rejects.toThrow("duplicate key");
+    ).toThrow("UNIQUE constraint failed");
     expect(attempts).toBe(3);
   });
 });

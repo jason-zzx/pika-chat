@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { newTopicId } from "@/lib/id";
@@ -289,26 +289,19 @@ describe("topic.service", () => {
       );
     });
 
-    it("does not skip rows that share a millisecond across a page boundary", async () => {
+    it("pages rows that share a millisecond across a page boundary in id desc order", async () => {
       const { userActor } = await seedActors();
       const assistant = await createAssistant({ name: "Ties", icon: "✨" }, userActor);
       const ids = await seedTopics(assistant.id, 25);
-      // Microsecond-spaced inside one millisecond: a millisecond cursor
-      // would drop or repeat rows on the boundary at 20.
-      await Promise.all(
-        ids.map((id, index) =>
-          db
-            .update(topics)
-            .set({
-              updatedAt: sql`timestamptz '2026-01-01 00:00:00.123000+00' - ${index} * interval '1 microsecond'`,
-            })
-            .where(eq(topics.id, id)),
-        ),
-      );
+      await db
+        .update(topics)
+        .set({ updatedAt: new Date("2026-01-01T00:00:00.123Z") })
+        .where(eq(topics.assistantId, assistant.id));
 
+      const expected = [...ids].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
       const pages = await readAll(assistant.id, userActor);
       expect(pages.map((page) => page.length)).toEqual([20, 5]);
-      expect(pages.flat()).toEqual(ids);
+      expect(pages.flat()).toEqual(expected);
     });
 
     it("breaks identical updated_at ties by id", async () => {
@@ -425,7 +418,7 @@ describe("topic.service", () => {
     await expect(
       listTopicMessages({ topicId: topic.id }, otherAdminActor),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(
+    expect(() =>
       appendUserMessage(
         {
           topicId: topic.id,
@@ -437,7 +430,7 @@ describe("topic.service", () => {
         },
         otherAdminActor,
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
 
     const listed = await listTopicMessages({ topicId: topic.id }, userActor);
     expect(listed).toHaveLength(1);

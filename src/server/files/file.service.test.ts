@@ -11,11 +11,12 @@ import { maxFileBytes } from "./limits";
 try {
   process.loadEnvFile(".env");
 } catch {
-  process.env.DATABASE_URL ??= "postgres://pika:pika@localhost:5432/pika_chat";
-  process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
-  process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
-    "test-credential-encryption-secret-min-32";
+  // Fall back to test defaults below when no .env is present.
 }
+process.env.DATABASE_PATH ??= ":memory:";
+process.env.BETTER_AUTH_SECRET ??= "test-better-auth-secret-min-32-chars";
+process.env.CREDENTIAL_ENCRYPTION_SECRET ??=
+  "test-credential-encryption-secret-min-32";
 
 const actor: Actor = { userId: "user-1", role: "user" };
 

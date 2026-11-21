@@ -2,7 +2,8 @@ import type { FileStorage } from "@/server/files/storage";
 
 /**
  * In-memory {@link FileStorage} for integration tests. Integration tests
- * isolate `TEST_DATABASE_URL` but historically let `getFileStorage()` reach
+ * isolate their database (`:memory:` SQLite per worker) but historically let
+ * `getFileStorage()` reach
  * the real object storage, leaving hundreds of fixture objects in the
  * operator's bucket. This fake keeps every byte in a Map: byte round-trips
  * still exercise the service orchestration, while the shared integration

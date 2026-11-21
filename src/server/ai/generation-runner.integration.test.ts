@@ -1,7 +1,7 @@
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   checkpointContentOf,
@@ -18,7 +18,7 @@ import {
   type ChatChunk,
 } from "@/server/ai/generation-stream";
 import { getLiveGeneration } from "@/server/ai/generation-registry";
-import { executeRows, getDb } from "@/server/db/client";
+import { getDb } from "@/server/db/client";
 import { chatGenerations, chatMessages, files, topics } from "@/server/db/schema";
 import { getFileStorage } from "@/server/files/storage";
 import { uploadFile } from "@/server/files/file.service";
@@ -88,19 +88,6 @@ async function readUntilText(
       return seen;
     }
   }
-}
-
-/** Waits until some other backend is blocked on the lock held by `pid`. */
-async function waitUntilBlocking(pid: number, timeoutMs?: number): Promise<void> {
-  await waitFor(async () => {
-    const [blocked] = executeRows<{ count: number }>(
-      await db.execute(sql`
-        select count(*)::int as count from pg_stat_activity
-        where ${pid} = ANY(pg_blocking_pids(pid))
-      `),
-    );
-    return (blocked?.count ?? 0) > 0;
-  }, timeoutMs);
 }
 
 describe("generation executor", () => {
@@ -442,46 +429,6 @@ describe("generation executor", () => {
     expect((await generationRow(generation.id))?.status).toBe("completed");
   });
 
-  it.skipIf(process.env.PGLITE_DATA_DIR)("waits for the real in-flight checkpoint before starting terminal persistence", async () => {
-    const { actor, assistantId, topicId } = await seedChat(provider.baseUrl);
-    provider.deltas = ["checkpoint before stop"];
-    provider.holdOpen = true;
-    const { generation } = await admitPrepared(preparedTurn({ assistantId, topicId }), actor);
-    const entry = await ensureGenerationRunning(generation.id);
-    if (!entry) throw new Error("missing live generation");
-    await readUntilText(subscribeToGeneration(entry).getReader(), "checkpoint");
-    const locked = Promise.withResolvers<number>();
-    const release = Promise.withResolvers<void>();
-    const blocker = db.transaction(async tx => {
-      await tx.select().from(chatMessages).where(eq(chatMessages.id, generation.assistantMessageId!)).for("update");
-      const [backend] = executeRows<{ pid: number }>(
-        await tx.execute(sql`select pg_backend_pid() as pid`),
-      );
-      locked.resolve(backend!.pid);
-      await release.promise;
-    });
-    const pid = await locked.promise;
-    // Observe the I/O boundary without replacing it; checkpoint is a single
-    // UPDATE while finalization opens a transaction. The real 10s timer runs.
-    const transactions = vi.spyOn(db, "transaction");
-    try {
-      await waitUntilBlocking(pid, 15_000);
-      await stopGenerationById(generation.id, actor);
-      await waitFor(() => entry.pendingTerminal !== null);
-      expect(transactions).not.toHaveBeenCalled();
-    } finally {
-      release.resolve();
-      await blocker;
-      transactions.mockRestore();
-    }
-    await entry.settled;
-    expect((await generationRow(generation.id))?.status).toBe("stopped");
-    expect(await assistantText(topicId, actor)).toBe("checkpoint before stop");
-    const messages = await listTopicMessages({ topicId }, actor);
-    expect(messages.find(message => message.role === "assistant")?.metadata?.outcome).toBe("stopped");
-    expect(provider.calls).toHaveLength(1);
-  });
-
   it("carries usage/reasoning metadata into the crash-retention checkpoint and filters markup in tool mode only", () => {
     const state = createLiveStreamState({
       generationId: "gen",
@@ -514,7 +461,7 @@ describe("generation executor", () => {
     expect(checkpointContentOf(state, true).parts).toEqual([{ type: "text", text: "par" }]);
   });
 
-  it.skipIf(process.env.PGLITE_DATA_DIR).each(["topic", "assistant"] as const)("cleans an image committed while %s deletion waits for the topic lock", async (target) => {
+  it.each(["topic", "assistant"] as const)("cleans a finalized generated image when %s is deleted", async (target) => {
     const { actor, assistantId, topicId } = await seedChat(provider.baseUrl);
     await createAssistant({ name: "Spare", icon: "✨" }, actor);
     const { generation } = await admitPrepared(preparedTurn({ assistantId, topicId }), actor);
@@ -529,55 +476,35 @@ describe("generation executor", () => {
       { skipSizeLimit: true },
     );
 
-    // Hold the parent lock the way a finalize does, then let the delete start:
-    // it must see the parts committed in between, otherwise the image this
-    // turn produced leaks (the old code read parts before taking the lock).
-    const locked = Promise.withResolvers<number>();
-    const release = Promise.withResolvers<void>();
-    const finalizeLike = db.transaction(async (tx) => {
-      await tx
-        .select({ id: topics.id })
-        .from(topics)
-        .where(eq(topics.id, topicId))
-        .for("update");
-      const [backend] = executeRows<{ pid: number }>(
-        await tx.execute(sql`select pg_backend_pid() as pid`),
-      );
-      locked.resolve(backend!.pid);
-      await release.promise;
-      await writeAssistantTurnRow(tx, {
-        topicId,
-        messageId: generation.assistantMessageId!,
-        parts: [
-          {
-            type: "file",
-            url: uploaded.url,
-            mediaType: uploaded.mediaType,
-            filename: uploaded.filename,
-          },
-          { type: "text", text: "here it is" },
-        ],
-        outcome: "completed",
-      });
-      await tx
-        .update(chatGenerations)
-        .set({ status: "completed", finishedAt: new Date() })
-        .where(eq(chatGenerations.id, generation.id));
-    });
+    db.transaction(
+      (tx) => {
+        writeAssistantTurnRow(tx, {
+          topicId,
+          messageId: generation.assistantMessageId!,
+          parts: [
+            {
+              type: "file",
+              url: uploaded.url,
+              mediaType: uploaded.mediaType,
+              filename: uploaded.filename,
+            },
+            { type: "text", text: "here it is" },
+          ],
+          outcome: "completed",
+        });
+        tx.update(chatGenerations)
+          .set({ status: "completed", finishedAt: new Date() })
+          .where(eq(chatGenerations.id, generation.id))
+          .run();
+      },
+      { behavior: "immediate" },
+    );
 
-    const pid = await locked.promise;
-    const deletion = target === "topic"
-      ? deleteTopic(topicId, actor)
-      : deleteAssistant(assistantId, actor);
-    // Do not race a sleep: observe the deleter actually waiting on this
-    // transaction before finalizing. Taking generation before topic would
-    // now deadlock, and reading file references before topic would leak.
-    try {
-      await waitUntilBlocking(pid);
-    } finally {
-      release.resolve();
+    if (target === "topic") {
+      await deleteTopic(topicId, actor);
+    } else {
+      await deleteAssistant(assistantId, actor);
     }
-    await Promise.all([finalizeLike, deletion]);
 
     expect(
       await db.select({ id: files.id }).from(files).where(eq(files.id, uploaded.id)),

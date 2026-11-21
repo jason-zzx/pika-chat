@@ -126,7 +126,7 @@ describe("model-preferences.service", () => {
     ).rejects.toMatchObject({ code: "VALIDATION_FAILED", status: 400 });
   });
 
-  it("degrades dirty jsonb to empty preferences", async () => {
+  it("degrades dirty JSON to empty preferences", async () => {
     const actor = await seedUser();
     await db
       .update(users)

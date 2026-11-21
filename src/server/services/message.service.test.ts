@@ -59,7 +59,7 @@ function mockDbSelecting(rows: ChatMessageRow[]): void {
   getDb.mockImplementation(() => ({
     select: () => ({
       from: () => ({
-        where: () => ({ orderBy: async () => rows }),
+        where: () => ({ orderBy: () => ({ all: () => rows }) }),
       }),
     }),
   }));
@@ -314,7 +314,7 @@ describe("listTopicMessages", () => {
   beforeEach(() => {
     findTopicContextForActor.mockReset();
     getDb.mockReset();
-    findTopicContextForActor.mockResolvedValue({ id: "topic-1" });
+    findTopicContextForActor.mockReturnValue({ id: "topic-1" });
   });
 
   it("returns single-version groups in order, one message per row", async () => {
@@ -459,20 +459,21 @@ describe("appendUserMessage", () => {
     capturedValues = undefined;
     findTopicContextForActor.mockReset();
     getDb.mockReset();
-    findTopicContextForActor.mockResolvedValue({ id: "topic-1" });
+    findTopicContextForActor.mockReturnValue({ id: "topic-1" });
     getDb.mockImplementation(() => ({
       insert: () => ({
         values: (values: ChatMessageInsert) => {
           capturedValues = values;
           return {
-            returning: async () => [
-              row({
-                id: values.id ?? "user-1",
-                role: "user",
-                outcome: null,
-                groupId: values.groupId ?? "user-1",
-              }),
-            ],
+            returning: () => ({
+              get: () =>
+                row({
+                  id: values.id ?? "user-1",
+                  role: "user",
+                  outcome: null,
+                  groupId: values.groupId ?? "user-1",
+                }),
+            }),
           };
         },
       }),
@@ -496,7 +497,7 @@ describe("appendUserMessage", () => {
     expect(message.id).toBe("user-9");
   });
 
-  it("persists file parts alongside text (attachments ride in the parts jsonb)", async () => {
+  it("persists file parts alongside text (attachments ride in the parts JSON)", async () => {
     await appendUserMessage(
       {
         topicId: "topic-1",
@@ -540,56 +541,59 @@ describe("appendUserMessageVersion", () => {
     groupRole = "user";
     findTopicContextForActor.mockReset();
     getDb.mockReset();
-    findTopicContextForActor.mockResolvedValue({ id: "topic-1" });
+    findTopicContextForActor.mockReturnValue({ id: "topic-1" });
     getDb.mockImplementation(() => ({
       // Group existence/role lookup.
       select: () => ({
         from: () => ({
           where: () => ({
-            limit: async () =>
-              groupRole
-                ? [
-                    {
+            limit: () => ({
+              get: () =>
+                groupRole
+                  ? {
                       role: groupRole,
                       groupCreatedAt: new Date("2026-01-01T00:00:00.000Z"),
-                    },
-                  ]
-                : [],
+                    }
+                  : undefined,
+            }),
           }),
         }),
       }),
-      transaction: async (
+      transaction: (
         fn: (tx: {
           update: () => {
-            set: (v: unknown) => { where: (w: unknown) => Promise<void> };
+            set: (v: unknown) => { where: (w: unknown) => { run: () => void } };
           };
           insert: () => {
             values: (v: ChatMessageInsert) => {
-              returning: () => Promise<ChatMessageRow[]>;
+              returning: () => { get: () => ChatMessageRow };
             };
           };
-        }) => Promise<unknown>,
+        }) => unknown,
       ) =>
         fn({
           update: () => ({
             set: () => ({
-              where: async (whereClause: unknown) => {
-                deselectedWhere = whereClause;
-              },
+              where: (whereClause: unknown) => ({
+                run: () => {
+                  deselectedWhere = whereClause;
+                },
+              }),
             }),
           }),
           insert: () => ({
             values: (values: ChatMessageInsert) => {
               capturedValues = values;
               return {
-                returning: async () => [
-                  row({
-                    id: values.id ?? "user-2",
-                    role: "user",
-                    outcome: null,
-                    groupId: values.groupId ?? "g-1",
-                  }),
-                ],
+                returning: () => ({
+                  get: () =>
+                    row({
+                      id: values.id ?? "user-2",
+                      role: "user",
+                      outcome: null,
+                      groupId: values.groupId ?? "g-1",
+                    }),
+                }),
               };
             },
           }),
@@ -638,22 +642,22 @@ describe("appendUserMessageVersion", () => {
     expect(capturedValues?.createdAt).toBe(createdAt);
   });
 
-  it("rejects a group whose role is not user, without any write", async () => {
+  it("rejects a group whose role is not user, without any write", () => {
     groupRole = "assistant";
 
-    await expect(
-      appendUserMessageVersion(editInput, actor),
-    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
+    expect(() => appendUserMessageVersion(editInput, actor)).toThrow(
+      expect.objectContaining({ code: "NOT_FOUND", status: 404 }),
+    );
     expect(capturedValues).toBeUndefined();
     expect(deselectedWhere).toBeUndefined();
   });
 
-  it("rejects an unknown group, without any write", async () => {
+  it("rejects an unknown group, without any write", () => {
     groupRole = null;
 
-    await expect(
-      appendUserMessageVersion(editInput, actor),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(() => appendUserMessageVersion(editInput, actor)).toThrow(
+      expect.objectContaining({ code: "NOT_FOUND" }),
+    );
     expect(capturedValues).toBeUndefined();
   });
 });
@@ -675,44 +679,54 @@ describe("appendAssistantMessage", () => {
       insert: () => ({
         values: (values: ChatMessageInsert) => {
           capturedValues = values;
-          return { returning: async () => [rowValue] };
+          return { returning: () => ({ get: () => rowValue }) };
         },
       }),
-      transaction: async (
+      transaction: (
         fn: (tx: {
-          update: () => { set: (v: unknown) => { where: (w: unknown) => Promise<void> } };
+          update: () => {
+            set: (v: unknown) => { where: (w: unknown) => { run: () => void } };
+          };
           select: () => {
             from: () => {
-              where: () => { limit: () => Promise<{ groupCreatedAt: Date }[]> };
+              where: () => {
+                limit: () => { get: () => { groupCreatedAt: Date } };
+              };
             };
           };
           insert: () => {
-            values: (v: ChatMessageInsert) => { returning: () => Promise<ChatMessageRow[]> };
+            values: (v: ChatMessageInsert) => {
+              returning: () => { get: () => ChatMessageRow };
+            };
           };
-        }) => Promise<unknown>,
+        }) => unknown,
       ) =>
         fn({
           update: () => ({
             set: () => ({
-              where: async (whereClause: unknown) => {
-                updatedWhere = whereClause;
-              },
+              where: (whereClause: unknown) => ({
+                run: () => {
+                  updatedWhere = whereClause;
+                },
+              }),
             }),
           }),
           // Sibling anchor lookup for group-version inserts.
           select: () => ({
             from: () => ({
               where: () => ({
-                limit: async () => [
-                  { groupCreatedAt: new Date("2026-01-01T00:00:00.000Z") },
-                ],
+                limit: () => ({
+                  get: () => ({
+                    groupCreatedAt: new Date("2026-01-01T00:00:00.000Z"),
+                  }),
+                }),
               }),
             }),
           }),
           insert: () => ({
             values: (values: ChatMessageInsert) => {
               capturedValues = values;
-              return { returning: async () => [rowValue] };
+              return { returning: () => ({ get: () => rowValue }) };
             },
           }),
         }),
@@ -724,7 +738,7 @@ describe("appendAssistantMessage", () => {
     updatedWhere = undefined;
     findTopicContextForActor.mockReset();
     getDb.mockReset();
-    findTopicContextForActor.mockResolvedValue({ id: "topic-1" });
+    findTopicContextForActor.mockReturnValue({ id: "topic-1" });
   });
 
   const baseInput = {

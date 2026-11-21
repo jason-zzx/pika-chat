@@ -80,7 +80,7 @@ function makeFile(overrides: Partial<FileRecord> = {}): FileRecord {
   };
 }
 
-/** jsonb is not validated by the driver, so a bad row is a real possibility. */
+/** JSON column is not validated by the driver, so a bad row is a real possibility. */
 function malformedReferences(json: string): FileRecord["providerReferences"] {
   return JSON.parse(json);
 }
@@ -96,7 +96,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Chunks of a drizzle `sql` template, for asserting the jsonb merge. */
+/** Chunks of a drizzle `sql` template, for asserting the SQLite `json_set` merge. */
 function sqlChunks(table: unknown): unknown[] {
   for (const call of mocks.dbUpdate.mock.calls) {
     if (call[0] !== table || !isRecord(call[1])) {
@@ -112,15 +112,18 @@ function sqlChunks(table: unknown): unknown[] {
 
 /** The record just written for `CONFIG_ID`. */
 function writtenRecord(): Record<string, unknown> {
-  const json = sqlChunks(files).find(
+  const chunks = sqlChunks(files);
+  if (!chunks.includes(`$."${CONFIG_ID}"`)) {
+    throw new Error(`expected json_set path for ${CONFIG_ID}`);
+  }
+  const json = chunks.find(
     (chunk): chunk is string => typeof chunk === "string" && chunk.startsWith("{"),
   );
   const parsed: unknown = JSON.parse(json ?? "{}");
-  const entry = isRecord(parsed) ? parsed[CONFIG_ID] : undefined;
-  if (!isRecord(entry)) {
+  if (!isRecord(parsed)) {
     throw new Error(`no reference record written for ${CONFIG_ID}`);
   }
-  return entry;
+  return parsed;
 }
 
 function updateCount(table: unknown): number {

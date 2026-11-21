@@ -33,29 +33,27 @@ describe("demo-usage.service", () => {
     const day1 = "2026-11-13";
     const day2 = "2026-11-14";
 
-    const results = await Promise.all(
-      Array.from({ length: 6 }, () =>
-        consumeDemoQuota({ subject, kind: "model", limit: 3, day: day1 }),
-      ),
+    const results = Array.from({ length: 6 }, () =>
+      consumeDemoQuota({ subject, kind: "model", limit: 3, day: day1 }),
     );
     expect(results.filter(Boolean)).toHaveLength(3);
     expect(results.filter((ok) => !ok)).toHaveLength(3);
 
     // Next UTC day gets a fresh bucket.
-    await expect(
+    expect(
       consumeDemoQuota({ subject, kind: "model", limit: 3, day: day2 }),
-    ).resolves.toBe(true);
+    ).toBe(true);
   });
 
   it("rolls back both guest and global counters when the enclosing transaction fails", async () => {
     const guestId = newId();
 
-    await expect(
-      db.transaction(async (tx) => {
-        await consumeGuestModelTurnQuota(guestId, tx);
+    expect(() =>
+      db.transaction((tx) => {
+        consumeGuestModelTurnQuota(guestId, tx);
         throw new Error("simulated tx abort");
       }),
-    ).rejects.toThrow("simulated tx abort");
+    ).toThrow("simulated tx abort");
 
     const usage = await getGuestUsage(guestId);
     expect(usage.model.used).toBe(0);
@@ -69,9 +67,9 @@ describe("demo-usage.service", () => {
 
   it("reports each kind's count independently in getGuestUsage", async () => {
     const guestId = newId();
-    await consumeDemoQuota({ subject: guestId, kind: "search", limit: 10 });
-    await consumeDemoQuota({ subject: guestId, kind: "upload", limit: 5 });
-    await consumeDemoQuota({ subject: guestId, kind: "upload", limit: 5 });
+    consumeDemoQuota({ subject: guestId, kind: "search", limit: 10 });
+    consumeDemoQuota({ subject: guestId, kind: "upload", limit: 5 });
+    consumeDemoQuota({ subject: guestId, kind: "upload", limit: 5 });
 
     await expect(getGuestUsage(guestId)).resolves.toEqual({
       model: { used: 0, limit: 10 },

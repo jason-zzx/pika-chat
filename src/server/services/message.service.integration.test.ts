@@ -351,7 +351,7 @@ describe("message.service versions", () => {
     await expect(
       selectMessageVersion({ topicId, messageId: "m2" }, otherActor),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(
+    expect(() =>
       db.transaction((tx) =>
         appendUserMessage(
           { topicId, message: userMessage("m-foreign-u", "nope") },
@@ -359,8 +359,8 @@ describe("message.service versions", () => {
           { tx },
         ),
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
+    expect(() =>
       db.transaction((tx) =>
         appendUserMessageVersion(
           { topicId, groupId: "m1", message: userMessage("m-foreign-uv", "nope") },
@@ -368,8 +368,8 @@ describe("message.service versions", () => {
           { tx },
         ),
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
+    expect(() =>
       db.transaction((tx) =>
         appendAssistantMessage(
           {
@@ -383,11 +383,11 @@ describe("message.service versions", () => {
           { tx },
         ),
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
     const { insertAssistantPlaceholder } = await import(
       "@/server/services/message.service"
     );
-    await expect(
+    expect(() =>
       db.transaction((tx) =>
         insertAssistantPlaceholder(
           { topicId, id: "m-foreign-p" },
@@ -395,7 +395,7 @@ describe("message.service versions", () => {
           { tx },
         ),
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
     await expect(
       deleteMessage({ topicId, messageId: "nope" }, actor),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -664,18 +664,18 @@ describe("message.service versions", () => {
     const { actor, topicId } = await setupTopic();
     await seedTurn(topicId, actor, { user: "m1", assistant: "m2" });
 
-    await expect(
+    expect(() =>
       appendUserMessageVersion(
         { topicId, groupId: "m2", message: userMessage("m9", "nope") },
         actor,
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
-    await expect(
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND", status: 404 }));
+    expect(() =>
       appendUserMessageVersion(
         { topicId, groupId: "gone", message: userMessage("m9", "nope") },
         actor,
       ),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).toThrow(expect.objectContaining({ code: "NOT_FOUND" }));
 
     expect(await storedMessageIds(topicId)).toEqual(["m1", "m2"]);
   });

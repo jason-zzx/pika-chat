@@ -1,15 +1,10 @@
 import "server-only";
 
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { requireActor } from "@/server/auth/actor";
 import { updateInstanceSettings } from "@/server/services/instance-settings.service";
-import { newId } from "@/lib/id";
 import {
   adminCredentials,
   authGet,
@@ -98,11 +93,6 @@ async function adminCreateUser(
     }),
   );
 }
-
-const promoteMigrationPath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../db/migrations/0002_promote_first_user_to_super_admin.sql",
-);
 
 async function resetAuthState(): Promise<void> {
   await db.delete(providerModels);
@@ -847,57 +837,6 @@ describe("auth", () => {
     expect(oldPassword.status).toBe(401);
     const newPassword = await signInEmail(adminCredentials.email, "password2");
     expect(newPassword.status).toBe(200);
-  });
-
-  it("promotes the earliest user to super_admin when none exists", async () => {
-    const earlier = new Date("2026-01-01T00:00:00.000Z");
-    const later = new Date("2026-06-01T00:00:00.000Z");
-    const firstId = newId();
-    const secondId = newId();
-    await db.insert(users).values([
-      {
-        id: firstId,
-        name: "legacy",
-        email: "legacy@example.com",
-        username: "legacy",
-        role: "admin",
-        emailVerified: false,
-        banned: false,
-        createdAt: earlier,
-        updatedAt: earlier,
-      },
-      {
-        id: secondId,
-        name: "later",
-        email: "later@example.com",
-        username: "later",
-        role: "user",
-        emailVerified: false,
-        banned: false,
-        createdAt: later,
-        updatedAt: later,
-      },
-    ]);
-
-    const contents = readFileSync(promoteMigrationPath, "utf8")
-      .split("\n")
-      .filter((line) => !line.startsWith("--") && line.trim().length > 0)
-      .join("\n");
-    await db.execute(sql.raw(contents));
-
-    const rows = await db
-      .select({ id: users.id, role: users.role })
-      .from(users);
-    const byId = new Map(rows.map((row) => [row.id, row.role]));
-    expect(byId.get(firstId)).toBe("super_admin");
-    expect(byId.get(secondId)).toBe("user");
-
-    await db.execute(sql.raw(contents));
-    const again = await db
-      .select({ id: users.id, role: users.role })
-      .from(users)
-      .where(eq(users.id, secondId));
-    expect(again[0]?.role).toBe("user");
   });
 
   it("returns 404 for /api/auth/sign-in/anonymous when DEMO_MODE is unset", async () => {
