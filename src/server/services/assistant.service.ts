@@ -137,7 +137,7 @@ export async function listAssistantTree(
   }
 
   const db = getDb();
-  await insertWithShortId({
+  insertWithShortId({
     mint: newAssistantId,
     insert: (id) =>
       db
@@ -150,7 +150,8 @@ export async function listAssistantTree(
         })
         .onConflictDoNothing({
           target: [assistants.ownerId, assistants.name],
-        }),
+        })
+        .run(),
   });
 
   return { assistants: await selectTree(actor) };
@@ -169,10 +170,10 @@ export async function createAssistant(
   const db = getDb();
   let createdId: string;
   try {
-    ({ id: createdId } = await insertWithShortId({
+    ({ id: createdId } = insertWithShortId({
       mint: newAssistantId,
-      insert: async (id) => {
-        const inserted = await db
+      insert: (id) => {
+        const inserted = db
           .insert(assistants)
           .values({
             id,
@@ -183,8 +184,9 @@ export async function createAssistant(
             defaultProviderConfigId: pair.defaultProviderConfigId,
             defaultModelId: pair.defaultModelId,
           })
-          .returning({ id: assistants.id });
-        if (!inserted[0]) {
+          .returning({ id: assistants.id })
+          .get();
+        if (!inserted) {
           throw new AppError("INTERNAL", 500, "assistant.createFailed");
         }
       },
@@ -261,44 +263,47 @@ export async function deleteAssistant(id: string, actor: Actor): Promise<void> {
   const db = getDb();
   let deletedTopicIds: string[] = [];
   let messageRows: { parts: unknown }[] = [];
-  await db.transaction(async (tx) => {
-    const owned = await tx
-      .select({ id: assistants.id })
-      .from(assistants)
-      .where(eq(assistants.ownerId, actor.userId))
-      .orderBy(asc(assistants.id))
-      .for("update");
+  db.transaction(
+    (tx) => {
+      const owned = tx
+        .select({ id: assistants.id })
+        .from(assistants)
+        .where(eq(assistants.ownerId, actor.userId))
+        .orderBy(asc(assistants.id))
+        .all();
 
-    if (!owned.some((row) => row.id === id)) {
-      throw new AppError("NOT_FOUND", 404, "assistant.notFound");
-    }
-    if (owned.length <= 1) {
-      throw new AppError(
-        "CONFLICT",
-        409,
-        "assistant.lastOne",
-      );
-    }
+      if (!owned.some((row) => row.id === id)) {
+        throw new AppError("NOT_FOUND", 404, "assistant.notFound");
+      }
+      if (owned.length <= 1) {
+        throw new AppError(
+          "CONFLICT",
+          409,
+          "assistant.lastOne",
+        );
+      }
 
-    // Deleting an assistant deletes its topics (cascade), which must cancel
-    // their generations in the same transaction (chat task §8): mark them
-    // target-deleted, then let the cascade remove the rows.
-    const topicIds = await topicIdsForAssistant(tx, id);
-    // Read after locking the topics: a final save that committed first must
-    // be included, just as in deleteTopic. Otherwise newly generated images
-    // disappear from the transcript but keep consuming the user's quota.
-    if (topicIds.length > 0) {
-      messageRows = await tx.select({ parts: chatMessages.parts })
-        .from(chatMessages).where(inArray(chatMessages.topicId, topicIds));
-    }
-    await markGenerationsForDeletedTopics(tx, topicIds);
-    await tx
-      .delete(assistants)
-      .where(
-        and(eq(assistants.id, id), eq(assistants.ownerId, actor.userId)),
-      );
-    deletedTopicIds = topicIds;
-  });
+      // Deleting an assistant deletes its topics (cascade), which must cancel
+      // their generations in the same transaction (chat task §8): mark them
+      // target-deleted, then let the cascade remove the rows.
+      const topicIds = topicIdsForAssistant(tx, id);
+      if (topicIds.length > 0) {
+        messageRows = tx
+          .select({ parts: chatMessages.parts })
+          .from(chatMessages)
+          .where(inArray(chatMessages.topicId, topicIds))
+          .all();
+      }
+      markGenerationsForDeletedTopics(tx, topicIds);
+      tx.delete(assistants)
+        .where(
+          and(eq(assistants.id, id), eq(assistants.ownerId, actor.userId)),
+        )
+        .run();
+      deletedTopicIds = topicIds;
+    },
+    { behavior: "immediate" },
+  );
   const { discardGenerationsForTopic } = await import(
     "@/server/ai/generation-runner"
   );

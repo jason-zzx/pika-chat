@@ -19,7 +19,7 @@ export function utcDayString(now: Date = new Date()): string {
  * Atomically consumes one unit of a daily quota counter. Returns true when the
  * increment stayed within `limit`, or false when the bucket is already full.
  */
-export async function consumeDemoQuota(
+export function consumeDemoQuota(
   input: {
     subject: string;
     kind: DemoUsageKind;
@@ -27,7 +27,7 @@ export async function consumeDemoQuota(
     day?: string;
     tx?: DbTransaction;
   },
-): Promise<boolean> {
+): boolean {
   const executor = input.tx ?? getDb();
   const day = input.day ?? utcDayString();
   const rows = executor.all<{ count: number }>(sql`
@@ -45,12 +45,12 @@ export async function consumeDemoQuota(
  * Consumes a guest turn's model call and the global guest ceiling inside the
  * admission transaction (so a later rollback refunds both).
  */
-export async function consumeGuestModelTurnQuota(
+export function consumeGuestModelTurnQuota(
   userId: string,
   tx: DbTransaction,
-): Promise<void> {
+): void {
   const env = getEnv();
-  const guestAllowed = await consumeDemoQuota({
+  const guestAllowed = consumeDemoQuota({
     subject: userId,
     kind: "model",
     limit: env.DEMO_DAILY_MODEL_CALLS,
@@ -59,7 +59,7 @@ export async function consumeGuestModelTurnQuota(
   if (!guestAllowed) {
     throw new AppError("RATE_LIMITED", 429, "demo.modelLimit");
   }
-  const globalAllowed = await consumeDemoQuota({
+  const globalAllowed = consumeDemoQuota({
     subject: "global",
     kind: "model",
     limit: env.DEMO_GLOBAL_DAILY_MODEL_CALLS,

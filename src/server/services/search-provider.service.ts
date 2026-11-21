@@ -164,34 +164,39 @@ export async function deleteSearchProviderSetting(
   actor: Actor,
 ): Promise<void> {
   const db = getDb();
-  await db.transaction(async (tx) => {
-    const deleted = await tx
-      .delete(searchProviderSettings)
-      .where(
-        and(
-          eq(searchProviderSettings.userId, actor.userId),
-          eq(searchProviderSettings.provider, provider),
-        ),
-      )
-      .returning({ id: searchProviderSettings.id });
-    if (!deleted[0]) {
-      throw new AppError("NOT_FOUND", 404, "searchProvider.notConfigured");
-    }
-    // Compact positions back to 0..n-1 in the remaining order.
-    const remaining = await tx
-      .select()
-      .from(searchProviderSettings)
-      .where(eq(searchProviderSettings.userId, actor.userId))
-      .orderBy(asc(searchProviderSettings.position));
-    for (const [index, row] of remaining.entries()) {
-      if (row.position !== index) {
-        await tx
-          .update(searchProviderSettings)
-          .set({ position: index })
-          .where(eq(searchProviderSettings.id, row.id));
+  db.transaction(
+    (tx) => {
+      const deleted = tx
+        .delete(searchProviderSettings)
+        .where(
+          and(
+            eq(searchProviderSettings.userId, actor.userId),
+            eq(searchProviderSettings.provider, provider),
+          ),
+        )
+        .returning({ id: searchProviderSettings.id })
+        .get();
+      if (!deleted) {
+        throw new AppError("NOT_FOUND", 404, "searchProvider.notConfigured");
       }
-    }
-  });
+      // Compact positions back to 0..n-1 in the remaining order.
+      const remaining = tx
+        .select()
+        .from(searchProviderSettings)
+        .where(eq(searchProviderSettings.userId, actor.userId))
+        .orderBy(asc(searchProviderSettings.position))
+        .all();
+      for (const [index, row] of remaining.entries()) {
+        if (row.position !== index) {
+          tx.update(searchProviderSettings)
+            .set({ position: index })
+            .where(eq(searchProviderSettings.id, row.id))
+            .run();
+        }
+      }
+    },
+    { behavior: "immediate" },
+  );
   logger.info(
     { userId: actor.userId, provider },
     "search provider setting deleted",
@@ -203,55 +208,59 @@ export async function reorderSearchProviders(
   actor: Actor,
 ): Promise<SearchProviderSetting[]> {
   const db = getDb();
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .select()
-      .from(searchProviderSettings)
-      .where(eq(searchProviderSettings.userId, actor.userId))
-      .orderBy(asc(searchProviderSettings.position));
+  return db.transaction(
+    (tx) => {
+      const rows = tx
+        .select()
+        .from(searchProviderSettings)
+        .where(eq(searchProviderSettings.userId, actor.userId))
+        .orderBy(asc(searchProviderSettings.position))
+        .all();
 
-    const requested = input.providers;
-    const current = rows.map((row) => row.provider);
-    const isPermutation =
-      requested.length === current.length &&
-      new Set(requested).size === current.length &&
-      current.every((provider) => requested.includes(provider));
-    if (!isPermutation) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        400,
-        "searchProvider.invalidOrder",
-      );
-    }
-
-    const byProvider = new Map(rows.map((row) => [row.provider, row]));
-    const reordered: SettingRow[] = [];
-    for (const [index, provider] of requested.entries()) {
-      const row = byProvider.get(provider);
-      if (!row) {
+      const requested = input.providers;
+      const current = rows.map((row) => row.provider);
+      const isPermutation =
+        requested.length === current.length &&
+        new Set(requested).size === current.length &&
+        current.every((provider) => requested.includes(provider));
+      if (!isPermutation) {
         throw new AppError(
           "VALIDATION_FAILED",
           400,
           "searchProvider.invalidOrder",
         );
       }
-      if (row.position !== index) {
-        const updated = await tx
-          .update(searchProviderSettings)
-          .set({ position: index, updatedAt: new Date() })
-          .where(eq(searchProviderSettings.id, row.id))
-          .returning();
-        const updatedRow = updated[0];
-        if (!updatedRow) {
-          throw new AppError("INTERNAL", 500, "searchProvider.reorderFailed");
+
+      const byProvider = new Map(rows.map((row) => [row.provider, row]));
+      const reordered: SettingRow[] = [];
+      for (const [index, provider] of requested.entries()) {
+        const row = byProvider.get(provider);
+        if (!row) {
+          throw new AppError(
+            "VALIDATION_FAILED",
+            400,
+            "searchProvider.invalidOrder",
+          );
         }
-        reordered.push(updatedRow);
-      } else {
-        reordered.push(row);
+        if (row.position !== index) {
+          const updatedRow = tx
+            .update(searchProviderSettings)
+            .set({ position: index, updatedAt: new Date() })
+            .where(eq(searchProviderSettings.id, row.id))
+            .returning()
+            .get();
+          if (!updatedRow) {
+            throw new AppError("INTERNAL", 500, "searchProvider.reorderFailed");
+          }
+          reordered.push(updatedRow);
+        } else {
+          reordered.push(row);
+        }
       }
-    }
-    return reordered.map(toSetting);
-  });
+      return reordered.map(toSetting);
+    },
+    { behavior: "immediate" },
+  );
 }
 
 /**

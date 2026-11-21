@@ -588,49 +588,54 @@ export async function syncProviderModels(
   );
 
   // Resolve catalog metadata outside the transaction: cold lookup performs an
-  // HTTP fetch, which must not hold a PGlite transaction mutex open.
+  // HTTP fetch, which must not hold a SQLite write transaction open.
   const metadataById = await fillMetadataForModelIds(addIds);
 
   const db = getDb();
-  const { addedCount, removedCount } = await db.transaction(async (tx) => {
-    const deleted =
-      removeIds.length > 0
-        ? await tx
-            .delete(providerModels)
-            .where(
-              and(
-                eq(providerModels.providerConfigId, configId),
-                inArray(providerModels.modelId, removeIds),
-              ),
-            )
-            .returning({ id: providerModels.id })
-        : [];
-
-    const inserted =
-      addIds.length > 0
-        ? await tx
-            .insert(providerModels)
-            .values(
-              addIds.map((modelId) => ({
-                id: newId(),
-                providerConfigId: configId,
-                modelId,
-                ...fillValues(
-                  metadataById.get(modelId) ?? defaultModelMetadata(),
+  const { addedCount, removedCount } = db.transaction(
+    (tx) => {
+      const deleted =
+        removeIds.length > 0
+          ? tx
+              .delete(providerModels)
+              .where(
+                and(
+                  eq(providerModels.providerConfigId, configId),
+                  inArray(providerModels.modelId, removeIds),
                 ),
-              })),
-            )
-            .onConflictDoNothing({
-              target: [providerModels.providerConfigId, providerModels.modelId],
-            })
-            .returning({ id: providerModels.id })
-        : [];
+              )
+              .returning({ id: providerModels.id })
+              .all()
+          : [];
 
-    return {
-      addedCount: inserted.length,
-      removedCount: deleted.length,
-    };
-  });
+      const inserted =
+        addIds.length > 0
+          ? tx
+              .insert(providerModels)
+              .values(
+                addIds.map((modelId) => ({
+                  id: newId(),
+                  providerConfigId: configId,
+                  modelId,
+                  ...fillValues(
+                    metadataById.get(modelId) ?? defaultModelMetadata(),
+                  ),
+                })),
+              )
+              .onConflictDoNothing({
+                target: [providerModels.providerConfigId, providerModels.modelId],
+              })
+              .returning({ id: providerModels.id })
+              .all()
+          : [];
+
+      return {
+        addedCount: inserted.length,
+        removedCount: deleted.length,
+      };
+    },
+    { behavior: "immediate" },
+  );
 
   logger.info(
     { userId: actor.userId, configId, addedCount, removedCount },

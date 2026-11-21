@@ -39,7 +39,7 @@ export async function createTopicForChat(
 ): Promise<Topic> {
   const assistant = await requireOwnedAssistant(input.assistantId, actor);
   const db = getDb();
-  const { result: inserted } = await insertWithShortId({
+  const { result: row } = insertWithShortId({
     mint: newTopicId,
     insert: (id) =>
       db
@@ -49,9 +49,9 @@ export async function createTopicForChat(
           assistantId: assistant.id,
           title: defaultTitle,
         })
-        .returning(topicColumns),
+        .returning(topicColumns)
+        .get(),
   });
-  const row = inserted[0];
   if (!row) {
     throw new AppError("INTERNAL", 500, "topic.createFailed");
   }
@@ -170,27 +170,30 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
   // commits before the delete removes it. `deleteTopic` is the only writer of
   // this row, and the message cascade is the child side.
   let messageRows: { parts: unknown }[] = [];
-  const deleted = await db.transaction(async (tx) => {
-    const locked = await tx
-      .select({ id: topics.id })
-      .from(topics)
-      .where(owned)
-      .for("update");
-    if (locked.length === 0) {
-      throw new AppError("NOT_FOUND", 404, "topic.notFound");
-    }
-    // Attachment references are read AFTER the lock, so a finalize that
-    // committed its images just before this transaction is visible here and
-    // its files are cleaned. A finalize that loses the lock writes nothing and
-    // reclaims its own files (chat task §8 — no orphaned generated images).
-    messageRows = await tx
-      .select({ parts: chatMessages.parts })
-      .from(chatMessages)
-      .where(eq(chatMessages.topicId, id));
-    await markGenerationsForDeletedTopics(tx, [id]);
-    return tx.delete(topics).where(owned).returning({ id: topics.id });
-  });
-  if (!deleted[0]) {
+  const deleted = db.transaction(
+    (tx) => {
+      const locked = tx
+        .select({ id: topics.id })
+        .from(topics)
+        .where(owned)
+        .get();
+      if (!locked) {
+        throw new AppError("NOT_FOUND", 404, "topic.notFound");
+      }
+      // Attachment references are read AFTER taking the immediate write lock,
+      // so a finalize that committed its images just before this transaction is
+      // visible here and its files are cleaned.
+      messageRows = tx
+        .select({ parts: chatMessages.parts })
+        .from(chatMessages)
+        .where(eq(chatMessages.topicId, id))
+        .all();
+      markGenerationsForDeletedTopics(tx, [id]);
+      return tx.delete(topics).where(owned).returning({ id: topics.id }).get();
+    },
+    { behavior: "immediate" },
+  );
+  if (!deleted) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
   // After the commit (the deletion is durable), drop the local producer's
@@ -259,13 +262,13 @@ export type TopicContext = {
   };
 };
 
-export async function findTopicContextForActor(
+export function findTopicContextForActor(
   id: string,
   actor: Actor,
   options?: { tx?: DbTransaction },
-): Promise<TopicContext | null> {
+): TopicContext | null {
   const db = options?.tx ?? getDb();
-  const rows = await db
+  const row = db
     .select({
       topicId: topics.id,
       topicTitle: topics.title,
@@ -277,8 +280,8 @@ export async function findTopicContextForActor(
     .from(topics)
     .innerJoin(assistants, eq(assistants.id, topics.assistantId))
     .where(and(eq(topics.id, id), eq(assistants.ownerId, actor.userId)))
-    .limit(1);
-  const row = rows[0];
+    .limit(1)
+    .get();
   if (!row) {
     return null;
   }

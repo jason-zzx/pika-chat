@@ -11,7 +11,7 @@ import {
   type ChatUsage,
 } from "@/lib/schemas/chat";
 import type { Actor } from "@/server/auth/actor";
-import { getDb, type DbTransaction } from "@/server/db/client";
+import { getDb, type DbExecutor, type DbTransaction } from "@/server/db/client";
 import { chatMessages, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
 import {
@@ -123,12 +123,12 @@ export function textFromMessage(message: ChatUIMessage): string {
     .join("");
 }
 
-async function requireOwnedTopic(
+function requireOwnedTopic(
   topicId: string,
   actor: Actor,
   tx?: DbTransaction,
-): Promise<void> {
-  const context = await findTopicContextForActor(topicId, actor, { tx });
+): void {
+  const context = findTopicContextForActor(topicId, actor, { tx });
   if (!context) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
@@ -218,15 +218,16 @@ export async function messageVersionMetadata(
   return versionInfoOf(group, target);
 }
 
-async function listTopicRows(
+function listTopicRows(
   topicId: string,
-  executor: DbTransaction | ReturnType<typeof getDb> = getDb(),
-): Promise<ChatMessageRow[]> {
+  executor: DbExecutor = getDb(),
+): ChatMessageRow[] {
   return executor
     .select()
     .from(chatMessages)
     .where(eq(chatMessages.topicId, topicId))
-    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    .all();
 }
 
 /**
@@ -239,22 +240,23 @@ async function listTopicRows(
  * own version group, or in any earlier group, is locked. An unresolvable
  * boundary id locks nothing — the same fallback `messagesAfterBoundary` uses.
  */
-async function assertTargetNotCompressed(
+function assertTargetNotCompressed(
   topicId: string,
   targetId: string,
   knownGroups?: ChatMessageRow[][],
-  executor: DbTransaction | ReturnType<typeof getDb> = getDb(),
-): Promise<void> {
-  const boundaryRows = await executor
+  executor: DbExecutor = getDb(),
+): void {
+  const boundaryRow = executor
     .select({ summaryUpToMessageId: topics.summaryUpToMessageId })
     .from(topics)
     .where(eq(topics.id, topicId))
-    .limit(1);
-  const boundaryId = boundaryRows[0]?.summaryUpToMessageId ?? null;
+    .limit(1)
+    .get();
+  const boundaryId = boundaryRow?.summaryUpToMessageId ?? null;
   if (!boundaryId) {
     return;
   }
-  const groups = knownGroups ?? groupRows(await listTopicRows(topicId, executor));
+  const groups = knownGroups ?? groupRows(listTopicRows(topicId, executor));
   const boundaryIndex = groups.findIndex((group) =>
     group.some((row) => row.id === boundaryId),
   );
@@ -280,8 +282,8 @@ export async function listTopicMessages(
   input: { topicId: string },
   actor: Actor,
 ): Promise<ChatUIMessage[]> {
-  await requireOwnedTopic(input.topicId, actor);
-  const rows = await listTopicRows(input.topicId);
+  requireOwnedTopic(input.topicId, actor);
+  const rows = listTopicRows(input.topicId);
   return groupRows(rows).map((group) => {
     const selected = selectedRowOf(group);
     return rowToChatUIMessage(selected, versionInfoOf(group, selected));
@@ -298,7 +300,7 @@ export async function loadMessagesByIds(
   input: { topicId: string; ids: string[] },
   actor: Actor,
 ): Promise<ChatUIMessage[]> {
-  await requireOwnedTopic(input.topicId, actor);
+  requireOwnedTopic(input.topicId, actor);
   if (input.ids.length === 0) {
     return [];
   }
@@ -338,10 +340,10 @@ type UserMessageVersionInsertInput = {
  * Callers must establish topic ownership before invoking this writer:
  * the public wrapper uses `requireOwnedTopic`; admission uses `prepare*`.
  */
-export async function insertUserMessageRow(
-  executor: DbTransaction | ReturnType<typeof getDb>,
+export function insertUserMessageRow(
+  executor: DbExecutor,
   input: UserMessageInsertInput,
-): Promise<ChatUIMessage> {
+): ChatUIMessage {
   const id = input.message.id.length > 0 ? input.message.id : newId();
   // Attachments ride along in the persisted parts so the history keeps the
   // file references the UI renders; the model payload is routed separately at
@@ -352,7 +354,7 @@ export async function insertUserMessageRow(
       part.type === "file" ||
       part.type === "data-quote",
   );
-  const inserted = await executor
+  const row = executor
     .insert(chatMessages)
     .values({
       id,
@@ -362,29 +364,27 @@ export async function insertUserMessageRow(
       // User messages are always single-version groups keyed by their own id.
       groupId: id,
       // Caller passes the app-side turn-start time so every row in a topic
-      // shares one clock; the DB default would mix in the Postgres clock,
-      // whose drift (e.g. Docker/WSL2) can invert list ordering against the
-      // app-timestamped assistant rows.
+      // shares one clock; the DB default would mix in another clock source.
       ...(input.createdAt
         ? // New group: anchor to the row's own createdAt (single app clock);
-          // when omitted both fall back to the same statement's now() default.
+          // when omitted both fall back to the same statement's default.
           { createdAt: input.createdAt, groupCreatedAt: input.createdAt }
         : {}),
     })
-    .returning();
-  const row = inserted[0];
+    .returning()
+    .get();
   if (!row) {
     throw new AppError("INTERNAL", 500, "message.storeFailed");
   }
   return rowToChatUIMessage(row);
 }
 
-export async function appendUserMessage(
+export function appendUserMessage(
   input: UserMessageInsertInput,
   actor: Actor,
   options?: { tx?: DbTransaction },
-): Promise<ChatUIMessage> {
-  await requireOwnedTopic(input.topicId, actor, options?.tx);
+): ChatUIMessage {
+  requireOwnedTopic(input.topicId, actor, options?.tx);
   return insertUserMessageRow(options?.tx ?? getDb(), input);
 }
 
@@ -394,11 +394,11 @@ export async function appendUserMessage(
  * inserts the new selected version in one transaction. Callers must establish
  * topic ownership before invoking this writer.
  */
-export async function insertUserMessageVersionRow(
-  executor: DbTransaction | ReturnType<typeof getDb>,
+export function insertUserMessageVersionRow(
+  executor: DbExecutor,
   input: UserMessageVersionInsertInput,
-): Promise<ChatUIMessage> {
-  const groupRows = await executor
+): ChatUIMessage {
+  const groupRow = executor
     .select({
       role: chatMessages.role,
       groupCreatedAt: chatMessages.groupCreatedAt,
@@ -410,10 +410,11 @@ export async function insertUserMessageVersionRow(
         eq(chatMessages.groupId, input.groupId),
       ),
     )
-    .limit(1);
+    .limit(1)
+    .get();
   // Editing applies to user messages only; an unknown group and a non-user
   // group are indistinguishable to the caller.
-  if (groupRows[0]?.role !== "user") {
+  if (groupRow?.role !== "user") {
     throw new AppError("NOT_FOUND", 404, "message.notFound");
   }
   const id = input.message.id.length > 0 ? input.message.id : newId();
@@ -423,33 +424,36 @@ export async function insertUserMessageVersionRow(
       part.type === "file" ||
       part.type === "data-quote",
   );
-  const row = await executor.transaction(async (tx) => {
-    await tx
-      .update(chatMessages)
-      .set({ isSelected: false })
-      .where(
-        and(
-          eq(chatMessages.topicId, input.topicId),
-          eq(chatMessages.groupId, input.groupId),
-        ),
-      );
-    const inserted = await tx
-      .insert(chatMessages)
-      .values({
-        id,
-        topicId: input.topicId,
-        role: "user",
-        parts,
-        groupId: input.groupId,
-        // App-side turn time, same single-clock rule as appendUserMessage.
-        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
-        // The version inherits the group's position anchor (verified to
-        // exist by the role check above).
-        groupCreatedAt: groupRows[0]!.groupCreatedAt,
-      })
-      .returning();
-    return inserted[0];
-  });
+  const row = executor.transaction(
+    (tx) => {
+      tx.update(chatMessages)
+        .set({ isSelected: false })
+        .where(
+          and(
+            eq(chatMessages.topicId, input.topicId),
+            eq(chatMessages.groupId, input.groupId),
+          ),
+        )
+        .run();
+      return tx
+        .insert(chatMessages)
+        .values({
+          id,
+          topicId: input.topicId,
+          role: "user",
+          parts,
+          groupId: input.groupId,
+          // App-side turn time, same single-clock rule as appendUserMessage.
+          ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+          // The version inherits the group's position anchor (verified to
+          // exist by the role check above).
+          groupCreatedAt: groupRow.groupCreatedAt,
+        })
+        .returning()
+        .get();
+    },
+    { behavior: "immediate" },
+  );
   if (!row) {
     throw new AppError("INTERNAL", 500, "message.storeFailed");
   }
@@ -463,12 +467,12 @@ export async function insertUserMessageVersionRow(
  * versions of the group — the same contract as appendAssistantMessage's group
  * branch.
  */
-export async function appendUserMessageVersion(
+export function appendUserMessageVersion(
   input: UserMessageVersionInsertInput,
   actor: Actor,
   options?: { tx?: DbTransaction },
-): Promise<ChatUIMessage> {
-  await requireOwnedTopic(input.topicId, actor, options?.tx);
+): ChatUIMessage {
+  requireOwnedTopic(input.topicId, actor, options?.tx);
   return insertUserMessageVersionRow(options?.tx ?? getDb(), input);
 }
 
@@ -511,10 +515,10 @@ type AssistantMessageInsert = {
  * finalize go through here, so the row identity never changes mid-turn.
  * Callers must establish topic ownership before invoking this writer.
  */
-export async function insertAssistantRow(
-  executor: DbTransaction | ReturnType<typeof getDb>,
+export function insertAssistantRow(
+  executor: DbExecutor,
   input: AssistantMessageInsert,
-): Promise<ChatUIMessage> {
+): ChatUIMessage {
   const values = {
     id: input.id,
     topicId: input.topicId,
@@ -524,7 +528,7 @@ export async function insertAssistantRow(
     errorMessage: input.errorMessage ?? null,
     providerConfigId: input.providerConfigId,
     modelId: input.modelId,
-    // Undefined falls back to the column default (null / defaultNow());
+    // Undefined falls back to the column default (null / DB timestamp);
     // createdAt is the turn-start time so a reloaded history shows the same
     // value the live stream announced.
     reasoningMs: input.reasoningMs,
@@ -534,56 +538,60 @@ export async function insertAssistantRow(
     groupId: input.groupId ?? input.id,
     // New group: anchor to the explicit override, else the row's own
     // createdAt (undefined lets both fall back to the same statement's
-    // now() default). The existing-group branch overwrites this below.
+    // default). The existing-group branch overwrites this below.
     groupCreatedAt: input.groupCreatedAt ?? input.createdAt,
   };
   const existingGroupId = input.groupId;
   const row = existingGroupId
     ? // New version of an existing group: deselect siblings and insert the
       // new selected version atomically (partial unique index on the group).
-      await executor.transaction(async (tx) => {
-        await tx
-          .update(chatMessages)
-          .set({ isSelected: false })
-          .where(
-            and(
-              eq(chatMessages.topicId, input.topicId),
-              eq(chatMessages.groupId, existingGroupId),
-            ),
-          );
-        // Inherit the group's position anchor from any sibling so the
-        // version never re-anchors the group to its own createdAt.
-        const siblings = await tx
-          .select({ groupCreatedAt: chatMessages.groupCreatedAt })
-          .from(chatMessages)
-          .where(
-            and(
-              eq(chatMessages.topicId, input.topicId),
-              eq(chatMessages.groupId, existingGroupId),
-            ),
-          )
-          .limit(1);
-        const inserted = await tx
-          .insert(chatMessages)
-          .values({
-            ...values,
-            // An empty group here is unreachable (resolveRegenerateTarget
-            // only returns groups with rows); fall back to the precomputed
-            // anchor rather than dropping the column.
-            groupCreatedAt:
-              siblings[0]?.groupCreatedAt ?? values.groupCreatedAt,
-          })
-          .returning();
-        return inserted[0];
-      })
-    : (await executor.insert(chatMessages).values(values).returning())[0];
+      executor.transaction(
+        (tx) => {
+          tx.update(chatMessages)
+            .set({ isSelected: false })
+            .where(
+              and(
+                eq(chatMessages.topicId, input.topicId),
+                eq(chatMessages.groupId, existingGroupId),
+              ),
+            )
+            .run();
+          // Inherit the group's position anchor from any sibling so the
+          // version never re-anchors the group to its own createdAt.
+          const sibling = tx
+            .select({ groupCreatedAt: chatMessages.groupCreatedAt })
+            .from(chatMessages)
+            .where(
+              and(
+                eq(chatMessages.topicId, input.topicId),
+                eq(chatMessages.groupId, existingGroupId),
+              ),
+            )
+            .limit(1)
+            .get();
+          return tx
+            .insert(chatMessages)
+            .values({
+              ...values,
+              // An empty group here is unreachable (resolveRegenerateTarget
+              // only returns groups with rows); fall back to the precomputed
+              // anchor rather than dropping the column.
+              groupCreatedAt:
+                sibling?.groupCreatedAt ?? values.groupCreatedAt,
+            })
+            .returning()
+            .get();
+        },
+        { behavior: "immediate" },
+      )
+    : executor.insert(chatMessages).values(values).returning().get();
   if (!row) {
     throw new AppError("INTERNAL", 500, "message.storeFailed");
   }
   return rowToChatUIMessage(row);
 }
 
-export async function appendAssistantMessage(
+export function appendAssistantMessage(
   input: {
     topicId: string;
     message: ChatUIMessage;
@@ -600,8 +608,8 @@ export async function appendAssistantMessage(
   },
   actor: Actor,
   options?: { tx?: DbTransaction },
-): Promise<ChatUIMessage> {
-  await requireOwnedTopic(input.topicId, actor, options?.tx);
+): ChatUIMessage {
+  requireOwnedTopic(input.topicId, actor, options?.tx);
   return insertAssistantRow(options?.tx ?? getDb(), {
     topicId: input.topicId,
     id: input.message.id.length > 0 ? input.message.id : newId(),
@@ -625,7 +633,7 @@ export async function appendAssistantMessage(
  * selected state and the message identity are fixed for the whole turn. The
  * executor later UPDATEs this same row with the produced parts.
  */
-export async function insertAssistantPlaceholder(
+export function insertAssistantPlaceholder(
   input: {
     topicId: string;
     id: string;
@@ -635,8 +643,8 @@ export async function insertAssistantPlaceholder(
   },
   actor: Actor,
   options?: { tx?: DbTransaction },
-): Promise<ChatUIMessage> {
-  await requireOwnedTopic(input.topicId, actor, options?.tx);
+): ChatUIMessage {
+  requireOwnedTopic(input.topicId, actor, options?.tx);
   return insertAssistantRow(options?.tx ?? getDb(), {
     topicId: input.topicId,
     id: input.id,
@@ -681,11 +689,11 @@ export type AssistantTurnWrite = {
  * Returns false when the row no longer exists (topic/message deleted while the
  * turn ran); the caller must then discard its output instead of re-creating it.
  */
-export async function writeAssistantTurnRow(
-  executor: DbTransaction | ReturnType<typeof getDb>,
+export function writeAssistantTurnRow(
+  executor: DbExecutor,
   input: AssistantTurnWrite,
-): Promise<boolean> {
-  const updated = await executor
+): boolean {
+  const updated = executor
     .update(chatMessages)
     .set({
       ...(input.parts === undefined ? {} : { parts: input.parts }),
@@ -712,63 +720,68 @@ export async function writeAssistantTurnRow(
         eq(chatMessages.role, "assistant"),
       ),
     )
-    .returning({ id: chatMessages.id });
-  return updated.length > 0;
+    .returning({ id: chatMessages.id })
+    .get();
+  return updated !== undefined;
 }
 
 export async function deleteMessage(
   input: { topicId: string; messageId: string },
   actor: Actor,
 ): Promise<{ deleted: true; groupEmpty: boolean }> {
-  await requireOwnedTopic(input.topicId, actor);
+  requireOwnedTopic(input.topicId, actor);
   const db = getDb();
   // Attachment ids referenced by the row being removed, collected inside the
   // transaction so the post-commit cleanup sees the reference already gone.
   let releasedFileIds: string[] = [];
-  const result = await db.transaction(async (tx) => {
-    // A running turn owns the topic's context: deleting a message under it
-    // would generate against a history that no longer exists (chat task §8).
-    await lockTopicAndAssertIdle(tx, input.topicId);
-    const targets = await tx
-      .select()
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.topicId, input.topicId),
-          eq(chatMessages.id, input.messageId),
-        ),
-      )
-      .limit(1);
-    const target = targets[0];
-    if (!target) {
-      // Missing and foreign messages are indistinguishable to the caller.
-      throw new AppError("NOT_FOUND", 404, "message.notFound");
-    }
-    // PRD R10: the compressed zone is immutable; check before deleting.
-    await assertTargetNotCompressed(input.topicId, target.id, undefined, tx);
-    releasedFileIds = fileIdsFromParts(target.parts);
-    await tx.delete(chatMessages).where(eq(chatMessages.id, target.id));
-    const remaining = await tx
-      .select()
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.topicId, input.topicId),
-          eq(chatMessages.groupId, target.groupId),
-        ),
-      )
-      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
-    const groupEmpty = remaining.length === 0;
-    const latest = remaining[remaining.length - 1];
-    if (target.isSelected && latest) {
-      // Fall back to the newest remaining version.
-      await tx
-        .update(chatMessages)
-        .set({ isSelected: true })
-        .where(eq(chatMessages.id, latest.id));
-    }
-    return { deleted: true as const, groupEmpty };
-  });
+  const result = db.transaction(
+    (tx) => {
+      // A running turn owns the topic's context: deleting a message under it
+      // would generate against a history that no longer exists (chat task §8).
+      lockTopicAndAssertIdle(tx, input.topicId);
+      const target = tx
+        .select()
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.topicId, input.topicId),
+            eq(chatMessages.id, input.messageId),
+          ),
+        )
+        .limit(1)
+        .get();
+      if (!target) {
+        // Missing and foreign messages are indistinguishable to the caller.
+        throw new AppError("NOT_FOUND", 404, "message.notFound");
+      }
+      // PRD R10: the compressed zone is immutable; check before deleting.
+      assertTargetNotCompressed(input.topicId, target.id, undefined, tx);
+      releasedFileIds = fileIdsFromParts(target.parts);
+      tx.delete(chatMessages).where(eq(chatMessages.id, target.id)).run();
+      const remaining = tx
+        .select()
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.topicId, input.topicId),
+            eq(chatMessages.groupId, target.groupId),
+          ),
+        )
+        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+        .all();
+      const groupEmpty = remaining.length === 0;
+      const latest = remaining[remaining.length - 1];
+      if (target.isSelected && latest) {
+        // Fall back to the newest remaining version.
+        tx.update(chatMessages)
+          .set({ isSelected: true })
+          .where(eq(chatMessages.id, latest.id))
+          .run();
+      }
+      return { deleted: true as const, groupEmpty };
+    },
+    { behavior: "immediate" },
+  );
   // After the row is gone so the reference check no longer sees it. Best-effort
   // by contract; a failure is reclaimed by the orphan sweeper later.
   await deleteFilesIfUnreferenced(releasedFileIds, actor);
@@ -779,40 +792,43 @@ export async function selectMessageVersion(
   input: { topicId: string; messageId: string },
   actor: Actor,
 ): Promise<void> {
-  await requireOwnedTopic(input.topicId, actor);
+  requireOwnedTopic(input.topicId, actor);
   const db = getDb();
-  await db.transaction(async (tx) => {
-    await lockTopicAndAssertIdle(tx, input.topicId);
-    const targets = await tx
-      .select({ id: chatMessages.id, groupId: chatMessages.groupId })
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.topicId, input.topicId),
-          eq(chatMessages.id, input.messageId),
-        ),
-      )
-      .limit(1);
-    const target = targets[0];
-    if (!target) {
-      throw new AppError("NOT_FOUND", 404, "message.notFound");
-    }
-    // Deselect first so the partial unique index never sees two selected
-    // versions of the same group.
-    await tx
-      .update(chatMessages)
-      .set({ isSelected: false })
-      .where(
-        and(
-          eq(chatMessages.topicId, input.topicId),
-          eq(chatMessages.groupId, target.groupId),
-        ),
-      );
-    await tx
-      .update(chatMessages)
-      .set({ isSelected: true })
-      .where(eq(chatMessages.id, target.id));
-  });
+  db.transaction(
+    (tx) => {
+      lockTopicAndAssertIdle(tx, input.topicId);
+      const target = tx
+        .select({ id: chatMessages.id, groupId: chatMessages.groupId })
+        .from(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.topicId, input.topicId),
+            eq(chatMessages.id, input.messageId),
+          ),
+        )
+        .limit(1)
+        .get();
+      if (!target) {
+        throw new AppError("NOT_FOUND", 404, "message.notFound");
+      }
+      // Deselect first so the partial unique index never sees two selected
+      // versions of the same group.
+      tx.update(chatMessages)
+        .set({ isSelected: false })
+        .where(
+          and(
+            eq(chatMessages.topicId, input.topicId),
+            eq(chatMessages.groupId, target.groupId),
+          ),
+        )
+        .run();
+      tx.update(chatMessages)
+        .set({ isSelected: true })
+        .where(eq(chatMessages.id, target.id))
+        .run();
+    },
+    { behavior: "immediate" },
+  );
 }
 
 export type RegenerateTarget = {
@@ -851,8 +867,8 @@ export async function resolveRegenerateTarget(
   input: { topicId: string; messageId: string },
   actor: Actor,
 ): Promise<RegenerateTarget> {
-  await requireOwnedTopic(input.topicId, actor);
-  const rows = await listTopicRows(input.topicId);
+  requireOwnedTopic(input.topicId, actor);
+  const rows = listTopicRows(input.topicId);
   const target = rows.find((row) => row.id === input.messageId);
   if (!target) {
     throw new AppError("NOT_FOUND", 404, "message.notFound");
@@ -860,7 +876,7 @@ export async function resolveRegenerateTarget(
   const groups = groupRows(rows);
   // PRD R10: regenerating inside the compressed zone would produce an answer
   // whose context the summary no longer reflects; reject it.
-  await assertTargetNotCompressed(input.topicId, target.id, groups);
+  assertTargetNotCompressed(input.topicId, target.id, groups);
   const targetGroupIndex = groups.findIndex((group) =>
     group.some((row) => row.id === target.id),
   );

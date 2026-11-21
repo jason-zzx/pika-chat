@@ -20,7 +20,6 @@ import {
   chatGenerations,
   chatMessages,
   topics,
-  users,
   type ChatGenerationInput,
 } from "@/server/db/schema";
 import { consumeGuestModelTurnQuota } from "@/server/services/demo-usage.service";
@@ -391,163 +390,163 @@ async function acceptTurn(
   let createdTopicId: string | null = null;
   let duplicate: GenerationRow | null = null;
   try {
-    const row = await db.transaction(async (tx) => {
-      let topicId = prepared.topicId;
-      if (topicId === null) {
-        // Fresh topic: no parent lock needed, the id is new.
-        const { result } = await insertWithShortId({
-          mint: newTopicId,
-          insert: (id) =>
-            tx
-              .insert(topics)
-              .values({
-                id,
-                assistantId: prepared.assistantId,
-                title: prepared.defaultTopicTitle,
-              })
-              .returning({ id: topics.id }),
-        });
-        topicId = result[0]?.id ?? null;
-        createdTopicId = topicId;
+    const row = db.transaction(
+      (tx) => {
+        let topicId = prepared.topicId;
         if (topicId === null) {
-          throw new AppError("INTERNAL", 500, "topic.createFailed");
+          // Fresh topic: id is new.
+          const { result } = insertWithShortId({
+            mint: newTopicId,
+            insert: (id) =>
+              tx
+                .insert(topics)
+                .values({
+                  id,
+                  assistantId: prepared.assistantId,
+                  title: prepared.defaultTopicTitle,
+                })
+                .returning({ id: topics.id })
+                .get(),
+          });
+          topicId = result?.id ?? null;
+          createdTopicId = topicId;
+          if (topicId === null) {
+            throw new AppError("INTERNAL", 500, "topic.createFailed");
+          }
+        } else {
+          // Immediate write transaction already serializes writers; check
+          // parent existence and context validity inside the transaction.
+          const lockedTopic = tx
+            .select({
+              id: topics.id,
+              summaryUpToMessageId: topics.summaryUpToMessageId,
+            })
+            .from(topics)
+            .where(eq(topics.id, topicId))
+            .get();
+          if (!lockedTopic) {
+            throw new AppError("NOT_FOUND", 404, "topic.notFound");
+          }
+          if (requestId) {
+            // Re-check the receipt inside the serialized transaction: two
+            // requests retrying the same request id serialize here, and the
+            // second returns the winner's task instead of a topic conflict.
+            const receipt = tx
+              .select()
+              .from(chatGenerations)
+              .where(
+                and(
+                  eq(chatGenerations.userId, actor.userId),
+                  eq(chatGenerations.requestId, requestId),
+                ),
+              )
+              .limit(1)
+              .get();
+            if (receipt) {
+              assertReceiptMatches(receipt, prepared.requestHash);
+              duplicate = receipt;
+              return receipt;
+            }
+          }
+          // The context the turn was prepared against is validated HERE, inside
+          // the serialized write transaction: another context mutation (version
+          // switch, delete, manual compaction) or a previous turn may have
+          // completed between preparation and admission.
+          assertFrozenContextValid(
+            tx,
+            topicId,
+            lockedTopic.summaryUpToMessageId,
+            prepared,
+          );
+          const active = tx
+            .select({ id: chatGenerations.id })
+            .from(chatGenerations)
+            .where(
+              and(
+                eq(chatGenerations.topicId, topicId),
+                inArray(chatGenerations.status, [...ACTIVE_GENERATION_STATUSES]),
+              ),
+            )
+            .limit(1)
+            .get();
+          if (active) {
+            throw new AppError("CONFLICT", 409, "generation.topicBusy");
+          }
         }
-      } else {
-        // Parent lock: the single-active-turn rule serializes on the topic row,
-        // in the same parent→child order the delete paths use.
-        const locked = await tx
-          .select({
-            id: topics.id,
-            summaryUpToMessageId: topics.summaryUpToMessageId,
-          })
-          .from(topics)
-          .where(eq(topics.id, topicId))
-          .for("update");
-        const lockedTopic = locked[0];
-        if (!lockedTopic) {
-          throw new AppError("NOT_FOUND", 404, "topic.notFound");
-        }
-        if (requestId) {
-          // Re-check the receipt under the lock: two tabs retrying the SAME
-          // request id both miss the pre-transaction lookup, and only one of
-          // them will hold the lock. Without this the loser would report a
-          // topic conflict instead of returning the winner's task.
-          const receipt = await tx
-            .select()
+
+        if (actor.isGuest) {
+          // Enforce at most one active generation per guest + daily/global
+          // quotas inside the serialized immediate transaction.
+          const guestActive = tx
+            .select({ id: chatGenerations.id })
             .from(chatGenerations)
             .where(
               and(
                 eq(chatGenerations.userId, actor.userId),
-                eq(chatGenerations.requestId, requestId),
+                inArray(chatGenerations.status, [...ACTIVE_GENERATION_STATUSES]),
               ),
             )
-            .limit(1);
-          if (receipt[0]) {
-            assertReceiptMatches(receipt[0], prepared.requestHash);
-            duplicate = receipt[0];
-            return receipt[0];
+            .limit(1)
+            .get();
+          if (guestActive) {
+            throw new AppError("CONFLICT", 409, "demo.busy");
+          }
+          consumeGuestModelTurnQuota(actor.userId, tx);
+        }
+
+        if (prepared.userMessage) {
+          const message = prepared.userMessage.message as never;
+          if (prepared.userMessage.versionOfGroupId) {
+            insertUserMessageVersionRow(tx, {
+              topicId,
+              groupId: prepared.userMessage.versionOfGroupId,
+              message,
+              createdAt: messageTime,
+            });
+          } else {
+            insertUserMessageRow(tx, {
+              topicId,
+              message,
+              createdAt: messageTime,
+            });
           }
         }
-        // The context the turn was prepared against is validated HERE, inside
-        // the lock: another context mutation (version switch, delete, manual
-        // compaction) or a previous turn may have completed between
-        // preparation and admission.
-        await assertFrozenContextValid(
-          tx,
+
+        insertAssistantRow(tx, {
           topicId,
-          lockedTopic.summaryUpToMessageId,
-          prepared,
-        );
-        const active = await tx
-          .select({ id: chatGenerations.id })
-          .from(chatGenerations)
-          .where(
-            and(
-              eq(chatGenerations.topicId, topicId),
-              inArray(chatGenerations.status, [...ACTIVE_GENERATION_STATUSES]),
-            ),
-          )
-          .limit(1);
-        if (active.length > 0) {
-          throw new AppError("CONFLICT", 409, "generation.topicBusy");
-        }
-      }
-
-      if (actor.isGuest) {
-        // Serialize concurrent sends across a guest's topics and enforce
-        // at most one active generation per guest + daily/global quotas.
-        await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.id, actor.userId))
-          .for("update");
-        const guestActive = await tx
-          .select({ id: chatGenerations.id })
-          .from(chatGenerations)
-          .where(
-            and(
-              eq(chatGenerations.userId, actor.userId),
-              inArray(chatGenerations.status, [...ACTIVE_GENERATION_STATUSES]),
-            ),
-          )
-          .limit(1);
-        if (guestActive.length > 0) {
-          throw new AppError("CONFLICT", 409, "demo.busy");
-        }
-        await consumeGuestModelTurnQuota(actor.userId, tx);
-      }
-
-      if (prepared.userMessage) {
-        const message = prepared.userMessage.message as never;
-        if (prepared.userMessage.versionOfGroupId) {
-          await insertUserMessageVersionRow(tx, {
-            topicId,
-            groupId: prepared.userMessage.versionOfGroupId,
-            message,
-            createdAt: messageTime,
-          });
-        } else {
-          await insertUserMessageRow(tx, {
-            topicId,
-            message,
-            createdAt: messageTime,
-          });
-        }
-      }
-
-      await insertAssistantRow(tx, {
-        topicId,
-        id: assistantMessageId,
-        parts: [],
-        outcome: null,
-        createdAt: placeholderTime,
-        groupId: prepared.assistantGroupId,
-        groupCreatedAt: prepared.assistantGroupCreatedAt,
-      });
-
-      const inserted = await tx
-        .insert(chatGenerations)
-        .values({
-          id: newId(),
-          userId: actor.userId,
-          requestId: requestId ?? null,
-          requestHash: prepared.requestHash,
-          requestExpiresAt,
-          kind: prepared.kind,
-          status: "queued",
-          topicId,
-          assistantMessageId,
-          input: { ...input, topicId },
+          id: assistantMessageId,
+          parts: [],
+          outcome: null,
           createdAt: placeholderTime,
-          updatedAt: placeholderTime,
-        })
-        .returning();
-      const generation = inserted[0];
-      if (!generation) {
-        throw new AppError("INTERNAL", 500, "generation.createFailed");
-      }
-      return generation;
-    });
+          groupId: prepared.assistantGroupId,
+          groupCreatedAt: prepared.assistantGroupCreatedAt,
+        });
+
+        const generation = tx
+          .insert(chatGenerations)
+          .values({
+            id: newId(),
+            userId: actor.userId,
+            requestId: requestId ?? null,
+            requestHash: prepared.requestHash,
+            requestExpiresAt,
+            kind: prepared.kind,
+            status: "queued",
+            topicId,
+            assistantMessageId,
+            input: { ...input, topicId },
+            createdAt: placeholderTime,
+            updatedAt: placeholderTime,
+          })
+          .returning()
+          .get();
+        if (!generation) {
+          throw new AppError("INTERNAL", 500, "generation.createFailed");
+        }
+        return generation;
+      },
+      { behavior: "immediate" },
+    );
     if (duplicate !== null) {
       return { generation: duplicate, duplicate: true };
     }
@@ -598,12 +597,12 @@ async function acceptTurn(
  * Any mismatch is a conflict: the client has to re-prepare against the current
  * context instead of generating an answer the server can no longer justify.
  */
-async function assertFrozenContextValid(
+function assertFrozenContextValid(
   tx: DbTransaction,
   topicId: string,
   summaryUpToMessageId: string | null,
   prepared: PreparedTurn,
-): Promise<void> {
+): void {
   const frozenSummaryBoundary = prepared.summary?.boundaryMessageId ?? null;
   if (frozenSummaryBoundary !== summaryUpToMessageId) {
     throw new AppError("CONFLICT", 409, "generation.contextChanged");
@@ -616,12 +615,13 @@ async function assertFrozenContextValid(
   if (ids.length === 0) {
     return;
   }
-  const rows = await tx
+  const rows = tx
     .select({ id: chatMessages.id })
     .from(chatMessages)
     .where(
       and(eq(chatMessages.topicId, topicId), inArray(chatMessages.id, ids)),
-    );
+    )
+    .all();
   const present = new Set(rows.map((row) => row.id));
   for (const id of ids) {
     if (!present.has(id)) {
@@ -790,94 +790,95 @@ export async function finalizeGeneration(
     input: null,
   } as const;
 
-  return db.transaction(async (tx) => {
-    if (input.topicId !== null) {
-      const lockedTopic = await tx
-        .select({ id: topics.id })
-        .from(topics)
-        .where(eq(topics.id, input.topicId))
-        .for("update");
-      if (lockedTopic.length === 0) {
-        // Parent already deleted: its transaction settled the task. Keep the
-        // task from lingering as active if it somehow was not (idempotent).
-        await tx
-          .update(chatGenerations)
-          .set(terminal)
-          .where(
-            and(
-              eq(chatGenerations.id, input.id),
-              inArray(chatGenerations.status, [
-                ...ACTIVE_GENERATION_STATUSES,
-              ]),
-            ),
-          );
+  return db.transaction(
+    (tx) => {
+      if (input.topicId !== null) {
+        const lockedTopic = tx
+          .select({ id: topics.id })
+          .from(topics)
+          .where(eq(topics.id, input.topicId))
+          .get();
+        if (!lockedTopic) {
+          // Parent already deleted: its transaction settled the task. Keep the
+          // task from lingering as active if it somehow was not (idempotent).
+          tx.update(chatGenerations)
+            .set(terminal)
+            .where(
+              and(
+                eq(chatGenerations.id, input.id),
+                inArray(chatGenerations.status, [
+                  ...ACTIVE_GENERATION_STATUSES,
+                ]),
+              ),
+            )
+            .run();
+          return { settled: false, messageStored: false, targetDeleted: true };
+        }
+      }
+
+      const current = tx
+        .select({
+          status: chatGenerations.status,
+          targetDeletedAt: chatGenerations.targetDeletedAt,
+        })
+        .from(chatGenerations)
+        .where(eq(chatGenerations.id, input.id))
+        .get();
+      if (!current) {
         return { settled: false, messageStored: false, targetDeleted: true };
       }
-    }
+      if (!isActiveGenerationStatus(current.status as GenerationStatus)) {
+        // Another writer (delete, boot recovery, earlier stop/finalize) already
+        // closed this task. Never overwrite a terminal state; report what it is,
+        // so a retried terminal write can tell a committed answer (its own lost
+        // acknowledgement) from a turn that ended without content.
+        return {
+          settled: false,
+          messageStored: false,
+          targetDeleted: current.targetDeletedAt !== null,
+          status: current.status as TerminalGenerationStatus,
+        };
+      }
 
-    const rows = await tx
-      .select({
-        status: chatGenerations.status,
-        targetDeletedAt: chatGenerations.targetDeletedAt,
-      })
-      .from(chatGenerations)
-      .where(eq(chatGenerations.id, input.id))
-      .for("update");
-    const current = rows[0];
-    if (!current) {
-      return { settled: false, messageStored: false, targetDeleted: true };
-    }
-    if (!isActiveGenerationStatus(current.status as GenerationStatus)) {
-      // Another writer (delete, boot recovery, earlier stop/finalize) already
-      // closed this task. Never overwrite a terminal state; report what it is,
-      // so a retried terminal write can tell a committed answer (its own lost
-      // acknowledgement) from a turn that ended without content.
-      return {
-        settled: false,
-        messageStored: false,
-        targetDeleted: current.targetDeletedAt !== null,
-        status: current.status as TerminalGenerationStatus,
-      };
-    }
+      const targetDeleted =
+        current.targetDeletedAt !== null ||
+        input.topicId === null ||
+        input.assistantMessageId === null;
+      // A stop can commit after the producer computed "completed" but before
+      // this transaction acquired the write lock. Never overwrite that decision
+      // with stale local state (including an error arriving after cancellation).
+      const status = current.status === "stopping" ? "stopped" : input.status;
+      const errorMessage = status === "stopped" ? null : terminal.errorMessage;
+      const message =
+        input.message && status === "stopped"
+          ? {
+              ...input.message,
+              outcome: "stopped" as const,
+              errorMessage: null,
+              ...(input.discardPartsOnStop ? { parts: [] } : {}),
+            }
+          : input.message;
+      const messageStored =
+        !targetDeleted && message !== null && message !== undefined
+          ? writeAssistantTurnRow(tx, message)
+          : false;
 
-    const targetDeleted =
-      current.targetDeletedAt !== null ||
-      input.topicId === null ||
-      input.assistantMessageId === null;
-    // A stop can commit after the producer computed "completed" but before
-    // this transaction acquired the task lock. Never overwrite that decision
-    // with stale local state (including an error arriving after cancellation).
-    const status = current.status === "stopping" ? "stopped" : input.status;
-    const errorMessage = status === "stopped" ? null : terminal.errorMessage;
-    const message = input.message && status === "stopped"
-      ? {
-          ...input.message,
-          outcome: "stopped" as const,
-          errorMessage: null,
-          ...(input.discardPartsOnStop ? { parts: [] } : {}),
-        }
-      : input.message;
-    const messageStored =
-      !targetDeleted && message !== null && message !== undefined
-        ? await writeAssistantTurnRow(tx, message)
-        : false;
+      tx.update(chatGenerations)
+        .set({ ...terminal, status, errorMessage })
+        .where(eq(chatGenerations.id, input.id))
+        .run();
 
-    await tx
-      .update(chatGenerations)
-      .set({ ...terminal, status, errorMessage })
-      .where(eq(chatGenerations.id, input.id));
+      if (input.topicId !== null && !targetDeleted) {
+        tx.update(topics)
+          .set({ updatedAt: now })
+          .where(eq(topics.id, input.topicId))
+          .run();
+      }
 
-    if (input.topicId !== null && !targetDeleted) {
-      // The row is already locked above, so this cannot deadlock with
-      // admission (same topic → generation order).
-      await tx
-        .update(topics)
-        .set({ updatedAt: now })
-        .where(eq(topics.id, input.topicId));
-    }
-
-    return { settled: true, messageStored, targetDeleted, status };
-  });
+      return { settled: true, messageStored, targetDeleted, status };
+    },
+    { behavior: "immediate" },
+  );
 }
 
 /**

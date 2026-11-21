@@ -11,14 +11,14 @@ const MAX_ATTEMPTS = 3;
  * transparent re-mint. A genuine user-facing conflict (e.g. duplicate name)
  * is retried pointlessly a couple of times, then rethrown unchanged.
  */
-export async function insertWithShortId<T>(args: {
+export function insertWithShortId<T>(args: {
   mint: () => string;
-  insert: (id: string) => Promise<T>;
-}): Promise<{ id: string; result: T }> {
+  insert: (id: string) => T;
+}): { id: string; result: T } {
   for (let attempt = 0; ; attempt += 1) {
     const id = args.mint();
     try {
-      return { id, result: await args.insert(id) };
+      return { id, result: args.insert(id) };
     } catch (error) {
       const canRetry = attempt + 1 < MAX_ATTEMPTS && isUniqueViolation(error);
       if (!canRetry) {

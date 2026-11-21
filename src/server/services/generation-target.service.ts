@@ -2,10 +2,9 @@ import "server-only";
 
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 
-import { AppError } from "@/server/errors";
-
-import type { getDb } from "@/server/db/client";
+import type { DbExecutor } from "@/server/db/client";
 import { chatGenerations, topics } from "@/server/db/schema";
+import { AppError } from "@/server/errors";
 
 /**
  * Target-deletion bookkeeping shared by the topic/assistant delete
@@ -17,15 +16,10 @@ import { chatGenerations, topics } from "@/server/db/schema";
  * service: a cycle).
  */
 
-type Db = ReturnType<typeof getDb>;
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-type Executor = Tx | Db;
-
 const ACTIVE_STATUSES = ["queued", "running", "stopping"] as const;
 
 /**
- * Runs inside the caller's delete transaction, in the fixed parent→child order
- * (topic/assistant row lock already held by the caller):
+ * Runs inside the caller's synchronous immediate transaction:
  *
  * - every generation targeting these topics loses its content association
  *   (input, receipt hash, assistant message id) and is marked deleted, so a
@@ -34,10 +28,10 @@ const ACTIVE_STATUSES = ["queued", "running", "stopping"] as const;
  * - turns that were still active become `stopped` here, which also releases
  *   the topic's partial unique slot before the row disappears.
  */
-export async function markGenerationsForDeletedTopics(
-  executor: Executor,
+export function markGenerationsForDeletedTopics(
+  executor: DbExecutor,
   topicIds: string[],
-): Promise<void> {
+): void {
   if (topicIds.length === 0) {
     return;
   }
@@ -45,7 +39,7 @@ export async function markGenerationsForDeletedTopics(
   // Stop the active turns FIRST: the clearing statement below also nulls
   // `topic_id` (the FK would do it on delete anyway), so a status update after
   // it would match nothing.
-  await executor
+  executor
     .update(chatGenerations)
     .set({ status: "stopped", finishedAt: now, errorMessage: null, updatedAt: now })
     .where(
@@ -53,8 +47,9 @@ export async function markGenerationsForDeletedTopics(
         inArray(chatGenerations.topicId, topicIds),
         inArray(chatGenerations.status, [...ACTIVE_STATUSES]),
       ),
-    );
-  await executor
+    )
+    .run();
+  executor
     .update(chatGenerations)
     .set({
       targetDeletedAt: now,
@@ -64,20 +59,20 @@ export async function markGenerationsForDeletedTopics(
       assistantMessageId: null,
       topicId: null,
     })
-    .where(inArray(chatGenerations.topicId, topicIds));
+    .where(inArray(chatGenerations.topicId, topicIds))
+    .run();
 }
 
-/** Lock child topics before their tasks, matching finalize's topic → task order. */
-export async function topicIdsForAssistant(
-  tx: Executor,
+export function topicIdsForAssistant(
+  tx: DbExecutor,
   assistantId: string,
-): Promise<string[]> {
-  const rows = await tx
+): string[] {
+  const rows = tx
     .select({ id: topics.id })
     .from(topics)
     .where(eq(topics.assistantId, assistantId))
     .orderBy(asc(topics.id))
-    .for("update");
+    .all();
   return rows.map((row) => row.id);
 }
 
@@ -85,12 +80,11 @@ export async function topicIdsForAssistant(
  * Context mutations (delete/select version, manual compression) are refused
  * while the topic has an active turn (chat task §8): the running answer was
  * generated from a specific version selection, so changing the selection or
- * the summary underneath it would make history and the reply disagree. The
- * check runs in the caller's transaction, taking the topic row lock first
- * (parent → child), the same order admission uses.
+ * the summary underneath it would make history and the reply disagree. Runs
+ * inside the caller's synchronous immediate transaction.
  */
-export async function lockTopicAndAssertIdle(
-  tx: Executor,
+export function lockTopicAndAssertIdle(
+  tx: DbExecutor,
   topicId: string,
   options: {
     /**
@@ -100,16 +94,16 @@ export async function lockTopicAndAssertIdle(
      */
     exceptGenerationId?: string;
   } = {},
-): Promise<void> {
-  const locked = await tx
+): void {
+  const locked = tx
     .select({ id: topics.id })
     .from(topics)
     .where(eq(topics.id, topicId))
-    .for("update");
-  if (locked.length === 0) {
+    .get();
+  if (!locked) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
-  const active = await tx
+  const active = tx
     .select({ id: chatGenerations.id })
     .from(chatGenerations)
     .where(
@@ -121,8 +115,9 @@ export async function lockTopicAndAssertIdle(
           : ne(chatGenerations.id, options.exceptGenerationId),
       ),
     )
-    .limit(1);
-  if (active.length > 0) {
+    .limit(1)
+    .get();
+  if (active) {
     throw new AppError("CONFLICT", 409, "generation.topicBusy");
   }
 }

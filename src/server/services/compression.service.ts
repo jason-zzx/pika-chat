@@ -6,7 +6,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 import type { ChatModelHandle } from "@/server/ai/chat-model";
 import type { Actor } from "@/server/auth/actor";
-import { getDb } from "@/server/db/client";
+import { getDb, type DbExecutor } from "@/server/db/client";
 import { lockTopicAndAssertIdle } from "@/server/services/generation-target.service";
 import { assistants, chatMessages, topics } from "@/server/db/schema";
 import { AppError } from "@/server/errors";
@@ -215,7 +215,7 @@ export type CompressionResult = {
  *   underneath it, so two compactions can never disagree.
  * - the MANUAL path (`exclusive`) asserts the topic is idle, plans outside any
  *   transaction, then re-locks, re-asserts idle and writes conditionally. The
- *   model call must not run inside a transaction: on PGlite that stalls every
+ *   model call must not run inside a transaction: on SQLite that stalls every
  *   other query in the process.
  *
  * Throws `topic.nothingToCompress` when there is no unsummarized history —
@@ -242,26 +242,35 @@ export async function compressTopicHistory(
   }
   const db = getDb();
   if (input.exclusive) {
-    await db.transaction(async (tx) => {
-      await lockTopicAndAssertIdle(tx, input.topicId);
-    });
+    db.transaction(
+      (tx) => {
+        lockTopicAndAssertIdle(tx, input.topicId);
+      },
+      { behavior: "immediate" },
+    );
     const plan = await planCompression(input, actor);
-    return db.transaction(async (tx) => {
-      await lockTopicAndAssertIdle(tx, input.topicId);
-      await writeSummary(tx, input.topicId, actor, plan);
-      return plan.result;
-    });
+    return db.transaction(
+      (tx) => {
+        lockTopicAndAssertIdle(tx, input.topicId);
+        writeSummary(tx, input.topicId, actor, plan);
+        return plan.result;
+      },
+      { behavior: "immediate" },
+    );
   }
   // Auto: assert the topic is idle EXCEPT for the turn asking for the summary,
   // then summarize without holding a lock (the model call must not block other
   // topics or this topic's own terminal write).
-  await db.transaction(async (tx) => {
-    await lockTopicAndAssertIdle(tx, input.topicId, {
-      exceptGenerationId: input.exceptGenerationId,
-    });
-  });
+  db.transaction(
+    (tx) => {
+      lockTopicAndAssertIdle(tx, input.topicId, {
+        exceptGenerationId: input.exceptGenerationId,
+      });
+    },
+    { behavior: "immediate" },
+  );
   const plan = await planCompression(input, actor);
-  await writeSummary(db, input.topicId, actor, plan);
+  writeSummary(db, input.topicId, actor, plan);
   return plan.result;
 }
 
@@ -344,13 +353,13 @@ async function planCompression(
  * another compaction committed in the meantime the write matches no row and the
  * caller must not pretend the newer summary is its own.
  */
-async function writeSummary(
-  executor: ReturnType<typeof getDb> | Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+function writeSummary(
+  executor: DbExecutor,
   topicId: string,
   actor: Actor,
   plan: CompressionPlan,
-): Promise<void> {
-  const updated = await executor
+): void {
+  const updated = executor
     .update(topics)
     .set({
       summaryText: plan.summaryText,
@@ -371,8 +380,9 @@ async function writeSummary(
         ),
       ),
     )
-    .returning({ id: topics.id });
-  if (updated.length === 0) {
+    .returning({ id: topics.id })
+    .get();
+  if (!updated) {
     throw new AppError("CONFLICT", 409, "topic.compressionMoved");
   }
 }
