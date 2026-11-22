@@ -4,6 +4,35 @@ export type ServerCheck =
   | { ok: true; version: string | null }
   | { ok: false; reason: "unreachable" | "not-pika" };
 
+export type DesktopThemeColors = {
+  isDark: boolean;
+  background: string;
+  foreground: string;
+  mutedForeground: string;
+  popover: string;
+  popoverForeground: string;
+  accent: string;
+  accentForeground: string;
+  border: string;
+  titlebarBackground?: string;
+  titlebarBorderless?: boolean;
+};
+
+export type TitlebarState = {
+  platform: "win32" | "linux" | "darwin";
+  title: string;
+  isMaximized: boolean;
+  theme: DesktopThemeColors;
+};
+
+export type ServerMenuData = {
+  servers: Server[];
+  activeServerId: string | null;
+  localName: string;
+  anchor: { x: number; y: number };
+  theme: DesktopThemeColors;
+};
+
 export interface PikaShell {
   appVersion: string;
   listServers(): Promise<{ servers: Server[]; lastServerId: string | null }>;
@@ -15,8 +44,25 @@ export interface PikaShell {
   desktop?: {
     openLocalLog(): Promise<void>;
     getLocalError(): Promise<string | null>;
-    getHotkey(): Promise<string | null>;
-    setHotkey(accelerator: string | null): Promise<{ ok: boolean }>;
+    setTheme(theme: DesktopThemeColors): void;
+    getDeveloperMode(): Promise<boolean>;
+    setDeveloperMode(enabled: boolean): Promise<void>;
+    openDevTools(): Promise<void>;
+    openDesktopLog(): Promise<void>;
+    windowControls: {
+      minimize(): void;
+      toggleMaximize(): void;
+      close(): void;
+      getState(): Promise<TitlebarState>;
+      onState(listener: (state: TitlebarState) => void): () => void;
+    };
+    serverMenu: {
+      getData(): Promise<ServerMenuData | null>;
+      onData(listener: (data: ServerMenuData) => void): () => void;
+      select(id: string): void;
+      open(screen: "add" | "list"): void;
+      close(): void;
+    };
   };
 }
 

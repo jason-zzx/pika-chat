@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceleratorFromKey, classifyHealth, isNewerVersion, normalizeServerUrl, sameMajorMinor } from "./servers";
+import { classifyHealth, isNewerVersion, normalizeServerUrl, sameMajorMinor } from "./servers";
 
 describe("normalizeServerUrl", () => {
   it("assumes https and reduces to an origin", () => {
@@ -47,36 +47,6 @@ describe("classifyHealth", () => {
     expect(classifyHealth(true, null)).toEqual({ ok: false, reason: "not-pika" });
     expect(classifyHealth(true, "ok")).toEqual({ ok: false, reason: "not-pika" });
     expect(classifyHealth(true, { ok: false })).toEqual({ ok: false, reason: "not-pika" });
-  });
-});
-
-describe("acceleratorFromKey", () => {
-  const none = { ctrlKey: false, metaKey: false, altKey: false, shiftKey: false };
-
-  it("maps the primary modifier to CommandOrControl per platform", () => {
-    expect(acceleratorFromKey({ ...none, ctrlKey: true, shiftKey: true, code: "Space" }, false)).toBe(
-      "CommandOrControl+Shift+Space",
-    );
-    expect(acceleratorFromKey({ ...none, metaKey: true, shiftKey: true, code: "Space" }, true)).toBe(
-      "CommandOrControl+Shift+Space",
-    );
-  });
-
-  it("keeps the secondary modifier distinct", () => {
-    expect(acceleratorFromKey({ ...none, ctrlKey: true, code: "KeyK" }, true)).toBe("Control+K");
-    expect(acceleratorFromKey({ ...none, metaKey: true, code: "KeyK" }, false)).toBe("Super+K");
-  });
-
-  it("names keys from their physical code", () => {
-    expect(acceleratorFromKey({ ...none, altKey: true, code: "Digit1" }, false)).toBe("Alt+1");
-    expect(acceleratorFromKey({ ...none, altKey: true, code: "F12" }, false)).toBe("Alt+F12");
-    expect(acceleratorFromKey({ ...none, altKey: true, code: "ArrowUp" }, false)).toBe("Alt+Up");
-  });
-
-  it("rejects modifier-only, unmodified and shift-only presses", () => {
-    expect(acceleratorFromKey({ ...none, ctrlKey: true, code: "ControlLeft" }, false)).toBeNull();
-    expect(acceleratorFromKey({ ...none, code: "KeyA" }, false)).toBeNull();
-    expect(acceleratorFromKey({ ...none, shiftKey: true, code: "KeyA" }, false)).toBeNull();
   });
 });
 

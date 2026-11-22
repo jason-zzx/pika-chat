@@ -16,6 +16,7 @@
     "build": "pnpm -C ../shell-ui build && node scripts/build.mjs",
     "start": "pnpm build && electron .",
     "dist": "pnpm build && electron-builder --config electron-builder.config.mjs --publish never",
+    "test": "node scripts/test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

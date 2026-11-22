@@ -5,12 +5,17 @@ import { z } from "zod";
 
 const DEFAULT_HOTKEY = "CommandOrControl+Shift+Space";
 
+export const closeActionSchema = z.enum(["tray", "quit"]);
+export type CloseAction = z.infer<typeof closeActionSchema>;
+
 // Each field falls back on its own, so one bad value does not discard the server list.
 const configSchema = z.object({
   servers: z.array(z.object({ id: z.string(), name: z.string(), url: z.string() })).catch([]),
   lastServerId: z.string().nullable().catch(null),
   localPort: z.number().int().positive().nullable().catch(null),
   hotkey: z.string().nullable().catch(DEFAULT_HOTKEY),
+  closeAction: closeActionSchema.catch("tray"),
+  developerMode: z.boolean().catch(false),
   windowState: z
     .object({
       bounds: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }),

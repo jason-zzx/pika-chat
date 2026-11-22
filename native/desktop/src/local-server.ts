@@ -118,7 +118,8 @@ export function createLocalServer() {
     }
 
     const origin = `http://127.0.0.1:${port}`;
-    const logStream = createWriteStream(paths.logFile, { flags: "w" });
+    writeFileSync(paths.logFile, "");
+    const logStream = createWriteStream(paths.logFile, { flags: "a" });
 
     const proc = utilityProcess.fork(join(serverDir, "server.js"), [], {
       cwd: serverDir,

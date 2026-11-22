@@ -1,6 +1,8 @@
 import { isNewerVersion } from "@pika/shell-ui/servers";
 import { app, dialog, net, shell } from "electron";
 import { autoUpdater } from "electron-updater";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { Strings } from "./i18n";
 
@@ -8,6 +10,16 @@ const RELEASES_URL = "https://github.com/jason-zzx/pika-chat/releases/latest";
 const LATEST_API = "https://api.github.com/repos/jason-zzx/pika-chat/releases/latest";
 
 const latestRelease = z.object({ tag_name: z.string(), html_url: z.string() });
+
+function supportsAutoInstall(): boolean {
+  if (process.platform === "darwin" || !app.isPackaged) return false;
+  if (!existsSync(join(process.resourcesPath, "app-update.yml"))) return false;
+  if (process.platform === "win32") {
+    const exeDir = dirname(app.getPath("exe"));
+    if (!existsSync(join(exeDir, "Uninstall Pika Chat.exe"))) return false;
+  }
+  return true;
+}
 
 // Dialogs have no parent window: an update can finish downloading while the window is hidden in the
 // tray, and a dialog attached to a hidden window may never appear.
@@ -40,7 +52,7 @@ export function createUpdater(t: Strings, beforeInstall: () => Promise<void>) {
     autoUpdater.quitAndInstall();
   });
 
-  async function checkMac(manual: boolean) {
+  async function checkReleasePrompt(manual: boolean) {
     const res = await net.fetch(LATEST_API, { headers: { Accept: "application/vnd.github+json" } }).catch(() => null);
     const parsed = res?.ok ? latestRelease.safeParse(await res.json()) : null;
     if (!parsed?.success) {
@@ -57,8 +69,8 @@ export function createUpdater(t: Strings, beforeInstall: () => Promise<void>) {
   }
 
   return async function check(manual: boolean) {
-    if (process.platform === "darwin") return checkMac(manual);
-    if (!app.isPackaged) return;
+    if (!app.isPackaged && !manual) return;
+    if (!supportsAutoInstall()) return checkReleasePrompt(manual);
     reportErrors = manual;
     const result = await autoUpdater.checkForUpdates().catch(() => undefined);
     if (!manual || result === undefined) return;

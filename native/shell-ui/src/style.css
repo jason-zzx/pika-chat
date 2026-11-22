@@ -3,11 +3,14 @@
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.92 0.006 75);
@@ -21,11 +24,14 @@
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.2 0 0);
+    --popover: oklch(0.2 0 0);
+    --popover-foreground: oklch(0.985 0 0);
     --primary: oklch(0.922 0 0);
     --primary-foreground: oklch(0.205 0 0);
     --secondary: oklch(0.26 0 0);
     --muted-foreground: oklch(0.712 0 0);
     --accent: oklch(0.26 0 0);
+    --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
     --destructive-foreground: oklch(0.145 0 0);
     --border: oklch(1 0 0 / 10%);
@@ -45,6 +51,170 @@ body {
   font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
+}
+
+html.chrome-transparent,
+body.chrome-transparent {
+  background: transparent;
+  overflow: hidden;
+}
+
+body.chrome-titlebar {
+  overflow: hidden;
+  background: var(--titlebar-background, var(--background));
+  color: var(--foreground);
+}
+
+.titlebar {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 12px;
+  border-bottom: 1px solid var(--titlebar-border, var(--border));
+  background: var(--titlebar-background, var(--background));
+  color: var(--foreground);
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+  -webkit-app-region: drag;
+}
+
+.titlebar.platform-darwin {
+  padding-left: 78px;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.titlebar-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.titlebar-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titlebar-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+  width: 44px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.titlebar-btn:hover {
+  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+.titlebar-btn-close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.titlebar-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+}
+
+.server-menu {
+  position: fixed;
+  min-width: 210px;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--menu-background, var(--background));
+  color: var(--menu-foreground, var(--foreground));
+  box-shadow: 0 10px 30px oklch(0 0 0 / 18%), 0 2px 8px oklch(0 0 0 / 10%);
+}
+
+.server-menu[hidden] {
+  display: none;
+}
+
+.server-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 80ms ease, color 80ms ease;
+}
+
+.server-menu-item:hover,
+.server-menu-item:focus-visible {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  outline: none;
+}
+
+.server-menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-menu-check,
+.server-menu-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.server-menu-check {
+  color: var(--menu-foreground, var(--foreground));
+}
+
+.server-menu-sep {
+  height: 1px;
+  margin: 0 -4px;
+  background: var(--border);
 }
 
 .view {
@@ -270,10 +440,6 @@ input:focus-visible {
   border-radius: var(--radius);
 }
 
-.card .message {
-  margin: 0;
-}
-
 .setting {
   display: flex;
   align-items: center;
@@ -282,13 +448,8 @@ input:focus-visible {
   padding: 12px 0;
 }
 
-.setting + .setting,
-.message + .setting {
+.setting + .setting {
   border-top: 1px solid var(--border);
-}
-
-.recorder {
-  min-width: 160px;
 }
 
 .status {
@@ -322,6 +483,36 @@ input:focus-visible {
   .spinner {
     animation-duration: 3s;
   }
+}
+
+.shell-footer {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.version-trigger {
+  border: 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.version-trigger:hover {
+  opacity: 1;
+}
+
+.footer-hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
 dialog.confirm-dialog {
