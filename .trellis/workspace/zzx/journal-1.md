@@ -1330,3 +1330,28 @@ Replaced PostgreSQL (server) and PGlite (desktop local mode) with embedded SQLit
 ### Status
 
 [OK] **Completed**
+
+
+## Session 49: Desktop polish and packaging improvements
+<!-- trellis-session: v=2 fp=73088904485549e8 -->
+
+**Date**: 2026-11-22
+**Task**: Desktop polish and packaging improvements
+**Branch**: `feat/native-apps`
+
+### Summary
+
+Switched Windows installer to an assisted NSIS wizard (custom BMP graphics, directory selection, updater cache auto-cleanup, and optional %AppData% wipe checkbox) alongside a separate Windows x64 portable zip build (sharing %AppData% userData and falling back to release links in updater.ts). Fixed missing RPM desktop icons by supplying 16-512px PNGs under native/desktop/assets/icons/ and linux.icon='icons'. Added frameless 34px theme-synced titlebar (titlebarView) and shell-owned transparent server dropdown (serverMenuView), unified inset sidebar layout across desktop and web without SidebarRail, added minimize/restore white-screen mitigations and append-mode local server logging, moved desktop preferences and 4-category PC storage breakdown to Settings -> General, and gated detached DevTools and desktop.log on a 5-click version trigger without auto-opening DevTools. Deferred CI/target-OS verification: Windows NSIS/zip packaging, Linux RPM build, and interactive Electron window checks.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `584a5f8` | build(desktop,ci): configure NSIS wizard, portable zip, and RPM icons |
+| `c9ffd91` | feat(desktop): add custom titlebar, server menu, storage manager, and polish |
+| `e242ef2` | feat(web): add desktop settings, storage view, dev trigger, and inset shell |
+| `9952e7e` | docs(trellis): sync native-shell specs and track 11-21-native-desktop-polish |
+
+### Status
+
+[OK] **Completed**
