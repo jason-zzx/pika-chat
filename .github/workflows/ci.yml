@@ -145,7 +145,7 @@ jobs:
           - os: ubuntu-latest
             args: --linux AppImage deb rpm --x64
           - os: windows-latest
-            args: --win nsis --x64
+            args: --win zip --x64 && pnpm -C native/desktop dist --win nsis --x64
           - os: macos-15-intel
             args: --mac dmg --x64
           - os: macos-latest
@@ -191,6 +191,7 @@ jobs:
           node native/desktop/scripts/build-server.mjs
 
       - name: Package desktop app (dry-run, publish never)
+        shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: pnpm -C native/desktop dist ${{ matrix.args }}

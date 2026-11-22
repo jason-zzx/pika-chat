@@ -1,8 +1,9 @@
 import { build } from "esbuild";
-import { cpSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const desktop = new URL("../", import.meta.url);
+const RUNTIME_ASSETS = ["icon.png", "tray.png", "trayTemplate.png", "trayTemplate@2x.png"];
 const version = JSON.parse(readFileSync(new URL("../../package.json", desktop), "utf8")).version;
 
 rmSync(new URL("dist", desktop), { recursive: true, force: true });
@@ -25,4 +26,7 @@ await build({
 });
 
 cpSync(new URL("../shell-ui/dist", desktop), new URL("dist/shell-ui", desktop), { recursive: true });
-cpSync(new URL("assets", desktop), new URL("dist/assets", desktop), { recursive: true });
+mkdirSync(new URL("dist/assets", desktop), { recursive: true });
+for (const file of RUNTIME_ASSETS) {
+  cpSync(new URL(`assets/${file}`, desktop), new URL(`dist/assets/${file}`, desktop));
+}

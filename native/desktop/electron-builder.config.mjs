@@ -16,7 +16,22 @@ export default {
   artifactName: "pika-chat-${version}-${os}-${arch}.${ext}",
   // Only used to generate updater metadata; CI publishes through the GitHub Release job.
   publish: { provider: "github", owner: "jason-zzx", repo: "pika-chat" },
-  win: { target: [{ target: "nsis", arch: ["x64"] }] },
+  win: {
+    target: [
+      { target: "zip", arch: ["x64"] },
+      { target: "nsis", arch: ["x64"] },
+    ],
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowElevation: true,
+    allowToChangeInstallationDirectory: true,
+    installerSidebar: "installerSidebar.bmp",
+    uninstallerSidebar: "installerSidebar.bmp",
+    installerHeader: "installerHeader.bmp",
+    include: "installer.nsh",
+  },
   mac: {
     target: [{ target: "dmg", arch: ["x64", "arm64"] }],
     category: "public.app-category.productivity",
@@ -38,6 +53,6 @@ export default {
     category: "Network;Chat",
     maintainer: "jason-zzx <zxzhukke@gmail.com>",
     synopsis: "Desktop app for Pika Chat",
-    icon: "icon.png",
+    icon: "icons",
   },
 };
