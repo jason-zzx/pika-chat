@@ -20,6 +20,8 @@ type AboutVersionCardProps = {
 };
 
 const COPIED_FEEDBACK_MS = 2000;
+const DEV_TAP_TARGET = 5;
+const DEV_TAP_RESET_MS = 1500;
 
 function formatVersion(version: string): string {
   return version.startsWith("v") ? version : `v${version}`;
@@ -38,12 +40,35 @@ export default function AboutVersionCard({
   const t = useTranslations("Settings.About");
   const tRoot = useTranslations("RootLayout");
   const native = usePikaNative();
+  const desktop = native?.desktop;
   const [copied, setCopied] = useState(false);
+  const [developerMode, setDeveloperMode] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
   const copiedTimeoutRef = useRef<number | undefined>(undefined);
+  const tapCountRef = useRef(0);
+  const tapResetRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    return () => window.clearTimeout(copiedTimeoutRef.current);
+    return () => {
+      window.clearTimeout(copiedTimeoutRef.current);
+      window.clearTimeout(tapResetRef.current);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!desktop) {
+      return;
+    }
+    let active = true;
+    void desktop.getSettings().then((settings) => {
+      if (active) {
+        setDeveloperMode(settings.developerMode);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [desktop]);
 
   const displayVersion = formatVersion(version);
   const clientVersion =
@@ -78,6 +103,74 @@ export default function AboutVersionCard({
     );
   }
 
+  async function onCheckUpdates() {
+    if (!desktop || checkingUpdates) {
+      return;
+    }
+    setCheckingUpdates(true);
+    try {
+      await desktop.checkForUpdates();
+    } finally {
+      setCheckingUpdates(false);
+    }
+  }
+
+  async function onVersionClick() {
+    if (!desktop || developerMode) {
+      return;
+    }
+    window.clearTimeout(tapResetRef.current);
+    tapCountRef.current += 1;
+    tapResetRef.current = window.setTimeout(() => {
+      tapCountRef.current = 0;
+    }, DEV_TAP_RESET_MS);
+
+    if (tapCountRef.current >= DEV_TAP_TARGET) {
+      tapCountRef.current = 0;
+      window.clearTimeout(tapResetRef.current);
+      await desktop.setDeveloperMode(true);
+      setDeveloperMode(true);
+      toast.add({ type: "success", title: t("developerModeEnabled") });
+      return;
+    }
+
+    if (tapCountRef.current >= 3) {
+      toast.add({
+        type: "info",
+        title: t("developerModeClicks", {
+          count: DEV_TAP_TARGET - tapCountRef.current,
+        }),
+      });
+    }
+  }
+
+  async function onDisableDeveloperMode() {
+    if (!desktop) {
+      return;
+    }
+    await desktop.setDeveloperMode(false);
+    setDeveloperMode(false);
+  }
+
+  function renderVersionValue(text: string, interactive: boolean) {
+    if (!interactive) {
+      return (
+        <span className="font-mono text-sm text-muted-foreground tabular-nums">
+          {text}
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="font-mono text-sm text-muted-foreground tabular-nums transition-colors hover:text-foreground"
+        onClick={() => void onVersionClick()}
+      >
+        {text}
+      </button>
+    );
+  }
+
   return (
     <SettingsCard>
       <div className="flex flex-col divide-y divide-border">
@@ -100,41 +193,83 @@ export default function AboutVersionCard({
               </p>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-fit shrink-0"
-            onClick={() => void onCopyVersion()}
-          >
-            {copied ? (
-              <>
-                <CheckIcon aria-hidden="true" />
-                {t("copied")}
-              </>
-            ) : (
-              <>
-                <CopyIcon aria-hidden="true" />
-                {t("copyVersion")}
-              </>
-            )}
-          </Button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {desktop ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={checkingUpdates}
+                onClick={() => void onCheckUpdates()}
+              >
+                {checkingUpdates ? t("checkingUpdates") : t("checkForUpdates")}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit shrink-0"
+              onClick={() => void onCopyVersion()}
+            >
+              {copied ? (
+                <>
+                  <CheckIcon aria-hidden="true" />
+                  {t("copied")}
+                </>
+              ) : (
+                <>
+                  <CopyIcon aria-hidden="true" />
+                  {t("copyVersion")}
+                </>
+              )}
+            </Button>
+          </div>
         </div>
         <SettingsRow
           label={clientVersion ? t("serverVersion") : t("version")}
-          control={
-            <span className="font-mono text-sm text-muted-foreground tabular-nums">
-              {displayVersion}
-            </span>
-          }
+          control={renderVersionValue(
+            displayVersion,
+            Boolean(desktop && !clientVersion),
+          )}
         />
         {clientVersion ? (
           <SettingsRow
             label={t("clientVersion")}
+            control={renderVersionValue(clientVersion, Boolean(desktop))}
+          />
+        ) : null}
+        {desktop && developerMode ? (
+          <SettingsRow
+            label={t("developerDiagnostics")}
+            description={t("developerDiagnosticsDescription")}
             control={
-              <span className="font-mono text-sm text-muted-foreground tabular-nums">
-                {clientVersion}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void desktop.openDevTools()}
+                >
+                  {t("openDevTools")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void desktop.openDesktopLog()}
+                >
+                  {t("openDesktopLog")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void onDisableDeveloperMode()}
+                >
+                  {t("disableDeveloperMode")}
+                </Button>
+              </div>
             }
           />
         ) : null}

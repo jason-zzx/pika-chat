@@ -10,6 +10,7 @@ import SettingsCard from "@/components/settings/SettingsCard";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SettingsSection from "@/components/settings/SettingsSection";
 import ThemePresetControl from "@/components/settings/ThemePresetControl";
+import DesktopSettingsSection from "@/components/settings/general/DesktopSettingsSection";
 import { resolveActor } from "@/server/auth/actor";
 import { getUserThemePreference } from "@/server/services/user-preferences.service";
 
@@ -51,6 +52,7 @@ export default async function SettingsGeneralPage() {
           <ThemePresetControl initialPreference={themePreference} />
         </SettingsCard>
       </SettingsSection>
+      <DesktopSettingsSection />
     </PageContainer>
   );
 }

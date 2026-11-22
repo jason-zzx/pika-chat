@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 
 import AssistantTree from "@/components/assistant/AssistantTree";
@@ -9,7 +12,6 @@ import {
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarRail,
 } from "@/components/ui/sidebar";
 import { isStaffRole, type ActorRole } from "@/lib/auth-hierarchy";
 import type { ThemePreference } from "@/lib/theme";
@@ -29,8 +31,19 @@ export default function AppSidebar({
 }: AppSidebarProps) {
   const t = useTranslations("Layout");
 
+  useEffect(() => {
+    window.dispatchEvent(new Event("pika:chrome-sync"));
+    return () => {
+      window.dispatchEvent(new Event("pika:chrome-sync"));
+    };
+  }, []);
+
   return (
-    <Sidebar collapsible="icon" aria-label={t("sidebar.main")}>
+    <Sidebar
+      variant="inset"
+      collapsible="icon"
+      aria-label={t("sidebar.main")}
+    >
       <AssistantTree showUsers={!local && isStaffRole(role)} local={local} />
       <SidebarFooter>
         <DemoUsageCard />
@@ -47,7 +60,6 @@ export default function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   );
 }

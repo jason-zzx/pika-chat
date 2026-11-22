@@ -112,4 +112,57 @@ describe("AboutVersionCard", () => {
       await screen.findByText("Could not copy version info"),
     ).toBeInTheDocument();
   });
+
+  it("activates developer mode after 5 clicks without auto-opening DevTools", async () => {
+    const setDeveloperMode = vi.fn().mockResolvedValue(undefined);
+    const openDevTools = vi.fn().mockResolvedValue(undefined);
+    const openDesktopLog = vi.fn().mockResolvedValue(undefined);
+    window.pikaNative = {
+      serverName: "Home lab",
+      appVersion: "1.0.0-rc.2",
+      notify: vi.fn(),
+      showServerMenu: vi.fn(),
+      openServers: vi.fn(),
+      desktop: {
+        platform: "win32",
+        getSettings: vi.fn().mockResolvedValue({
+          closeAction: "tray",
+          hotkey: null,
+          developerMode: false,
+        }),
+        setCloseAction: vi.fn(),
+        setHotkey: vi.fn(),
+        getStorageUsage: vi.fn(),
+        clearStorage: vi.fn(),
+        openLocalDataFolder: vi.fn(),
+        checkForUpdates: vi.fn(),
+        openDevTools,
+        openDesktopLog,
+        setDeveloperMode,
+      },
+    };
+
+    renderWithIntl(
+      <>
+        <AboutVersionCard version="1.0.0-rc.1" />
+        <Toaster />
+      </>,
+    );
+
+    const versionButton = await screen.findByRole("button", { name: "v1.0.0-rc.2" });
+    expect(screen.queryByRole("button", { name: "Open DevTools" })).toBeNull();
+
+    for (let i = 0; i < 5; i += 1) {
+      fireEvent.click(versionButton);
+    }
+
+    await waitFor(() => {
+      expect(setDeveloperMode).toHaveBeenCalledWith(true);
+    });
+    expect(openDevTools).not.toHaveBeenCalled();
+
+    const openBtn = await screen.findByRole("button", { name: "Open DevTools" });
+    fireEvent.click(openBtn);
+    expect(openDevTools).toHaveBeenCalledTimes(1);
+  });
 });

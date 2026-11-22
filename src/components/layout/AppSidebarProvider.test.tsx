@@ -1,7 +1,7 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Sidebar, SidebarRail, useSidebar } from "@/components/ui/sidebar";
+import { useSidebar } from "@/components/ui/sidebar";
 import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import AppSidebarProvider from "./AppSidebarProvider";
@@ -32,9 +32,6 @@ describe("AppSidebarProvider", () => {
   it("forces the sidebar open on settings routes without clobbering collapsed chat state", () => {
     const view = renderWithIntl(
       <AppSidebarProvider defaultOpen={false}>
-        <Sidebar>
-          <SidebarRail />
-        </Sidebar>
         <SidebarProbe />
       </AppSidebarProvider>,
     );
@@ -47,17 +44,11 @@ describe("AppSidebarProvider", () => {
       "data-locked",
       "false",
     );
-    expect(
-      screen.getByRole("button", { name: "Toggle Sidebar" }),
-    ).toBeInTheDocument();
 
     mockPathname = "/settings/general";
     view.rerender(
       wrapWithIntl(
         <AppSidebarProvider defaultOpen={false}>
-          <Sidebar>
-            <SidebarRail />
-          </Sidebar>
           <SidebarProbe />
         </AppSidebarProvider>,
       ),
@@ -71,9 +62,6 @@ describe("AppSidebarProvider", () => {
       "data-locked",
       "true",
     );
-    expect(
-      screen.queryByRole("button", { name: "Toggle Sidebar" }),
-    ).not.toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "b", ctrlKey: true });
     expect(screen.getByTestId("sidebar-probe")).toHaveAttribute(
@@ -86,9 +74,6 @@ describe("AppSidebarProvider", () => {
     view.rerender(
       wrapWithIntl(
         <AppSidebarProvider defaultOpen={false}>
-          <Sidebar>
-            <SidebarRail />
-          </Sidebar>
           <SidebarProbe />
         </AppSidebarProvider>,
       ),
@@ -102,8 +87,5 @@ describe("AppSidebarProvider", () => {
       "data-locked",
       "false",
     );
-    expect(
-      screen.getByRole("button", { name: "Toggle Sidebar" }),
-    ).toBeInTheDocument();
   });
 });
