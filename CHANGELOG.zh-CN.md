@@ -5,6 +5,44 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [1.0.0-rc.3] - 2026-11-22
+
+### Highlights
+
+- **跟随主题的无边框桌面标题栏、内嵌式侧边栏与自定义服务器菜单**：在 Windows 与 Linux 上移除厚重的系统原生窗口边框（macOS 改为 `hiddenInset`），替换为 `34px` 跟随应用主题同步的顶部标题栏并配合内嵌式侧边栏布局（`variant="inset"`）；同时将系统原生服务器切换菜单重构为与主题一致的浮动弹出菜单。
+- **Web 设置页集成桌面端偏好、存储空间管理与诊断入口**：将桌面端设置（Windows/Linux 窗口关闭行为与全局快捷键）及 4 类客户端磁盘占用明细与安全缓存清理迁入**设置 → 通用**，并在**设置 → 关于**新增桌面端检查更新按钮与连续点击 5 次版本号开启开发者模式的触发入口。
+- **Windows 向导式安装包、便携版 Zip 与 Linux RPM 图标修复**：将 Windows NSIS 安装包切换为支持自选安装目录的交互式向导（卸载时支持可选清理个人数据），新增 Windows 便携版 `.zip` 分发包，并补全 Linux RPM 安装包的多尺寸应用图标。
+
+### Feats
+
+- **无边框标题栏与主题同步壳层**：
+  - 在 Windows 与 Linux 上启用 `frame: false`，通过壳层渲染 `34px` 高的 `titlebarView`（`?chrome=titlebar`，全屏时自动隐藏）展示 Pika Chat 图标、当前窗口标题及最小化/最大化/关闭按钮；macOS 采用 `titleBarStyle: "hiddenInset"` 保留原生红绿灯控制按钮。
+  - 在 `preload-remote.ts` 与 `shell-ui` 中实时监听 Web 端 CSS 主题变量（`--background`、`--foreground`、`--muted-foreground`、`--popover`、`--accent`、`--border`、`--sidebar` 与 `meta[name="theme-color"]`），使窗口背景、顶部标题栏及服务器弹出菜单在全部明暗主题预设间保持一致。
+  - 将 `AppSidebar` 调整为 `variant="inset"`（移除 `SidebarRail`），为桌面端补充 `data-chrome="desktop"` 下的 `SidebarInset` 边框样式并通过 `pika:chrome-sync` 同步状态，使标题栏与侧边栏自然衔接。
+- **自定义主题服务器切换弹出菜单**：
+  - 将 `native:showServerMenu` 中的原生 `Menu.buildFromTemplate` 替换为透明背景的 `WebContentsView` 浮层（`native/shell-ui/src/server-menu.ts`，`?chrome=menu`），支持视口边界自动夹紧、键盘方向键与 `Esc` 导航、右侧对勾选中指示，以及对齐一致的**添加服务器…** / **管理服务器…**条目，同时保持远端页面无法获取已保存的服务器列表。
+- **桌面端偏好与客户端存储空间管理（设置 → 通用）**：
+  - 新增 `DesktopSettingsSection`（仅在存在 `window.pikaNative?.desktop` 时渲染）：支持配置**关闭主窗口时**（Windows 与 Linux 可选**最小化到系统托盘**或**退出应用**）及**全局快捷键**录制器（`src/lib/desktop-hotkey.ts`）与清除操作。
+  - 新增 4 项客户端**存储空间**统计（`native/desktop/src/storage.ts` 与 `storage-fs.ts`）：**本地模式数据**（提供**打开目录**）、**网页与媒体缓存**、**更新安装包缓存**与**日志与临时文件**，支持按类安全**清理缓存**/**清理**（不删除登录会话、Cookie、`Local Storage`、`IndexedDB` 与本地 SQLite 数据）及一键**刷新**。
+  - 精简桌面端 `shell-ui` 服务器管理页面，移除非服务器相关的桌面偏好项（Android 端仍保留 `shell-ui` 设置页以检查更新）。
+- **检查更新与按需开发者诊断（设置 → 关于与 `shell-ui`）**：
+  - 在桌面端的**设置 → 关于**（`AboutVersionCard`）新增**检查更新**按钮。
+  - 在**设置 → 关于**版本号及桌面端 `shell-ui` 底部版本号上新增连续点击 5 次开启 `developerMode` 的触发机制（不自动弹出控制台），开启后展示**打开控制台**（独立窗口）、**打开桌面日志**与**关闭**按钮，并在托盘及视图菜单同步显示相应调试入口，未开启时隐藏默认 DevTools 快捷键。
+- **Windows 向导式安装包与便携版 Zip（`native/desktop`）**：
+  - 为 NSIS 配置 `oneClick: false`、`allowToChangeInstallationDirectory: true`、Pika Chat 定制侧边栏/页头 BMP 位图（`installerSidebar.bmp` 与 `installerHeader.bmp`）及 `installer.nsh`（真实卸载时自动清理 `*-updater` 更新缓存，并在卸载欢迎页提供默认未勾选的复选框以可选删除 `%AppData%\Pika Chat` 个人数据）。
+  - 新增 Windows `{ target: "zip", arch: ["x64"] }` 便携版压缩包，与安装版共用 `%AppData%\Pika Chat` 数据目录；当缺少 `app-update.yml` 或 NSIS 卸载程序时自动回退至 GitHub Release 下载提示。
+
+### Fixes
+
+- **Windows 任务栏最小化/还原白屏与崩溃恢复**：在窗口最小化时跳过 `0x0` 的 `layout()` 尺寸更新，并在 `show`、`restore`、`maximize`、`unmaximize` 与 `leave-full-screen` 时重新同步视图边界与 `invalidate()` 重绘；新增 `render-process-gone` 自动重载（10 秒内连续崩溃回退至 `?failed=<id>`）与 GPU `child-process-gone` 重绘恢复，增加按 `1 MiB` 上限轮转的 `<userData>/desktop.log` 日志，并将 `local/server.log` 改为清空后以追加模式打开以确保清理截断可靠生效。
+- **Linux RPM 应用图标尺寸缺失**：从 `icon.png` 生成 `16x16` 至 `512x512` 多尺寸 PNG 图标（`native/desktop/assets/icons/`）并将 `linux.icon` 设为 `"icons"`，使 RPM、deb 与 AppImage 包安装完整的 `hicolor` 图标集而非仅含 `1024x1024`。
+
+### Dev
+
+- 新增桌面端存储空间统计与清理单元测试（`native/desktop/src/storage-fs.test.ts`，通过 `pnpm -C native/desktop test` 运行）以及全局快捷键、桌面设置和关于页测试。
+- 精简 `native/desktop/scripts/build.mjs` 仅拷贝运行时所需资源到 `dist/assets/`，并更新 `.github/workflows/ci.yml` 与 `.github/workflows/release.yml` 在构建和发布中同步产出并上传 Windows 便携版 `.zip`。
+- 将 `.github/workflows/release.yml` 中的单节点 QEMU 多架构 Docker 构建替换为并行的原生 `ubuntu-latest`（`linux/amd64`）与 `ubuntu-24.04-arm`（`linux/arm64`）分架构按摘要构建，随后通过 `docker buildx imagetools create` 合并推送多架构 Manifest，并为各架构隔离缓存作用域与添加任务超时限制。
+
 ## [1.0.0-rc.2] - 2026-11-21
 
 ### Highlights

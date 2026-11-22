@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.3] - 2026-11-22
+
+### Highlights
+
+- **Theme-Synced Frameless Desktop Titlebar, Inset Shell & Custom Server Popover**: Replaced the thick OS window frame on Windows and Linux (and switched macOS to `hiddenInset`) with a `34px` theme-synced titlebar paired with an inset sidebar layout (`variant="inset"`), and replaced the OS-native server switcher menu with a custom themed floating popover.
+- **Desktop Preferences, Storage Manager & Diagnostics in Web Settings**: Moved desktop settings (close-to-tray vs. quit on Windows and Linux, global shortcut) and a 4-category client storage breakdown with safe cache/log cleanup into **Settings → General**, and added desktop update checks plus a 5-click developer mode trigger in **Settings → About**.
+- **Windows Assisted Installer, Portable Zip & Linux RPM Icon Fixes**: Switched the Windows NSIS installer to an interactive wizard with optional user-data cleanup on uninstall, added a portable `.zip` build, and fixed Linux RPM application icon sizes.
+
+### Feats
+
+- **Frameless Titlebar & Theme-Synced Shell Chrome**:
+  - Switched Windows and Linux to `frame: false` with a shell-rendered `34px` `titlebarView` (`?chrome=titlebar`, hidden in fullscreen) displaying the Pika Chat icon, active window title, and window controls; switched macOS to `titleBarStyle: "hiddenInset"` with native traffic lights.
+  - Observed active web CSS tokens (`--background`, `--foreground`, `--muted-foreground`, `--popover`, `--accent`, `--border`, `--sidebar`, and `meta[name="theme-color"]`) in `preload-remote.ts` and `shell-ui` to keep the window background, titlebar, and server menu synchronized across all light/dark theme presets.
+  - Updated `AppSidebar` to `variant="inset"` (removing `SidebarRail`) with desktop-aware `SidebarInset` framing (`data-chrome="desktop"`) and `pika:chrome-sync` updates so the titlebar blends seamlessly with the sidebar.
+- **Custom Themed Server Selector Popover**:
+  - Replaced `Menu.buildFromTemplate` in `native:showServerMenu` with a transparent `WebContentsView` popover (`?chrome=menu` in `native/shell-ui/src/server-menu.ts`), featuring viewport-clamped positioning, keyboard navigation, right-aligned active checkmarks, and clean alignment for **Add server…** and **Manage servers…**, while keeping the server list isolated from remote pages.
+- **Desktop Preferences & Client Storage Manager (`Settings → General`)**:
+  - Added `DesktopSettingsSection` (visible only when `window.pikaNative?.desktop` is present): **When closing window** (`Minimize to tray` default or `Quit app` on Windows and Linux) and **Global shortcut** key recorder (`src/lib/desktop-hotkey.ts`) with **Clear**.
+  - Added a 4-category **Storage** view (`native/desktop/src/storage.ts` and `storage-fs.ts`) measuring **Local mode data** (with **Open folder**), **Web & media cache**, **Updater cache**, and **Logs & temporary files** (with **Clear cache** / **Clear** actions that preserve login sessions, cookies, `Local Storage`, `IndexedDB`, and local SQLite data, plus **Refresh**).
+  - Removed non-server desktop preferences from desktop `shell-ui` server management while keeping `shell-ui` Settings on Android.
+- **Update Check & On-Demand Developer Diagnostics (`Settings → About` & `shell-ui`)**:
+  - Added **Check for updates** to **Settings → About** (`AboutVersionCard`) on desktop.
+  - Added a 5-click trigger on the version number (in **Settings → About** and desktop `shell-ui`'s footer) to enable `developerMode` without auto-opening DevTools, revealing **Open DevTools** (detached), **Open desktop log**, and **Disable** actions alongside the tray and View menus while hiding default DevTools shortcuts when disabled.
+- **Windows Assisted Installer & Portable Zip (`native/desktop`)**:
+  - Configured NSIS with `oneClick: false`, `allowToChangeInstallationDirectory: true`, custom Pika Chat sidebar/header BMP graphics (`installerSidebar.bmp` and `installerHeader.bmp`), and `installer.nsh` (automatically removing the `*-updater` cache on real uninstalls while providing an unchecked-by-default checkbox on the uninstall welcome page to optionally delete `%AppData%\Pika Chat`).
+  - Added Windows `{ target: "zip", arch: ["x64"] }` portable builds sharing `%AppData%\Pika Chat` and falling back to GitHub Release download prompts when `app-update.yml` or the NSIS uninstaller is absent.
+
+### Fixes
+
+- **Windows Taskbar Minimize/Restore White Screen & Crash Recovery**: Skipped `0x0` `layout()` bounds updates when minimized, re-synced view bounds and called `invalidate()` on `show`, `restore`, `maximize`, `unmaximize`, and `leave-full-screen`, added `render-process-gone` auto-reload / `?failed=<id>` fallback and GPU `child-process-gone` repaint recovery, and added rotated `<userData>/desktop.log` logging (`1 MiB` cap) with append-mode `local/server.log` writes for reliable log truncation.
+- **Linux RPM Application Icons**: Generated multi-size PNG icons (`16x16` through `512x512`) under `native/desktop/assets/icons/` and set `linux.icon` to `"icons"` so RPM, deb, and AppImage packages install standard `hicolor` icon sizes instead of only `1024x1024`.
+
+### Dev
+
+- Added unit tests for desktop storage calculation/cleanup (`native/desktop/src/storage-fs.test.ts` via `pnpm -C native/desktop test`) alongside desktop hotkey, settings, and about tests.
+- Updated `native/desktop/scripts/build.mjs` to copy only runtime assets into `dist/assets/`, and updated `.github/workflows/ci.yml` and `.github/workflows/release.yml` to build and upload Windows portable `.zip` artifacts alongside NSIS installers.
+- Replaced single-runner QEMU multi-arch Docker builds in `.github/workflows/release.yml` with parallel native `ubuntu-latest` (`linux/amd64`) and `ubuntu-24.04-arm` (`linux/arm64`) digest builds merged via `docker buildx imagetools create`, using per-architecture cache scopes and job timeouts.
+
 ## [1.0.0-rc.2] - 2026-11-21
 
 ### Highlights
