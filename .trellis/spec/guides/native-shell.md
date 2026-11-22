@@ -23,6 +23,7 @@ interface PikaNative {
   notify(input: { title: string; body: string; path: string }): void;
   showServerMenu(anchor: { x: number; y: number }): void; // viewport CSS px
   openServers(screen: "list" | "add"): void;
+  desktop?: PikaNativeDesktop; // desktop-only settings, storage, updates, diagnostics
 }
 ```
 
@@ -34,19 +35,36 @@ interface PikaNative {
   absent (undefined in a browser). No Web Notification fallback.
 - Server switching: the sidebar brand row (`AssistantTree`), the account menu
   (`SidebarUserMenu`, "Switch server…" + shortcut) and the auth layout chip
-  (`DesktopServerChip`) render only when the bridge exists. `showServerMenu`
-  pops a **native** menu in main (saved servers as radio items, Add server…,
-  Manage servers…), so the remote page never receives the list of other
-  servers. Picking another server loads shell-ui with `?connect=<id>` (normal
-  health/version flow); Add / Manage load `?add` / `?list`. `openServers` loads
-  `?list` / `?add` directly.
+  (`DesktopServerChip`) render only when the bridge exists. On desktop, `showServerMenu`
+  opens a **shell-owned transparent overlay `WebContentsView`** (`?chrome=menu` inside
+  `win.contentView`, styled with the active page's synced theme colors; saved servers
+  with right-aligned checkmark, Add server…, Manage servers…), so the remote page never
+  receives the list of other servers. Picking another server loads shell-ui with
+  `?connect=<id>` (normal health/version flow); Add / Manage load `?add` / `?list`.
+  `openServers` loads `?list` / `?add` directly.
+- Desktop settings, storage & diagnostics (`pikaNative.desktop`): rendered inside
+  `Settings -> General` (`DesktopSettingsSection`) and `Settings -> About` (`AboutVersionCard`)
+  only when `native.desktop` is present. Covers `closeAction` (`"tray"` default / `"quit"`
+  on Win/Linux), global shortcut, 4-category storage breakdown (`localDataBytes`, `webCacheBytes`,
+  `updaterCacheBytes`, `logsAndTempBytes`) with safe cache/log clearing, manual update checks,
+  and a 5-click version trigger that activates `developerMode` (without auto-opening DevTools)
+  to expose on-demand detached DevTools and `desktop.log`.
+- Theme & frameless titlebar: Windows and Linux use `frame: false` (macOS `hiddenInset`) with
+  a 34 px `titlebarView` (`?chrome=titlebar`, collapsed in fullscreen). `preload-remote.ts`
+  observes `meta[name="theme-color"]`, `<html>` theme/class, `(min-width: 768px)`, and sidebar
+  layout changes (`pika:chrome-sync` / navigation), sampling `--background`, `--sidebar`,
+  `--popover`, `--accent`, `--border`, etc. and posting `native:theme` (origin-checked). Because
+  `AppSidebar` uses `variant="inset"` across both web and desktop (with `data-chrome="desktop"`
+  making the inset card sit flush beneath the 34 px titlebar), the sidebar and borderless
+  `--sidebar` titlebar form one seamless frame around the inset content card (falling back to
+  `--background` + border on auth pages, `shell-ui`, and narrow `< 768px` windows).
 - `serverName` reaches the sandboxed preload via
   `webPreferences.additionalArguments` (`--pika-server-name=<encodeURIComponent>`).
 - `path` is an app-relative path (`assistantTopicHref(...)`); it must start
   with `/`.
-- Desktop main accepts `native:notify`, `native:showServerMenu` and
-  `native:openServers` only when the sender frame origin equals
-  the active server origin (payloads zod-validated); clicking the notification focuses the window and
+- Desktop main accepts `native:notify`, `native:showServerMenu`, `native:openServers`,
+  `native:theme`, and `native:desktop:*` only when the sender frame origin equals
+  the active server origin (payloads zod-validated); clicking a notification focuses the window and
   navigates to `origin + path`.
 - Adding a method: extend the type in `src/global.d.ts`, the remote preload,
   and the main-process handler (with its origin check) together.
@@ -62,20 +80,25 @@ warning before connecting. Existing callers only read `ok`.
 
 Defined in `native/shell-ui/src/host.ts`, implemented by the desktop
 `preload-shell.ts` and the Android host (`native/mobile/src/main.ts`). Desktop-only
-methods (`openLocalLog`, `getLocalError`, `getHotkey`, `setHotkey`) live under the
-optional `host.desktop` group; without it shell-ui hides the local row, welcome
-screen and hotkey setting, falls back to the list for `local` ids, and opens the
-add form on first launch. Main validates every IPC payload at the handler and answers
-only the shell view. Connection logic (health check, version warning, URL
+methods (`openLocalLog`, `getLocalError`, `setTheme`, `getDeveloperMode`,
+`setDeveloperMode`, `openDevTools`, `openDesktopLog`, `windowControls`, `serverMenu`)
+live under the optional `host.desktop` group; without it shell-ui hides the local row
+and welcome screen, keeps its Settings button (Android update check) and opens the add
+form on first launch. On desktop (`host.desktop` present), shell-ui keeps only server
+management (no Settings screen in the server list, plus a subtle 5-click version footer
+activating `developerMode` without auto-opening DevTools) and also renders `?chrome=titlebar`
+and `?chrome=menu`. Main validates every IPC payload at the handler and answers
+only the matching shell view. Connection logic (health check, version warning, URL
 normalization) lives in shell-ui so Android can reuse it. Query modes of
 `index.html`: none (auto-connect to the last server, `"local"` included, or show
 the welcome screen when there is nothing to auto-connect to and `servers` is
 empty), `?list`, `?add` (add form;
 Cancel returns to the list), `?connect=<id>` (connect flow for that server
 regardless of the last one, including `"local"`), `?failed=<id>` (load-error
-screen, or local startup error with "Open log" when `id === "local"`). An unknown
-id falls back to the list; only an empty query auto-connects or shows the welcome
-screen.
+screen, or local startup error with "Open log" when `id === "local"`),
+`?chrome=titlebar` (desktop frameless top bar), and `?chrome=menu` (desktop
+server switcher overlay). An unknown id falls back to the list; only an empty
+query auto-connects or shows the welcome screen.
 
 ## Android shell (`native/mobile`, remote mode only)
 
@@ -239,9 +262,17 @@ own), so `allowBuilds` needs only `esbuild`.
   `[build-and-push, build-desktop]` and attaches everything, so one tag yields
   one release with the Docker image and desktop installers. Tags containing
   `-` are prereleases. `ci.yml` has a `native` job (typecheck, tests, bundle).
-- Updates: electron-updater (GitHub provider) on Windows NSIS and Linux
-  AppImage/deb/rpm (deb/rpm elevate via pkexec); macOS only prompts with the
-  release link. Builds are unsigned (macOS ad-hoc).
-- Keep the Linux target order AppImage, deb, rpm: electron-builder writes
-  `resources/package-type` into the shared `linux-unpacked` dir for deb/rpm, so
-  AppImage must be packed first or it would pick the wrong updater.
+- Updates: electron-updater (GitHub provider) on Windows NSIS (`oneClick: false`,
+  `allowToChangeInstallationDirectory: true`, `installer.nsh` cleaning updater cache and
+  optional `%AppData%` wipe checkbox on real uninstall) and Linux AppImage/deb/rpm
+  (deb/rpm elevate via pkexec); Windows portable `.zip` (shares `%AppData%` `userData`)
+  and macOS prompt with the release link (`supportsAutoInstall()` checks both
+  `app-update.yml` and `Uninstall Pika Chat.exe` on `win32`). Windows CI runs
+  `--win zip --x64` before `--win nsis --x64` so `PublishManager` does not write
+  `app-update.yml` into the portable `.zip`. Builds are unsigned (macOS ad-hoc).
+- Linux icons: `linux.icon: "icons"` points at `native/desktop/assets/icons/`
+  (`16x16`–`512x512` PNGs) so `FpmTarget` installs standard `hicolor` sizes indexed by
+  `/usr/share/icons/hicolor/index.theme` (a single `1024x1024` PNG bypassed icon-set
+  generation and missed `hicolor` lookup). Keep the Linux target order AppImage, deb, rpm:
+  electron-builder writes `resources/package-type` into the shared `linux-unpacked` dir
+  for deb/rpm, so AppImage must be packed first or it would pick the wrong updater.
