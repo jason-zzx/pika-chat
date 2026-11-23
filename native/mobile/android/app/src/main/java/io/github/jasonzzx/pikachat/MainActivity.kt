@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,7 +18,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -34,7 +32,7 @@ class MainActivity : BridgeActivity() {
         private set
 
     private lateinit var hostPlugin: PikaHostPlugin
-    private var lastBarColor = 0
+    private var currentTheme = ThemePalette.defaults(false)
 
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -77,7 +75,7 @@ class MainActivity : BridgeActivity() {
         java.io.File(cacheDir, "open").deleteRecursively()
         createNotificationChannel()
         val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        applyBarColor(Color.parseColor(if (night) "#0a0a0a" else "#fafafa"))
+        applyTheme(ThemePalette.defaults(night))
 
         val wv = bridge.webView
         remoteBridge = RemoteBridge(
@@ -152,11 +150,15 @@ class MainActivity : BridgeActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         // Re-apply after Capacitor's SystemBars.setStyle resets decorView backgroundColor.
-        applyBarColor(lastBarColor)
+        applyBarColor(currentTheme.background)
     }
 
-    fun applyBarColor(color: Int) {
-        lastBarColor = color
+    fun applyTheme(palette: ThemePalette) {
+        currentTheme = palette
+        applyBarColor(palette.background)
+    }
+
+    private fun applyBarColor(color: Int) {
         val decor = window.decorView
         decor.setBackgroundColor(color)
         bridge.webView.setBackgroundColor(color)
@@ -168,29 +170,14 @@ class MainActivity : BridgeActivity() {
     }
 
     fun showServerMenuDialog() {
-        val connected = hostPlugin.connectedServer
-        val servers = hostPlugin.getServers()
-        val labels = (servers.map { it.name } + getString(R.string.server_menu_add) + getString(R.string.server_menu_manage)).toTypedArray()
-
-        val checkedIndex = servers.indexOfFirst { it.id == connected?.id }
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.server_menu_title)
-            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
-                dialog.dismiss()
-                when {
-                    which < servers.size -> {
-                        val picked = servers[which]
-                        if (picked.id != connected?.id) {
-                            showShell("?connect=${Uri.encode(picked.id)}")
-                        }
-                    }
-                    which == servers.size -> showShell("?add")
-                    else -> showShell("?list")
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        if (isFinishing || isDestroyed) return
+        showThemedServerMenuDialog(
+            activity = this,
+            theme = currentTheme,
+            servers = hostPlugin.getServers(),
+            connectedServerId = hostPlugin.connectedServer?.id,
+            onNavigate = ::showShell,
+        )
     }
 
     private fun createNotificationChannel() {

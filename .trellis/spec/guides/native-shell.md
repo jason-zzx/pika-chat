@@ -142,14 +142,16 @@ query auto-connects or shows the welcome screen.
 - **Back** is an `OnBackPressedCallback`: previous history entry on the connected origin ->
   `goBack()`, otherwise shell-ui `?list`; on shell-ui it disables itself so the system
   backgrounds the app. `@capacitor/app` is deliberately not installed.
-- **System bars**: edge-to-edge via `WindowCompat.enableEdgeToEdge` after `super.onCreate`,
+- **System bars & themed server menu**: edge-to-edge via `WindowCompat.enableEdgeToEdge` after `super.onCreate`,
   `isNavigationBarContrastEnforced = false`. A theme script (listener `pikaThemeHost`, rules
-  `{origin, https://localhost}`) reads `meta[name=theme-color]` (falling back to the body
-  background; WebView 133 serializes oklch tokens as `lab()`), normalizes to `#rrggbb` through
-  a canvas, and observes the meta, `<html>` class/`data-theme` and `prefers-color-scheme`.
-  The colour paints the decor view and WebView background and picks light/dark bar icons by
-  luminance; it is re-applied after `onConfigurationChanged` because Capacitor's SystemBars
-  resets the decor background there; it is sent on `DOMContentLoaded` and `load` (shell-ui's CSS arrives
+  `{origin, https://localhost}`) reads `meta[name=theme-color]` (falling back to `--background` / body
+  background; WebView 133 serializes oklch tokens as `lab()`) plus dialog tokens (`--popover`,
+  `--popover-foreground`/`--foreground`, `--muted-foreground`, `--accent`, `--primary`, `--border`),
+  normalizes via a canvas (`#rrggbb` / `#aarrggbb`), and observes the meta, `<html>` `class`/`data-theme`/`style`
+  and `prefers-color-scheme`. `MainActivity.applyTheme` paints the decor view and WebView background, picks
+  light/dark bar icons by luminance, and stores the active `ThemePalette` for the native `AlertDialog`
+  server menu (`ServerMenuDialog.kt`). The bar colour is re-applied after `onConfigurationChanged` because Capacitor's SystemBars
+  resets the decor background there; theme payloads are sent on `DOMContentLoaded` and `load` (shell-ui's CSS arrives
   late). SystemBars runs with `insetsHandling: "native"` so Capacitor never writes
   `--safe-area-inset-*` onto remote pages (it caused a dev hydration mismatch on `<html>`). On WebView < 140 the plugin pads the decor
   view by the bar insets (`env(safe-area-inset-*)` is 0), which the page background shows

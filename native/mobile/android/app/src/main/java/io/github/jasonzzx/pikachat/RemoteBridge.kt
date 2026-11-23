@@ -3,10 +3,35 @@ package io.github.jasonzzx.pikachat
 import android.graphics.Color
 import android.net.Uri
 import android.webkit.WebView
+import androidx.core.graphics.ColorUtils
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
+
+data class ThemePalette(
+    val isDark: Boolean,
+    val background: Int,
+    val popover: Int,
+    val popoverForeground: Int,
+    val mutedForeground: Int,
+    val accent: Int,
+    val primary: Int,
+    val border: Int,
+) {
+    companion object {
+        fun defaults(isDark: Boolean) = ThemePalette(
+            isDark = isDark,
+            background = Color.parseColor(if (isDark) "#0a0a0a" else "#fafafa"),
+            popover = Color.parseColor(if (isDark) "#171717" else "#ffffff"),
+            popoverForeground = Color.parseColor(if (isDark) "#fafafa" else "#0a0a0a"),
+            mutedForeground = Color.parseColor(if (isDark) "#a3a3a3" else "#737373"),
+            accent = Color.parseColor(if (isDark) "#262626" else "#f5f5f5"),
+            primary = Color.parseColor(if (isDark) "#fafafa" else "#171717"),
+            border = Color.parseColor(if (isDark) "#1affffff" else "#e5e5e5"),
+        )
+    }
+}
 
 class RemoteBridge(
     private val activity: MainActivity,
@@ -97,41 +122,80 @@ class RemoteBridge(
             val originStr = sourceOrigin.toString()
             if (originStr != SHELL_ORIGIN && originStr != connectedOrigin) return@addWebMessageListener
             val raw = message.data ?: return@addWebMessageListener
-            val hex = runCatching { JSONObject(raw).optString("color", "") }.getOrNull() ?: return@addWebMessageListener
-            if (!HEX_COLOR_RE.matches(hex)) return@addWebMessageListener
-            activity.runOnUiThread { activity.applyBarColor(Color.parseColor(hex)) }
+            val json = runCatching { JSONObject(raw) }.getOrNull() ?: return@addWebMessageListener
+            val palette = parseThemePalette(json) ?: return@addWebMessageListener
+            activity.runOnUiThread {
+                if (!activity.isFinishing && !activity.isDestroyed) activity.applyTheme(palette)
+            }
         }
 
         val themeJs = """
             if (window === top) {
               const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", { willReadFrequently: true });
-              const toHex = (css) => {
-                if (!css) return null;
+              const sample = (css) => {
+                if (!ctx || !css) return null;
                 ctx.clearRect(0, 0, 1, 1);
                 ctx.fillStyle = "#00000000";
                 ctx.fillStyle = css;
                 ctx.fillRect(0, 0, 1, 1);
                 const d = ctx.getImageData(0, 0, 1, 1).data;
-                if (d[3] === 0) return null;
-                return "#" + ((1 << 24) + (d[0] << 16) + (d[1] << 8) + d[2]).toString(16).slice(1);
+                return d[3] === 0 ? null : d;
               };
+              const hexByte = (n) => n.toString(16).padStart(2, "0");
+              const toHex = (css, opaque) => {
+                const d = sample(css);
+                if (!d) return null;
+                const rgb = hexByte(d[0]) + hexByte(d[1]) + hexByte(d[2]);
+                return opaque || d[3] === 255 ? "#" + rgb : "#" + hexByte(d[3]) + rgb;
+              };
+              let lastPayload = "";
               const sendColor = () => {
+                if (!document.body) return;
+                const bodyStyle = getComputedStyle(document.body);
+                const probe = document.createElement("span");
+                probe.style.display = "none";
+                document.body.append(probe);
+                const readVar = (name) => {
+                  if (!bodyStyle.getPropertyValue(name).trim()) return "";
+                  probe.style.color = "";
+                  probe.style.color = "var(" + name + ")";
+                  return getComputedStyle(probe).color;
+                };
                 const meta = document.querySelector('meta[name="theme-color"]');
-                const raw = (meta && meta.getAttribute("content")) || (document.body ? getComputedStyle(document.body).backgroundColor : "");
-                const hex = toHex(raw);
-                if (hex) $THEME_HOST.postMessage(JSON.stringify({ color: hex }));
+                const bgSample = sample((meta && meta.getAttribute("content")) || readVar("--background") || bodyStyle.backgroundColor);
+                const isDark = bgSample
+                  ? (0.2126 * bgSample[0] + 0.7152 * bgSample[1] + 0.0722 * bgSample[2]) < 128
+                  : document.documentElement.classList.contains("dark") ||
+                    (!document.documentElement.classList.contains("light") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+                const background = bgSample ? "#" + hexByte(bgSample[0]) + hexByte(bgSample[1]) + hexByte(bgSample[2]) : null;
+                const payload = {
+                  isDark,
+                  color: background,
+                  popover: toHex(readVar("--popover"), true),
+                  popoverForeground: toHex(readVar("--popover-foreground") || readVar("--foreground") || bodyStyle.color, false),
+                  mutedForeground: toHex(readVar("--muted-foreground"), false),
+                  accent: toHex(readVar("--accent"), false),
+                  primary: toHex(readVar("--primary"), false),
+                  border: toHex(readVar("--border"), false),
+                };
+                probe.remove();
+                const encoded = JSON.stringify(payload);
+                if (encoded === lastPayload) return;
+                lastPayload = encoded;
+                $THEME_HOST.postMessage(encoded);
               };
               const attachObservers = () => {
                 sendColor();
+                const schedule = () => requestAnimationFrame(sendColor);
                 const meta = document.querySelector('meta[name="theme-color"]');
                 if (meta) {
-                  new MutationObserver(sendColor).observe(meta, { attributes: true, attributeFilter: ["content"] });
+                  new MutationObserver(schedule).observe(meta, { attributes: true, attributeFilter: ["content"] });
                 }
-                new MutationObserver(() => requestAnimationFrame(sendColor)).observe(document.documentElement, {
+                new MutationObserver(schedule).observe(document.documentElement, {
                   attributes: true,
-                  attributeFilter: ["class", "data-theme"],
+                  attributeFilter: ["class", "data-theme", "style"],
                 });
-                window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => requestAnimationFrame(sendColor));
+                window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", schedule);
               };
               window.addEventListener("DOMContentLoaded", attachObservers, { once: true });
               // shell-ui's stylesheet is injected by a dynamic import, so its background is not applied yet at DOMContentLoaded.
@@ -141,10 +205,37 @@ class RemoteBridge(
         themeScript = WebViewCompat.addDocumentStartJavaScript(webView, themeJs, rules)
     }
 
+    private fun parseThemePalette(json: JSONObject): ThemePalette? {
+        val parsedBg = parseHexColor(json.optString("color"), opaqueOnly = true)
+        val isDark = when {
+            json.has("isDark") -> json.optBoolean("isDark")
+            parsedBg != null -> ColorUtils.calculateLuminance(parsedBg) <= 0.5
+            else -> return null
+        }
+        val fallback = ThemePalette.defaults(isDark)
+        return ThemePalette(
+            isDark = isDark,
+            background = parsedBg ?: fallback.background,
+            popover = parseHexColor(json.optString("popover"), opaqueOnly = true) ?: fallback.popover,
+            popoverForeground = parseHexColor(json.optString("popoverForeground")) ?: fallback.popoverForeground,
+            mutedForeground = parseHexColor(json.optString("mutedForeground")) ?: fallback.mutedForeground,
+            accent = parseHexColor(json.optString("accent")) ?: fallback.accent,
+            primary = parseHexColor(json.optString("primary")) ?: fallback.primary,
+            border = parseHexColor(json.optString("border")) ?: fallback.border,
+        )
+    }
+
+    private fun parseHexColor(raw: String, opaqueOnly: Boolean = false): Int? {
+        val regex = if (opaqueOnly) RGB_HEX_RE else ARGB_HEX_RE
+        if (!regex.matches(raw)) return null
+        return Color.parseColor(raw)
+    }
+
     companion object {
         const val SHELL_ORIGIN = "https://localhost"
         private const val NATIVE_HOST = "pikaNativeHost"
         private const val THEME_HOST = "pikaThemeHost"
-        private val HEX_COLOR_RE = Regex("^#[0-9a-fA-F]{6}$")
+        private val RGB_HEX_RE = Regex("^#[0-9a-fA-F]{6}$")
+        private val ARGB_HEX_RE = Regex("^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
     }
 }
