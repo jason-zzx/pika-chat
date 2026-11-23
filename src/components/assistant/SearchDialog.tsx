@@ -210,7 +210,6 @@ export default function SearchDialog() {
               variant="ghost"
               size="icon-xs"
               aria-label={t("clear")}
-              title={t("clear")}
               className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setQuery("");

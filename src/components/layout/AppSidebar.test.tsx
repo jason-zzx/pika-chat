@@ -51,13 +51,12 @@ describe("AppSidebar", () => {
     delete window.pikaNative;
   });
 
-  it("renders inset sidebar without hover rail or desktop chrome marker in browsers", () => {
+  it("renders inset sidebar without desktop chrome marker in browsers", () => {
     const view = renderAppSidebar();
     const wrapper = view.container.querySelector('[data-slot="sidebar-wrapper"]');
     const sidebar = view.container.querySelector('[data-slot="sidebar"]');
     expect(wrapper).not.toHaveAttribute("data-chrome");
     expect(sidebar).toHaveAttribute("data-variant", "inset");
-    expect(view.container.querySelector('[data-sidebar="rail"]')).toBeNull();
     expect(screen.getByTestId("assistant-tree-stub")).toBeInTheDocument();
   });
 

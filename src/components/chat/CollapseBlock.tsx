@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 
 export type CollapseBlockProps = {
   /**
-   * Accessible name (also the tooltip) of the toggle. Receives the open state
-   * so callers can swap wording between expand and collapse.
+   * Accessible name of the toggle. Receives the open state so callers can swap
+   * wording between expand and collapse.
    */
   ariaLabel: (open: boolean) => string;
   /**
@@ -58,7 +58,6 @@ export default function CollapseBlock({
         aria-expanded={open}
         aria-controls={contentId}
         aria-label={name}
-        title={name}
         onClick={() => setOpen((current) => !current)}
       >
         {label({

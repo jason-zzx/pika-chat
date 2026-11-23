@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
+
 import { listAvailableModels } from "@/lib/api/provider";
 import { listSearchProviders } from "@/lib/api/search-provider";
 import {
@@ -55,9 +57,10 @@ function renderComposer(options?: {
   const onImageParamsChange = vi.fn();
   renderWithIntl(
     <QueryClientProvider client={client}>
-      <Composer
-        draft={options?.draft ?? "hello"}
-        onDraftChange={() => undefined}
+      <TooltipProvider delay={0}>
+        <Composer
+          draft={options?.draft ?? "hello"}
+          onDraftChange={() => undefined}
         model={options?.model ?? { configId: "cfg", modelId: "local-llama" }}
         onModelChange={() => undefined}
         showAssistantPicker={false}
@@ -77,7 +80,9 @@ function renderComposer(options?: {
         onRetryAttachment={onRetryAttachment}
         imageParams={options?.imageParams}
         onImageParamsChange={onImageParamsChange}
-      />
+        />
+        <SharedTooltipHost />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
   return {
@@ -214,14 +219,21 @@ describe("Composer", () => {
     });
     renderComposer();
 
-    const expectTrigger = (
+    const expectTrigger = async (
       mode: "Off" | "Model built-in" | "Search tool",
       icon: "lucide-globe" | "lucide-search",
     ) => {
       const trigger = screen.getByRole("button", {
         name: `Web search mode: ${mode}`,
       });
-      expect(trigger).toHaveAttribute("title", `Web search: ${mode}`);
+      fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
+      fireEvent.mouseEnter(trigger);
+      expect(
+        await screen.findByText(`Web search: ${mode}`, {
+          selector: "[data-slot=tooltip-content]",
+        }),
+      ).toBeInTheDocument();
+      fireEvent.mouseLeave(trigger);
       expect(trigger).toHaveAttribute("aria-expanded", "false");
       expect(trigger.textContent).toBe("");
       const otherIcon =
@@ -231,7 +243,7 @@ describe("Composer", () => {
       return trigger;
     };
 
-    const trigger = expectTrigger("Off", "lucide-globe");
+    const trigger = await expectTrigger("Off", "lucide-globe");
     fireEvent.click(trigger);
 
     await vi.waitFor(() =>
@@ -242,7 +254,7 @@ describe("Composer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Model built-in/ }));
     expect(useComposerStore.getState().searchMode).toBe("builtin");
-    expectTrigger("Model built-in", "lucide-search");
+    await expectTrigger("Model built-in", "lucide-search");
 
     fireEvent.click(trigger);
     expect(
@@ -250,12 +262,12 @@ describe("Composer", () => {
     ).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: /^Search tool/ }));
     expect(useComposerStore.getState().searchMode).toBe("tool");
-    expectTrigger("Search tool", "lucide-globe");
+    await expectTrigger("Search tool", "lucide-globe");
 
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByRole("button", { name: /^Off/ }));
     expect(useComposerStore.getState().searchMode).toBe("off");
-    expectTrigger("Off", "lucide-globe");
+    await expectTrigger("Off", "lucide-globe");
   });
 
   it("does not show expand for a short draft", () => {
@@ -307,7 +319,10 @@ describe("Composer", () => {
     const effort = await screen.findByRole("combobox", {
       name: "Reasoning effort",
     });
-    expect(effort).toHaveAttribute("title", "Auto");
+    fireEvent.focus(effort);
+    expect(
+      await screen.findByText("Auto", { selector: "[data-slot=tooltip-content]" }),
+    ).toBeInTheDocument();
     fireEvent.keyDown(effort, { key: "ArrowDown" });
     const auto = await screen.findByRole("option", { name: "Auto" });
     const low = screen.getByRole("option", { name: "low" });
@@ -792,7 +807,7 @@ describe("Composer attachments", () => {
     ).toBeDisabled();
   });
 
-  it("gives every icon-only control both an accessible name and a title", () => {
+  it("gives every icon-only control both an accessible name and a tooltip", () => {
     renderComposer({ onCompress: vi.fn() });
 
     const form = screen.getByRole("button", { name: "Send" }).closest("form");
@@ -806,11 +821,12 @@ describe("Composer attachments", () => {
     expect(iconButtons.length).toBeGreaterThan(0);
     for (const button of iconButtons) {
       expect(button.getAttribute("aria-label")).toBeTruthy();
-      expect(button.getAttribute("title")).toBeTruthy();
+      expect(button).not.toHaveAttribute("title");
+      expect(button).toHaveAttribute("data-slot", "tooltip-trigger");
     }
   });
 
-  it("gives the attachment chip's icon-only controls both an accessible name and a title", () => {
+  it("gives the attachment chip retry button a tooltip and keeps remove free of title", async () => {
     renderComposer({
       attachments: [
         stagedAttachment({
@@ -827,9 +843,15 @@ describe("Composer attachments", () => {
     });
 
     const retry = screen.getByRole("button", { name: "Retry upload" });
-    expect(retry).toHaveAttribute("title", "Retry upload");
+    fireEvent.focus(retry);
+    expect(
+      await screen.findByText("Retry upload", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
     const remove = screen.getByRole("button", { name: "Remove notes.txt" });
-    expect(remove).toHaveAttribute("title", "Remove notes.txt");
+    expect(remove).not.toHaveAttribute("title");
+    expect(remove).not.toHaveAttribute("data-slot", "tooltip-trigger");
   });
 
   it("focuses the message input when clicking the blank space inside the action bar", () => {

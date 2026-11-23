@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_FILE_LIMITS } from "@/lib/api/files";
+import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
 import type { ChatFilePart, ChatUIMessage } from "@/lib/schemas/chat";
 import { useComposerStore } from "@/stores/composer-store";
 import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
@@ -129,9 +130,14 @@ describe("MessageItem", () => {
     expect(time).toHaveClass("group-hover/message:opacity-100");
   });
 
-  it("shows the user timestamp above the bubble and copy below it", () => {
+  it("shows the user timestamp above the bubble and copy below it", async () => {
     const createdAt = recentIso();
-    renderWithIntl(<MessageItem message={userMessage("Hello", { createdAt })} />);
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <MessageItem message={userMessage("Hello", { createdAt })} />
+        <SharedTooltipHost />
+      </TooltipProvider>,
+    );
 
     const article = screen.getByRole("article", { name: "You" });
     const children = Array.from(article.children);
@@ -143,11 +149,15 @@ describe("MessageItem", () => {
 
     const time = screen.getByText("just now");
     expect(time).toHaveAttribute("datetime", createdAt);
+    expect(time).not.toHaveAttribute("title");
+    fireEvent.pointerEnter(time, { pointerType: "mouse" });
+    fireEvent.mouseEnter(time);
     // The exact format is asserted in MessageTimestamp.test.tsx.
-    expect(time).toHaveAttribute(
-      "title",
-      expect.stringMatching(/\d{2}:\d{2}:\d{2}/),
-    );
+    expect(
+      await screen.findByText(/\d{2}:\d{2}:\d{2}/, {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("offers a labelled copy action for both roles", () => {
@@ -884,14 +894,14 @@ describe("MessageItem tap-to-reveal", () => {
       // The 2s check-icon feedback must stay visible even though the pointer
       // and focus may have left the message row.
       await vi.waitFor(() => {
-        expect(screen.getByTitle("Copied")).toBeInTheDocument();
+        expect(screen.getByText("Copied")).toBeInTheDocument();
       });
       expect(article).toHaveAttribute("data-revealed", "true");
 
       await act(async () => {
         vi.advanceTimersByTime(2_100);
       });
-      expect(screen.getByTitle("Copy message")).toBeInTheDocument();
+      expect(screen.queryByText("Copied")).not.toBeInTheDocument();
       expect(article).toHaveAttribute("data-revealed", "false");
     } finally {
       vi.useRealTimers();

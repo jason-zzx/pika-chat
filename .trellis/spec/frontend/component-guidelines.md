@@ -401,8 +401,7 @@ model/assistant pickers, tool-call headers) until the fix landed.
 
 Semantic cursors keep winning: `:not(:disabled)` excludes disabled controls
 (`disabled:cursor-not-allowed` on `ui/select.tsx` still applies), and explicit
-utilities such as the `SidebarRail` resize cursors (`cursor-w-resize` /
-`cursor-e-resize`) live in the utilities layer and override the base rule.
+utilities live in the utilities layer and override the base rule.
 Anchors with `href` already point natively. Do **not** put `cursor: pointer` on
 large content regions whose click is a secondary affordance (the message
 `<article>` tap-to-reveal) — it poisons text-selection gestures.
@@ -496,15 +495,27 @@ Reference: `TopicRow` in `assistant/AssistantTree.tsx`, landed in
   while a press is active, so desktop right-click stays native. Add
   `[-webkit-touch-callout:none] select-none` under `hover:none`.
 - **Long-press-only header**: the full title is a `DropdownMenuLabel` shown only
-  when the menu was opened by long press. Clear that flag in
+  when the menu was opened by long press. Put `line-clamp-3 break-words` on an
+  inner zero-padding `<span>` rather than on `DropdownMenuLabel` itself —
+  `overflow: hidden` clips at the padding box, so bottom padding on a clamped
+  element exposes half of line 4. Clear the flag in
   `onOpenChangeComplete(false)`, not in `onOpenChange(false)`. Clearing on
   close shrinks the menu mid-exit-animation, which reads as a jitter.
 - **Full-title tooltip**: shared `Tooltip`, `side="right"`, `delay={500}` on the
   trigger. It opens only when the title overflows: `onOpenChange` calls
-  `details.cancel()` when `scrollWidth <= clientWidth`. Style it with popover
-  tokens (`bg-popover text-popover-foreground ring-1 ring-foreground/10
-  shadow-md rounded-lg`, arrow hidden via `[&>div]:hidden`). The primitive's
-  inverted `bg-foreground` bubble clashes with the theme presets.
+  `details.cancel()` when `scrollWidth <= clientWidth`.
+- **Tooltips across the app**: `ui/tooltip.tsx` uses popover tokens
+  (`bg-popover text-popover-foreground ring-1 ring-foreground/10 shadow-md
+  rounded-lg`, arrow removed) and `TooltipProvider` defaults `delay = 300`
+  (sidebar collapsed items pass `delay={0}` so the icon rail stays snappy).
+  Action buttons and truncated metadata use `SharedTooltipHost` (mounted once in
+  `AppProviders`) via `<SharedTooltip payload={...} ... />`
+  instead of native HTML `title` attributes, while obvious `✕`
+  dismiss/clear/remove buttons carry `aria-label` only (no `title` or tooltip).
+  Disabled buttons that still need a hover explanation (e.g. `FilesList` in-use
+  delete) wrap the `<Button>` in a non-disabled `<span className="inline-flex">`
+  `SharedTooltip`. Every interactive item in the collapsed left sidebar
+  carries a tooltip (`side="right"`).
 
 ## Collapsible sidebar group labels
 

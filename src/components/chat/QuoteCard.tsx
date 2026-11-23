@@ -48,7 +48,6 @@ export default function QuoteCard({
           size="icon-xs"
           className="m-1 shrink-0"
           aria-label={t("remove")}
-          title={t("remove")}
           disabled={disabled}
           onClick={onRemove}
         >

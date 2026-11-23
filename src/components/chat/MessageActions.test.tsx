@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
 import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageActions from "./MessageActions";
@@ -53,29 +54,50 @@ describe("MessageActions", () => {
   it("copies the message text and announces success", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     mockClipboard(writeText);
-    renderWithIntl(<MessageActions text="hello world" messageRole="assistant" />);
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <MessageActions text="hello world" messageRole="assistant" />
+        <SharedTooltipHost />
+      </TooltipProvider>,
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
+    const copyBtn = screen.getByRole("button", { name: "Copy message" });
+    fireEvent.click(copyBtn);
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith("hello world");
     });
-    expect(await screen.findByTitle("Copied")).toBeInTheDocument();
+    expect(await screen.findByText("Copied")).toBeInTheDocument();
+    fireEvent.pointerEnter(copyBtn, { pointerType: "mouse" });
+    fireEvent.mouseEnter(copyBtn);
+    expect(
+      await screen.findByText("Copied", { selector: "[data-slot=tooltip-content]" }),
+    ).toBeInTheDocument();
   });
 
-  it("shows a transient failure title when both clipboard paths fail", async () => {
+  it("shows a transient failure tooltip when both clipboard paths fail", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     mockClipboard(writeText);
     mockExecCommand(false);
-    renderWithIntl(<MessageActions text="hello" messageRole="assistant" />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
-
-    expect(await screen.findByTitle("Copy failed")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Copy message" })).toHaveAttribute(
-      "aria-label",
-      "Copy message",
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <MessageActions text="hello" messageRole="assistant" />
+        <SharedTooltipHost />
+      </TooltipProvider>,
     );
+
+    const copyBtn = screen.getByRole("button", { name: "Copy message" });
+    fireEvent.click(copyBtn);
+
+    expect(await screen.findByText("Copy failed")).toBeInTheDocument();
+    fireEvent.pointerEnter(copyBtn, { pointerType: "mouse" });
+    fireEvent.mouseEnter(copyBtn);
+    expect(
+      await screen.findByText("Copy failed", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
+    expect(copyBtn).toHaveAttribute("aria-label", "Copy message");
   });
 
   it("falls back to execCommand when the clipboard API is missing (B9)", async () => {
@@ -85,7 +107,7 @@ describe("MessageActions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
-    expect(await screen.findByTitle("Copied")).toBeInTheDocument();
+    expect(await screen.findByText("Copied")).toBeInTheDocument();
     expect(execCommand).toHaveBeenCalledWith("copy");
   });
 
@@ -97,7 +119,7 @@ describe("MessageActions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
 
-    expect(await screen.findByTitle("Copied")).toBeInTheDocument();
+    expect(await screen.findByText("Copied")).toBeInTheDocument();
     expect(writeText).toHaveBeenCalledWith("hello world");
     expect(execCommand).toHaveBeenCalledWith("copy");
   });
@@ -277,21 +299,34 @@ describe("MessageActions", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     mockClipboard(writeText);
     try {
-      renderWithIntl(<MessageActions text="hello" messageRole="assistant" />);
+      renderWithIntl(
+        <TooltipProvider delay={0}>
+          <MessageActions text="hello" messageRole="assistant" />
+          <SharedTooltipHost />
+        </TooltipProvider>,
+      );
 
-      fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
+      const copyBtn = screen.getByRole("button", { name: "Copy message" });
+      fireEvent.click(copyBtn);
 
       await vi.waitFor(() => {
-        expect(screen.getByTitle("Copied")).toBeInTheDocument();
+        expect(screen.getByText("Copied")).toBeInTheDocument();
       });
-      expect(screen.queryByTitle("Copy message")).not.toBeInTheDocument();
+      expect(copyBtn.querySelector(".lucide-check")).toBeInTheDocument();
 
       await act(async () => {
         vi.advanceTimersByTime(2_100);
       });
 
-      expect(screen.getByTitle("Copy message")).toBeInTheDocument();
-      expect(screen.queryByTitle("Copied")).not.toBeInTheDocument();
+      expect(screen.queryByText("Copied")).not.toBeInTheDocument();
+      expect(copyBtn.querySelector(".lucide-copy")).toBeInTheDocument();
+      fireEvent.pointerEnter(copyBtn, { pointerType: "mouse" });
+      fireEvent.mouseEnter(copyBtn);
+      expect(
+        await screen.findByText("Copy message", {
+          selector: "[data-slot=tooltip-content]",
+        }),
+      ).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

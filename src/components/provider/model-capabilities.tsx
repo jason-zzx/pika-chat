@@ -1,3 +1,5 @@
+"use client";
+
 import {
   AudioLinesIcon,
   BrainIcon,
@@ -8,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
+import { SharedTooltip } from "@/components/ui/tooltip";
 import type { ProviderModel } from "@/lib/schemas/provider";
 import { cn } from "@/lib/utils";
 
@@ -62,17 +65,24 @@ export function ModelCapabilityIcons({
       )}
     >
       {model.reasoning ? (
-        <span title={REASONING_LABEL} aria-label={REASONING_LABEL}>
+        <SharedTooltip
+          payload={REASONING_LABEL}
+          render={<span aria-label={REASONING_LABEL} />}
+        >
           <BrainIcon aria-hidden="true" className="size-3.5" />
-        </span>
+        </SharedTooltip>
       ) : null}
       {extras.map((modality) => (
-        <span key={modality} title={modality} aria-label={modality}>
+        <SharedTooltip
+          key={modality}
+          payload={modality}
+          render={<span aria-label={modality} />}
+        >
           <ModalityIcon
             modality={modality}
             className="size-3.5"
           />
-        </span>
+        </SharedTooltip>
       ))}
     </span>
   );

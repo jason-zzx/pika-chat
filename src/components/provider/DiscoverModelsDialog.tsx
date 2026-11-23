@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { cn } from "@/lib/utils";
 
@@ -221,14 +222,18 @@ export default function DiscoverModelsDialog({
                     );
                   })}
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t("refreshUpstream")}
-                  title={t("refreshUpstream")}
-                  disabled={discover.isFetching || syncModels.isPending}
-                  onClick={() => void discover.refetch()}
+                <SharedTooltip
+                  payload={t("refreshUpstream")}
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={t("refreshUpstream")}
+                      disabled={discover.isFetching || syncModels.isPending}
+                      onClick={() => void discover.refetch()}
+                    />
+                  }
                 >
                   <RefreshCwIcon
                     aria-hidden="true"
@@ -238,7 +243,7 @@ export default function DiscoverModelsDialog({
                         "animate-spin motion-reduce:animate-none",
                     )}
                   />
-                </Button>
+                </SharedTooltip>
               </div>
 
               {discoveryError ? (

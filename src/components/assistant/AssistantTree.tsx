@@ -157,7 +157,7 @@ export default function AssistantTree({
           </SidebarMenuButton>
         ) : (
           <div className="flex h-10 min-w-0 items-center overflow-hidden px-2.5 md:h-8 md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <CloseOnNavigateLink href="/">
+            <CloseOnNavigateLink href="/" tooltip={tRoot("title")}>
               <PikaMark className="size-6" />
               <span className="truncate group-data-[collapsible=icon]:sr-only">
                 {tRoot("title")}
@@ -171,7 +171,7 @@ export default function AssistantTree({
         {isSettings ? (
           <SettingsNav showUsers={showUsers} local={local} />
         ) : tree.isPending ? (
-          <SidebarGroup className="group-data-[collapsible=icon]:p-1.5">
+          <SidebarGroup>
             <SidebarGroupContent>
               <LoadingRows showIcon />
             </SidebarGroupContent>
@@ -255,20 +255,37 @@ function PaneHeader({
   onBack: () => void;
 }) {
   const t = useTranslations("Layout");
+  const { isMobile, state } = useSidebar();
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden px-1 text-base md:gap-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
-        aria-label={t("tree.backToAssistants")}
-        onClick={onBack}
-      >
-        <ArrowLeftIcon />
-      </Button>
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden px-1 text-base md:gap-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
+      <Tooltip>
+        <TooltipTrigger
+          delay={0}
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="size-9 md:size-7 group-data-[collapsible=icon]:md:size-8 [&_svg]:size-5 md:[&_svg]:size-4"
+              aria-label={t("tree.backToAssistants")}
+              onClick={onBack}
+            />
+          }
+        >
+          <ArrowLeftIcon />
+        </TooltipTrigger>
+        <TooltipContent
+          side={state === "collapsed" && !isMobile ? "right" : "bottom"}
+          align="center"
+        >
+          {t("tree.backToAssistants")}
+        </TooltipContent>
+      </Tooltip>
       {icon ? (
-        <span aria-hidden="true" className="shrink-0">
+        <span
+          aria-hidden="true"
+          className="flex size-5 shrink-0 items-center justify-center leading-none"
+        >
           {icon}
         </span>
       ) : null}
@@ -319,17 +336,23 @@ function AssistantList({
 }) {
   const t = useTranslations("Layout");
   return (
-    <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:p-1.5">
+    <SidebarGroup className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <SidebarGroupLabel>{t("tree.assistants")}</SidebarGroupLabel>
       <SidebarGroupContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <SidebarMenu className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto">
           {assistants.map((assistant) => (
             <SidebarMenuItem key={assistant.id} className="min-w-0 overflow-hidden">
               <SidebarMenuButton
+                tooltip={assistant.name}
                 onClick={() => onOpen(assistant)}
                 aria-label={t("tree.openAssistant", { name: assistant.name })}
               >
-                <span aria-hidden="true">{assistant.icon}</span>
+                <span
+                  aria-hidden="true"
+                  className="flex size-4.5 shrink-0 items-center justify-center leading-none md:size-4"
+                >
+                  {assistant.icon}
+                </span>
                 <span className="truncate group-data-[collapsible=icon]:hidden">
                   {assistant.name}
                 </span>
@@ -338,10 +361,8 @@ function AssistantList({
           ))}
         </SidebarMenu>
         <div className="shrink-0 pt-2 md:pt-1">
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-10 w-full justify-start gap-2.5 px-2.5 text-base md:h-8 md:gap-2 md:px-2 md:text-sm [&_svg]:size-4.5 md:[&_svg]:size-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+          <SidebarMenuButton
+            tooltip={t("tree.newAssistant")}
             aria-label={t("tree.newAssistant")}
             onClick={onCreate}
           >
@@ -349,7 +370,7 @@ function AssistantList({
             <span className="group-data-[collapsible=icon]:hidden">
               {t("tree.newAssistant")}
             </span>
-          </Button>
+          </SidebarMenuButton>
         </div>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -503,7 +524,7 @@ function AssistantPane({
 
   return (
     <>
-      <SidebarGroup className="shrink-0 group-data-[collapsible=icon]:p-1.5">
+      <SidebarGroup className="shrink-0">
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem className="min-w-0 overflow-hidden">
@@ -846,13 +867,7 @@ function TopicRow({
             <TopicAgeLabel updatedAt={topic.updatedAt} />
           )}
         </SidebarMenuButton>
-        {/* Popover tokens (same surface as the row menu) instead of the
-            primitive's inverted foreground bubble; [&>div] is the arrow. */}
-        <TooltipContent
-          side="right"
-          sideOffset={8}
-          className="max-w-72 rounded-lg bg-popover px-2.5 py-1.5 text-xs leading-relaxed text-popover-foreground shadow-md ring-1 ring-foreground/10 wrap-break-word [&>div]:hidden"
-        >
+        <TooltipContent side="right" sideOffset={8}>
           {topic.title}
         </TooltipContent>
       </Tooltip>
@@ -897,8 +912,12 @@ function TopicRow({
             {openedByLongPress ? (
               <>
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel className="line-clamp-3 max-w-64 break-words">
-                    {topic.title}
+                  {/* Clamp on a zero-padding child so overflow:hidden never
+                      exposes line 4 inside DropdownMenuLabel's bottom padding. */}
+                  <DropdownMenuLabel className="max-w-64">
+                    <span className="line-clamp-3 break-words">
+                      {topic.title}
+                    </span>
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />

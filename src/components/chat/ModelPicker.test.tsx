@@ -3,6 +3,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { listAvailableModels } from "@/lib/api/provider";
+import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
 import { defaultModelMetadata } from "@/lib/schemas/provider";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 
@@ -22,11 +23,14 @@ function renderPicker(options?: {
   const onChange = vi.fn();
   renderWithIntl(
     <QueryClientProvider client={client}>
-      <ModelPicker
-        value={options?.value ?? null}
-        onChange={onChange}
-        allowClear={options?.allowClear}
-      />
+      <TooltipProvider delay={0}>
+        <ModelPicker
+          value={options?.value ?? null}
+          onChange={onChange}
+          allowClear={options?.allowClear}
+        />
+        <SharedTooltipHost />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
   return { onChange };
@@ -204,8 +208,19 @@ describe("ModelPicker", () => {
     expect(screen.queryByText("200K")).not.toBeInTheDocument();
     expect(screen.queryByText("1M · vision")).not.toBeInTheDocument();
 
-    expect(screen.getAllByTitle("Vision")).toHaveLength(2);
-    expect(screen.getAllByTitle("Vision")[0]).toHaveAccessibleName("Vision");
+    const visionLabels = screen.getAllByText("Vision");
+    expect(visionLabels).toHaveLength(2);
+    const visionTrigger = visionLabels[0]?.parentElement;
+    if (!visionTrigger) {
+      throw new Error("Expected Vision tooltip trigger");
+    }
+    fireEvent.pointerEnter(visionTrigger, { pointerType: "mouse" });
+    fireEvent.mouseEnter(visionTrigger);
+    expect(
+      await screen.findByText("Vision", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
 
     const bigRow = screen.getByRole("button", { name: /big-context/ });
     expect(bigRow).toHaveAccessibleName(/Vision/);

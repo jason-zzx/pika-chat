@@ -7,8 +7,15 @@ import {
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  SharedTooltip,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { formatBytes } from "@/lib/files/format";
 import { cn } from "@/lib/utils";
@@ -36,6 +43,7 @@ export default function AttachmentChip({
 }: AttachmentChipProps) {
   const t = useTranslations("Files");
   const tErrors = useTranslations("Errors");
+  const filenameRef = useRef<HTMLSpanElement>(null);
   const failed = attachment.status === "error";
   // Image chips show a thumbnail served by our own authenticated route once
   // the upload is ready. A local object URL (useMemo + revoke-on-unmount)
@@ -91,12 +99,26 @@ export default function AttachmentChip({
         />
       )}
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span
-          className="max-w-[12rem] truncate font-medium"
-          title={attachment.filename}
+        <Tooltip
+          onOpenChange={(open, details) => {
+            const label = filenameRef.current;
+            if (open && label && label.scrollWidth <= label.clientWidth) {
+              details.cancel();
+            }
+          }}
         >
-          {attachment.filename}
-        </span>
+          <TooltipTrigger
+            render={
+              <span
+                ref={filenameRef}
+                className="max-w-[12rem] truncate font-medium"
+              />
+            }
+          >
+            {attachment.filename}
+          </TooltipTrigger>
+          <TooltipContent>{attachment.filename}</TooltipContent>
+        </Tooltip>
         {attachment.status === "uploading" ? (
           <span className="text-muted-foreground">{t("uploading")}</span>
         ) : attachment.sizeBytes !== undefined ? (
@@ -115,24 +137,27 @@ export default function AttachmentChip({
         ))}
       </div>
       {failed ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t("retry")}
-          title={t("retry")}
-          disabled={disabled}
-          onClick={onRetry}
+        <SharedTooltip
+          payload={t("retry")}
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t("retry")}
+              disabled={disabled}
+              onClick={onRetry}
+            />
+          }
         >
           <RotateCcwIcon aria-hidden="true" />
-        </Button>
+        </SharedTooltip>
       ) : null}
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
         aria-label={t("remove", { filename: attachment.filename })}
-        title={t("remove", { filename: attachment.filename })}
         disabled={disabled}
         onClick={onRemove}
       >

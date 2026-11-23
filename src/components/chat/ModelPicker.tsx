@@ -12,6 +12,7 @@ import {
   Popover,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import {
   formatContextTokens,
   modelHasVision,
@@ -73,11 +74,10 @@ export default function ModelPicker({
         }
       }}
     >
-      <PopoverTrigger
+      <SharedTooltip
         id={id}
-        disabled={pickerDisabled}
-        aria-label={iconOnly ? triggerLabel : undefined}
-        title={
+        disabled={!iconOnly}
+        payload={
           iconOnly
             ? selected
               ? `${selected.modelId} · ${selected.configName}`
@@ -85,18 +85,24 @@ export default function ModelPicker({
             : undefined
         }
         render={
-          <Button
-            type="button"
-            variant="outline"
-            size={iconOnly ? "icon-sm" : "sm"}
-            // bg-transparent matches the Select-based pickers on the muted
-            // composer container (outline variant defaults to bg-background).
-            className={cn(
-              "max-w-full bg-transparent font-normal",
-              iconOnly
-                ? "size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
-                : "justify-between gap-1.5",
-            )}
+          <PopoverTrigger
+            disabled={pickerDisabled}
+            aria-label={iconOnly ? triggerLabel : undefined}
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size={iconOnly ? "icon-sm" : "sm"}
+                // bg-transparent matches the Select-based pickers on the muted
+                // composer container (outline variant defaults to bg-background).
+                className={cn(
+                  "max-w-full bg-transparent font-normal",
+                  iconOnly
+                    ? "size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
+                    : "justify-between gap-1.5",
+                )}
+              />
+            }
           />
         }
       >
@@ -126,7 +132,7 @@ export default function ModelPicker({
             className="size-4 text-muted-foreground"
           />
         ) : null}
-      </PopoverTrigger>
+      </SharedTooltip>
       <ComposerPickerContent
         side={iconOnly ? "top" : "bottom"}
         className="w-80 gap-2"
@@ -218,44 +224,31 @@ export default function ModelPicker({
                             {contextLabel !== null ? (
                               <span>{contextLabel}</span>
                             ) : null}
-                            {hasVision ? (
-                              <span
-                                title={t("vision")}
-                                className="flex items-center"
-                              >
-                                <EyeIcon
-                                  aria-hidden="true"
-                                  className="size-3.5"
-                                />
-                                <span className="sr-only">{t("vision")}</span>
-                              </span>
-                            ) : null}
-                            {model.reasoning ? (
-                              <span
-                                title={t("reasoning")}
-                                className="flex items-center"
-                              >
-                                <BrainIcon
-                                  aria-hidden="true"
-                                  className="size-3.5"
-                                />
-                                <span className="sr-only">{t("reasoning")}</span>
-                              </span>
-                            ) : null}
-                            {generatesImages ? (
-                              <span
-                                title={t("imageGeneration")}
-                                className="flex items-center"
-                              >
-                                <ImageIcon
-                                  aria-hidden="true"
-                                  className="size-3.5"
-                                />
-                                <span className="sr-only">
-                                  {t("imageGeneration")}
-                                </span>
-                              </span>
-                            ) : null}
+                            {[
+                              hasVision && { label: t("vision"), Icon: EyeIcon },
+                              model.reasoning && {
+                                label: t("reasoning"),
+                                Icon: BrainIcon,
+                              },
+                              generatesImages && {
+                                label: t("imageGeneration"),
+                                Icon: ImageIcon,
+                              },
+                            ].map((cue) =>
+                              cue ? (
+                                <SharedTooltip
+                                  key={cue.label}
+                                  payload={cue.label}
+                                  render={<span className="flex items-center" />}
+                                >
+                                  <cue.Icon
+                                    aria-hidden="true"
+                                    className="size-3.5"
+                                  />
+                                  <span className="sr-only">{cue.label}</span>
+                                </SharedTooltip>
+                              ) : null,
+                            )}
                           </span>
                         ) : null}
                       </button>

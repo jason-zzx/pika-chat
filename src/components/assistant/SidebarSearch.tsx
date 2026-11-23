@@ -3,8 +3,7 @@
 import { SearchIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { SidebarInput } from "@/components/ui/sidebar";
+import { SidebarInput, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useSearchDialogStore } from "@/stores/search-dialog-store";
 
 /** Persistent search row between the sidebar header and the tree. The box is
@@ -17,16 +16,15 @@ export default function SidebarSearch() {
 
   return (
     <div className="shrink-0 px-2 pb-1.5 md:pb-1">
-      <Button
+      <SidebarMenuButton
         type="button"
-        variant="ghost"
-        size="icon"
+        tooltip={t("openSearch")}
         aria-label={t("openSearch")}
-        className="hidden w-full group-data-[collapsible=icon]:flex"
+        className="hidden group-data-[collapsible=icon]:flex"
         onClick={() => setOpen(true)}
       >
         <SearchIcon aria-hidden="true" />
-      </Button>
+      </SidebarMenuButton>
       <div className="relative group-data-[collapsible=icon]:hidden">
         <SearchIcon
           aria-hidden="true"

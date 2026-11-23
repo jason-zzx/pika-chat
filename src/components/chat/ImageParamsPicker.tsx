@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import {
+  SharedTooltip,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -151,23 +152,27 @@ export default function ImageParamsPicker({
 
   return (
     <Popover>
-      <PopoverTrigger
-        aria-label={t("imageParams")}
-        title={t("imageParams")}
-        disabled={disabled}
+      <SharedTooltip
+        payload={t("imageParams")}
         render={
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            // bg-transparent matches the other pickers on the muted composer
-            // container (outline variant defaults to bg-background).
-            className="size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
+          <PopoverTrigger
+            aria-label={t("imageParams")}
+            disabled={disabled}
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                // bg-transparent matches the other pickers on the muted composer
+                // container (outline variant defaults to bg-background).
+                className="size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
+              />
+            }
           />
         }
       >
         <ImageIcon aria-hidden="true" />
-      </PopoverTrigger>
+      </SharedTooltip>
       <ComposerPickerContent className="w-72 gap-3">
         <ParamSection label={t("imageSize")}>
           {capability.sizes.map((option) => (
@@ -215,29 +220,37 @@ export default function ImageParamsPicker({
         ) : null}
         {capability.nMax > 1 ? (
           <ParamSection label={t("imageCount")}>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-xs"
-              aria-label={t("imageCountDecrease")}
-              title={t("imageCountDecrease")}
-              disabled={disabled || n <= 1}
-              onClick={() => onChange({ ...value, n: n - 1 })}
+            <SharedTooltip
+              payload={t("imageCountDecrease")}
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  aria-label={t("imageCountDecrease")}
+                  disabled={disabled || n <= 1}
+                  onClick={() => onChange({ ...value, n: n - 1 })}
+                />
+              }
             >
               <MinusIcon aria-hidden="true" />
-            </Button>
+            </SharedTooltip>
             <span className="min-w-6 text-center text-sm">{n}</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-xs"
-              aria-label={t("imageCountIncrease")}
-              title={t("imageCountIncrease")}
-              disabled={disabled || n >= capability.nMax}
-              onClick={() => onChange({ ...value, n: n + 1 })}
+            <SharedTooltip
+              payload={t("imageCountIncrease")}
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  aria-label={t("imageCountIncrease")}
+                  disabled={disabled || n >= capability.nMax}
+                  onClick={() => onChange({ ...value, n: n + 1 })}
+                />
+              }
             >
               <PlusIcon aria-hidden="true" />
-            </Button>
+            </SharedTooltip>
           </ParamSection>
         ) : null}
         {capability.qualities ? (

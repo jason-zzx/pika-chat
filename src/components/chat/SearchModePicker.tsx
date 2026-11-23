@@ -12,6 +12,7 @@ import {
   Popover,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import type { SearchMode } from "@/lib/schemas/search-provider";
 import { cn } from "@/lib/utils";
 import { useComposerStore } from "@/stores/composer-store";
@@ -90,24 +91,28 @@ export default function SearchModePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        aria-label={t("searchMode.toggleLabel", { mode: modeLabel })}
-        title={t("searchMode.toggleTitle", { mode: modeLabel })}
-        disabled={disabled}
+      <SharedTooltip
+        payload={t("searchMode.toggleTitle", { mode: modeLabel })}
         render={
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            className={cn(
-              "size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4",
-              // Active: highlight the icon itself in primary (near-black in
-              // light mode) instead of filling the button; inactive is a
-              // lighter muted tint.
-              mode === "off"
-                ? "text-muted-foreground/70"
-                : "text-primary hover:text-primary aria-expanded:text-primary",
-            )}
+          <PopoverTrigger
+            aria-label={t("searchMode.toggleLabel", { mode: modeLabel })}
+            disabled={disabled}
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className={cn(
+                  "size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4",
+                  // Active: highlight the icon itself in primary (near-black in
+                  // light mode) instead of filling the button; inactive is a
+                  // lighter muted tint.
+                  mode === "off"
+                    ? "text-muted-foreground/70"
+                    : "text-primary hover:text-primary aria-expanded:text-primary",
+                )}
+              />
+            }
           />
         }
       >
@@ -116,7 +121,7 @@ export default function SearchModePicker({
         ) : (
           <GlobeIcon aria-hidden="true" />
         )}
-      </PopoverTrigger>
+      </SharedTooltip>
       <ComposerPickerContent className="w-80 gap-1">
         {SEARCH_MODE_OPTIONS.map((option) => {
           const optionDisabled = option.value === "tool" && !toolAvailable;

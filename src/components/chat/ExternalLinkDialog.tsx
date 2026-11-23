@@ -93,7 +93,6 @@ export default function ExternalLinkDialog({
             />
           }
           aria-label={tCommon("close")}
-          title={tCommon("close")}
         >
           <XIcon aria-hidden="true" />
         </AlertDialogPrimitive.Close>

@@ -45,7 +45,7 @@ export default function AssistantPicker({
     >
       <ComposerSelectTrigger
         label={t("assistant")}
-        title={selected?.name ?? t("assistant")}
+        tooltip={selected?.name ?? t("assistant")}
       >
         <SelectValue
           className="justify-center text-center"

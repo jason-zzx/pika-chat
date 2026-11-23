@@ -8,6 +8,7 @@ import AttachmentIcon from "@/components/chat/AttachmentIcon";
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { formatBytes } from "@/lib/files/format";
 import {
   FILE_LIST_CATEGORY_LABEL_KEYS,
@@ -139,18 +140,23 @@ function FileRow({
             <ExternalLinkIcon aria-hidden="true" />
           </a>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled={file.referenced}
-          title={file.referenced ? t("inUseHint") : undefined}
-          aria-describedby={file.referenced ? inUseBadgeId : undefined}
-          aria-label={t("delete", { filename: file.filename })}
-          onClick={() => onDelete(file)}
+        <SharedTooltip
+          disabled={!file.referenced}
+          payload={file.referenced ? t("inUseHint") : undefined}
+          render={<span className="inline-flex" />}
         >
-          <Trash2Icon aria-hidden="true" />
-        </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={file.referenced}
+            aria-describedby={file.referenced ? inUseBadgeId : undefined}
+            aria-label={t("delete", { filename: file.filename })}
+            onClick={() => onDelete(file)}
+          >
+            <Trash2Icon aria-hidden="true" />
+          </Button>
+        </SharedTooltip>
       </div>
     </div>
   );

@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { ChatMetadata } from "@/lib/schemas/chat";
 import {
@@ -144,99 +145,123 @@ export default function MessageActions({
               count: version.versionCount,
             })}
           >
-            <button
-              type="button"
-              aria-label={t("previousVersion")}
-              title={t("previousVersion")}
-              disabled={!hasPrevious}
-              onClick={() => {
-                const target = version.versionIds[version.versionIndex - 2];
-                if (target !== undefined) {
-                  onSelectVersion(target);
-                }
-              }}
-              className={ACTION_BUTTON_CLASS}
+            <SharedTooltip
+              payload={t("previousVersion")}
+              render={
+                <button
+                  type="button"
+                  aria-label={t("previousVersion")}
+                  disabled={!hasPrevious}
+                  onClick={() => {
+                    const target = version.versionIds[version.versionIndex - 2];
+                    if (target !== undefined) {
+                      onSelectVersion(target);
+                    }
+                  }}
+                  className={ACTION_BUTTON_CLASS}
+                />
+              }
             >
               <ChevronLeftIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
-            </button>
+            </SharedTooltip>
             <span
               className="min-w-7 text-center text-sm text-muted-foreground tabular-nums md:text-xs"
               aria-hidden="true"
             >
               {version.versionIndex}/{version.versionCount}
             </span>
-            <button
-              type="button"
-              aria-label={t("nextVersion")}
-              title={t("nextVersion")}
-              disabled={!hasNext}
-              onClick={() => {
-                const target = version.versionIds[version.versionIndex];
-                if (target !== undefined) {
-                  onSelectVersion(target);
-                }
-              }}
-              className={ACTION_BUTTON_CLASS}
+            <SharedTooltip
+              payload={t("nextVersion")}
+              render={
+                <button
+                  type="button"
+                  aria-label={t("nextVersion")}
+                  disabled={!hasNext}
+                  onClick={() => {
+                    const target = version.versionIds[version.versionIndex];
+                    if (target !== undefined) {
+                      onSelectVersion(target);
+                    }
+                  }}
+                  className={ACTION_BUTTON_CLASS}
+                />
+              }
             >
               <ChevronRightIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
-            </button>
+            </SharedTooltip>
           </div>
         ) : null}
         {/* The pencil sits right of the version switcher (R1); without a
             switcher it is naturally the leftmost action. */}
         {showEdit ? (
-          <button
-            type="button"
-            aria-label={t("editMessage")}
-            title={t("editMessage")}
-            onClick={onEdit}
-            className={ACTION_BUTTON_CLASS}
+          <SharedTooltip
+            payload={t("editMessage")}
+            render={
+              <button
+                type="button"
+                aria-label={t("editMessage")}
+                onClick={onEdit}
+                className={ACTION_BUTTON_CLASS}
+              />
+            }
           >
             <PencilIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
-          </button>
+          </SharedTooltip>
         ) : null}
         {onRegenerate ? (
-          <button
-            type="button"
-            aria-label={t("regenerateResponse")}
-            title={t("regenerateResponse")}
-            onClick={onRegenerate}
-            className={ACTION_BUTTON_CLASS}
+          <SharedTooltip
+            payload={t("regenerateResponse")}
+            render={
+              <button
+                type="button"
+                aria-label={t("regenerateResponse")}
+                onClick={onRegenerate}
+                className={ACTION_BUTTON_CLASS}
+              />
+            }
           >
             <RefreshCwIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
-          </button>
+          </SharedTooltip>
         ) : null}
         {hideCopy ? null : (
-          <button
-            type="button"
-            aria-label={t("copyMessage")}
-            title={copyTitle}
-            onClick={() => {
-              void handleCopy();
-            }}
-            className={ACTION_BUTTON_CLASS}
+          <SharedTooltip
+            payload={copyTitle}
+            render={
+              <button
+                type="button"
+                aria-label={t("copyMessage")}
+                onClick={() => {
+                  void handleCopy();
+                }}
+                className={ACTION_BUTTON_CLASS}
+              />
+            }
           >
             {copyState === "success" ? (
               <CheckIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
             ) : (
               <CopyIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
             )}
-          </button>
+          </SharedTooltip>
         )}
         {onTranslate ? (
           <DropdownMenu onOpenChange={onMenuOpenChange}>
-            <DropdownMenuTrigger
+            <SharedTooltip
+              payload={t("translate")}
               render={
-                <button
-                  type="button"
-                  aria-label={t("translate")}
-                  title={t("translate")}
-                  className={ACTION_BUTTON_CLASS}
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label={t("translate")}
+                      className={ACTION_BUTTON_CLASS}
+                    />
+                  }
                 />
               }
             >
               <LanguagesIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
-            </DropdownMenuTrigger>
+            </SharedTooltip>
             <DropdownMenuContent align="start" side="top" className="w-auto">
               {TRANSLATE_TARGET_LANGUAGES.map((language) => {
                 const translated = translatedLangs?.includes(language.code);
@@ -264,18 +289,22 @@ export default function MessageActions({
           </DropdownMenu>
         ) : null}
         <DropdownMenu onOpenChange={onMenuOpenChange}>
-          <DropdownMenuTrigger
+          <SharedTooltip
+            payload={t("more")}
             render={
-              <button
-                type="button"
-                aria-label={t("more")}
-                title={t("more")}
-                className={ACTION_BUTTON_CLASS}
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={t("more")}
+                    className={ACTION_BUTTON_CLASS}
+                  />
+                }
               />
             }
           >
             <MoreHorizontalIcon aria-hidden="true" className={ACTION_ICON_CLASS} />
-          </DropdownMenuTrigger>
+          </SharedTooltip>
           <DropdownMenuContent align="start" side="top" className="w-auto">
             {showEdit ? (
               <DropdownMenuItem

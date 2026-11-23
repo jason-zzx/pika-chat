@@ -2,6 +2,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ListedFile } from "@/lib/schemas/file";
+import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
 import { renderWithIntl, wrapWithIntl } from "@/test-utils/render-with-intl";
 
 import FilesList from "./FilesList";
@@ -63,8 +64,20 @@ describe("FilesList", () => {
     ).toBeDisabled();
   });
 
-  it("points a disabled delete action at the in-use badge for its reason", () => {
-    renderList([file({ referenced: true })]);
+  it("points a disabled delete action at the in-use badge for its reason and shows a hover tooltip", async () => {
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <FilesList
+          files={[file({ referenced: true })]}
+          selectedIds={new Set()}
+          onToggleSelect={vi.fn()}
+          onToggleAll={vi.fn()}
+          onPreview={vi.fn()}
+          onDelete={vi.fn()}
+        />
+        <SharedTooltipHost />
+      </TooltipProvider>,
+    );
 
     const deleteButton = screen.getByRole("button", {
       name: "Delete notes.txt",
@@ -72,6 +85,18 @@ describe("FilesList", () => {
     const describedBy = deleteButton.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)).toHaveTextContent("In use");
+
+    const trigger = deleteButton.parentElement;
+    if (!trigger) {
+      throw new Error("Expected delete tooltip trigger wrapper");
+    }
+    fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
+    fireEvent.mouseEnter(trigger);
+    expect(
+      await screen.findByText("Still used by a message, so it cannot be deleted.", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("keeps row actions always visible rather than hover-revealed", () => {

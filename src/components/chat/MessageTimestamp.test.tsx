@@ -1,6 +1,7 @@
-import { act, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import MessageTimestamp from "./MessageTimestamp";
@@ -30,27 +31,55 @@ describe("MessageTimestamp", () => {
     vi.useRealTimers();
   });
 
-  it("renders the relative label with dateTime and localized exact title", () => {
+  it("renders the relative label with dateTime and localized exact tooltip", async () => {
     const created = new Date(2026, 8, 4, 11, 30, 0);
     const iso = created.toISOString();
-    renderWithIntl(<MessageTimestamp createdAt={iso} />, { now: NOW });
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <MessageTimestamp createdAt={iso} />
+        <SharedTooltipHost />
+      </TooltipProvider>,
+      { now: NOW },
+    );
 
     const time = screen.getByText("30 minutes ago");
     expect(time.tagName).toBe("TIME");
     expect(time).toHaveAttribute("datetime", iso);
-    expect(time).toHaveAttribute("title", exactTitle(created, "en"));
+    expect(time).not.toHaveAttribute("title");
+
+    fireEvent.pointerEnter(time, { pointerType: "mouse" });
+    fireEvent.mouseEnter(time);
+    fireEvent.mouseMove(time);
+    expect(
+      await screen.findByText(exactTitle(created, "en"), {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
   });
 
-  it("renders the plural and tooltip from the zh-CN catalog", () => {
+  it("renders the plural and tooltip from the zh-CN catalog", async () => {
     const created = new Date(2026, 8, 4, 11, 30, 0);
     const iso = created.toISOString();
-    renderWithIntl(<MessageTimestamp createdAt={iso} />, {
-      locale: "zh-CN",
-      now: NOW,
-    });
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <MessageTimestamp createdAt={iso} />
+        <SharedTooltipHost />
+      </TooltipProvider>,
+      {
+        locale: "zh-CN",
+        now: NOW,
+      },
+    );
 
     const time = screen.getByText("30 分钟前");
-    expect(time).toHaveAttribute("title", exactTitle(created, "zh-CN"));
+    fireEvent.pointerEnter(time, { pointerType: "mouse" });
+    fireEvent.mouseEnter(time);
+    fireEvent.mouseMove(time);
+    expect(
+      await screen.findByText(exactTitle(created, "zh-CN"), {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders an older message as a short date in the active locale", () => {

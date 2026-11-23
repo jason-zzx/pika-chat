@@ -11,6 +11,7 @@ import {
 
 import ImagePreviewDialog from "@/components/common/ImagePreviewDialog";
 import { Button } from "@/components/ui/button";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { classifyFile } from "@/lib/files/media-types";
 import { formatBytes } from "@/lib/files/format";
 import { DEFAULT_ASSISTANT_ICON } from "@/lib/schemas/assistant";
@@ -143,17 +144,21 @@ function AttachmentCard({ part, onEdit }: AttachmentCardProps) {
           // always-visible fallback path.
           <div className="group/edit relative inline-block max-w-full">
             {thumbnail}
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon-sm"
-              className="absolute right-1.5 top-1.5 border border-border/60 bg-background/85 text-foreground opacity-0 shadow-xs backdrop-blur-xs transition-opacity hover:bg-background focus-visible:opacity-100 group-hover/edit:opacity-100 [@media(hover:none)]:opacity-100"
-              aria-label={t("editImage")}
-              title={t("editImage")}
-              onClick={editImage}
+            <SharedTooltip
+              payload={t("editImage")}
+              render={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-sm"
+                  className="absolute right-1.5 top-1.5 border border-border/60 bg-background/85 text-foreground opacity-0 shadow-xs backdrop-blur-xs transition-opacity hover:bg-background focus-visible:opacity-100 group-hover/edit:opacity-100 [@media(hover:none)]:opacity-100"
+                  aria-label={t("editImage")}
+                  onClick={editImage}
+                />
+              }
             >
               <PencilIcon aria-hidden="true" />
-            </Button>
+            </SharedTooltip>
           </div>
         ) : (
           thumbnail

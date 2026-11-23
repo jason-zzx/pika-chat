@@ -68,14 +68,16 @@ export default function SidebarUserMenu({
         <DropdownMenuTrigger
           render={
             <SidebarMenuButton
-              className="flex-1 not-group-data-[collapsible=icon]:hover:bg-transparent not-group-data-[collapsible=icon]:active:bg-transparent not-group-data-[collapsible=icon]:data-open:hover:bg-transparent"
+              className="flex-1 group-data-[collapsible=icon]:flex-none not-group-data-[collapsible=icon]:hover:bg-transparent not-group-data-[collapsible=icon]:active:bg-transparent not-group-data-[collapsible=icon]:data-open:hover:bg-transparent"
               tooltip={name}
             />
           }
           aria-label={t("userMenu.accountMenu", { name })}
         >
           <CircleUserRoundIcon aria-hidden="true" />
-          <span className="truncate">{name}</span>
+          <span className="truncate group-data-[collapsible=icon]:hidden">
+            {name}
+          </span>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="min-w-56">
           <DropdownMenuGroup>

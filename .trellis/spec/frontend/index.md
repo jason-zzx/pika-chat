@@ -23,9 +23,13 @@ Divergences from the first draft of this spec:
   positioning", "Cursor affordance"), string-only i18n edits swapping
   hardcoded copy for catalog lookups in `sidebar`, `dialog`, `sheet`, and
   `emoji-picker` ([i18n](./i18n.md)), safe-area padding/offsets in `sidebar`
-  and `toast` ([Theming](./theming.md)), and mobile-first sizing/spacing
+  and `toast` ([Theming](./theming.md)), mobile-first sizing/spacing
   (`text-base md:text-sm`, row height/gap) in `sidebar`, `sheet`,
-  `dropdown-menu`, and `select` (desktop `md:` values stay unchanged).
+  `dropdown-menu`, and `select` (desktop `md:` values stay unchanged),
+  popover-token styling without an arrow, `delay = 300` default, and
+  `SharedTooltip` / `SharedTooltipHost` in `tooltip`, plus removing unused
+  `SidebarRail` and wiring `SidebarTrigger` / collapsed rail `delay={0}` in
+  `sidebar` ([Component Guidelines](./component-guidelines.md)).
 - AppShell lives at `components/layout/AppShell.tsx`; `(app)/layout.tsx` is the
   session guard that renders it.
 - Administration is under `(app)/settings/`, not an `admin/` page route. The

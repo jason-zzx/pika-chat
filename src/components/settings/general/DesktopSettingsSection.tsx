@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/toast";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { usePikaNative } from "@/hooks/use-pika-native";
 import { acceleratorFromKey, formatAccelerator } from "@/lib/desktop-hotkey";
 import { formatBytes } from "@/lib/files/format";
@@ -219,19 +220,23 @@ export default function DesktopSettingsSection() {
               description={tDesktop("hotkeyDescription")}
               control={
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-w-40 font-mono"
-                    title={tDesktop("hotkeyRecord")}
-                    disabled={!settings}
-                    onClick={() => setRecording(true)}
-                    onBlur={() => setRecording(false)}
-                    onKeyDown={(event) => void onRecordKeyDown(event)}
+                  <SharedTooltip
+                    payload={tDesktop("hotkeyRecord")}
+                    render={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-w-40 font-mono"
+                        disabled={!settings}
+                        onClick={() => setRecording(true)}
+                        onBlur={() => setRecording(false)}
+                        onKeyDown={(event) => void onRecordKeyDown(event)}
+                      />
+                    }
                   >
                     {hotkeyLabel}
-                  </Button>
+                  </SharedTooltip>
                   <Button
                     type="button"
                     variant="ghost"

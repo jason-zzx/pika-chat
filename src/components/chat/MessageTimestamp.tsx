@@ -2,6 +2,7 @@
 
 import { useFormatter, useNow, useTranslations } from "next-intl";
 
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { getMessageAge, parseTimestamp } from "@/lib/message-time";
 import { localTimeZone } from "@/lib/time-zone";
 
@@ -51,12 +52,16 @@ export default function MessageTimestamp({ createdAt }: MessageTimestampProps) {
   });
 
   return (
-    <time
-      dateTime={createdAt}
-      title={exact}
-      className="flex h-6 shrink-0 items-center text-sm text-muted-foreground opacity-0 transition-opacity duration-150 motion-reduce:transition-none md:h-5 md:text-xs group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100"
+    <SharedTooltip
+      payload={exact}
+      render={
+        <time
+          dateTime={createdAt}
+          className="flex h-6 shrink-0 items-center text-sm text-muted-foreground opacity-0 transition-opacity duration-150 motion-reduce:transition-none md:h-5 md:text-xs group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-data-[revealed=true]/message:opacity-100"
+        />
+      }
     >
       {label}
-    </time>
+    </SharedTooltip>
   );
 }

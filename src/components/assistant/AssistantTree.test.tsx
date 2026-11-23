@@ -69,15 +69,15 @@ function assistant(partial: Partial<Assistant> & Pick<Assistant, "id" | "name">)
   };
 }
 
-function renderTree(options?: { showUsers?: boolean }) {
+function renderTree(options?: { showUsers?: boolean; defaultOpen?: boolean }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return renderWithIntl(
     <QueryClientProvider client={client}>
-      <TooltipProvider>
-        <SidebarProvider>
-          <Sidebar>
+      <TooltipProvider delay={0}>
+        <SidebarProvider defaultOpen={options?.defaultOpen ?? true}>
+          <Sidebar collapsible="icon">
             <AssistantTree showUsers={options?.showUsers ?? false} />
           </Sidebar>
         </SidebarProvider>
@@ -675,7 +675,16 @@ describe("AssistantTree", () => {
         vi.advanceTimersByTime(500);
       });
       const menu = await screen.findByRole("menu");
-      expect(within(menu).getByText("A very long title")).toBeInTheDocument();
+      const label = within(menu).getByText("A very long title");
+      expect(label).toBeInTheDocument();
+      // Clamping must live on an inner zero-padding element so padding-bottom
+      // on DropdownMenuLabel cannot leak a partial fourth line.
+      expect(label).toHaveClass("line-clamp-3", "break-words");
+      expect(label).not.toHaveClass("py-1.5");
+      expect(label.parentElement).toHaveAttribute(
+        "data-slot",
+        "dropdown-menu-label",
+      );
 
       fireEvent.pointerUp(row, { pointerType: "touch" });
       fireEvent.click(link);
@@ -716,9 +725,13 @@ describe("AssistantTree", () => {
       expect(screen.queryByText("Fits", { selector: "[data-slot=tooltip-content]" })).toBeNull();
 
       fireEvent.focus(cut);
-      expect(
-        await screen.findByText("Cut off title", { selector: "[data-slot=tooltip-content]" }),
-      ).toBeInTheDocument();
+      const tooltip = await screen.findByText("Cut off title", {
+        selector: "[data-slot=tooltip-content]",
+      });
+      expect(tooltip).toBeInTheDocument();
+      expect(tooltip).toHaveClass("bg-popover", "text-popover-foreground");
+      expect(tooltip).not.toHaveClass("bg-foreground");
+      expect(tooltip.children).toHaveLength(0);
     });
 
     it("the click-opened menu has no title header", async () => {
@@ -775,6 +788,57 @@ describe("AssistantTree", () => {
     expect(topicLink.closest("[data-slot=sidebar-group]")).toHaveClass(
       "group-data-[collapsible=icon]:hidden",
     );
+  });
+
+  it("shows tooltips for every interactive item when the sidebar is collapsed", async () => {
+    nav.pathname = "/";
+    vi.mocked(listAssistantTree).mockResolvedValue({
+      assistants: [assistant({ id: "a1", name: "Work" })],
+    });
+    const { unmount } = renderTree({ defaultOpen: false });
+
+    const brand = await screen.findByRole("link", { name: /Pika Chat/ });
+    fireEvent.focus(brand);
+    expect(
+      await screen.findByText("Pika Chat", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
+
+    const openWork = screen.getByRole("button", { name: "Open Work" });
+    expect(openWork.closest("[data-slot=sidebar-group]")).not.toHaveClass(
+      "group-data-[collapsible=icon]:p-1.5",
+    );
+    expect(openWork).toHaveClass(
+      "group-data-[collapsible=icon]:justify-center",
+    );
+    fireEvent.focus(openWork);
+    expect(
+      await screen.findByText("Work", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.focus(screen.getByRole("button", { name: "New assistant" }));
+    expect(
+      await screen.findByText("New assistant", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
+    unmount();
+
+    nav.pathname = "/assistant/a1";
+    renderTree({ defaultOpen: false });
+
+    const back = await screen.findByRole("button", {
+      name: "Back to assistants",
+    });
+    fireEvent.focus(back);
+    expect(
+      await screen.findByText("Back to assistants", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders topic loading placeholders with the same row height as topic items", async () => {

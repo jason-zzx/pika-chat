@@ -11,6 +11,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { attachmentLimitFor } from "@/lib/files/constants";
 import { SUPPORTED_FILE_ACCEPT } from "@/lib/files/media-types";
 import type {
@@ -214,20 +215,24 @@ export default function UserMessageEditor({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => textareaRef.current?.focus()}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          // bg-transparent matches the muted editor container (the outline
-          // variant defaults to bg-background), as on the composer.
-          className="relative size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
-          aria-label={tFiles("attach")}
-          title={tFiles("attach")}
-          disabled={attachmentCapReached}
-          onClick={() => fileInputRef.current?.click()}
+        <SharedTooltip
+          payload={tFiles("attach")}
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              // bg-transparent matches the muted editor container (the outline
+              // variant defaults to bg-background), as on the composer.
+              className="relative size-9 bg-transparent md:size-7 [&_svg]:size-5 md:[&_svg]:size-4"
+              aria-label={tFiles("attach")}
+              disabled={attachmentCapReached}
+              onClick={() => fileInputRef.current?.click()}
+            />
+          }
         >
           <PaperclipIcon aria-hidden="true" />
-        </Button>
+        </SharedTooltip>
         <input
           ref={fileInputRef}
           type="file"

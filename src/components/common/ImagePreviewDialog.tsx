@@ -18,6 +18,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { copyTextToClipboard } from "@/lib/clipboard";
 
 const ZOOM_STEP = 1.25;
@@ -232,16 +233,20 @@ export default function ImagePreviewDialog({
                 )}
               </Button>
               {onEdit ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={tFiles("editImage")}
-                  title={tFiles("editImage")}
-                  onClick={onEdit}
+                <SharedTooltip
+                  payload={tFiles("editImage")}
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={tFiles("editImage")}
+                      onClick={onEdit}
+                    />
+                  }
                 >
                   <PencilIcon aria-hidden="true" />
-                </Button>
+                </SharedTooltip>
               ) : null}
               {/* Download and open-in-new-tab stay plain anchors: the image
                * is same-origin (our authenticated /api/files route), so the

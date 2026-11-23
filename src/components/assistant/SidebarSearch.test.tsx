@@ -2,6 +2,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useSearchDialogStore } from "@/stores/search-dialog-store";
 import { renderWithIntl } from "@/test-utils/render-with-intl";
 
@@ -43,5 +44,23 @@ describe("SidebarSearch", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
     expect(useSearchDialogStore.getState().open).toBe(true);
+  });
+
+  it("shows a tooltip on the collapsed-rail search icon button", async () => {
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <SidebarProvider defaultOpen={false}>
+          <SidebarSearch />
+        </SidebarProvider>
+      </TooltipProvider>,
+    );
+
+    const searchBtn = screen.getByRole("button", { name: "Search" });
+    fireEvent.focus(searchBtn);
+    expect(
+      await screen.findByText("Search", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
   });
 });

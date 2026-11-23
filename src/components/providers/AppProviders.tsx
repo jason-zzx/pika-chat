@@ -3,7 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
 import { installClipboardPolyfill } from "@/lib/clipboard-polyfill";
 
 import AccountProvider from "./AccountProvider";
@@ -29,6 +29,7 @@ export default function AppProviders({
         <TooltipProvider>
           <ChatPoolBridge />
           {children}
+          <SharedTooltipHost />
         </TooltipProvider>
       </AccountProvider>
     </QueryClientProvider>

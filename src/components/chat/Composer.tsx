@@ -28,6 +28,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { SharedTooltip } from "@/components/ui/tooltip";
 import { attachmentLimitFor } from "@/lib/files/constants";
 import { SUPPORTED_FILE_ACCEPT } from "@/lib/files/media-types";
 import { imageCapabilityFor } from "@/lib/image-capabilities";
@@ -292,23 +293,27 @@ export default function Composer({
               />
               {onAddFiles && attachmentsEnabled ? (
                 <>
-                  <Button
-                    // Composer root is a <form>: without an explicit type
-                    // this would submit the draft.
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    // bg-transparent matches the Select-based pickers on the
-                    // muted composer container (outline variant defaults to
-                    // bg-background).
-                    className={cn(TOOLBAR_ICON_BUTTON_CLASS, "bg-transparent")}
-                    aria-label={tFiles("attach")}
-                    title={tFiles("attach")}
-                    disabled={inFlight || attachmentCapReached}
-                    onClick={() => fileInputRef.current?.click()}
+                  <SharedTooltip
+                    payload={tFiles("attach")}
+                    render={
+                      <Button
+                        // Composer root is a <form>: without an explicit type
+                        // this would submit the draft.
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        // bg-transparent matches the Select-based pickers on the
+                        // muted composer container (outline variant defaults to
+                        // bg-background).
+                        className={cn(TOOLBAR_ICON_BUTTON_CLASS, "bg-transparent")}
+                        aria-label={tFiles("attach")}
+                        disabled={inFlight || attachmentCapReached}
+                        onClick={() => fileInputRef.current?.click()}
+                      />
+                    }
                   >
                     <PaperclipIcon aria-hidden="true" />
-                  </Button>
+                  </SharedTooltip>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -343,73 +348,93 @@ export default function Composer({
                 />
               ) : null}
               {onCompress ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className={TOOLBAR_ICON_BUTTON_CLASS}
-                  aria-label={tCompression("compress")}
-                  title={tCompression("compress")}
-                  disabled={compressDisabled}
-                  onClick={onCompress}
+                <SharedTooltip
+                  payload={tCompression("compress")}
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className={TOOLBAR_ICON_BUTTON_CLASS}
+                      aria-label={tCompression("compress")}
+                      disabled={compressDisabled}
+                      onClick={onCompress}
+                    />
+                  }
                 >
                   <ListCollapseIcon aria-hidden="true" />
-                </Button>
+                </SharedTooltip>
               ) : null}
-              <Button
-                // Composer root is a <form>: without an explicit type this
-                // would submit the draft.
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className={TOOLBAR_ICON_BUTTON_CLASS}
-                aria-label={t("chatMap")}
-                title={t("chatMap")}
-                disabled={chatMapDisabled}
-                onClick={onOpenChatMap}
+              <SharedTooltip
+                payload={t("chatMap")}
+                render={
+                  <Button
+                    // Composer root is a <form>: without an explicit type this
+                    // would submit the draft.
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className={TOOLBAR_ICON_BUTTON_CLASS}
+                    aria-label={t("chatMap")}
+                    disabled={chatMapDisabled}
+                    onClick={onOpenChatMap}
+                  />
+                }
               >
                 <MapIcon aria-hidden="true" />
-              </Button>
+              </SharedTooltip>
               {showExpandToggle ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className={TOOLBAR_ICON_BUTTON_CLASS}
-                  aria-label={expanded ? t("collapse") : t("expand")}
-                  title={expanded ? t("collapse") : t("expand")}
-                  onClick={() => setExpanded((current) => !current)}
+                <SharedTooltip
+                  payload={expanded ? t("collapse") : t("expand")}
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className={TOOLBAR_ICON_BUTTON_CLASS}
+                      aria-label={expanded ? t("collapse") : t("expand")}
+                      onClick={() => setExpanded((current) => !current)}
+                    />
+                  }
                 >
                   {expanded ? (
                     <Minimize2Icon aria-hidden="true" />
                   ) : (
                     <Maximize2Icon aria-hidden="true" />
                   )}
-                </Button>
+                </SharedTooltip>
               ) : null}
               {inFlight ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="icon-sm"
-                  className={cn(TOOLBAR_ICON_BUTTON_CLASS, "ml-1 rounded-full")}
-                  aria-label={t("stop")}
-                  title={t("stop")}
-                  onClick={onStop}
+                <SharedTooltip
+                  payload={t("stop")}
+                  render={
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon-sm"
+                      className={cn(TOOLBAR_ICON_BUTTON_CLASS, "ml-1 rounded-full")}
+                      aria-label={t("stop")}
+                      onClick={onStop}
+                    />
+                  }
                 >
                   <SquareIcon aria-hidden="true" />
-                </Button>
+                </SharedTooltip>
               ) : (
-                <Button
-                  type="submit"
-                  size="icon-sm"
-                  className={cn(TOOLBAR_ICON_BUTTON_CLASS, "ml-1 rounded-full")}
-                  aria-label={t("send")}
-                  title={t("send")}
-                  disabled={!canSend}
+                <SharedTooltip
+                  payload={t("send")}
+                  render={
+                    <Button
+                      type="submit"
+                      size="icon-sm"
+                      className={cn(TOOLBAR_ICON_BUTTON_CLASS, "ml-1 rounded-full")}
+                      aria-label={t("send")}
+                      disabled={!canSend}
+                    />
+                  }
                 >
                   <ArrowUpIcon aria-hidden="true" />
-                </Button>
+                </SharedTooltip>
               )}
             </div>
           </div>
@@ -447,7 +472,7 @@ function ReasoningEffortSelect({
     >
       <ComposerSelectTrigger
         label={t("reasoningEffort")}
-        title={value ?? t("auto")}
+        tooltip={value ?? t("auto")}
       >
         <BrainIcon aria-hidden="true" />
       </ComposerSelectTrigger>
