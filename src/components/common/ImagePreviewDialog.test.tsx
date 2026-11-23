@@ -18,16 +18,56 @@ function renderDialog(props: Partial<ImagePreviewDialogProps> = {}) {
 
 type ImagePreviewDialogProps = Parameters<typeof ImagePreviewDialog>[0];
 
-/** jsdom never loads images: fake the fitted width and fire the load event
- * the component measures on. */
-function loadImage(dialog: HTMLElement, fittedWidth = 800) {
+/** jsdom never loads images: fake the fitted dimensions and fire the load
+ * event the component measures on. */
+function loadImage(
+  dialog: HTMLElement,
+  fittedWidth = 800,
+  fittedHeight = 600,
+) {
   const image = within(dialog).getByRole("img", { name: "cat.png" });
   Object.defineProperty(image, "offsetWidth", {
     value: fittedWidth,
     configurable: true,
   });
+  Object.defineProperty(image, "offsetHeight", {
+    value: fittedHeight,
+    configurable: true,
+  });
   fireEvent.load(image);
   return image;
+}
+
+function mockBoxRect(
+  element: Element,
+  rect: { left: number; top: number; width: number; height: number },
+) {
+  Object.defineProperty(element, "getBoundingClientRect", {
+    value: () => ({
+      ...rect,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => ({}),
+    }),
+    configurable: true,
+  });
+}
+
+function touch(
+  element: Element,
+  type: "pointerDown" | "pointerMove" | "pointerUp",
+  pointerId: number,
+  clientX: number,
+  clientY: number,
+) {
+  fireEvent[type](element, {
+    pointerId,
+    pointerType: "touch",
+    clientX,
+    clientY,
+  });
 }
 
 describe("ImagePreviewDialog", () => {
@@ -94,6 +134,133 @@ describe("ImagePreviewDialog", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Reset zoom" }));
     expect(image).toHaveStyle({ width: "800px" });
+
+    // Toolbar zoom-out clamps at 50% (MIN_SCALE = 0.5).
+    for (let i = 0; i < 6; i += 1) {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Zoom out" }));
+    }
+    expect(image).toHaveStyle({ width: "400px" });
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("50%");
+  });
+
+  it("pinch-zooms around the touch midpoint and keeps panning when one finger lifts", async () => {
+    renderDialog();
+
+    const dialog = await screen.findByRole("dialog");
+    const image = loadImage(dialog, 400, 300);
+    const container = image.parentElement!;
+    mockBoxRect(container, { left: 0, top: 0, width: 400, height: 400 });
+    mockBoxRect(image, { left: 0, top: 50, width: 400, height: 300 });
+
+    touch(container, "pointerDown", 1, 150, 200);
+    touch(container, "pointerDown", 2, 250, 200);
+    touch(container, "pointerMove", 1, 100, 200);
+    touch(container, "pointerMove", 2, 300, 200);
+
+    expect(image).toHaveStyle({ width: "800px" });
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("200%");
+    expect(container.scrollLeft).toBe(200);
+    expect(container.scrollTop).toBe(100);
+
+    // Lifting one finger re-anchors single-finger pan to the remaining pointer.
+    touch(container, "pointerUp", 2, 300, 200);
+    touch(container, "pointerMove", 1, 80, 190);
+    expect(container.scrollLeft).toBe(220);
+    expect(container.scrollTop).toBe(110);
+
+    touch(container, "pointerUp", 1, 80, 190);
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("200%");
+  });
+
+  it("allows pinching down to 50% and rebounds to 100% on release", async () => {
+    renderDialog();
+
+    const dialog = await screen.findByRole("dialog");
+    const image = loadImage(dialog, 400, 300);
+    const container = image.parentElement!;
+    mockBoxRect(container, { left: 0, top: 0, width: 400, height: 400 });
+    mockBoxRect(image, { left: 0, top: 50, width: 400, height: 300 });
+
+    touch(container, "pointerDown", 1, 100, 200);
+    touch(container, "pointerDown", 2, 300, 200);
+    touch(container, "pointerMove", 1, 190, 200);
+    touch(container, "pointerMove", 2, 210, 200);
+
+    expect(image).toHaveStyle({ width: "200px" });
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("50%");
+
+    touch(container, "pointerUp", 1, 190, 200);
+    touch(container, "pointerUp", 2, 210, 200);
+
+    expect(image).toHaveStyle({ width: "400px" });
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("100%");
+  });
+
+  it("double-taps to zoom to 200% at the tap point and resets on a second double-tap", async () => {
+    renderDialog();
+
+    const dialog = await screen.findByRole("dialog");
+    const image = loadImage(dialog, 400, 300);
+    const container = image.parentElement!;
+    mockBoxRect(container, { left: 0, top: 0, width: 400, height: 400 });
+    mockBoxRect(image, { left: 0, top: 50, width: 400, height: 300 });
+
+    // First double-tap at (300, 200): u = 0.75, v = 0.5 -> zooms to 200%.
+    touch(container, "pointerDown", 1, 300, 200);
+    touch(container, "pointerUp", 1, 300, 200);
+    touch(container, "pointerDown", 1, 300, 200);
+    touch(container, "pointerUp", 1, 300, 200);
+
+    expect(image).toHaveStyle({ width: "800px" });
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("200%");
+    expect(container.scrollLeft).toBe(300);
+    expect(container.scrollTop).toBe(100);
+
+    // Second double-tap resets back to 100% and clears scroll offsets.
+    touch(container, "pointerDown", 1, 300, 200);
+    touch(container, "pointerUp", 1, 300, 200);
+    touch(container, "pointerDown", 1, 300, 200);
+    touch(container, "pointerUp", 1, 300, 200);
+
+    expect(image).toHaveStyle({ width: "400px" });
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("100%");
+    expect(container.scrollLeft).toBe(0);
+    expect(container.scrollTop).toBe(0);
+
+    // Dragging does not count as a tap toward double-tap zoom.
+    touch(container, "pointerDown", 1, 200, 200);
+    touch(container, "pointerMove", 1, 230, 200);
+    touch(container, "pointerUp", 1, 230, 200);
+    touch(container, "pointerDown", 1, 230, 200);
+    touch(container, "pointerUp", 1, 230, 200);
+    expect(
+      within(dialog).getByRole("button", { name: "Reset zoom" }),
+    ).toHaveTextContent("100%");
+  });
+
+  it("blocks browser touch zoom and scroll chaining on the preview surface", async () => {
+    renderDialog();
+
+    const dialog = await screen.findByRole("dialog");
+    const image = loadImage(dialog, 400, 300);
+    const container = image.parentElement!;
+
+    expect(dialog).toHaveClass("touch-none", "overscroll-none");
+    expect(container).toHaveClass("touch-none", "overscroll-none");
   });
 
   it("pans the image by dragging and stops on pointer up", async () => {
