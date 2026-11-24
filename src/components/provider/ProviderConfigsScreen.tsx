@@ -1,12 +1,11 @@
 "use client";
 
 import { ArrowLeftIcon, PlusIcon, XIcon } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import SettingsCard from "@/components/settings/SettingsCard";
 import { Button } from "@/components/ui/button";
@@ -67,7 +66,7 @@ export default function ProviderConfigsScreen({
 }: ProviderConfigsScreenProps) {
   const configs = useProviderConfigs();
   const createConfig = useCreateProviderConfig();
-  const router = useRouter();
+  const appNav = useAppNavigation();
   const t = useTranslations("Provider");
   const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +93,7 @@ export default function ProviderConfigsScreen({
       typeof window.matchMedia !== "function" ||
       !window.matchMedia("(min-width: 768px)").matches
     ) {
-      router.push(`/settings/providers/${id}`);
+      appNav.openProviderDetail(id);
     }
   }
 
@@ -103,7 +102,7 @@ export default function ProviderConfigsScreen({
       setSelectedId(null);
     }
     if (selectedConfigId === id) {
-      router.push("/settings/providers");
+      appNav.openSettings("/settings/providers");
     }
   }
 
@@ -199,13 +198,14 @@ export default function ProviderConfigsScreen({
           )}
         >
           {selectedConfigId ? (
-            <Link
-              href="/settings/providers"
-              className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
+            <button
+              type="button"
+              onClick={appNav.goBack}
+              className="mb-4 inline-flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
             >
               <ArrowLeftIcon aria-hidden="true" className="size-4" />
               {t("backToProviders")}
-            </Link>
+            </button>
           ) : null}
           {detail === null ? (
             <p className="text-sm text-muted-foreground">

@@ -1,6 +1,7 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
+import { clearNavState } from "@/lib/navigation-state";
 import { clearPendingGenerationRequests } from "@/lib/pending-generation-requests";
 
 /**
@@ -22,5 +23,6 @@ export async function signOutAndReset(): Promise<void> {
     throw new Error(result.error.message ?? "Sign out failed");
   }
   clearPendingGenerationRequests();
+  clearNavState();
   window.location.replace("/sign-in");
 }

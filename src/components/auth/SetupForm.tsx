@@ -1,13 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import CredentialsForm from "@/components/auth/CredentialsForm";
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { submitSetup } from "@/lib/api/instance";
 
 export default function SetupForm() {
-  const router = useRouter();
+  const appNav = useAppNavigation();
   const t = useTranslations("Auth");
 
   return (
@@ -17,8 +17,7 @@ export default function SetupForm() {
       fallbackErrorKey="actions.completeSetup"
       onSubmit={async (input) => {
         await submitSetup(input);
-        router.push("/");
-        router.refresh();
+        appNav.completeAuth();
       }}
     />
   );

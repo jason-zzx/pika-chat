@@ -1,7 +1,6 @@
 "use client";
 
 import { SearchIcon, XIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -15,6 +14,7 @@ import {
   useDebouncedValue,
   useSearch,
 } from "@/components/assistant/use-search";
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -55,7 +55,7 @@ export default function SearchDialog() {
   const tSidebar = useTranslations("Search.sidebar");
   const open = useSearchDialogStore((state) => state.open);
   const setOpen = useSearchDialogStore((state) => state.setOpen);
-  const router = useRouter();
+  const appNav = useAppNavigation();
   const { setOpenMobile } = useSidebar();
   const inputRef = useRef<HTMLInputElement>(null);
   const activeItemRef = useRef<HTMLButtonElement | null>(null);
@@ -122,9 +122,7 @@ export default function SearchDialog() {
     handleOpenChange(false);
     setOpenMobile(false);
     if (result.kind === "topic") {
-      router.push(
-        assistantTopicHref(result.topic.assistantId, result.topic.id),
-      );
+      appNav.openTopic(result.topic.assistantId, result.topic.id);
       return;
     }
     const { message } = result;
@@ -143,7 +141,11 @@ export default function SearchDialog() {
         current: message.groupId,
       });
     }
-    router.push(messageHitHref(message));
+    appNav.openTopic(
+      message.assistantId,
+      message.topicId,
+      messageHitHref(message),
+    );
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {

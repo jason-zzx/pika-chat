@@ -23,11 +23,12 @@ import AssistantTree from "./AssistantTree";
 const nav = vi.hoisted(() => ({
   pathname: "/",
   push: vi.fn(),
+  replace: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
-  useRouter: () => ({ push: nav.push }),
+  useRouter: () => ({ push: nav.push, replace: nav.replace }),
 }));
 
 vi.mock("@/hooks/use-mobile", () => ({
@@ -212,7 +213,7 @@ describe("AssistantTree", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => {
-      expect(nav.push).toHaveBeenCalledWith("/assistant/a-active");
+      expect(nav.replace).toHaveBeenCalledWith("/assistant/a-active");
     });
   });
 
@@ -276,7 +277,7 @@ describe("AssistantTree", () => {
     expect(screen.queryByText("Assistants")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to assistants" }));
-    expect(nav.push).toHaveBeenCalledWith("/");
+    expect(nav.replace).toHaveBeenCalledWith("/");
   });
 
   it("hides the Users settings row for non-staff", () => {

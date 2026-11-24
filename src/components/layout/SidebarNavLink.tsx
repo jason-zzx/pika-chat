@@ -10,6 +10,7 @@ type SidebarNavLinkProps = {
   children: ReactNode;
   tooltip?: string;
   isActive?: boolean;
+  replace?: boolean;
 };
 
 export default function SidebarNavLink({
@@ -17,6 +18,7 @@ export default function SidebarNavLink({
   children,
   tooltip,
   isActive = false,
+  replace = false,
 }: SidebarNavLinkProps) {
   const { setOpenMobile } = useSidebar();
 
@@ -25,6 +27,7 @@ export default function SidebarNavLink({
       render={
         <Link
           href={href}
+          replace={replace}
           aria-current={isActive ? "page" : undefined}
         />
       }

@@ -116,7 +116,7 @@ export default function SidebarUserMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       <SidebarMenuButton
-        render={<Link href="/settings/general" />}
+        render={<Link href="/settings/general" replace={native !== null} />}
         tooltip={t("userMenu.settings")}
         aria-label={t("userMenu.settings")}
         className="shrink-0 justify-center not-group-data-[collapsible=icon]:mr-1.5 not-group-data-[collapsible=icon]:size-7 not-group-data-[collapsible=icon]:rounded-full not-group-data-[collapsible=icon]:p-0 not-group-data-[collapsible=icon]:text-sidebar-foreground/60 not-group-data-[collapsible=icon]:hover:bg-sidebar-foreground/10 not-group-data-[collapsible=icon]:hover:text-sidebar-foreground not-group-data-[collapsible=icon]:md:mr-1 not-group-data-[collapsible=icon]:md:size-6"

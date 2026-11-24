@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import CredentialsForm from "@/components/auth/CredentialsForm";
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { submitRegistration } from "@/lib/api/instance";
 
 export default function SignUpForm() {
-  const router = useRouter();
+  const appNav = useAppNavigation();
   const t = useTranslations("Auth");
 
   return (
@@ -18,13 +18,12 @@ export default function SignUpForm() {
       fallbackErrorKey="actions.register"
       onSubmit={async (input) => {
         await submitRegistration(input);
-        router.push("/");
-        router.refresh();
+        appNav.completeAuth();
       }}
       footer={
         <p className="text-sm text-muted-foreground">
           {t("signUp.haveAccount")}{" "}
-          <Link className="underline" href="/sign-in">
+          <Link className="underline" href="/sign-in" replace>
             {t("signUp.signInLink")}
           </Link>
         </p>

@@ -12,7 +12,7 @@ import {
   UserRoundIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import {
   useEffect,
@@ -36,6 +36,7 @@ import EmptyState from "@/components/common/EmptyState";
 import PikaMark from "@/components/common/PikaMark";
 import CloseOnNavigateLink from "@/components/layout/CloseOnNavigateLink";
 import SettingsNav from "@/components/layout/SettingsNav";
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import DeleteTopicDialog from "@/components/topic/DeleteTopicDialog";
 import RenameTopicDialog from "@/components/topic/RenameTopicDialog";
 import { useMinuteClock } from "@/hooks/use-minute-clock";
@@ -86,7 +87,8 @@ export default function AssistantTree({
   local = false,
 }: AssistantTreeProps) {
   const tree = useAssistantTree();
-  const router = useRouter();
+  const appNav = useAppNavigation();
+  const { setOpenMobile } = useSidebar();
   const pathname = usePathname();
   const t = useTranslations("Layout");
   const tRoot = useTranslations("RootLayout");
@@ -109,18 +111,17 @@ export default function AssistantTree({
   const isLastAssistant = assistants.length === 1;
 
   function leaveIfViewingAssistant(assistant: Assistant) {
-    if (pathAssistantId === assistant.id) {
-      router.push("/");
-    }
+    appNav.purgeDeletedAssistant(assistant.id);
   }
 
   function leaveForNewTopicIfViewing(id: string) {
-    if (topicId !== id) {
-      return;
-    }
-    router.push(
-      pathAssistantId ? assistantDraftHref(pathAssistantId) : "/",
-    );
+    const fallback =
+      topicId === id
+        ? pathAssistantId
+          ? assistantDraftHref(pathAssistantId)
+          : "/"
+        : undefined;
+    appNav.purgeDeletedTopic(id, fallback);
   }
 
   return (
@@ -131,13 +132,16 @@ export default function AssistantTree({
             {isSettings ? (
               <PaneHeader
                 title={t("settingsNav.label")}
-                onBack={() => router.push("/")}
+                onBack={() => {
+                  setOpenMobile(false);
+                  appNav.exitSettings();
+                }}
               />
             ) : viewing ? (
               <PaneHeader
                 title={viewing.name}
                 icon={viewing.icon}
-                onBack={() => router.push("/")}
+                onBack={appNav.navigateHome}
               />
             ) : native ? (
               <SidebarMenuButton
@@ -200,7 +204,7 @@ export default function AssistantTree({
         ) : (
           <AssistantList
             assistants={assistants}
-            onOpen={(assistant) => router.push(assistantDraftHref(assistant.id))}
+            onOpen={(assistant) => appNav.openAssistant(assistant.id)}
             onCreate={() => setEditor("create")}
           />
         )}
@@ -482,6 +486,8 @@ function AssistantPane({
   const topicsContentId = useId();
   const favoritesContentId = useId();
   const t = useTranslations("Layout");
+  const { setOpenMobile } = useSidebar();
+  const isNative = usePikaNative() !== null;
   const sections = useSyncExternalStore(
     subscribeTopicSections,
     topicSectionsSnapshot,
@@ -535,9 +541,15 @@ function AssistantPane({
           <SidebarMenu>
             <SidebarMenuItem className="min-w-0 overflow-hidden">
               <SidebarMenuButton
-                render={<Link href={assistantDraftHref(assistant.id)} />}
+                render={
+                  <Link
+                    href={assistantDraftHref(assistant.id)}
+                    replace={isNative}
+                  />
+                }
                 tooltip={t("tree.newTopic")}
                 aria-label={t("tree.newTopic")}
+                onClick={() => setOpenMobile(false)}
               >
                 <PlusIcon />
                 <span className="group-data-[collapsible=icon]:hidden">
@@ -762,6 +774,7 @@ function TopicRow({
   const setFavorite = useSetTopicFavorite();
   const t = useTranslations("Layout");
   const { setOpenMobile } = useSidebar();
+  const isNative = usePikaNative() !== null;
   const [menuOpen, setMenuOpen] = useState(false);
   const [openedByLongPress, setOpenedByLongPress] = useState(false);
   const titleRef = useRef<HTMLSpanElement>(null);
@@ -847,6 +860,7 @@ function TopicRow({
               render={
                 <Link
                   href={assistantTopicHref(assistantId, topic.id)}
+                  replace={isNative}
                   aria-current={isActive ? "page" : undefined}
                 />
               }

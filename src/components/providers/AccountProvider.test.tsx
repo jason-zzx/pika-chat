@@ -1,6 +1,12 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  loadNavState,
+  openHome,
+  openTopic,
+  saveNavState,
+} from "@/lib/navigation-state";
 import { rememberPendingGenerationRequest } from "@/lib/pending-generation-requests";
 
 /**
@@ -124,6 +130,9 @@ describe("AccountProvider identity boundary", () => {
       requestId: "r1",
       userId: "account-a",
     });
+    saveNavState(
+      openTopic(openHome(), "a1", "t1", { isMobile: false }),
+    );
     sessionState.current = { data: null, error, isPending: false };
 
     act(() => {
@@ -132,5 +141,6 @@ describe("AccountProvider identity boundary", () => {
 
     expect(locationMock.replace).toHaveBeenCalledWith("/sign-in");
     expect(listPendingGenerationRequests("account-a")).toEqual([]);
+    expect(loadNavState()).toBeNull();
   });
 });

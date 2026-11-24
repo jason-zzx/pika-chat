@@ -5,14 +5,14 @@ import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import DemoEntry from "./DemoEntry";
 
-const { push, refresh, signInAnonymous } = vi.hoisted(() => ({
-  push: vi.fn(),
+const { replace, refresh, signInAnonymous } = vi.hoisted(() => ({
+  replace: vi.fn(),
   refresh: vi.fn(),
   signInAnonymous: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, refresh }),
+  useRouter: () => ({ replace, refresh }),
 }));
 
 vi.mock("@/lib/auth-client", () => ({
@@ -33,7 +33,7 @@ describe("DemoEntry", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enter demo" }));
 
     await waitFor(() => expect(signInAnonymous).toHaveBeenCalled());
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
     expect(refresh).toHaveBeenCalled();
   });
 
@@ -49,6 +49,6 @@ describe("DemoEntry", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Too many demo sessions created from this network today.",
     );
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 });

@@ -19,6 +19,7 @@ import {
 } from "@/components/assistant/use-assistants";
 import EmptyState from "@/components/common/EmptyState";
 import InsetHeader from "@/components/layout/InsetHeader";
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { useAvailableModels } from "@/components/provider/use-available-models";
 import {
   AlertDialog,
@@ -241,6 +242,7 @@ export default function ChatView({
 }: ChatViewProps) {
   const queryClient = useQueryClient();
   const userId = useAccountUserId();
+  const appNav = useAppNavigation();
   const t = useTranslations("Chat.MessageList");
   const tChat = useTranslations("Chat");
   const tCompression = useTranslations("Chat.Compression");
@@ -490,6 +492,7 @@ export default function ChatView({
         "",
         assistantTopicHref(assistant, streamTopicId),
       );
+      appNav.recordPromotedTopic(assistant, streamTopicId);
     },
   );
   const handlePoolFinish = useStableCallback((event: { isError: boolean }) => {

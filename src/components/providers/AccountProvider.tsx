@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from "react";
 import { resetChatPool } from "@/components/chat/chat-pool";
 import { AccountUserIdContext } from "@/hooks/use-account-user";
 import { authClient } from "@/lib/auth-client";
+import { clearNavState } from "@/lib/navigation-state";
 import { clearPendingGenerationRequests } from "@/lib/pending-generation-requests";
 import { resetStreamingTopics } from "@/lib/streaming-topics";
 
@@ -82,6 +83,7 @@ function useAccountIdentityGuard(baselineUserId: string | null) {
 /** Drop what this document holds for the previous account. */
 function discardAccountOwnedState(): void {
   clearPendingGenerationRequests();
+  clearNavState();
   resetChatPool();
   resetStreamingTopics();
 }

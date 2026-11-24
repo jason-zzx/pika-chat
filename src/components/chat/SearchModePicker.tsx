@@ -7,6 +7,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { useSearchProviders } from "@/components/search/use-search-providers";
 import { useIsGuest } from "@/hooks/use-is-guest";
+import { usePikaNative } from "@/hooks/use-pika-native";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -70,6 +71,7 @@ export default function SearchModePicker({
   disabled = false,
 }: SearchModePickerProps) {
   const t = useTranslations("Chat.Pickers");
+  const isNative = usePikaNative() !== null;
   const mode = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const setSearchMode = useComposerStore((state) => state.setSearchMode);
   const isGuest = useIsGuest();
@@ -152,6 +154,7 @@ export default function SearchModePicker({
             {t("searchMode.noProviders")}{" "}
             <Link
               href="/settings/search"
+              replace={isNative}
               className="font-medium text-foreground underline underline-offset-2"
               onClick={() => setOpen(false)}
             >

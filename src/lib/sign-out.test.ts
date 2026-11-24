@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { signOut, clear, replace } = vi.hoisted(() => ({
+const { signOut, clear, clearNav, replace } = vi.hoisted(() => ({
   signOut: vi.fn(),
   clear: vi.fn(),
+  clearNav: vi.fn(),
   replace: vi.fn(),
 }));
 vi.mock("@/lib/auth-client", () => ({ authClient: { signOut } }));
 vi.mock("@/lib/pending-generation-requests", () => ({
   clearPendingGenerationRequests: clear,
+}));
+vi.mock("@/lib/navigation-state", () => ({
+  clearNavState: clearNav,
 }));
 
 import { signOutAndReset } from "./sign-out";
@@ -19,10 +23,11 @@ describe("confirmed sign-out document boundary", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("replaces the document and clears receipts only after success", async () => {
+  it("replaces the document and clears receipts and nav state only after success", async () => {
     signOut.mockResolvedValue({ data: { success: true }, error: null });
     await signOutAndReset();
     expect(clear).toHaveBeenCalledOnce();
+    expect(clearNav).toHaveBeenCalledOnce();
     expect(replace).toHaveBeenCalledWith("/sign-in");
   });
 
@@ -30,6 +35,7 @@ describe("confirmed sign-out document boundary", () => {
     signOut.mockResolvedValue({ data: null, error: { message: "Unavailable" } });
     await expect(signOutAndReset()).rejects.toThrow("Unavailable");
     expect(clear).not.toHaveBeenCalled();
+    expect(clearNav).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
   });
 });

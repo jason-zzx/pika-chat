@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
+
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
+import { usePikaNative } from "@/hooks/use-pika-native";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +36,8 @@ function needsSecondStep(data: unknown): boolean {
 }
 
 export default function SignInForm({ allowRegistration }: SignInFormProps) {
-  const router = useRouter();
+  const appNav = useAppNavigation();
+  const isNative = usePikaNative() !== null;
   const t = useTranslations("Auth");
   const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +61,11 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
       // A 2FA-enabled account is not signed in by step one: better-auth has
       // issued a signed challenge cookie and the second step lives on its own
       // page so it survives a reload.
-      router.push(needsSecondStep(result.data) ? "/two-factor" : "/");
-      router.refresh();
+      if (needsSecondStep(result.data)) {
+        appNav.openAuthPage("/two-factor", { refresh: true });
+        return;
+      }
+      appNav.completeAuth();
     } catch (caught) {
       setError(apiErrorMessage(caught, tErrors, SIGN_IN_FAILED_KEY));
     } finally {
@@ -95,7 +101,7 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
       {allowRegistration ? (
         <p className="text-sm text-muted-foreground">
           {t("signIn.needAccount")}{" "}
-          <Link className="underline" href="/sign-up">
+          <Link className="underline" href="/sign-up" replace={isNative}>
             {t("signIn.createAccountLink")}
           </Link>
         </p>

@@ -71,6 +71,7 @@ export default function SettingsNav({ showUsers, local = false }: SettingsNavPro
                   href={tab.href}
                   tooltip={t(tab.labelKey)}
                   isActive={pathname === tab.href}
+                  replace
                 >
                   <tab.icon aria-hidden="true" />
                   <span className="truncate group-data-[collapsible=icon]:hidden">

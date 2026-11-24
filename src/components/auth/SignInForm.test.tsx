@@ -5,15 +5,18 @@ import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import SignInForm from "./SignInForm";
 
-const { push, refresh, signInEmail, signInUsername } = vi.hoisted(() => ({
-  push: vi.fn(),
-  refresh: vi.fn(),
-  signInEmail: vi.fn(),
-  signInUsername: vi.fn(),
-}));
+const { push, replace, refresh, signInEmail, signInUsername } = vi.hoisted(
+  () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+    signInEmail: vi.fn(),
+    signInUsername: vi.fn(),
+  }),
+);
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, refresh }),
+  useRouter: () => ({ push, replace, refresh }),
 }));
 
 vi.mock("@/lib/auth-client", () => ({
@@ -86,7 +89,7 @@ describe("SignInForm", () => {
       }),
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/two-factor"));
-    expect(push).not.toHaveBeenCalledWith("/");
+    expect(replace).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalled();
   });
 
@@ -98,7 +101,7 @@ describe("SignInForm", () => {
 
     submitCredentials("operator");
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
     expect(push).not.toHaveBeenCalledWith("/two-factor");
   });
 });

@@ -5,15 +5,15 @@ import { renderWithIntl } from "@/test-utils/render-with-intl";
 
 import TwoFactorForm from "./TwoFactorForm";
 
-const { verifyTotp, verifyBackupCode, push, refresh } = vi.hoisted(() => ({
+const { verifyTotp, verifyBackupCode, replace, refresh } = vi.hoisted(() => ({
   verifyTotp: vi.fn(),
   verifyBackupCode: vi.fn(),
-  push: vi.fn(),
+  replace: vi.fn(),
   refresh: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, refresh }),
+  useRouter: () => ({ replace, refresh }),
 }));
 
 vi.mock("@/lib/auth-client", () => ({
@@ -46,7 +46,7 @@ describe("TwoFactorForm", () => {
       expect(verifyTotp).toHaveBeenCalledWith({ code: "123456" }),
     );
     expect(verifyBackupCode).not.toHaveBeenCalled();
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
   });
 
   it("sends a backup-code shaped value to verifyBackupCode", async () => {
@@ -56,7 +56,7 @@ describe("TwoFactorForm", () => {
       expect(verifyBackupCode).toHaveBeenCalledWith({ code: "aB3dE-7xK9p" }),
     );
     expect(verifyTotp).not.toHaveBeenCalled();
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
   });
 
   it("shows the specific message for a rejected code and stays on the page", async () => {
@@ -70,7 +70,7 @@ describe("TwoFactorForm", () => {
     await waitFor(() =>
       expect(screen.getByText("That code was not accepted")).toBeDefined(),
     );
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("renders the challenge copy from the zh-CN catalog", () => {

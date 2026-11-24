@@ -1,14 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
 export default function DemoEntry() {
-  const router = useRouter();
+  const appNav = useAppNavigation();
   const t = useTranslations("Auth");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -28,8 +28,7 @@ export default function DemoEntry() {
         );
         return;
       }
-      router.push("/");
-      router.refresh();
+      appNav.completeAuth();
     } catch {
       setError(t("demo.enterFailed"));
     } finally {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 
+import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,7 @@ import { isTotpCode } from "@/lib/two-factor";
 const INVALID_CODE_ERRORS = ["INVALID_CODE", "INVALID_BACKUP_CODE"];
 
 export default function TwoFactorForm() {
-  const router = useRouter();
+  const appNav = useAppNavigation();
   const t = useTranslations("Auth.twoFactor");
   const tErrors = useTranslations("Errors");
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +41,7 @@ export default function TwoFactorForm() {
         );
         return;
       }
-      router.push("/");
-      router.refresh();
+      appNav.completeAuth();
     } catch (caught) {
       setError(apiErrorMessage(caught, tErrors, "actions.verifyTwoFactor"));
     } finally {
