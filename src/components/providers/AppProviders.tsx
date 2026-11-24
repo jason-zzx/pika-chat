@@ -8,6 +8,7 @@ import { installClipboardPolyfill } from "@/lib/clipboard-polyfill";
 
 import AccountProvider from "./AccountProvider";
 import ChatPoolBridge from "./ChatPoolBridge";
+import NavigationProvider from "./NavigationProvider";
 
 // Streamdown's built-in copy buttons call `navigator.clipboard` directly;
 // install the insecure-context fallback once, as early as the client entry
@@ -26,11 +27,13 @@ export default function AppProviders({
   return (
     <QueryClientProvider client={queryClient}>
       <AccountProvider userId={userId}>
-        <TooltipProvider>
-          <ChatPoolBridge />
-          {children}
-          <SharedTooltipHost />
-        </TooltipProvider>
+        <NavigationProvider>
+          <TooltipProvider>
+            <ChatPoolBridge />
+            {children}
+            <SharedTooltipHost />
+          </TooltipProvider>
+        </NavigationProvider>
       </AccountProvider>
     </QueryClientProvider>
   );

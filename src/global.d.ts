@@ -40,12 +40,18 @@ declare global {
     setDeveloperMode(enabled: boolean): Promise<void>;
   }
 
+  interface PikaNativeNavigation {
+    setCanGoBack(canGoBack: boolean): void;
+    onBack(listener: () => void): () => void;
+  }
+
   interface PikaNative {
     serverName: string;
     appVersion?: string;
     notify(input: { title: string; body: string; path: string }): void;
     showServerMenu(anchor: { x: number; y: number }): void;
     openServers(screen: "list" | "add"): void;
+    navigation?: PikaNativeNavigation;
     desktop?: PikaNativeDesktop;
   }
 
