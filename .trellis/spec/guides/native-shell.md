@@ -17,12 +17,18 @@ optional.**
 ## `window.pikaNative` (web <-> host)
 
 ```ts
+interface PikaNativeNavigation {
+  setCanGoBack(canGoBack: boolean): void;
+  onBack(listener: () => void): () => void;
+}
+
 interface PikaNative {
   serverName: string; // display name of the server this page belongs to
   appVersion?: string; // native shell version (optional for older shells)
   notify(input: { title: string; body: string; path: string }): void;
   showServerMenu(anchor: { x: number; y: number }): void; // viewport CSS px
   openServers(screen: "list" | "add"): void;
+  navigation?: PikaNativeNavigation; // logical Back bridge (optional for older shells/servers)
   desktop?: PikaNativeDesktop; // desktop-only settings, storage, updates, diagnostics
 }
 ```
@@ -63,9 +69,20 @@ interface PikaNative {
 - `path` is an app-relative path (`assistantTopicHref(...)`); it must start
   with `/`.
 - Desktop main accepts `native:notify`, `native:showServerMenu`, `native:openServers`,
-  `native:theme`, and `native:desktop:*` only when the sender frame origin equals
-  the active server origin (payloads zod-validated); clicking a notification focuses the window and
-  navigates to `origin + path`.
+  `native:theme`, `native:navState`, and `native:desktop:*` only when the sender frame origin equals
+  the active server origin (payloads zod-validated); clicking a notification focuses the window,
+  re-attaches `remote.view` if hidden behind `shellView`, and navigates to `origin + path`.
+- Native navigation (`pikaNative.navigation`): `NavigationProvider` owns a logical stack
+  (`src/lib/navigation-state.ts`, persisted in `sessionStorage`) and uses `router.replace`
+  in native mode so Chromium's history stays flat, Home (`/`) is always the workspace root,
+  and `/settings/*` is an isolated branch. Back events (`native:back` on Desktop,
+  `window.__pikaDispatchBack?.()` on Android) dismiss the topmost Base UI overlay first
+  (`src/lib/overlay-dismiss.ts`) before stepping the stack. Desktop hooks `app-command`
+  (`browser-backward`), macOS `swipe`, and `before-input-event` (`Alt+Left` / `Cmd+[` /
+  `BrowserBack`, swallowing forward shortcuts) with root Back as a no-op; `showShell` keeps
+  `remote.view` alive unless `dropRemote: true` so `returnToServer()` resumes losslessly.
+  Both shells gate logical Back dispatch on `webNavReady` (flipped on the first `navState`
+  message) and fall back to same-origin `goBack()` when connecting to older servers.
 - Adding a method: extend the type in `src/global.d.ts`, the remote preload,
   and the main-process handler (with its origin check) together.
 
@@ -89,16 +106,19 @@ management (no Settings screen in the server list, plus a subtle 5-click version
 activating `developerMode` without auto-opening DevTools) and also renders `?chrome=titlebar`
 and `?chrome=menu`. Main validates every IPC payload at the handler and answers
 only the matching shell view. Connection logic (health check, version warning, URL
-normalization) lives in shell-ui so Android can reuse it. Query modes of
-`index.html`: none (auto-connect to the last server, `"local"` included, or show
+normalization) lives in shell-ui so Android can reuse it. query modes of `index.html`: none (auto-connect to the last server, `"local"` included, or show
 the welcome screen when there is nothing to auto-connect to and `servers` is
-empty), `?list`, `?add` (add form;
-Cancel returns to the list), `?connect=<id>` (connect flow for that server
+empty), `?list`, `?add` (add form; Cancel/Back returns to the active server when opened standalone,
+otherwise pops to the list), `?connect=<id>` (connect flow for that server
 regardless of the last one, including `"local"`), `?failed=<id>` (load-error
 screen, or local startup error with "Open log" when `id === "local"`),
 `?chrome=titlebar` (desktop frameless top bar), and `?chrome=menu` (desktop
-server switcher overlay). An unknown id falls back to the list; only an empty
-query auto-connects or shows the welcome screen.
+server switcher overlay). `listServers()` includes `activeServerId` when a kept-alive server
+can be resumed via `returnToServer()`; `shell-ui` tracks an internal sub-screen stack
+(`native/shell-ui/src/nav-stack.ts`), handles `onBack` / `Escape` (confirm `<dialog>` first),
+and reports `setCanGoBack`. Removing the active server or changing its normalized URL origin
+immediately drops the kept-alive server; editing only its name keeps it returnable. An unknown id
+falls back to the list; only an empty query auto-connects or shows the welcome screen.
 
 ## Android shell (`native/mobile`, remote mode only)
 
@@ -113,18 +133,22 @@ query auto-connects or shows the welcome screen.
   rejects with an "update Android System WebView" error; there is no `addJavascriptInterface`
   fallback. Removing a server expires that origin's cookies. Web storage is **not** cleared:
   `WebStorage.deleteOrigin` is a no-op on current WebViews (checked on 133).
-- **`pikaNative` injection**: `addWebMessageListener("pikaNativeHost", {origin})` plus a
-  document-start script that defines the frozen `window.pikaNative` (main frame only,
-  `serverName` embedded as a literal), re-registered on every `connect`. The handler also
-  checks `sourceOrigin == connected origin` and `isMainFrame`, and validates payloads with
-  the desktop limits. Do not remove a web-message listener that is not followed by a new
-  one: dropping the connected origin on server removal only clears the accepted origin
-  (`RemoteBridge.clearNative`), because unregistering without re-adding crashed WebView 133
-  on the next page load.
-- **Navigation**: `PikaHostPlugin.shouldOverrideLoad` replaces Capacitor's static
-  `allowNavigation`: connected origin stays in the WebView; `https://localhost` (shell-ui) is
-  reachable only from shell-ui itself (native code shows it with `loadUrl`, which bypasses the
-  hook), so a remote page cannot navigate to it; same-origin `/api/files/<id>` is **opened**
+- **Dual WebViews & `pikaNative` injection**: Capacitor's `bridge.webView` stays exclusively
+  on `https://localhost` (`shell-ui`) so `PikaHostPlugin` and `CapacitorHttp` never lose the
+  bridge. Each `connect` destroys any previous `remoteWebView` (guaranteeing empty history and
+  avoiding WebView 133 crashes from removing a `WebMessageListener` without re-adding one) and
+  creates a fresh `remoteWebView` inside the root `CoordinatorLayout`, reusing a single
+  `BridgeWebChromeClient(bridge)` created in `onCreate` before `STARTED`. Each `remoteWebView`
+  installs a per-view `RemoteBridge` (`addWebMessageListener("pikaNativeHost", {origin})` +
+  document-start script defining frozen `window.pikaNative` with `navigation`, main frame only,
+  `serverName` embedded as a literal). The handler checks `sourceOrigin == origin`, `isMainFrame`,
+  and `isCurrentRemoteBridge(this)`, validating payloads with the desktop limits. Opening
+  `shell-ui` (`showShell(query, dropRemote = false)`) hides `remoteWebView` (`View.INVISIBLE`)
+  without destroying it so `returnToServer()` restores it losslessly; removing the active server
+  or editing its URL origin destroys `remoteWebView` immediately.
+- **Navigation**: `PikaHostPlugin.shouldOverrideLoad` handles `bridge.webView` (`shell-ui` only),
+  while `shouldOverrideRemoteLoad` handles `remoteWebView`: connected origin stays in the WebView;
+  `https://localhost` (shell-ui) is always blocked from `remoteWebView`; same-origin `/api/files/<id>` is **opened**
   (`openAttachment`: GET with the session cookie, no redirects; on 3xx GET `Location` without the cookie; saved to
   `cacheDir/open` (cleared on start), then an `ACTION_VIEW` "Open with" chooser on a FileProvider Uri;
   `<queries>` for `VIEW content:*/*` is needed or `resolveActivity` is null; no `REQUEST_INSTALL_PACKAGES`),
@@ -136,26 +160,29 @@ query auto-connects or shows the welcome screen.
   other http(s) goes to `ACTION_VIEW`. A click on `a[download]` to `/api/files/<id>` never reaches
   that hook (WebView follows the 302 straight to the storage host), so the injected `pikaNative` script captures it
   and posts `{type:"download", url}`; native re-checks with `PikaHostPlugin.downloadAttachment`. The
-  `DownloadListener` also downloads only connected-origin URLs. Editing the connected server keeps
-  its old origin until the next `connect` (as on desktop). Main-frame load errors on the connected
-  origin (except `net::ERR_ABORTED`) load shell-ui `?failed=<id>`; a lost renderer calls `recreate()`.
-- **Back** is an `OnBackPressedCallback`: previous history entry on the connected origin ->
-  `goBack()`, otherwise shell-ui `?list`; on shell-ui it disables itself so the system
-  backgrounds the app. `@capacitor/app` is deliberately not installed.
+  `DownloadListener` also downloads only connected-origin URLs. Main-frame load errors on the connected
+  origin (except `net::ERR_ABORTED`) load shell-ui `?failed=<id>` with `dropRemote = true` (or silently
+  drop `remoteWebView` if `shell-ui` is already foregrounded); a lost foreground renderer calls `recreate()`.
+- **Back & predictive back**: `AndroidManifest.xml` enables `android:enableOnBackInvokedCallback="true"`.
+  `MainActivity.updateBackEnabled()` dynamically toggles a single `OnBackPressedCallback` from
+  `(serverMenuDialog?.isShowing -> false; isShellVisible -> shellCanGoBack; remoteWebView != null -> if (webNavReady) webCanGoBack else canGoBack())`.
+  At root with no open overlays the callback is disabled so Android 14+ OS drives the predictive
+  back gesture directly to the launcher. `@capacitor/app` is deliberately not installed.
 - **System bars & themed server menu**: edge-to-edge via `WindowCompat.enableEdgeToEdge` after `super.onCreate`,
-  `isNavigationBarContrastEnforced = false`. A theme script (listener `pikaThemeHost`, rules
-  `{origin, https://localhost}`) reads `meta[name=theme-color]` (falling back to `--background` / body
+  `isNavigationBarContrastEnforced = false`. Separate `shellTheme` and `remoteTheme` palettes are
+  tracked via `RemoteBridge.installTheme` (`pikaThemeHost` scoped to each WebView's single origin),
+  so background theme events never flicker the system bars. The script reads `meta[name=theme-color]` (falling back to `--background` / body
   background; WebView 133 serializes oklch tokens as `lab()`) plus dialog tokens (`--popover`,
   `--popover-foreground`/`--foreground`, `--muted-foreground`, `--accent`, `--primary`, `--border`),
   normalizes via a canvas (`#rrggbb` / `#aarrggbb`), and observes the meta, `<html>` `class`/`data-theme`/`style`
-  and `prefers-color-scheme`. `MainActivity.applyTheme` paints the decor view and WebView background, picks
-  light/dark bar icons by luminance, and stores the active `ThemePalette` for the native `AlertDialog`
+  and `prefers-color-scheme`. `MainActivity.applyBarColor` paints the decor view, picks
+  light/dark bar icons by luminance, and `activeTheme` styles the native `AlertDialog`
   server menu (`ServerMenuDialog.kt`). The bar colour is re-applied after `onConfigurationChanged` because Capacitor's SystemBars
   resets the decor background there; theme payloads are sent on `DOMContentLoaded` and `load` (shell-ui's CSS arrives
   late). SystemBars runs with `insetsHandling: "native"` so Capacitor never writes
-  `--safe-area-inset-*` onto remote pages (it caused a dev hydration mismatch on `<html>`). On WebView < 140 the plugin pads the decor
-  view by the bar insets (`env(safe-area-inset-*)` is 0), which the page background shows
-  through; the IME resizes the viewport.
+  `--safe-area-inset-*` onto remote pages (it caused a dev hydration mismatch on `<html>`). Because
+  `remoteWebView` is added to the same `CoordinatorLayout` parent inside the decor view and calls
+  `requestApplyInsets()`, both WebViews inherit the same safe-area / IME resize behavior.
 - **Notifications**: channel `replies`; `POST_NOTIFICATIONS` requested once after the first
   successful remote page load; the tap intent carries `serverId` + `path` and `onNewIntent`
   loads `origin + path` only when that server is still connected. No foreground service: Android
