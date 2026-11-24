@@ -154,6 +154,7 @@ function start() {
   session.defaultSession.setPermissionCheckHandler(() => false);
 
   let currentTheme = defaultTheme(nativeTheme.shouldUseDarkColors);
+  let shellTheme = currentTheme;
 
   const saved = config.windowState;
   const restorable =
@@ -193,12 +194,22 @@ function start() {
   const serverMenuView = createShellView("?chrome=menu");
   serverMenuView.setBackgroundColor("#00000000");
 
-  let remote: { view: WebContentsView; server: Server; partition: string } | null = null;
+  type RemoteState = {
+    view: WebContentsView;
+    server: Server;
+    partition: string;
+    webNavReady: boolean;
+    theme: DesktopThemeColors | null;
+  };
+
+  let remote: RemoteState | null = null;
+  let shellAttached = true;
+  let connectToken = 0;
   let serverMenuOpen = false;
   let lastMenuData: ServerMenuData | null = null;
 
-  const activeView = () => remote?.view ?? shellView;
-  const windowTitle = () => (remote ? `${remote.server.name} · Pika Chat` : "Pika Chat");
+  const activeView = () => (shellAttached || !remote ? shellView : remote.view);
+  const windowTitle = () => (!shellAttached && remote ? `${remote.server.name} · Pika Chat` : "Pika Chat");
 
   const getTitlebarState = (): TitlebarState => ({
     platform: process.platform as "win32" | "linux" | "darwin",
@@ -252,7 +263,7 @@ function start() {
 
   const attach = (view: WebContentsView) => {
     closeServerMenu();
-    for (const child of win.contentView.children) win.contentView.removeChildView(child);
+    for (const child of [...win.contentView.children]) win.contentView.removeChildView(child);
     win.contentView.addChildView(titlebarView);
     win.contentView.addChildView(view);
     layout();
@@ -327,19 +338,103 @@ function start() {
   const closeRemote = () => {
     closeServerMenu();
     if (!remote) return;
-    win.contentView.removeChildView(remote.view);
-    remote.view.webContents.close();
+    const view = remote.view;
     remote = null;
+    if (win.contentView.children.includes(view)) {
+      win.contentView.removeChildView(view);
+    }
+    if (!view.webContents.isDestroyed()) {
+      view.webContents.close();
+    }
   };
 
   // query: "" auto-connects to the last server, "?list" shows the list, "?add" the add form,
   // "?connect=<id>" connects to that server, "?failed=<id>" the load error.
-  const showShell = (query: string) => {
-    closeRemote();
+  const showShell = (query: string, { dropRemote = false }: { dropRemote?: boolean } = {}) => {
+    connectToken++;
+    if (dropRemote) closeRemote();
+    shellAttached = true;
     attach(shellView);
+    applyTheme(shellTheme);
     void shellView.webContents.loadURL(shellUrl + query);
     rebuildTray();
   };
+
+  const returnToServer = () => {
+    if (!remote || remote.view.webContents.isDestroyed()) {
+      showShell("?list", { dropRemote: true });
+      return;
+    }
+    connectToken++;
+    shellAttached = false;
+    attach(remote.view);
+    if (remote.theme) applyTheme(remote.theme);
+    rebuildTray();
+  };
+
+  const dispatchBack = () => {
+    if (serverMenuOpen) {
+      closeServerMenu();
+      return;
+    }
+    if (shellAttached) {
+      if (!shellView.webContents.isDestroyed()) {
+        shellView.webContents.send("shell:back");
+      }
+      return;
+    }
+    if (!remote || remote.view.webContents.isDestroyed()) return;
+    if (remote.webNavReady) {
+      remote.view.webContents.send("native:back");
+      return;
+    }
+    if (remote.view.webContents.navigationHistory.canGoBack()) {
+      remote.view.webContents.navigationHistory.goBack();
+    }
+  };
+
+  const attachNavInput = (contents: WebContents) => {
+    contents.on("before-input-event", (event, input) => {
+      if (input.type !== "keyDown") return;
+      const isBack =
+        input.key === "BrowserBack" ||
+        (!isMac && input.alt && !input.control && !input.meta && !input.shift && input.key === "ArrowLeft") ||
+        (isMac &&
+          input.meta &&
+          !input.control &&
+          !input.alt &&
+          !input.shift &&
+          (input.key === "[" || input.code === "BracketLeft"));
+      if (isBack) {
+        event.preventDefault();
+        dispatchBack();
+        return;
+      }
+      const isForward =
+        input.key === "BrowserForward" ||
+        (!isMac && input.alt && !input.control && !input.meta && !input.shift && input.key === "ArrowRight") ||
+        (isMac &&
+          input.meta &&
+          !input.control &&
+          !input.alt &&
+          !input.shift &&
+          (input.key === "]" || input.code === "BracketRight"));
+      if (isForward) {
+        event.preventDefault();
+      }
+    });
+  };
+
+  attachNavInput(shellView.webContents);
+  attachNavInput(serverMenuView.webContents);
+  attachNavInput(titlebarView.webContents);
+
+  win.on("app-command", (_event, cmd) => {
+    if (cmd === "browser-backward") dispatchBack();
+  });
+  win.on("swipe", (_event, dir) => {
+    if (dir === "right") dispatchBack();
+  });
 
   const attachCrashRecovery = (contents: WebContents, label: string, onRepeatedCrash: () => void) => {
     let lastCrashAt = 0;
@@ -397,6 +492,19 @@ function start() {
   };
 
   const guardRemote = (contents: WebContents, server: Server) => {
+    const handleRemoteFailure = (failedId: string) => {
+      if (remote?.view.webContents !== contents) return;
+      setImmediate(() => {
+        if (remote?.view.webContents !== contents) return;
+        if (shellAttached) {
+          closeRemote();
+          rebuildTray();
+          return;
+        }
+        showShell(`?failed=${encodeURIComponent(failedId)}`, { dropRemote: true });
+      });
+    };
+
     contents.setWindowOpenHandler(({ url }) => {
       const target = new URL(url);
       if (target.origin !== server.url) {
@@ -421,7 +529,7 @@ function start() {
         void localServer
           .signIn(contents.session)
           .then(() => contents.loadURL(server.url))
-          .catch(() => setImmediate(() => showShell("?failed=local")));
+          .catch(() => handleRemoteFailure(LOCAL_SERVER_ID));
       const intercept = (event: { preventDefault(): void; url: string; isMainFrame: boolean }) => {
         if (!event.isMainFrame || !isAuthPage(event.url)) return;
         event.preventDefault();
@@ -433,17 +541,20 @@ function start() {
         if (isMainFrame && isAuthPage(url)) signInAgain();
       });
     }
+    contents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace && remote?.view.webContents === contents) {
+        remote.webNavReady = false;
+      }
+    });
     // -3 is ERR_ABORTED: a navigation superseded by another one, not a failure. The shell shows the
     // error without retrying: the health check can pass while the page itself fails to load.
     contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
       if (isMainFrame && code !== -3) {
         logDesktop("warn", `did-fail-load server=${server.id} code=${code} desc=${description} url=${url}`);
-        setImmediate(() => showShell(`?failed=${encodeURIComponent(server.id)}`));
+        handleRemoteFailure(server.id);
       }
     });
-    attachCrashRecovery(contents, `remote(${server.id})`, () =>
-      setImmediate(() => showShell(`?failed=${encodeURIComponent(server.id)}`)),
-    );
+    attachCrashRecovery(contents, `remote(${server.id})`, () => handleRemoteFailure(server.id));
   };
 
   const attachServerView = (server: Server, partition: string, url: string) => {
@@ -459,7 +570,9 @@ function start() {
     });
     secureSession(view.webContents.session);
     guardRemote(view.webContents, server);
-    remote = { view, server, partition };
+    attachNavInput(view.webContents);
+    remote = { view, server, partition, webNavReady: false, theme: null };
+    shellAttached = false;
     void view.webContents.loadURL(url);
     attach(view);
     config.lastServerId = server.id;
@@ -468,10 +581,13 @@ function start() {
   };
 
   const connect = async (id: string) => {
+    const token = ++connectToken;
     if (id === LOCAL_SERVER_ID) {
       // A failure rejects back to shell-ui, which shows the local error view.
       const origin = await localServer.ensureStarted(config, saveConfig);
+      if (token !== connectToken || !shellAttached) return;
       await localServer.signIn(session.fromPartition("persist:local"));
+      if (token !== connectToken || !shellAttached) return;
       attachServerView({ id: LOCAL_SERVER_ID, name: t.localName, url: origin }, "persist:local", origin);
       return;
     }
@@ -525,10 +641,14 @@ function start() {
       return run(schema.parse(raw));
     });
 
-  handleShell("shell:listServers", z.undefined(), () => ({
-    servers: config.servers,
-    lastServerId: config.lastServerId,
-  }));
+  handleShell("shell:listServers", z.undefined(), () => {
+    connectToken++;
+    return {
+      servers: config.servers,
+      lastServerId: config.lastServerId,
+      activeServerId: remote && !remote.view.webContents.isDestroyed() ? remote.server.id : null,
+    };
+  });
   handleShell(
     "shell:saveServer",
     z.object({ id: z.string().optional(), name: z.string().max(100), url: z.string().max(2048) }),
@@ -540,6 +660,14 @@ function start() {
       config.servers = existing
         ? config.servers.map((candidate) => (candidate.id === server.id ? server : candidate))
         : [...config.servers, server];
+      if (existing && remote?.server.id === server.id) {
+        if (existing.url !== server.url) {
+          closeRemote();
+        } else {
+          remote.server = server;
+          emitTitlebarState();
+        }
+      }
       saveConfig(config);
       rebuildTray();
       return server;
@@ -548,6 +676,7 @@ function start() {
   handleShell("shell:removeServer", z.string(), async (id) => {
     config.servers = config.servers.filter((server) => server.id !== id);
     if (config.lastServerId === id) config.lastServerId = null;
+    if (remote?.server.id === id) closeRemote();
     saveConfig(config);
     rebuildTray();
     await session.fromPartition(`persist:server-${id}`).clearStorageData();
@@ -560,6 +689,9 @@ function start() {
     return classifyHealth(res.ok, await res.json().catch(() => null));
   });
   handleShell("shell:connect", z.string(), connect);
+  handleShell("shell:returnToServer", z.undefined(), () => {
+    returnToServer();
+  });
   handleShell("shell:openLocalLog", z.undefined(), () => {
     shell.showItemInFolder(localPaths().logFile);
   });
@@ -573,7 +705,9 @@ function start() {
   ipcMain.on("shell:setTheme", (event, raw: unknown) => {
     if (event.sender !== shellView.webContents) return;
     const parsed = themeInput.safeParse(raw);
-    if (parsed.success && remote === null) applyTheme(parsed.data);
+    if (!parsed.success) return;
+    shellTheme = parsed.data;
+    if (shellAttached) applyTheme(shellTheme);
   });
 
   // Titlebar controls (titlebarView only)
@@ -663,7 +797,10 @@ function start() {
     const notification = new Notification({ title: input.data.title, body: input.data.body, icon });
     notification.on("click", () => {
       showWindow();
-      if (remote?.server.id === server.id) void remote.view.webContents.loadURL(server.url + input.data.path);
+      if (remote?.server.id === server.id) {
+        if (shellAttached) returnToServer();
+        void remote.view.webContents.loadURL(server.url + input.data.path);
+      }
     });
     notification.on("close", () => notifications.delete(notification));
     notifications.add(notification);
@@ -671,14 +808,21 @@ function start() {
   });
 
   ipcMain.on("native:theme", (event, raw: unknown) => {
-    if (!fromRemote(event)) return;
+    if (!remote || !fromRemote(event)) return;
     const parsed = themeInput.safeParse(raw);
-    if (parsed.success) applyTheme(parsed.data);
+    if (!parsed.success) return;
+    remote.theme = parsed.data;
+    if (!shellAttached) applyTheme(parsed.data);
+  });
+
+  ipcMain.on("native:navState", (event) => {
+    if (!remote || !fromRemote(event)) return;
+    remote.webNavReady = true;
   });
 
   ipcMain.on("native:showServerMenu", (event, raw: unknown) => {
     const anchor = anchorInput.safeParse(raw);
-    if (!remote || !fromRemote(event) || !anchor.success) return;
+    if (shellAttached || !remote || !fromRemote(event) || !anchor.success) return;
     const zoom = event.sender.getZoomFactor();
     lastMenuData = {
       servers: config.servers,
@@ -697,7 +841,7 @@ function start() {
   });
   ipcMain.on("native:openServers", (event, raw: unknown) => {
     const target = z.enum(["list", "add"]).safeParse(raw);
-    if (fromRemote(event) && target.success) showShell(`?${target.data}`);
+    if (!shellAttached && fromRemote(event) && target.success) showShell(`?${target.data}`);
   });
 
   const trayIcon = nativeImage.createFromPath(join(__dirname, "assets", isMac ? "trayTemplate.png" : "tray.png"));
@@ -715,6 +859,14 @@ function start() {
       : [];
 
   function rebuildTray() {
+    const switchFromTray = (id: string) => () => {
+      showWindow();
+      if (remote?.server.id === id) {
+        if (shellAttached) returnToServer();
+        return;
+      }
+      showShell(`?connect=${encodeURIComponent(id)}`);
+    };
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: win.isVisible() ? t.hide : t.show, click: () => (win.isVisible() ? win.hide() : showWindow()) },
@@ -726,13 +878,13 @@ function start() {
               label: t.localName,
               type: "radio",
               checked: remote?.server.id === LOCAL_SERVER_ID,
-              click: () => showShell("?connect=local"),
+              click: switchFromTray(LOCAL_SERVER_ID),
             },
             ...config.servers.map((server) => ({
               label: server.name,
               type: "radio" as const,
               checked: remote?.server.id === server.id,
-              click: () => showShell(`?connect=${server.id}`),
+              click: switchFromTray(server.id),
             })),
           ],
         },

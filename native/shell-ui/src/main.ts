@@ -1,7 +1,14 @@
 import "./style.css";
 import type { DesktopThemeColors, PikaShell, Server } from "./host";
-import { mountServerMenu } from "./server-menu";
 import { t } from "./i18n";
+import {
+  LOCAL_SERVER_ID,
+  canShellGoBack,
+  resolveInitialStack,
+  stepShellBack,
+  type ShellScreen,
+} from "./nav-stack";
+import { mountServerMenu } from "./server-menu";
 import { normalizeServerUrl, sameMajorMinor } from "./servers";
 import { mountTitlebar } from "./titlebar";
 
@@ -22,7 +29,16 @@ if (chrome === "titlebar") {
 function readShellTheme(): DesktopThemeColors {
   const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const probe = document.createElement("div");
-  const vars = ["--background", "--foreground", "--muted-foreground", "--popover", "--popover-foreground", "--accent", "--accent-foreground", "--border"] as const;
+  const vars = [
+    "--background",
+    "--foreground",
+    "--muted-foreground",
+    "--popover",
+    "--popover-foreground",
+    "--accent",
+    "--accent-foreground",
+    "--border",
+  ] as const;
   const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", {
     willReadFrequently: true,
   });
@@ -88,6 +104,19 @@ async function mountShellPages() {
     return node;
   }
 
+  function arrowLeftIcon(): SVGSVGElement {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML = '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>';
+    return svg;
+  }
+
   function button(
     label: string,
     onclick: () => void,
@@ -99,6 +128,16 @@ async function mountShellPages() {
     return node;
   }
 
+  let navigation = 0;
+  let servers: Server[] = [];
+  let activeServerId: string | null = null;
+  let shellStack: ShellScreen[] = [];
+  let activeDialog: HTMLDialogElement | null = null;
+
+  const syncCanGoBack = () => {
+    host.setCanGoBack?.(canShellGoBack(shellStack, activeServerId, activeDialog !== null));
+  };
+
   function confirmDialog(title: string, body: string, confirmLabel: string): Promise<boolean> {
     return new Promise((resolve) => {
       const dialog = el(
@@ -106,7 +145,9 @@ async function mountShellPages() {
         {
           className: "confirm-dialog",
           onclose: () => {
+            if (activeDialog === dialog) activeDialog = null;
             dialog.remove();
+            syncCanGoBack();
             resolve(dialog.returnValue === "confirm");
           },
           onclick: (event) => {
@@ -122,8 +163,10 @@ async function mountShellPages() {
           button(confirmLabel, () => dialog.close("confirm"), "destructive", true),
         ),
       );
+      activeDialog = dialog;
       document.body.append(dialog);
       dialog.showModal();
+      syncCanGoBack();
     });
   }
 
@@ -131,6 +174,7 @@ async function mountShellPages() {
     const view = el("main", { className: "view" }, ...children);
     document.body.replaceChildren(view);
     view.querySelector<HTMLElement>("[data-focus]")?.focus();
+    syncCanGoBack();
   }
 
   function heading(title: string, body?: string) {
@@ -142,8 +186,71 @@ async function mountShellPages() {
     );
   }
 
-  let navigation = 0;
-  const LOCAL_SERVER_ID = "local";
+  const returnToActiveServer = () => {
+    navigation++;
+    void host.returnToServer();
+  };
+
+  const pushAndRender = (screen: ShellScreen) => {
+    shellStack = [...shellStack, screen];
+    void renderTop();
+  };
+
+  const replaceAndRender = (screen: ShellScreen) => {
+    shellStack = shellStack.length <= 1 ? [screen] : [...shellStack.slice(0, -1), screen];
+    void renderTop();
+  };
+
+  const resetAndRender = (screen: ShellScreen) => {
+    shellStack = [screen];
+    void renderTop();
+  };
+
+  const handleBack = () => {
+    const outcome = stepShellBack(shellStack, activeServerId, activeDialog !== null);
+    if (outcome.action === "closeDialog") {
+      activeDialog?.close();
+      return;
+    }
+    if (outcome.action === "pop") {
+      shellStack = outcome.stack;
+      void renderTop();
+      return;
+    }
+    if (outcome.action === "returnToServer") {
+      returnToActiveServer();
+    }
+  };
+
+  const cancelOrBack = () => {
+    if (shellStack.length > 1) {
+      handleBack();
+      return;
+    }
+    if (activeServerId !== null) {
+      returnToActiveServer();
+      return;
+    }
+    resetAndRender({ kind: "list" });
+  };
+
+  host.onBack?.(handleBack);
+  window.addEventListener("keydown", (event) => {
+    if (
+      event.key !== "Escape" ||
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.isComposing
+    ) {
+      return;
+    }
+    if (!canShellGoBack(shellStack, activeServerId, activeDialog !== null)) return;
+    event.preventDefault();
+    handleBack();
+  });
 
   function desktopFooter(developerMode: boolean): HTMLElement | null {
     const desktop = host.desktop;
@@ -197,30 +304,47 @@ async function mountShellPages() {
     return footer;
   }
 
-  async function showList() {
-    navigation++;
-    const [{ servers }, devMode] = await Promise.all([
+  async function renderList(run: number) {
+    const [state, devMode] = await Promise.all([
       host.listServers(),
       host.desktop ? host.desktop.getDeveloperMode() : Promise.resolve(false),
     ]);
+    if (run !== navigation) return;
+    servers = state.servers;
+    activeServerId = state.activeServerId;
+
     const rows: HTMLLIElement[] = [];
     if (host.desktop) {
+      const isActive = activeServerId === LOCAL_SERVER_ID;
       const local = el(
         "button",
-        { type: "button", className: "row-main", onclick: () => void connectLocal() },
+        {
+          type: "button",
+          className: "row-main",
+          onclick: () =>
+            isActive ? returnToActiveServer() : pushAndRender({ kind: "connecting", serverId: LOCAL_SERVER_ID }),
+        },
         el("span", { className: "row-name", textContent: t("localName") }),
         el("span", { className: "row-url muted", textContent: t("localDescription") }),
       );
-      rows.push(el("li", { className: "row" }, local));
+      if (isActive) local.setAttribute("aria-current", "true");
+      rows.push(el("li", { className: isActive ? "row row-active" : "row" }, local));
     }
     rows.push(
       ...servers.map((server) => {
+        const isActive = activeServerId === server.id;
         const rowButton = el(
           "button",
-          { type: "button", className: "row-main", onclick: () => void connect(server) },
+          {
+            type: "button",
+            className: "row-main",
+            onclick: () =>
+              isActive ? returnToActiveServer() : pushAndRender({ kind: "connecting", serverId: server.id }),
+          },
           el("span", { className: "row-name", textContent: server.name }),
           el("span", { className: "row-url muted", textContent: server.url }),
         );
+        if (isActive) rowButton.setAttribute("aria-current", "true");
         const removeButton = button(
           t("remove"),
           async () => {
@@ -228,83 +352,119 @@ async function mountShellPages() {
               return;
             }
             await host.removeServer(server.id);
-            await showList();
+            if (run !== navigation) return;
+            await renderTop();
           },
           "ghost",
         );
         removeButton.classList.add("btn-remove");
         return el(
           "li",
-          { className: "row" },
+          { className: isActive ? "row row-active" : "row" },
           rowButton,
-          el("div", { className: "row-actions" }, button(t("edit"), () => showForm(server), "ghost"), removeButton),
+          el(
+            "div",
+            { className: "row-actions" },
+            button(t("edit"), () => pushAndRender({ kind: "form", server, allowCancel: true }), "ghost"),
+            removeButton,
+          ),
         );
       }),
     );
 
+    const toolbarStartChildren: Child[] = [];
+    if (activeServerId !== null) {
+      const returnBtn = el(
+        "button",
+        {
+          type: "button",
+          className: "btn btn-ghost btn-return",
+          ariaLabel: t("returnToServer"),
+          title: t("returnToServer"),
+          onclick: returnToActiveServer,
+        },
+        arrowLeftIcon(),
+      );
+      toolbarStartChildren.push(returnBtn);
+    }
+    toolbarStartChildren.push(el("h1", { textContent: t("servers") }));
+
     const toolbarActions = host.desktop
-      ? [button(t("addServer"), () => showForm(), "primary")]
-      : [button(t("settings"), () => void showMobileSettings(), "ghost"), button(t("addServer"), () => showForm(), "primary")];
+      ? [button(t("addServer"), () => pushAndRender({ kind: "form", allowCancel: true }), "primary")]
+      : [
+          button(t("settings"), () => pushAndRender({ kind: "mobileSettings" }), "ghost"),
+          button(t("addServer"), () => pushAndRender({ kind: "form", allowCancel: true }), "primary"),
+        ];
     const footer = desktopFooter(devMode);
 
     render(
-      el("div", { className: "toolbar" }, el("h1", { textContent: t("servers") }), el("div", { className: "actions" }, ...toolbarActions)),
+      el(
+        "div",
+        { className: "toolbar" },
+        el("div", { className: "toolbar-start" }, ...toolbarStartChildren),
+        el("div", { className: "actions" }, ...toolbarActions),
+      ),
       el("ul", { className: "list" }, ...rows),
       ...(footer ? [footer] : []),
     );
   }
 
-  function showWelcome() {
-    navigation++;
+  function renderWelcome() {
     render(
       heading(t("welcomeTitle"), t("welcomeBody")),
       el(
         "div",
         { className: "actions" },
-        button(t("useLocal"), () => void connectLocal(), "primary", true),
-        button(t("connectRemote"), () => showForm()),
+        button(t("useLocal"), () => pushAndRender({ kind: "connecting", serverId: LOCAL_SERVER_ID }), "primary", true),
+        button(t("connectRemote"), () => pushAndRender({ kind: "form", allowCancel: true })),
       ),
     );
   }
 
-  async function connectLocal() {
-    const run = ++navigation;
+  async function renderConnectingLocal(run: number) {
     render(
       el(
         "div",
         { className: "status" },
         el("div", { className: "spinner", role: "progressbar" }),
         el("p", { textContent: t("localStarting") }),
-        button(t("cancel"), () => void showList(), "ghost", true),
+        button(t("cancel"), cancelOrBack, "ghost", true),
       ),
     );
     try {
       await host.connect(LOCAL_SERVER_ID);
     } catch {
       if (run !== navigation) return;
-      await showLocalError();
+      replaceAndRender({ kind: "error", serverId: LOCAL_SERVER_ID, reason: "unreachable" });
     }
   }
 
-  async function showLocalError() {
+  async function renderLocalError(run: number) {
     const desktop = host.desktop;
-    if (!desktop) return showList();
-    navigation++;
+    if (!desktop) {
+      resetAndRender({ kind: "list" });
+      return;
+    }
     const detail = await desktop.getLocalError();
+    if (run !== navigation) return;
     render(
       heading(t("localFailedTitle"), detail ?? t("localFailedBody")),
       el(
         "div",
         { className: "actions" },
-        button(t("retry"), () => void connectLocal(), "primary", true),
+        button(
+          t("retry"),
+          () => replaceAndRender({ kind: "connecting", serverId: LOCAL_SERVER_ID }),
+          "primary",
+          true,
+        ),
         button(t("openLog"), () => void desktop.openLocalLog()),
-        button(t("back"), () => void showList()),
+        button(t("back"), () => resetAndRender({ kind: "list" })),
       ),
     );
   }
 
-  function showForm(server?: Server, allowCancel = true) {
-    navigation++;
+  function renderForm(run: number, server?: Server, allowCancel = true) {
     let warned = false;
     const nameInput = el("input", { id: "name", value: server?.name ?? "", autocomplete: "off" });
     const urlInput = el("input", {
@@ -335,7 +495,7 @@ async function mountShellPages() {
       el("label", { htmlFor: "name" }, t("name"), el("span", { className: "muted", textContent: ` · ${t("nameHint")}` })),
       nameInput,
       message,
-      el("div", { className: "actions end" }, ...(allowCancel ? [button(t("cancel"), () => void showList())] : []), submit),
+      el("div", { className: "actions end" }, ...(allowCancel ? [button(t("cancel"), cancelOrBack)] : []), submit),
     );
     form.onsubmit = async (event) => {
       event.preventDefault();
@@ -347,6 +507,7 @@ async function mountShellPages() {
       if (!warned) {
         submit.disabled = true;
         const check = await host.checkServer(url);
+        if (run !== navigation) return;
         submit.disabled = false;
         if (!check.ok) {
           warned = true;
@@ -356,54 +517,62 @@ async function mountShellPages() {
         }
       }
       await host.saveServer({ id: server?.id, name: nameInput.value, url });
-      await showList();
+      if (run !== navigation) return;
+      resetAndRender({ kind: "list" });
     };
     render(heading(server ? t("editServer") : t("addServer")), form);
   }
 
-  async function connect(server: Server, { skipVersionCheck = false } = {}) {
-    const run = ++navigation;
+  async function renderConnectingRemote(run: number, server: Server, skipVersionCheck: boolean) {
     render(
       el(
         "div",
         { className: "status" },
         el("div", { className: "spinner", role: "progressbar" }),
         el("p", { textContent: t("connecting", { name: server.name }) }),
-        button(t("cancel"), () => void showList(), "ghost", true),
+        button(t("cancel"), cancelOrBack, "ghost", true),
       ),
     );
     const check = await host.checkServer(server.url);
     if (run !== navigation) return;
     if (!check.ok) {
-      showError(server, check.reason);
+      replaceAndRender({ kind: "error", serverId: server.id, reason: check.reason });
       return;
     }
     if (!skipVersionCheck && !sameMajorMinor(check.version, host.appVersion)) {
-      render(
-        heading(
-          t("versionTitle"),
-          t("versionBody", { server: check.version ?? t("olderServer"), app: host.appVersion }),
-        ),
-        el(
-          "div",
-          { className: "actions" },
-          button(t("connectAnyway"), () => void connect(server, { skipVersionCheck: true }), "primary", true),
-          button(t("back"), () => void showList()),
-        ),
-      );
+      replaceAndRender({ kind: "versionWarning", server, serverVersion: check.version });
       return;
     }
     try {
       await host.connect(server.id);
     } catch (err) {
       if (run !== navigation) return;
-      const message = err instanceof Error ? err.message : undefined;
-      showError(server, "unreachable", message);
+      const detail = err instanceof Error ? err.message : undefined;
+      replaceAndRender({ kind: "error", serverId: server.id, reason: "unreachable", detail });
     }
   }
 
-  function showError(server: Server, reason: "unreachable" | "not-pika", detail?: string) {
-    navigation++;
+  function renderVersionWarning(server: Server, serverVersion: string | null) {
+    render(
+      heading(
+        t("versionTitle"),
+        t("versionBody", { server: serverVersion ?? t("olderServer"), app: host.appVersion }),
+      ),
+      el(
+        "div",
+        { className: "actions" },
+        button(
+          t("connectAnyway"),
+          () => replaceAndRender({ kind: "connecting", serverId: server.id, skipVersionCheck: true }),
+          "primary",
+          true,
+        ),
+        button(t("back"), () => resetAndRender({ kind: "list" })),
+      ),
+    );
+  }
+
+  function renderRemoteError(server: Server, reason: "unreachable" | "not-pika", detail?: string) {
     const unreachable = reason === "unreachable";
     render(
       heading(
@@ -413,14 +582,13 @@ async function mountShellPages() {
       el(
         "div",
         { className: "actions" },
-        button(t("retry"), () => void connect(server), "primary", true),
-        button(t("back"), () => void showList()),
+        button(t("retry"), () => replaceAndRender({ kind: "connecting", serverId: server.id }), "primary", true),
+        button(t("back"), () => resetAndRender({ kind: "list" })),
       ),
     );
   }
 
-  async function showMobileSettings() {
-    navigation++;
+  function renderMobileSettings() {
     const checkUpdatesButton = button(t("checkForUpdates"), async () => {
       checkUpdatesButton.disabled = true;
       checkUpdatesButton.textContent = t("checkingUpdates");
@@ -438,7 +606,7 @@ async function mountShellPages() {
         "div",
         { className: "toolbar" },
         el("h1", { textContent: t("settings") }),
-        button(t("back"), () => void showList(), "ghost", true),
+        button(t("back"), handleBack, "ghost", true),
       ),
       el(
         "section",
@@ -446,28 +614,76 @@ async function mountShellPages() {
         el(
           "div",
           { className: "setting" },
-          el("div", {}, el("div", { className: "row-name", textContent: t("version") }), el("div", { className: "muted", textContent: host.appVersion })),
+          el(
+            "div",
+            {},
+            el("div", { className: "row-name", textContent: t("version") }),
+            el("div", { className: "muted", textContent: host.appVersion }),
+          ),
           checkUpdatesButton,
         ),
       ),
     );
   }
 
-  const { servers, lastServerId } = await host.listServers();
-  const failedId = params.get("failed");
-  const connectId = params.get("connect");
-  const failed = servers.find((server) => server.id === failedId);
-  const target = servers.find((server) => server.id === connectId);
-  const last = servers.find((server) => server.id === lastServerId);
-  if (host.desktop && failedId === LOCAL_SERVER_ID) await showLocalError();
-  else if (failed) showError(failed, "unreachable");
-  else if (host.desktop && connectId === LOCAL_SERVER_ID) await connectLocal();
-  else if (target) await connect(target);
-  else if (params.has("add")) showForm();
-  else if (location.search === "" && host.desktop && lastServerId === LOCAL_SERVER_ID) await connectLocal();
-  else if (location.search === "" && last) await connect(last);
-  else if (location.search === "" && servers.length === 0) {
-    if (host.desktop) showWelcome();
-    else showForm(undefined, false);
-  } else await showList();
+  async function renderTop() {
+    const run = ++navigation;
+    const screen = shellStack[shellStack.length - 1];
+    if (!screen) return;
+    if (screen.kind === "list") {
+      await renderList(run);
+      return;
+    }
+    if (screen.kind === "welcome") {
+      renderWelcome();
+      return;
+    }
+    if (screen.kind === "form") {
+      renderForm(run, screen.server, screen.allowCancel);
+      return;
+    }
+    if (screen.kind === "mobileSettings") {
+      renderMobileSettings();
+      return;
+    }
+    if (screen.kind === "versionWarning") {
+      renderVersionWarning(screen.server, screen.serverVersion);
+      return;
+    }
+    if (screen.kind === "connecting") {
+      if (host.desktop && screen.serverId === LOCAL_SERVER_ID) {
+        await renderConnectingLocal(run);
+        return;
+      }
+      const target = servers.find((s) => s.id === screen.serverId);
+      if (!target) {
+        resetAndRender({ kind: "list" });
+        return;
+      }
+      await renderConnectingRemote(run, target, screen.skipVersionCheck ?? false);
+      return;
+    }
+    if (host.desktop && screen.serverId === LOCAL_SERVER_ID) {
+      await renderLocalError(run);
+      return;
+    }
+    const target = servers.find((s) => s.id === screen.serverId);
+    if (!target) {
+      resetAndRender({ kind: "list" });
+      return;
+    }
+    renderRemoteError(target, screen.reason, screen.detail);
+  }
+
+  const initial = await host.listServers();
+  servers = initial.servers;
+  activeServerId = initial.activeServerId;
+  shellStack = resolveInitialStack({
+    search: location.search,
+    servers: initial.servers,
+    lastServerId: initial.lastServerId,
+    hasDesktop: Boolean(host.desktop),
+  });
+  syncCanGoBack();
+  await renderTop();
 }

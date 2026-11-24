@@ -35,11 +35,14 @@ export type ServerMenuData = {
 
 export interface PikaShell {
   appVersion: string;
-  listServers(): Promise<{ servers: Server[]; lastServerId: string | null }>;
+  listServers(): Promise<{ servers: Server[]; lastServerId: string | null; activeServerId: string | null }>;
   saveServer(input: { id?: string; name: string; url: string }): Promise<Server>;
   removeServer(id: string): Promise<void>;
   checkServer(url: string): Promise<ServerCheck>;
   connect(id: string): Promise<void>;
+  returnToServer(): Promise<void>;
+  setCanGoBack?(canGoBack: boolean): void;
+  onBack?(listener: () => void): () => void;
   checkForUpdates(): Promise<void>;
   desktop?: {
     openLocalLog(): Promise<void>;

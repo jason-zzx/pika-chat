@@ -1,6 +1,7 @@
 package io.github.jasonzzx.pikachat
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,57 +9,68 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
 import com.getcapacitor.BridgeActivity
-import com.getcapacitor.BridgeWebViewClient
+import com.getcapacitor.BridgeWebChromeClient
 import com.getcapacitor.WebViewListener
 
 class MainActivity : BridgeActivity() {
-    lateinit var remoteBridge: RemoteBridge
+    var isShellVisible: Boolean = true
         private set
 
     private lateinit var hostPlugin: PikaHostPlugin
-    private var currentTheme = ThemePalette.defaults(false)
+    private lateinit var remoteWebChromeClient: BridgeWebChromeClient
+    private lateinit var webViewContainer: ViewGroup
+
+    private var remoteWebView: WebView? = null
+    private var remoteBridge: RemoteBridge? = null
+    private var serverMenuDialog: AlertDialog? = null
+
+    private var shellTheme = ThemePalette.defaults(false)
+    private var remoteTheme = ThemePalette.defaults(false)
+    private var shellCanGoBack = false
+
+    private val activeTheme: ThemePalette
+        get() = if (isShellVisible) shellTheme else remoteTheme
 
     private val requestNotificationPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission(),
     ) { _ -> }
 
-    private val backCallback = object : OnBackPressedCallback(true) {
+    private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            val wv = bridge.webView
-            val currentOrigin = PikaHostPlugin.originOf(wv.url?.let { Uri.parse(it) })
-            val connected = hostPlugin.connectedServer
-
-            if (connected != null && currentOrigin == connected.url) {
-                val list = wv.copyBackForwardList()
-                val prevUrl = list.currentIndex.takeIf { it > 0 }?.let { list.getItemAtIndex(it - 1).url }
-                if (PikaHostPlugin.originOf(prevUrl?.let { Uri.parse(it) }) == connected.url) {
-                    wv.goBack()
-                } else {
-                    showShell("?list")
-                }
+            if (isShellVisible) {
+                bridge.webView.evaluateJavascript("window.__pikaShellBack?.()", null)
                 return
             }
-
-            // On shell-ui (or before any server is connected): delegate to system default (background app).
-            isEnabled = false
-            onBackPressedDispatcher.onBackPressed()
-            isEnabled = true
+            val wv = remoteWebView ?: return
+            val rb = remoteBridge ?: return
+            if (rb.webNavReady) {
+                rb.dispatchBack()
+                return
+            }
+            if (wv.canGoBack()) {
+                wv.goBack()
+            }
         }
     }
 
@@ -67,6 +79,10 @@ class MainActivity : BridgeActivity() {
         super.onCreate(savedInstanceState)
         hostPlugin = bridge.getPlugin("PikaHost").instance as PikaHostPlugin
 
+        // Instantiate once before STARTED so ActivityResultContracts launchers register legally,
+        // then reuse across remoteWebView instances for <input type="file"> / camera pickers.
+        remoteWebChromeClient = BridgeWebChromeClient(bridge)
+
         WindowCompat.enableEdgeToEdge(window)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -74,42 +90,23 @@ class MainActivity : BridgeActivity() {
 
         java.io.File(cacheDir, "open").deleteRecursively()
         createNotificationChannel()
-        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        applyTheme(ThemePalette.defaults(night))
+        val defaults = defaultThemeForConfig()
+        shellTheme = defaults
+        remoteTheme = defaults
+        applyBarColor(shellTheme.background)
 
-        val wv = bridge.webView
-        remoteBridge = RemoteBridge(
+        val shellWebView = bridge.webView
+        shellWebView.setBackgroundColor(shellTheme.background)
+        webViewContainer = shellWebView.parent as ViewGroup
+
+        RemoteBridge.installTheme(
             activity = this,
-            webView = wv,
+            webView = shellWebView,
+            allowedOrigin = RemoteBridge.SHELL_ORIGIN,
+            onTheme = ::applyShellTheme,
         )
-        remoteBridge.installTheme(setOf(RemoteBridge.SHELL_ORIGIN))
-
-        wv.setDownloadListener { url, _, _, _, _ ->
-            hostPlugin.downloadAttachment(Uri.parse(url))
-        }
-
-        bridge.setWebViewClient(object : BridgeWebViewClient(bridge) {
-            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                val connected = hostPlugin.connectedServer
-                val reqOrigin = PikaHostPlugin.originOf(request.url)
-                // A cancelled navigation is not a failure; WebView reports it as ERROR_UNKNOWN with Chromium's error name.
-                if (request.isForMainFrame && connected != null && reqOrigin == connected.url && error.description != "net::ERR_ABORTED") {
-                    showShell("?failed=${Uri.encode(connected.id)}")
-                    return
-                }
-                super.onReceivedError(view, request, error)
-            }
-        })
 
         bridge.addWebViewListener(object : WebViewListener() {
-            override fun onPageLoaded(webView: WebView) {
-                val connected = hostPlugin.connectedServer ?: return
-                val currentOrigin = PikaHostPlugin.originOf(webView.url?.let { Uri.parse(it) })
-                if (currentOrigin == connected.url) {
-                    maybeAskNotificationPermission()
-                }
-            }
-
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 recreate()
                 return true
@@ -117,28 +114,200 @@ class MainActivity : BridgeActivity() {
         })
 
         onBackPressedDispatcher.addCallback(this, backCallback)
+        updateBackEnabled()
         Updates.check(this, manual = false)
     }
 
+    internal fun isCurrentRemoteBridge(source: RemoteBridge): Boolean = remoteBridge === source
+
+    fun setShellCanGoBack(canGoBack: Boolean) {
+        shellCanGoBack = canGoBack
+        updateBackEnabled()
+    }
+
+    fun onRemoteNavStateChanged(source: RemoteBridge) {
+        if (remoteBridge === source) {
+            updateBackEnabled()
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun createRemoteWebView(server: ServerEntry): Pair<WebView, RemoteBridge> {
+        val wv = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+            setBackgroundColor(remoteTheme.background)
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                userAgentString = bridge.webView.settings.userAgentString
+                mixedContentMode = bridge.webView.settings.mixedContentMode
+            }
+            webChromeClient = remoteWebChromeClient
+            setDownloadListener { url, _, _, _, _ ->
+                hostPlugin.downloadAttachment(Uri.parse(url))
+            }
+        }
+
+        val cm = CookieManager.getInstance()
+        cm.setAcceptCookie(true)
+        cm.setAcceptThirdPartyCookies(wv, true)
+
+        val rb = RemoteBridge(
+            activity = this,
+            webView = wv,
+            origin = server.url,
+            serverName = server.name,
+        )
+        rb.install(onTheme = { palette -> applyRemoteTheme(rb, palette) })
+
+        wv.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                hostPlugin.shouldOverrideRemoteLoad(request.url)
+
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                rb.resetNavState()
+                updateBackEnabled()
+            }
+
+            override fun onPageFinished(view: WebView, url: String?) {
+                super.onPageFinished(view, url)
+                val connected = hostPlugin.connectedServer
+                val currentOrigin = PikaHostPlugin.originOf(url?.let { Uri.parse(it) })
+                if (connected != null && currentOrigin == connected.url) {
+                    maybeAskNotificationPermission()
+                }
+                updateBackEnabled()
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                updateBackEnabled()
+            }
+
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                val connected = hostPlugin.connectedServer
+                val reqOrigin = PikaHostPlugin.originOf(request.url)
+                // A cancelled navigation is not a failure; WebView reports it as ERROR_UNKNOWN with Chromium's error name.
+                if (
+                    remoteWebView === view &&
+                    request.isForMainFrame &&
+                    connected != null &&
+                    reqOrigin == connected.url &&
+                    error.description != "net::ERR_ABORTED"
+                ) {
+                    val failedId = connected.id
+                    // Post so destroyRemoteWebView never runs re-entrantly inside a WebViewClient callback.
+                    window.decorView.post {
+                        if (remoteWebView === view) {
+                            if (isShellVisible) {
+                                hostPlugin.clearConnectedServer()
+                                destroyRemoteWebView()
+                            } else {
+                                showShell("?failed=${Uri.encode(failedId)}", dropRemote = true)
+                            }
+                        }
+                    }
+                    return
+                }
+                super.onReceivedError(view, request, error)
+            }
+
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                if (remoteWebView === view) {
+                    if (isShellVisible) {
+                        hostPlugin.clearConnectedServer()
+                        destroyRemoteWebView()
+                    } else {
+                        recreate()
+                    }
+                }
+                return true
+            }
+        }
+
+        return wv to rb
+    }
+
     fun connectToServer(server: ServerEntry) {
-        remoteBridge.installForServer(server.url, server.name)
-        bridge.webView.loadUrl(server.url)
+        dismissServerMenuDialog()
+        destroyRemoteWebView()
+        remoteTheme = defaultThemeForConfig()
+        val (wv, rb) = createRemoteWebView(server)
+        remoteWebView = wv
+        remoteBridge = rb
+        webViewContainer.addView(wv, 0)
+        wv.requestApplyInsets()
+        isShellVisible = false
+        bridge.webView.visibility = View.GONE
+        wv.visibility = View.VISIBLE
+        applyBarColor(remoteTheme.background)
+        wv.loadUrl(server.url)
+        wv.requestFocus()
+        updateBackEnabled()
+    }
+
+    fun destroyRemoteWebView() {
+        val wv = remoteWebView ?: return
+        remoteWebView = null
+        remoteBridge = null
+        wv.stopLoading()
+        wv.webChromeClient = null
+        wv.webViewClient = WebViewClient()
+        (wv.parent as? ViewGroup)?.removeView(wv)
+        wv.destroy()
+        updateBackEnabled()
     }
 
     fun downloadAttachment(url: Uri) = hostPlugin.downloadAttachment(url)
 
-    fun showShell(query: String) {
+    fun showShell(query: String, dropRemote: Boolean = false) {
+        dismissServerMenuDialog()
+        if (dropRemote) {
+            hostPlugin.clearConnectedServer()
+            destroyRemoteWebView()
+        }
+        isShellVisible = true
+        shellCanGoBack = remoteWebView != null
+        remoteWebView?.visibility = View.INVISIBLE
+        bridge.webView.visibility = View.VISIBLE
+        bridge.webView.bringToFront()
         bridge.webView.loadUrl("${RemoteBridge.SHELL_ORIGIN}/$query")
+        bridge.webView.requestFocus()
+        applyBarColor(shellTheme.background)
+        updateBackEnabled()
+    }
+
+    fun returnToServer() {
+        val wv = remoteWebView
+        if (wv == null || hostPlugin.connectedServer == null) {
+            showShell("?list", dropRemote = true)
+            return
+        }
+        dismissServerMenuDialog()
+        isShellVisible = false
+        bridge.webView.visibility = View.GONE
+        wv.visibility = View.VISIBLE
+        wv.requestFocus()
+        applyBarColor(remoteTheme.background)
+        updateBackEnabled()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // BridgeActivity.load() invokes onNewIntent() during super.onCreate() before hostPlugin is initialized.
+        val wv = remoteWebView ?: return
+        if (!::hostPlugin.isInitialized) return
         val serverId = intent.getStringExtra(EXTRA_SERVER_ID) ?: return
         val path = intent.getStringExtra(EXTRA_PATH) ?: return
         val connected = hostPlugin.connectedServer ?: return
         // The activity is exported: extras may come from another app, so re-check the path.
         if (connected.id == serverId && path.startsWith("/")) {
-            bridge.webView.loadUrl(connected.url + path)
+            if (isShellVisible) returnToServer()
+            wv.loadUrl(connected.url + path)
         }
     }
 
@@ -147,21 +316,39 @@ class MainActivity : BridgeActivity() {
         CookieManager.getInstance().flush()
     }
 
+    override fun onDestroy() {
+        dismissServerMenuDialog()
+        destroyRemoteWebView()
+        super.onDestroy()
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         // Re-apply after Capacitor's SystemBars.setStyle resets decorView backgroundColor.
-        applyBarColor(currentTheme.background)
+        applyBarColor(activeTheme.background)
     }
 
-    fun applyTheme(palette: ThemePalette) {
-        currentTheme = palette
-        applyBarColor(palette.background)
+    private fun defaultThemeForConfig(): ThemePalette {
+        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        return ThemePalette.defaults(night)
+    }
+
+    private fun applyShellTheme(palette: ThemePalette) {
+        shellTheme = palette
+        bridge.webView.setBackgroundColor(palette.background)
+        if (isShellVisible) applyBarColor(palette.background)
+    }
+
+    private fun applyRemoteTheme(source: RemoteBridge, palette: ThemePalette) {
+        if (remoteBridge !== source) return
+        remoteTheme = palette
+        remoteWebView?.setBackgroundColor(palette.background)
+        if (!isShellVisible) applyBarColor(palette.background)
     }
 
     private fun applyBarColor(color: Int) {
         val decor = window.decorView
         decor.setBackgroundColor(color)
-        bridge.webView.setBackgroundColor(color)
         val lightBars = ColorUtils.calculateLuminance(color) > 0.5
         WindowCompat.getInsetsController(window, decor).apply {
             isAppearanceLightStatusBars = lightBars
@@ -169,15 +356,41 @@ class MainActivity : BridgeActivity() {
         }
     }
 
+    private fun dismissServerMenuDialog() {
+        serverMenuDialog?.dismiss()
+        serverMenuDialog = null
+    }
+
+    private fun updateBackEnabled() {
+        val wv = remoteWebView
+        val rb = remoteBridge
+        val shouldIntercept = when {
+            serverMenuDialog?.isShowing == true -> false // AlertDialog handles its own Back dismissal natively
+            isShellVisible -> shellCanGoBack
+            wv != null -> if (rb != null && rb.webNavReady) rb.webCanGoBack else wv.canGoBack()
+            else -> false
+        }
+        backCallback.isEnabled = shouldIntercept
+    }
+
     fun showServerMenuDialog() {
-        if (isFinishing || isDestroyed) return
-        showThemedServerMenuDialog(
+        if (isFinishing || isDestroyed || isShellVisible) return
+        dismissServerMenuDialog()
+        val dialog = showThemedServerMenuDialog(
             activity = this,
-            theme = currentTheme,
+            theme = activeTheme,
             servers = hostPlugin.getServers(),
             connectedServerId = hostPlugin.connectedServer?.id,
-            onNavigate = ::showShell,
+            onNavigate = { query -> showShell(query) },
         )
+        serverMenuDialog = dialog
+        dialog.setOnDismissListener {
+            if (serverMenuDialog === dialog) {
+                serverMenuDialog = null
+                updateBackEnabled()
+            }
+        }
+        updateBackEnabled()
     }
 
     private fun createNotificationChannel() {

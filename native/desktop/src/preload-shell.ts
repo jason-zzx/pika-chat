@@ -4,7 +4,9 @@ import type { DesktopThemeColors, PikaShell, ServerMenuData, TitlebarState } fro
 const subscribe = <T>(channel: string, listener: (payload: T) => void) => {
   const handler = (_event: unknown, payload: T) => listener(payload);
   ipcRenderer.on(channel, handler);
-  return () => ipcRenderer.removeListener(channel, handler);
+  return () => {
+    ipcRenderer.removeListener(channel, handler);
+  };
 };
 
 const shell: PikaShell = {
@@ -14,6 +16,8 @@ const shell: PikaShell = {
   removeServer: (id) => ipcRenderer.invoke("shell:removeServer", id),
   checkServer: (url) => ipcRenderer.invoke("shell:checkServer", url),
   connect: (id) => ipcRenderer.invoke("shell:connect", id),
+  returnToServer: () => ipcRenderer.invoke("shell:returnToServer"),
+  onBack: (listener) => subscribe("shell:back", () => listener()),
   checkForUpdates: () => ipcRenderer.invoke("shell:checkForUpdates"),
   desktop: {
     openLocalLog: () => ipcRenderer.invoke("shell:openLocalLog"),

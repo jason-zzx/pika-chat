@@ -3,14 +3,26 @@ import type { PikaShell, Server } from "@pika/shell-ui/host";
 import { classifyHealth, normalizeServerUrl } from "@pika/shell-ui/servers";
 
 interface PikaHostPlugin {
-  listServers(): Promise<{ servers: Server[]; lastServerId: string | null }>;
+  listServers(): Promise<{ servers: Server[]; lastServerId: string | null; activeServerId: string | null }>;
   saveServer(input: { id?: string; name: string; url: string }): Promise<Server>;
   removeServer(input: { id: string }): Promise<void>;
   connect(input: { id: string }): Promise<void>;
+  returnToServer(): Promise<void>;
+  setCanGoBack(input: { canGoBack: boolean }): Promise<void>;
   checkForUpdates(): Promise<void>;
 }
 
 const PikaHost = registerPlugin<PikaHostPlugin>("PikaHost");
+
+const backListeners = new Set<() => void>();
+Object.defineProperty(window, "__pikaShellBack", {
+  value: () => {
+    for (const listener of [...backListeners]) listener();
+  },
+  writable: false,
+  configurable: false,
+  enumerable: false,
+});
 
 window.pikaShell = {
   appVersion: __APP_VERSION__,
@@ -32,6 +44,16 @@ window.pikaShell = {
     }
   },
   connect: (id) => PikaHost.connect({ id }),
+  returnToServer: () => PikaHost.returnToServer(),
+  setCanGoBack: (canGoBack) => {
+    void PikaHost.setCanGoBack({ canGoBack });
+  },
+  onBack: (listener) => {
+    backListeners.add(listener);
+    return () => {
+      backListeners.delete(listener);
+    };
+  },
   checkForUpdates: () => PikaHost.checkForUpdates(),
 } satisfies PikaShell;
 

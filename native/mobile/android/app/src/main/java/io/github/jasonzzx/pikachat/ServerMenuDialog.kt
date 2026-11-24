@@ -34,7 +34,7 @@ internal fun showThemedServerMenuDialog(
     servers: List<ServerEntry>,
     connectedServerId: String?,
     onNavigate: (String) -> Unit,
-) {
+): AlertDialog {
     val dialog = AlertDialog.Builder(activity).create()
 
     val root = LinearLayout(activity).apply {
@@ -142,6 +142,7 @@ internal fun showThemedServerMenuDialog(
     }
     dialog.window?.setBackgroundDrawable(InsetDrawable(surface, inset, inset, inset, inset))
     dialog.show()
+    return dialog
 }
 
 private fun buildMenuRow(

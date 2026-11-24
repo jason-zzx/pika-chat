@@ -3,19 +3,18 @@ package io.github.jasonzzx.pikachat
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
-import android.content.IntentFilter
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.webkit.CookieManager
+import android.webkit.URLUtil
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import java.io.File
-import android.webkit.CookieManager
-import android.webkit.URLUtil
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -24,6 +23,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
@@ -39,8 +39,13 @@ data class ServerEntry(val id: String, val name: String, val url: String) {
 
 @CapacitorPlugin(name = "PikaHost")
 class PikaHostPlugin : Plugin() {
+    @Volatile
     var connectedServer: ServerEntry? = null
         private set
+
+    internal fun clearConnectedServer() {
+        connectedServer = null
+    }
 
     @PluginMethod
     fun listServers(call: PluginCall) {
@@ -48,6 +53,7 @@ class PikaHostPlugin : Plugin() {
         call.resolve(JSObject().apply {
             put("servers", JSArray(servers.map { it.toJson() }))
             put("lastServerId", lastId ?: JSONObject.NULL)
+            put("activeServerId", connectedServer?.id ?: JSONObject.NULL)
         })
     }
 
@@ -71,11 +77,20 @@ class PikaHostPlugin : Plugin() {
         } else {
             servers + entry
         }
-        // Like desktop, an edited connected server keeps its old origin until the next connect,
-        // so navigation, notifications and RemoteBridge's accepted origin stay in step.
         writeState(updated, lastId)
 
-        call.resolve(entry.toJson())
+        val main = activity as MainActivity
+        main.runOnUiThread {
+            if (existing != null && connectedServer?.id == entry.id) {
+                if (existing.url != entry.url) {
+                    connectedServer = null
+                    main.destroyRemoteWebView()
+                } else {
+                    connectedServer = entry
+                }
+            }
+            call.resolve(entry.toJson())
+        }
     }
 
     @PluginMethod
@@ -96,7 +111,7 @@ class PikaHostPlugin : Plugin() {
             if (target != null) clearOriginData(target.url)
             if (connectedServer?.id == id) {
                 connectedServer = null
-                main.remoteBridge.clearNative()
+                main.destroyRemoteWebView()
             }
             call.resolve()
         }
@@ -114,8 +129,12 @@ class PikaHostPlugin : Plugin() {
 
         val main = activity as MainActivity
         main.runOnUiThread {
-            if (!main.remoteBridge.supportsRequiredFeatures()) {
+            if (!RemoteBridge.supportsRequiredFeatures()) {
                 call.reject(context.getString(R.string.webview_unsupported))
+                return@runOnUiThread
+            }
+            if (!main.isShellVisible) {
+                call.resolve()
                 return@runOnUiThread
             }
             connectedServer = target
@@ -126,20 +145,48 @@ class PikaHostPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun returnToServer(call: PluginCall) {
+        val main = activity as MainActivity
+        main.runOnUiThread {
+            main.returnToServer()
+            call.resolve()
+        }
+    }
+
+    @PluginMethod
+    fun setCanGoBack(call: PluginCall) {
+        val canGoBack = call.getBoolean("canGoBack") ?: false
+        val main = activity as MainActivity
+        main.runOnUiThread {
+            main.setShellCanGoBack(canGoBack)
+            call.resolve()
+        }
+    }
+
+    @PluginMethod
     fun checkForUpdates(call: PluginCall) {
         Updates.check(activity, manual = true)
         call.resolve()
     }
 
-    // Runs on the UI thread for renderer-initiated navigations and redirects (not for loadUrl).
+    // Runs on the UI thread for renderer-initiated navigations on bridge.webView (shell-ui only).
     override fun shouldOverrideLoad(url: Uri): Boolean? {
         val origin = originOf(url)
-        val connected = connectedServer
-
-        if (origin == RemoteBridge.SHELL_ORIGIN) {
-            // Only native loadUrl shows shell-ui; a remote page must not navigate to it (desktop parity).
-            return if (originOf(Uri.parse(bridge.webView.url ?: "")) == RemoteBridge.SHELL_ORIGIN) null else true
+        if (origin == RemoteBridge.SHELL_ORIGIN) return null
+        if (origin != null || url.scheme == "mailto") {
+            try {
+                activity.startActivity(Intent(Intent.ACTION_VIEW, url))
+            } catch (_: ActivityNotFoundException) {
+            }
         }
+        return true
+    }
+
+    // Runs on the UI thread for renderer-initiated navigations on remoteWebView.
+    fun shouldOverrideRemoteLoad(url: Uri): Boolean {
+        val origin = originOf(url)
+        if (origin == RemoteBridge.SHELL_ORIGIN) return true
+        val connected = connectedServer
         if (connected != null && origin == connected.url) {
             return openAttachment(url)
         }

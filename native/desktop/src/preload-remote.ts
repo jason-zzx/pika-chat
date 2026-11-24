@@ -9,6 +9,16 @@ contextBridge.exposeInMainWorld("pikaNative", {
   notify: (input: { title: string; body: string; path: string }) => ipcRenderer.send("native:notify", input),
   showServerMenu: (anchor: { x: number; y: number }) => ipcRenderer.send("native:showServerMenu", anchor),
   openServers: (screen: "list" | "add") => ipcRenderer.send("native:openServers", screen),
+  navigation: {
+    setCanGoBack: (canGoBack: boolean) => ipcRenderer.send("native:navState", { canGoBack }),
+    onBack: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("native:back", handler);
+      return () => {
+        ipcRenderer.removeListener("native:back", handler);
+      };
+    },
+  },
   desktop: {
     platform: process.platform as "win32" | "linux" | "darwin",
     getSettings: () => ipcRenderer.invoke("native:desktop:getSettings"),
