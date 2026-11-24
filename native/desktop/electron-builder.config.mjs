@@ -17,12 +17,15 @@ export default {
   // Only used to generate updater metadata; CI publishes through the GitHub Release job.
   publish: { provider: "github", owner: "jason-zzx", repo: "pika-chat" },
   win: {
+    // electron-builder has no top-level `zip` config section, so give Windows the `-portable` name here and keep NSIS on the standard pattern below.
+    artifactName: "pika-chat-${version}-${os}-${arch}-portable.${ext}",
     target: [
       { target: "zip", arch: ["x64"] },
       { target: "nsis", arch: ["x64"] },
     ],
   },
   nsis: {
+    artifactName: "pika-chat-${version}-${os}-${arch}.${ext}",
     oneClick: false,
     perMachine: false,
     allowElevation: true,
