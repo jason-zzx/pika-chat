@@ -19,11 +19,11 @@ function renderHeader(title?: string | null, subtitle?: string | null) {
 }
 
 describe("InsetHeader", () => {
-  it("always shows the sidebar trigger", () => {
+  it("renders the mobile-only sidebar trigger", () => {
     renderHeader();
-    expect(
-      screen.getByRole("button", { name: "Toggle Sidebar" }),
-    ).toBeInTheDocument();
+    const trigger = screen.getByRole("button", { name: "Toggle Sidebar" });
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveClass("md:hidden");
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   });
 

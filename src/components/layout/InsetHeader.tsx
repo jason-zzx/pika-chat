@@ -17,11 +17,11 @@ export default function InsetHeader({
   return (
     <header
       className={cn(
-        "flex min-h-13 shrink-0 items-center gap-2 border-b border-border px-3 py-1 md:min-h-12",
+        "flex min-h-13 shrink-0 items-center gap-2 border-b border-border px-3 py-1 md:min-h-12 md:px-5",
         className,
       )}
     >
-      <SidebarTrigger className="size-9 md:size-7 [&_svg]:size-5 md:[&_svg]:size-4" />
+      <SidebarTrigger className="size-9 md:hidden [&_svg]:size-5" />
       {title ? (
         <div className="flex min-w-0 flex-col justify-center">
           <h1 className="min-w-0 truncate text-[17px] font-semibold tracking-tight md:text-base">

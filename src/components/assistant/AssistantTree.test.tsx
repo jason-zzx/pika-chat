@@ -797,6 +797,15 @@ describe("AssistantTree", () => {
     });
     const { unmount } = renderTree({ defaultOpen: false });
 
+    const toggle = await screen.findByRole("button", { name: "Toggle Sidebar" });
+    expect(toggle).toHaveClass("group-data-[collapsible=icon]:order-first");
+    fireEvent.focus(toggle);
+    expect(
+      await screen.findByText("Toggle Sidebar", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
+
     const brand = await screen.findByRole("link", { name: /Pika Chat/ });
     fireEvent.focus(brand);
     expect(
@@ -828,7 +837,7 @@ describe("AssistantTree", () => {
     unmount();
 
     nav.pathname = "/assistant/a1";
-    renderTree({ defaultOpen: false });
+    const assistantView = renderTree({ defaultOpen: false });
 
     const back = await screen.findByRole("button", {
       name: "Back to assistants",
@@ -839,6 +848,18 @@ describe("AssistantTree", () => {
         selector: "[data-slot=tooltip-content]",
       }),
     ).toBeInTheDocument();
+    assistantView.unmount();
+
+    nav.pathname = "/settings/general";
+    const settingsView = renderTree({ defaultOpen: false });
+    const sidebar = settingsView.container.querySelector('[data-slot="sidebar"]');
+    expect(sidebar).toHaveAttribute("data-state", "collapsed");
+
+    const settingsToggle = await screen.findByRole("button", {
+      name: "Toggle Sidebar",
+    });
+    fireEvent.click(settingsToggle);
+    expect(sidebar).toHaveAttribute("data-state", "expanded");
   });
 
   it("renders topic loading placeholders with the same row height as topic items", async () => {

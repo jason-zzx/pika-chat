@@ -61,6 +61,7 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -125,46 +126,51 @@ export default function AssistantTree({
   return (
     <>
       <SidebarHeader className="overflow-hidden">
-        {isSettings ? (
-          <PaneHeader
-            title={t("settingsNav.label")}
-            onBack={() => router.push("/")}
-          />
-        ) : viewing ? (
-          <PaneHeader
-            title={viewing.name}
-            icon={viewing.icon}
-            onBack={() => router.push("/")}
-          />
-        ) : native ? (
-          <SidebarMenuButton
-            tooltip={native.serverName}
-            aria-label={tServer("switchAria", { name: native.serverName })}
-            className="px-2.5 py-0 font-semibold tracking-tight md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1! [&>svg:first-child]:size-6"
-            onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              native.showServerMenu({ x: rect.left, y: rect.bottom });
-            }}
-          >
-            <PikaMark className="size-6" />
-            <span className="flex-1 truncate group-data-[collapsible=icon]:sr-only">
-              {native.serverName}
-            </span>
-            <ChevronsUpDownIcon
-              className="text-muted-foreground group-data-[collapsible=icon]:hidden"
-              aria-hidden="true"
-            />
-          </SidebarMenuButton>
-        ) : (
-          <div className="flex h-10 min-w-0 items-center overflow-hidden px-2.5 md:h-8 md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <CloseOnNavigateLink href="/" tooltip={tRoot("title")}>
-              <PikaMark className="size-6" />
-              <span className="truncate group-data-[collapsible=icon]:sr-only">
-                {tRoot("title")}
-              </span>
-            </CloseOnNavigateLink>
+        <div className="flex min-w-0 items-center gap-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
+          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex-none">
+            {isSettings ? (
+              <PaneHeader
+                title={t("settingsNav.label")}
+                onBack={() => router.push("/")}
+              />
+            ) : viewing ? (
+              <PaneHeader
+                title={viewing.name}
+                icon={viewing.icon}
+                onBack={() => router.push("/")}
+              />
+            ) : native ? (
+              <SidebarMenuButton
+                tooltip={native.serverName}
+                aria-label={tServer("switchAria", { name: native.serverName })}
+                className="px-2.5 py-0 font-semibold tracking-tight md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1! [&>svg:first-child]:size-6"
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  native.showServerMenu({ x: rect.left, y: rect.bottom });
+                }}
+              >
+                <PikaMark className="size-6" />
+                <span className="flex-1 truncate group-data-[collapsible=icon]:sr-only">
+                  {native.serverName}
+                </span>
+                <ChevronsUpDownIcon
+                  className="text-muted-foreground group-data-[collapsible=icon]:hidden"
+                  aria-hidden="true"
+                />
+              </SidebarMenuButton>
+            ) : (
+              <div className="flex h-10 min-w-0 items-center overflow-hidden px-2.5 md:h-8 md:px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+                <CloseOnNavigateLink href="/" tooltip={tRoot("title")}>
+                  <PikaMark className="size-6" />
+                  <span className="truncate group-data-[collapsible=icon]:sr-only">
+                    {tRoot("title")}
+                  </span>
+                </CloseOnNavigateLink>
+              </div>
+            )}
           </div>
-        )}
+          <SidebarTrigger className="hidden shrink-0 md:inline-flex md:size-7 group-data-[collapsible=icon]:order-first group-data-[collapsible=icon]:md:size-8" />
+        </div>
       </SidebarHeader>
       {isSettings ? null : <SidebarSearch />}
       <SidebarContent className="overflow-hidden">

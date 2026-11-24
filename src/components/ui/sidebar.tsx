@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
-  SharedTooltip,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -41,7 +40,6 @@ type SidebarContextProps = {
   openMobile: boolean
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
-  lockedOpen: boolean
   toggleSidebar: () => void
 }
 
@@ -60,7 +58,6 @@ function SidebarProvider({
   defaultOpen = true,
   open: openProp,
   onOpenChange: setOpenProp,
-  lockedOpen = false,
   className,
   style,
   children,
@@ -69,7 +66,6 @@ function SidebarProvider({
   defaultOpen?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  lockedOpen?: boolean
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
@@ -78,12 +74,8 @@ function SidebarProvider({
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen)
   const open = openProp ?? _open
-  const effectiveOpen = lockedOpen ? true : open
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      if (lockedOpen) {
-        return
-      }
       const openState = typeof value === "function" ? value(open) : value
       if (setOpenProp) {
         setOpenProp(openState)
@@ -94,7 +86,7 @@ function SidebarProvider({
       // This sets the cookie to keep the sidebar state.
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
     },
-    [setOpenProp, open, lockedOpen]
+    [setOpenProp, open]
   )
 
   // Helper to toggle the sidebar.
@@ -109,9 +101,6 @@ function SidebarProvider({
         event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
         (event.metaKey || event.ctrlKey)
       ) {
-        if (lockedOpen && !isMobile) {
-          return
-        }
         event.preventDefault()
         toggleSidebar()
       }
@@ -119,33 +108,23 @@ function SidebarProvider({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [toggleSidebar, lockedOpen, isMobile])
+  }, [toggleSidebar])
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
-  const state = effectiveOpen ? "expanded" : "collapsed"
+  const state = open ? "expanded" : "collapsed"
 
   const contextValue = React.useMemo<SidebarContextProps>(
     () => ({
       state,
-      open: effectiveOpen,
+      open,
       setOpen,
       isMobile,
       openMobile,
       setOpenMobile,
-      lockedOpen,
       toggleSidebar,
     }),
-    [
-      state,
-      effectiveOpen,
-      setOpen,
-      isMobile,
-      openMobile,
-      setOpenMobile,
-      lockedOpen,
-      toggleSidebar,
-    ]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
   )
 
   return (
@@ -284,30 +263,38 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, state, isMobile } = useSidebar()
   const t = useTranslations("Layout")
 
   return (
-    <SharedTooltip
-      payload={t("sidebar.toggle")}
-      render={
-        <Button
-          data-sidebar="trigger"
-          data-slot="sidebar-trigger"
-          variant="ghost"
-          size="icon-sm"
-          className={cn(className)}
-          onClick={(event) => {
-            onClick?.(event)
-            toggleSidebar()
-          }}
-          {...props}
-        />
-      }
-    >
-      <PanelLeftIcon />
-      <span className="sr-only">{t("sidebar.toggle")}</span>
-    </SharedTooltip>
+    <Tooltip>
+      <TooltipTrigger
+        delay={0}
+        render={
+          <Button
+            data-sidebar="trigger"
+            data-slot="sidebar-trigger"
+            variant="ghost"
+            size="icon-sm"
+            className={cn(className)}
+            onClick={(event) => {
+              onClick?.(event)
+              toggleSidebar()
+            }}
+            {...props}
+          />
+        }
+      >
+        <PanelLeftIcon />
+        <span className="sr-only">{t("sidebar.toggle")}</span>
+      </TooltipTrigger>
+      <TooltipContent
+        side={state === "collapsed" && !isMobile ? "right" : "bottom"}
+        align="center"
+      >
+        {t("sidebar.toggle")}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

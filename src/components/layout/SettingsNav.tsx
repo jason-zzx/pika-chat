@@ -1,5 +1,16 @@
 "use client";
 
+import {
+  BlocksIcon,
+  FolderOpenIcon,
+  GlobeIcon,
+  InfoIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
+  SparklesIcon,
+  UsersIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -17,20 +28,21 @@ type SettingsTabLabelKey = `settingsNav.${"general" | "models" | "account" | "fi
 type SettingsTab = {
   href: string;
   labelKey: SettingsTabLabelKey;
+  icon: LucideIcon;
   staffOnly?: boolean;
   memberOnly?: boolean;
   remoteOnly?: boolean;
 };
 
 const SETTINGS_TABS: SettingsTab[] = [
-  { href: "/settings/general", labelKey: "settingsNav.general" },
-  { href: "/settings/models", labelKey: "settingsNav.models" },
-  { href: "/settings/account", labelKey: "settingsNav.account", memberOnly: true, remoteOnly: true },
-  { href: "/settings/files", labelKey: "settingsNav.files" },
-  { href: "/settings/providers", labelKey: "settingsNav.providers", memberOnly: true },
-  { href: "/settings/search", labelKey: "settingsNav.search", memberOnly: true },
-  { href: "/settings/users", labelKey: "settingsNav.users", staffOnly: true },
-  { href: "/settings/about", labelKey: "settingsNav.about" },
+  { href: "/settings/general", labelKey: "settingsNav.general", icon: SettingsIcon },
+  { href: "/settings/models", labelKey: "settingsNav.models", icon: SparklesIcon },
+  { href: "/settings/account", labelKey: "settingsNav.account", icon: ShieldCheckIcon, memberOnly: true, remoteOnly: true },
+  { href: "/settings/files", labelKey: "settingsNav.files", icon: FolderOpenIcon },
+  { href: "/settings/providers", labelKey: "settingsNav.providers", icon: BlocksIcon, memberOnly: true },
+  { href: "/settings/search", labelKey: "settingsNav.search", icon: GlobeIcon, memberOnly: true },
+  { href: "/settings/users", labelKey: "settingsNav.users", icon: UsersIcon, staffOnly: true },
+  { href: "/settings/about", labelKey: "settingsNav.about", icon: InfoIcon },
 ];
 
 type SettingsNavProps = {
@@ -44,7 +56,7 @@ export default function SettingsNav({ showUsers, local = false }: SettingsNavPro
   const t = useTranslations("Layout");
 
   return (
-    <SidebarGroup>
+    <SidebarGroup className="thin-scrollbar min-h-0 flex-1 overflow-x-clip overflow-y-auto">
       <SidebarGroupContent>
         <nav aria-label={t("settingsNav.label")}>
           <SidebarMenu>
@@ -60,7 +72,10 @@ export default function SettingsNav({ showUsers, local = false }: SettingsNavPro
                   tooltip={t(tab.labelKey)}
                   isActive={pathname === tab.href}
                 >
-                  <span>{t(tab.labelKey)}</span>
+                  <tab.icon aria-hidden="true" />
+                  <span className="truncate group-data-[collapsible=icon]:hidden">
+                    {t(tab.labelKey)}
+                  </span>
                 </SidebarNavLink>
               </SidebarMenuItem>
             ))}

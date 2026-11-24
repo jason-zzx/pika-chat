@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Sidebar, SidebarProvider } from "@/components/ui/sidebar";
@@ -121,5 +121,30 @@ describe("SettingsNav", () => {
     expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Account" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
+  });
+
+  it("renders icons, hides labels, and shows tooltips when collapsed", async () => {
+    renderWithIntl(
+      <TooltipProvider delay={0}>
+        <SidebarProvider defaultOpen={false}>
+          <Sidebar collapsible="icon">
+            <SettingsNav showUsers={false} />
+          </Sidebar>
+        </SidebarProvider>
+      </TooltipProvider>,
+    );
+
+    const general = screen.getByRole("link", { name: "General" });
+    expect(general.querySelector("svg")).not.toBeNull();
+    expect(screen.getByText("General")).toHaveClass(
+      "group-data-[collapsible=icon]:hidden",
+    );
+
+    fireEvent.focus(general);
+    expect(
+      await screen.findByText("General", {
+        selector: "[data-slot=tooltip-content]",
+      }),
+    ).toBeInTheDocument();
   });
 });

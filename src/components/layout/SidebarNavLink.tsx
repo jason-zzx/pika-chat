@@ -28,6 +28,7 @@ export default function SidebarNavLink({
           aria-current={isActive ? "page" : undefined}
         />
       }
+      aria-label={tooltip}
       tooltip={tooltip}
       isActive={isActive}
       onClick={() => setOpenMobile(false)}
