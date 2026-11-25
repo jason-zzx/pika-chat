@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_FILE_LIMITS } from "@/lib/api/files";
 import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
@@ -417,6 +417,7 @@ describe("MessageItem version and action wiring", () => {
 });
 
 describe("MessageItem editing (edit-and-regenerate)", () => {
+  const originalMatchMedia = window.matchMedia;
   type EditableProps = Omit<ComponentProps<typeof MessageItem>, "message">;
 
   function renderEditable(message: ChatUIMessage, props: EditableProps = {}) {
@@ -438,6 +439,11 @@ describe("MessageItem editing (edit-and-regenerate)", () => {
     // chains `.catch` onto it, so the mock must return a promise.
     filesApi.deleteChatFile.mockResolvedValue(undefined);
     useComposerStore.setState({ attachments: {}, drafts: {} });
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    delete window.pikaNative;
   });
 
   it("opens the editor prefilled with the current version; cancel restores it without submitting (R2/R4)", () => {
@@ -667,6 +673,35 @@ describe("MessageItem editing (edit-and-regenerate)", () => {
     expect(
       screen.queryByRole("button", { name: "Edit message" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("submits on Enter on desktop, and leaves Enter as a newline on mobile", () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+    const onDesktopSubmit = vi.fn();
+    const message = userMessage("Hello there");
+    const desktopView = renderEditable(message, { onEditSubmit: onDesktopSubmit });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+    const desktopTextarea = screen.getByRole("textbox", { name: "Edit message" });
+
+    fireEvent.keyDown(desktopTextarea, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(desktopTextarea, { key: "Enter", isComposing: true });
+    expect(onDesktopSubmit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(desktopTextarea, { key: "Enter" });
+    expect(onDesktopSubmit).toHaveBeenCalledTimes(1);
+    desktopView.unmount();
+
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    const onMobileSubmit = vi.fn();
+    renderEditable(message, { onEditSubmit: onMobileSubmit });
+    fireEvent.click(screen.getByRole("button", { name: "Edit message" }));
+    const mobileTextarea = screen.getByRole("textbox", { name: "Edit message" });
+    expect(fireEvent.keyDown(mobileTextarea, { key: "Enter" })).toBe(true);
+    expect(onMobileSubmit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onMobileSubmit).toHaveBeenCalledTimes(1);
   });
 });
 

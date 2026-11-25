@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SharedTooltipHost, TooltipProvider } from "@/components/ui/tooltip";
 
@@ -113,17 +113,29 @@ function stagedAttachment(
   };
 }
 
+const originalMatchMedia = window.matchMedia;
+
 describe("Composer", () => {
   beforeEach(() => {
     useComposerStore.getState().setSearchMode("off");
     vi.mocked(listSearchProviders).mockResolvedValue({ providers: [] });
   });
 
-  it("sends with the in-box control and Enter, and inserts a newline with Shift+Enter", () => {
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    delete window.pikaNative;
+  });
+
+  it("sends with the in-box control and Enter on desktop, and ignores Shift+Enter or active IME composition", () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false });
     const { onSend } = renderComposer();
 
     const textarea = screen.getByRole("textbox", { name: "Message" });
+
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    expect(onSend).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(textarea, { key: "Enter", isComposing: true });
     expect(onSend).not.toHaveBeenCalled();
 
     fireEvent.keyDown(textarea, { key: "Enter" });
@@ -131,6 +143,59 @@ describe("Composer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(onSend).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves Enter as a newline on mobile browsers and submits only via the Send button", () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    const { onSend } = renderComposer();
+
+    const textarea = screen.getByRole("textbox", { name: "Message" });
+
+    // fireEvent.keyDown returns true when preventDefault() was NOT called.
+    const notPrevented = fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(notPrevented).toBe(true);
+    expect(onSend).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Enter-to-send in the Electron desktop shell and Enter-newline in the Android mobile shell", () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    window.pikaNative = {
+      serverName: "Work",
+      notify: vi.fn(),
+      showServerMenu: vi.fn(),
+      openServers: vi.fn(),
+      desktop: {
+        platform: "linux",
+        getSettings: vi.fn(),
+        setCloseAction: vi.fn(),
+        setHotkey: vi.fn(),
+        getStorageUsage: vi.fn(),
+        clearStorage: vi.fn(),
+        openLocalDataFolder: vi.fn(),
+        checkForUpdates: vi.fn(),
+        openDevTools: vi.fn(),
+        openDesktopLog: vi.fn(),
+        setDeveloperMode: vi.fn(),
+      },
+    };
+    const { onSend } = renderComposer();
+    const textarea = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    // Switch to Android native shell (no `desktop` capability) even with a fine pointer.
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+    window.pikaNative = {
+      serverName: "Work",
+      notify: vi.fn(),
+      showServerMenu: vi.fn(),
+      openServers: vi.fn(),
+    };
+    expect(fireEvent.keyDown(textarea, { key: "Enter" })).toBe(true);
+    expect(onSend).toHaveBeenCalledTimes(1);
   });
 
   it("replaces send with stop while a turn is in flight", () => {

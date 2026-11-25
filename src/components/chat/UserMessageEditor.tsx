@@ -28,6 +28,7 @@ import {
   stagedAttachmentSlotCount,
   useComposerAttachments,
 } from "./use-composer-attachments";
+import { shouldSendOnEnter } from "./enter-to-send";
 
 type UserMessageEditorProps = {
   /** The currently shown version: its text pre-fills the textarea and its
@@ -162,14 +163,14 @@ export default function UserMessageEditor({
   }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
-    // Same keyboard contract as the composer: Enter sends, Shift+Enter
-    // inserts a newline; Escape cancels the edit.
+    // Enter sends on desktop when not composing; mobile keeps Enter as a
+    // newline because soft keyboards lack Shift+Enter. Escape always cancels.
     if (event.key === "Escape") {
       event.preventDefault();
       onCancel();
       return;
     }
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (shouldSendOnEnter(event)) {
       event.preventDefault();
       handleSubmit();
     }

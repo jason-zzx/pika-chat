@@ -50,6 +50,7 @@ import { findAvailableModel } from "./model-pick";
 import ModelPicker from "./ModelPicker";
 import QuoteCard from "./QuoteCard";
 import SearchModePicker from "./SearchModePicker";
+import { shouldSendOnEnter } from "./enter-to-send";
 
 const AUTO_EFFORT = "__auto";
 
@@ -190,7 +191,7 @@ export default function Composer({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (shouldSendOnEnter(event)) {
       event.preventDefault();
       if (canSend && !inFlight) {
         collapseAndSend();
