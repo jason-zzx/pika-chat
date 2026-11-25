@@ -82,6 +82,8 @@ class MainActivity : BridgeActivity() {
         registerPlugin(PikaHostPlugin::class.java)
         super.onCreate(savedInstanceState)
         hostPlugin = bridge.getPlugin("PikaHost").instance as PikaHostPlugin
+        // Left over when the app was swiped away or killed with a temporary chat open.
+        hostPlugin.flushTemporaryTopic()
 
         // Instantiate once before STARTED so ActivityResultContracts launchers register legally,
         // then reuse across remoteWebView instances for <input type="file"> / camera pickers.
@@ -277,6 +279,9 @@ class MainActivity : BridgeActivity() {
 
     fun destroyRemoteWebView() {
         val wv = remoteWebView ?: return
+        // Every caller drops the page for good (server switch or removal, finishing, recreate), which leaves its
+        // temporary chat. Backgrounding never gets here.
+        hostPlugin.flushTemporaryTopic()
         remoteWebView = null
         remoteBridge = null
         wv.stopLoading()
@@ -288,6 +293,8 @@ class MainActivity : BridgeActivity() {
     }
 
     fun downloadAttachment(url: Uri) = hostPlugin.downloadAttachment(url)
+
+    fun saveTemporaryTopic(origin: String, topicId: String?) = hostPlugin.saveTemporaryTopic(origin, topicId)
 
     fun showShell(query: String, dropRemote: Boolean = false) {
         dismissServerMenuDialog()

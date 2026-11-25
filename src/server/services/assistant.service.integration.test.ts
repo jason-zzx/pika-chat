@@ -472,4 +472,25 @@ describe("assistant.service", () => {
     const tree = await listAssistantTree(userActor, DEFAULT_NAME);
     expect(tree.assistants.find((row) => row.id === assistant.id)?.topicCount).toBe(2);
   });
+
+  it("excludes temporary topics from topicCount", async () => {
+    const { userActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+      DEFAULT_TITLE,
+    );
+    await createTopicForChat(
+      { assistantId: assistant.id, temporary: true },
+      userActor,
+      DEFAULT_TITLE,
+    );
+
+    const tree = await listAssistantTree(userActor, DEFAULT_NAME);
+    expect(tree.assistants.find((row) => row.id === assistant.id)?.topicCount).toBe(1);
+  });
 });

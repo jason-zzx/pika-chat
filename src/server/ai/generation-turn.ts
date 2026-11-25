@@ -119,6 +119,7 @@ export function sendRequestHash(request: ChatRequest): string {
     kind: "send",
     assistantId: request.assistantId,
     topicId: request.topicId ?? null,
+    temporary: request.topicId ? false : (request.temporary ?? false),
     providerConfigId: request.providerConfigId,
     modelId: request.modelId,
     reasoningEffort: request.reasoningEffort ?? null,
@@ -230,7 +231,7 @@ export async function prepareSendTurn(
 
   const topicId = request.topicId ?? null;
   let historyMessageIds: string[] = [];
-  let titleCandidate = true;
+  let titleCandidate = request.temporary !== true;
   let summary: PreparedTurn["summary"] = null;
 
   if (topicId !== null) {
@@ -238,7 +239,8 @@ export async function prepareSendTurn(
     if (!context || context.assistant.id !== request.assistantId) {
       throw new AppError("NOT_FOUND", 404, "topic.notFound");
     }
-    titleCandidate = isDefaultTopicTitle(context.topic.title);
+    titleCandidate =
+      !context.topic.temporary && isDefaultTopicTitle(context.topic.title);
     historyMessageIds = await listHistoryIds(topicId, actor);
 
     if (!isImage) {
@@ -287,6 +289,7 @@ export async function prepareSendTurn(
     historyMessageIds,
     userMessage: { message: userMessage },
     defaultTopicTitle: input.defaultTopicTitle,
+    temporary: request.temporary,
     titleCandidate,
     actorRole: input.actorRole,
     actorIsGuest: actor.isGuest,
@@ -442,8 +445,10 @@ export async function prepareRegenerateTurn(
     assistantGroupCreatedAt: targetGroupId === null ? detachedAnchor : undefined,
     defaultTopicTitle: input.defaultTopicTitle,
     // The turn may name the topic only while it still carries the sentinel
-    // title; a user rename wins (chat task §7).
-    titleCandidate: isDefaultTopicTitle(topicContext.topic.title),
+    // title; a user rename wins (chat task §7). A temporary chat is never named.
+    titleCandidate:
+      !topicContext.topic.temporary &&
+      isDefaultTopicTitle(topicContext.topic.title),
     actorRole: input.actorRole,
     actorIsGuest: actor.isGuest,
     locale: input.locale,

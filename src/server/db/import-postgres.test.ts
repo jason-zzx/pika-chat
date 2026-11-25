@@ -32,7 +32,8 @@ function freshSqlite(): Database.Database {
 }
 
 // What `information_schema.columns` reports for a PostgreSQL database on the
-// final schema: the same column set as the migrated SQLite tables.
+// final (v0.4.2) schema: the migrated SQLite tables minus the columns added
+// after the SQLite switch.
 function finalSchemaColumns(sqlite: Database.Database): Record<string, string[]> {
   return Object.fromEntries(
     PG_IMPORT_TABLES.map((table) => [
@@ -40,7 +41,8 @@ function finalSchemaColumns(sqlite: Database.Database): Record<string, string[]>
       sqlite
         .prepare<[], string>(`select name from pragma_table_info('${table}')`)
         .pluck()
-        .all(),
+        .all()
+        .filter((name) => !(table === "topics" && name === "temporary")),
     ]),
   );
 }
@@ -361,8 +363,8 @@ describe("import", () => {
       sqlite.prepare("select day from demo_usage_counters where subject = 'guest-0'").get(),
     ).toEqual({ day: "2026-11-13" });
     expect(
-      sqlite.prepare("select created_at, is_favorite from topics").get(),
-    ).toEqual({ created_at: createdAt.getTime(), is_favorite: 1 });
+      sqlite.prepare("select created_at, is_favorite, temporary from topics").get(),
+    ).toEqual({ created_at: createdAt.getTime(), is_favorite: 1, temporary: 0 });
     expect(
       sqlite.prepare("select translations ->> '$.zh-CN.text' as text from chat_messages").get(),
     ).toEqual({ text: "见附件" });

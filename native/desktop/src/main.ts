@@ -37,6 +37,7 @@ const LOCAL_SERVER_ID = "local";
 const APP_ID = "io.github.jason-zzx.pika-chat";
 const TITLEBAR_HEIGHT = 34;
 const MAX_LOG_BYTES = 1024 * 1024;
+const TEMPORARY_DELETE_TIMEOUT_MS = 3_000;
 const isMac = process.platform === "darwin";
 const downloadsDir = join(tmpdir(), "pika-chat");
 
@@ -202,6 +203,7 @@ function start() {
     partition: string;
     webNavReady: boolean;
     theme: DesktopThemeColors | null;
+    temporaryTopicId: string | null;
   };
 
   let remote: RemoteState | null = null;
@@ -337,9 +339,25 @@ function start() {
   };
   const toggleWindow = () => (win.isVisible() && win.isFocused() ? win.hide() : showWindow());
 
-  const closeRemote = () => {
+  // Deletes the temporary chat the current server view reported, with its session's cookies. Any
+  // outcome clears the id: a 404 means the page already deleted it, and the server's sweep is the backstop.
+  const deleteTemporaryTopic = async () => {
+    const id = remote?.temporaryTopicId;
+    if (!remote || !id) return;
+    remote.temporaryTopicId = null;
+    await session
+      .fromPartition(remote.partition)
+      .fetch(`${remote.server.url}/api/topics/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        signal: AbortSignal.timeout(TEMPORARY_DELETE_TIMEOUT_MS),
+      })
+      .catch((error: unknown) => logDesktop("warn", `temporary topic delete failed: ${String(error)}`));
+  };
+
+  const closeRemote = (): Promise<void> => {
     closeServerMenu();
-    if (!remote) return;
+    if (!remote) return Promise.resolve();
+    const pendingDelete = deleteTemporaryTopic();
     const view = remote.view;
     remote = null;
     if (win.contentView.children.includes(view)) {
@@ -348,6 +366,7 @@ function start() {
     if (!view.webContents.isDestroyed()) {
       view.webContents.close();
     }
+    return pendingDelete;
   };
 
   // query: "" auto-connects to the last server, "?list" shows the list, "?add" the add form,
@@ -591,7 +610,7 @@ function start() {
     secureSession(view.webContents.session);
     guardRemote(view.webContents, server);
     attachNavInput(view.webContents);
-    remote = { view, server, partition, webNavReady: false, theme: null };
+    remote = { view, server, partition, webNavReady: false, theme: null, temporaryTopicId: null };
     shellAttached = false;
     void view.webContents.loadURL(url);
     attach(view);
@@ -643,7 +662,9 @@ function start() {
     }
   };
 
-  const checkForUpdates = createUpdater(t, localServer.shutdown);
+  // Local mode needs its server to answer the temporary chat's delete, so the delete comes first.
+  const beforeQuit = () => deleteTemporaryTopic().then(localServer.shutdown);
+  const checkForUpdates = createUpdater(t, beforeQuit);
   const manualUpdateCheck = () => {
     showWindow();
     return checkForUpdates();
@@ -712,9 +733,11 @@ function start() {
   handleShell("shell:removeServer", z.string(), async (id) => {
     config.servers = config.servers.filter((server) => server.id !== id);
     if (config.lastServerId === id) config.lastServerId = null;
-    if (remote?.server.id === id) closeRemote();
+    const pendingDelete = remote?.server.id === id ? closeRemote() : undefined;
     saveConfig(config);
     rebuildTray();
+    // Wait for the temporary-topic DELETE before clearing the partition's cookies.
+    await pendingDelete;
     await session.fromPartition(`persist:server-${id}`).clearStorageData();
   });
   handleShell("shell:checkServer", z.string(), async (raw) => {
@@ -866,6 +889,12 @@ function start() {
     remote.webNavReady = true;
   });
 
+  ipcMain.on("native:temporaryTopic", (event, raw: unknown) => {
+    const topicId = z.string().min(1).max(64).nullable().safeParse(raw);
+    if (!remote || !fromRemote(event) || !topicId.success) return;
+    remote.temporaryTopicId = topicId.data;
+  });
+
   ipcMain.on("native:showServerMenu", (event, raw: unknown) => {
     const anchor = anchorInput.safeParse(raw);
     if (shellAttached || !remote || !fromRemote(event) || !anchor.success) return;
@@ -992,7 +1021,7 @@ function start() {
     if (quitting) return;
     quitting = true;
     event.preventDefault();
-    void localServer.shutdown().finally(() => app.quit());
+    void beforeQuit().finally(() => app.quit());
   });
   win.on("close", (event) => {
     config.windowState = { bounds: win.getNormalBounds(), isMaximized: win.isMaximized() };

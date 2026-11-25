@@ -349,4 +349,47 @@ describe("search.service", () => {
       selectedId,
     ]);
   });
+
+  it("excludes temporary topics from both title and message search", async () => {
+    const { userActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    const normal = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+      DEFAULT_TITLE,
+    );
+    await db
+      .update(topics)
+      .set({ title: "Visible lantern" })
+      .where(eq(topics.id, normal.id));
+    await insertMessage({
+      topicId: normal.id,
+      role: "user",
+      parts: textParts("Visible lantern note"),
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    });
+
+    const temp = await createTopicForChat(
+      { assistantId: assistant.id, temporary: true },
+      userActor,
+      DEFAULT_TITLE,
+    );
+    await db
+      .update(topics)
+      .set({ title: "Hidden lantern" })
+      .where(eq(topics.id, temp.id));
+    await insertMessage({
+      topicId: temp.id,
+      role: "user",
+      parts: textParts("Hidden lantern secret"),
+      createdAt: new Date("2026-01-02T00:00:00Z"),
+    });
+
+    const result = await searchForActor(userActor, "lantern");
+    expect(result.topics.map((hit) => hit.id)).toEqual([normal.id]);
+    expect(result.messages.map((hit) => hit.topicId)).toEqual([normal.id]);
+  });
 });

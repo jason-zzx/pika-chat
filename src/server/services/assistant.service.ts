@@ -47,7 +47,10 @@ async function selectTree(actor: Actor, assistantId?: string): Promise<Assistant
       topicCount: sql<number>`count(${topics.id})`,
     })
     .from(assistants)
-    .leftJoin(topics, eq(topics.assistantId, assistants.id))
+    .leftJoin(
+      topics,
+      and(eq(topics.assistantId, assistants.id), eq(topics.temporary, false)),
+    )
     .where(
       assistantId
         ? and(

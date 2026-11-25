@@ -44,6 +44,7 @@ export async function searchForActor(
     .where(
       and(
         eq(assistants.ownerId, actor.userId),
+        eq(topics.temporary, false),
         sql`${topics.title} like ${pattern} escape '\\'`,
       ),
     )
@@ -67,6 +68,7 @@ export async function searchForActor(
     .where(
       and(
         eq(assistants.ownerId, actor.userId),
+        eq(topics.temporary, false),
         // Unselected versions are hidden alternative answers; jumping to one
         // would land on different content than the snippet promised.
         eq(chatMessages.isSelected, true),

@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import TemporaryTopicGuard from "@/components/chat/TemporaryTopicGuard";
 import AppShell from "@/components/layout/AppShell";
 import { resolveActor } from "@/server/auth/actor";
 import { isLocalMode } from "@/server/env";
@@ -29,6 +30,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       local={isLocalMode()}
       themePreference={themePreference}
     >
+      <TemporaryTopicGuard />
       {children}
     </AppShell>
   );

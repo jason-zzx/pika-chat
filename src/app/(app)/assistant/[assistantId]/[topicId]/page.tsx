@@ -20,7 +20,11 @@ export async function generateMetadata({
   }
   const { assistantId, topicId } = await params;
   const context = await findTopicContextForActor(topicId, actor);
-  if (!context || context.assistant.id !== assistantId) {
+  if (
+    !context ||
+    context.assistant.id !== assistantId ||
+    context.topic.temporary
+  ) {
     return {};
   }
   return { title: context.topic.title };
@@ -33,9 +37,13 @@ export default async function AssistantTopicPage({ params }: TopicPageProps) {
   }
   const { assistantId, topicId } = await params;
   const context = await findTopicContextForActor(topicId, actor);
-  // A deleted, unknown, or re-parented topic makes this a stale URL rather
-  // than a missing page: land on this assistant's new-topic draft.
-  if (!context || context.assistant.id !== assistantId) {
+  // A deleted, unknown, temporary, or re-parented topic makes this a stale URL
+  // rather than a missing page: land on this assistant's new-topic draft.
+  if (
+    !context ||
+    context.assistant.id !== assistantId ||
+    context.topic.temporary
+  ) {
     redirect(assistantDraftHref(assistantId));
   }
 

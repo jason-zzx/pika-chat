@@ -55,6 +55,8 @@ declare global {
     notify(input: { title: string; body: string; path: string }): void;
     showServerMenu(anchor: { x: number; y: number }): void;
     openServers(screen: "list" | "add"): void;
+    /** Topic id of the temporary chat open in this page, or null. Optional: older shells lack it. */
+    setTemporaryTopic?(topicId: string | null): void;
     navigation?: PikaNativeNavigation;
     desktop?: PikaNativeDesktop;
   }

@@ -9,6 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useTemporaryTopicStore } from "@/stores/temporary-topic-store";
 
 type CloseOnNavigateLinkProps = {
   href: string;
@@ -27,7 +28,10 @@ export default function CloseOnNavigateLink({
     <Link
       href={href}
       className="flex min-w-0 items-center gap-2 text-base font-semibold tracking-tight"
-      onClick={() => setOpenMobile(false)}
+      onClick={() => {
+        setOpenMobile(false);
+        useTemporaryTopicStore.getState().requestLeaveTemporaryTopic();
+      }}
     >
       {children}
     </Link>

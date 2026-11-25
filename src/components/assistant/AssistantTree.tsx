@@ -77,6 +77,7 @@ import type { Topic } from "@/lib/schemas/topic";
 import { formatTopicAge } from "@/lib/topic-age";
 import { cn } from "@/lib/utils";
 import { composerDraftKey, useComposerStore } from "@/stores/composer-store";
+import { useTemporaryTopicStore } from "@/stores/temporary-topic-store";
 
 type AssistantTreeProps = {
   showUsers: boolean;
@@ -557,7 +558,10 @@ function AssistantPane({
                 }
                 tooltip={t("tree.newTopic")}
                 aria-label={t("tree.newTopic")}
-                onClick={() => setOpenMobile(false)}
+                onClick={() => {
+                  setOpenMobile(false);
+                  useTemporaryTopicStore.getState().requestLeaveTemporaryTopic();
+                }}
               >
                 <PlusIcon />
                 <span className="group-data-[collapsible=icon]:hidden">

@@ -5,6 +5,7 @@ import { APICallError, DefaultChatTransport } from "ai";
 
 import { newId } from "@/lib/id";
 import { generationStreamUrl } from "@/lib/api/generation";
+import { deleteTopicBestEffort } from "@/lib/api/topic";
 import type { ChatUIMessage } from "@/lib/schemas/chat";
 import {
   markTopicStreaming,
@@ -74,6 +75,8 @@ export type PoolEntry = {
    * empty and must be reseeded, while a surviving entry must not be reseeded
    * over its live or newer messages. */
   seededFor: string | null;
+  temporary: boolean;
+  discarded: boolean;
   view: ChatPoolViewHandlers | null;
 };
 
@@ -162,14 +165,28 @@ function createEntry(chatId: string): PoolEntry {
     resumeInFlight: false,
     regenActive: false,
     seededFor: null,
+    temporary: false,
+    discarded: false,
     view: null,
   };
   entry.chat = new Chat<ChatUIMessage>({
     id: chatId,
     transport: createTransport(entry),
     onData: (part) => {
+      if (entry.discarded) {
+        return;
+      }
       if (part.type === "data-topic") {
         const { topicId, streamId } = part.data;
+        if (entry.temporary && entry.view === null) {
+          // The user left before the server announced the temporary topic id:
+          // discard and delete immediately instead of streaming or notifying.
+          entry.topicId = topicId;
+          entry.discarded = true;
+          discardChat(topicId);
+          void deleteTopicBestEffort(topicId);
+          return;
+        }
         entry.topicId = topicId;
         // `streamId` is the durable generation id (the server's task handle):
         // it drives the Stop button and the reconnect URL.
@@ -181,11 +198,16 @@ function createEntry(chatId: string): PoolEntry {
           entries.set(topicId, entry);
         }
         markTopicStreaming(topicId);
-        bridge?.onTopicAnnounced(topicId);
+        if (!entry.temporary) {
+          bridge?.onTopicAnnounced(topicId);
+        }
       }
       entry.view?.onData(part);
     },
     onFinish: (event) => {
+      if (entry.discarded) {
+        return;
+      }
       // The SDK calls onError AND onFinish for a response-body disconnect.
       // Keeping the target only in onError loses it again in this callback.
       if (!event.isDisconnect) {
@@ -198,7 +220,12 @@ function createEntry(chatId: string): PoolEntry {
       // by now a refetch returns the persisted row (including its error
       // detail for a failed turn).
       bridge?.invalidateAfterFinish(entry.topicId);
-      if (entry.topicId && !event.isAbort && !event.isDisconnect) {
+      if (
+        entry.topicId &&
+        !entry.temporary &&
+        !event.isAbort &&
+        !event.isDisconnect
+      ) {
         bridge?.notifyReplyFinished(entry.topicId, event.isError);
       }
       try {
@@ -208,6 +235,9 @@ function createEntry(chatId: string): PoolEntry {
       }
     },
     onError: () => {
+      if (entry.discarded) {
+        return;
+      }
       // A pre-stream failure never reaches onFinish. The generation target is
       // KEPT: a network drop says nothing about the server-side turn, which
       // may still be running — discovery will re-adopt it through the same
@@ -284,8 +314,9 @@ export function attachChatView(
 }
 
 /** Marks an existing topic streaming immediately when a send starts. */
-export function noteSendStarted(chatId: string): void {
+export function noteSendStarted(chatId: string, temporary = false): void {
   const entry = acquireChat(chatId);
+  entry.temporary = temporary;
   // Existing-topic sends know their topic immediately; drafts mark on
   // `data-topic` when the topic id arrives.
   if (entry.topicId) {
@@ -332,7 +363,11 @@ export function noteRegenFinished(
   if (entry.topicId) {
     unmarkTopicStreaming(entry.topicId);
   }
-  if (entry.topicId && (terminal === "finish" || terminal === "error")) {
+  if (
+    entry.topicId &&
+    !entry.temporary &&
+    (terminal === "finish" || terminal === "error")
+  ) {
     bridge?.notifyReplyFinished(entry.topicId, terminal === "error");
   }
   maybeEvict(entry);
@@ -418,6 +453,32 @@ export function reconnectTargetFor(chatId: string): string | null {
   const entry = entries.get(chatId) ??
     [...entries.values()].find(candidate => candidate.chatId === chatId);
   return entry?.generationId ?? null;
+}
+
+/**
+ * Detaches an in-flight temporary draft before `data-topic` arrives so a fresh
+ * draft gets a clean Chat and the abandoned send deletes on arrival.
+ */
+export function abandonTemporaryDraft(): void {
+  const entry = entries.get("draft");
+  if (!entry || !entry.temporary) {
+    return;
+  }
+  entry.view = null;
+  entries.delete("draft");
+}
+
+/** Drops a deleted topic's pooled chat and streaming indicator. */
+export function discardChat(topicId: string): void {
+  unmarkTopicStreaming(topicId);
+  for (const [key, entry] of entries) {
+    if (key === topicId || entry.topicId === topicId) {
+      entry.discarded = true;
+      entry.generationId = null;
+      entry.regenActive = false;
+      entries.delete(key);
+    }
+  }
 }
 
 /** Register the app-level bridge; returns the dispose function. */

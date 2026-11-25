@@ -19,13 +19,26 @@ const BATCH_SIZE = 1_000;
 // Every table except the SQLite-only ones: `message_file_refs` is derived (the
 // chat_messages triggers fill it as messages land) and `postgres_import` is
 // the marker. Foreign keys are off during the copy, so the order is free.
-const IMPORT_TABLES = Object.values(schema).flatMap((entry) =>
-  is(entry, SQLiteTable) &&
-  entry !== schema.messageFileRefs &&
-  entry !== schema.postgresImport
-    ? [getTableConfig(entry)]
-    : [],
-);
+// Columns added after the SQLite switch (`topics.temporary`) do not exist in a
+// v0.4.2 PostgreSQL source and stay at their SQLite defaults.
+const IMPORT_TABLES = Object.values(schema).flatMap((entry) => {
+  if (
+    !is(entry, SQLiteTable) ||
+    entry === schema.messageFileRefs ||
+    entry === schema.postgresImport
+  ) {
+    return [];
+  }
+  const { name, columns } = getTableConfig(entry);
+  return [
+    {
+      name,
+      columns: columns.filter(
+        (column) => !(name === "topics" && column.name === "temporary"),
+      ),
+    },
+  ];
+});
 
 export const PG_IMPORT_TABLES = IMPORT_TABLES.map((table) => table.name);
 

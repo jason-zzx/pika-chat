@@ -4,6 +4,7 @@ export const topicSchema = z.object({
   id: z.string(),
   title: z.string(),
   isFavorite: z.boolean(),
+  temporary: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

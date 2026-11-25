@@ -146,6 +146,8 @@ export const chatRequestSchema = z.object({
   // request under the same id is a conflict (chat task §4, G2).
   requestId: z.string().min(1).max(64).optional(),
   topicId: z.string().min(1).optional(),
+  // Creates the new topic as a temporary chat; ignored with `topicId`.
+  temporary: z.boolean().optional(),
   providerConfigId: z.string().min(1),
   modelId: z.string().min(1),
   reasoningEffort: z.string().trim().min(1).optional(),

@@ -26,6 +26,7 @@ vi.mock("@ai-sdk/react", () => ({
 vi.mock("@/lib/api/topic", () => ({
   getTopic: vi.fn(),
   waitForTopicTitle: vi.fn(),
+  deleteTopicBestEffort: vi.fn(async () => undefined),
 }));
 
 const now = new Date();
@@ -43,6 +44,7 @@ function setup(page: { hidden: boolean; focused: boolean }) {
     assistantId: "a1",
     title: "Trip plan",
     isFavorite: false,
+    temporary: false,
     createdAt: now,
     updatedAt: now,
     summaryUpToMessageId: null,

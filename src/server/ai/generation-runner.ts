@@ -34,6 +34,7 @@ import { stripMarkupFromTextParts } from "@/server/ai/search/markup-sanitizer";
 import { isDemoMode } from "@/server/env";
 import { messageVersionMetadata } from "@/server/services/message.service";
 import { purgeInactiveGuests } from "@/server/services/demo-cleanup.service";
+import { purgeIdleTemporaryTopics } from "@/server/services/topic.service";
 import { logger } from "@/server/logger";
 import { AppError } from "@/server/errors";
 import {
@@ -216,6 +217,7 @@ async function sweepQueued(state: RunnerState): Promise<void> {
       if (purged > 0) {
         logger.info({ purged }, "expired generation receipts purged");
       }
+      await purgeIdleTemporaryTopics();
       if (isDemoMode()) {
         await purgeInactiveGuests();
       }

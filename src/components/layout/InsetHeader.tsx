@@ -1,17 +1,21 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 type InsetHeaderProps = {
   title?: string | null;
   subtitle?: string | null;
+  actions?: ReactNode;
   className?: string;
 };
 
 export default function InsetHeader({
   title,
   subtitle,
+  actions,
   className,
 }: InsetHeaderProps) {
   return (
@@ -32,6 +36,11 @@ export default function InsetHeader({
               {subtitle}
             </p>
           ) : null}
+        </div>
+      ) : null}
+      {actions ? (
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {actions}
         </div>
       ) : null}
     </header>

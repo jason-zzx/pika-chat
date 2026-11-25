@@ -108,11 +108,12 @@ class PikaHostPlugin : Plugin() {
 
         val main = activity as MainActivity
         main.runOnUiThread {
-            if (target != null) clearOriginData(target.url)
+            // Drop the page first: deleting its temporary chat needs this origin's session cookie.
             if (connectedServer?.id == id) {
                 connectedServer = null
                 main.destroyRemoteWebView()
             }
+            if (target != null) clearOriginData(target.url)
             call.resolve()
         }
     }
@@ -167,6 +168,35 @@ class PikaHostPlugin : Plugin() {
             .putString(KEY_APPEARANCE_MODE, appearance.mode)
             .putString(KEY_APPEARANCE_PRESET, appearance.preset)
             .apply()
+    }
+
+    // The temporary chat open in the remote page (`pikaNative.setTemporaryTopic`), kept until the shell leaves it.
+    fun saveTemporaryTopic(origin: String, topicId: String?) {
+        prefs().edit()
+            .putString(KEY_TEMPORARY_TOPIC, topicId?.let { JSONObject().put("origin", origin).put("topicId", it).toString() })
+            .apply()
+    }
+
+    // Main thread only: taking the entry synchronously keeps two flushes from sending twice, and the cookie is read
+    // before removeServer expires it. A failed DELETE is left to the server's 24 h sweep; a 404 means the page
+    // already deleted the chat.
+    fun flushTemporaryTopic() {
+        val raw = prefs().getString(KEY_TEMPORARY_TOPIC, null) ?: return
+        prefs().edit().remove(KEY_TEMPORARY_TOPIC).apply()
+        // Written only by saveTemporaryTopic, so the shape is trusted.
+        val pending = JSONObject(raw)
+        val url = "${pending.getString("origin")}/api/topics/${Uri.encode(pending.getString("topicId"))}"
+        val cookie = CookieManager.getInstance().getCookie(url)
+        thread(name = "pika-temporary-topic") {
+            runCatching {
+                val conn = openConnection(url, "DELETE", cookie)
+                try {
+                    conn.responseCode
+                } finally {
+                    conn.disconnect()
+                }
+            }
+        }
     }
 
     @PluginMethod
@@ -390,6 +420,7 @@ class PikaHostPlugin : Plugin() {
         private const val KEY_APPEARANCE_MODE = "appearance_mode"
         private const val KEY_APPEARANCE_PRESET = "appearance_preset"
         private const val KEY_CONNECTED_SINCE = "connected_since"
+        private const val KEY_TEMPORARY_TOPIC = "temporary_topic"
 
         fun originOf(uri: Uri?): String? {
             val scheme = uri?.scheme?.lowercase() ?: return null

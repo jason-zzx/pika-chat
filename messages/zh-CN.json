@@ -367,6 +367,11 @@
       "jump": "跳转到引用原文：{text}",
       "remove": "移除引用"
     },
+    "Temporary": {
+      "title": "临时对话",
+      "toggle": "临时对话",
+      "banner": "临时对话不会保存到历史记录，离开页面后将自动删除。"
+    },
     "newTopic": "新话题"
   },
   "Topic": {

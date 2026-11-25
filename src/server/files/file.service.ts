@@ -715,7 +715,7 @@ export async function deleteFile(id: string, actor: Actor): Promise<void> {
  */
 export async function deleteFilesIfUnreferenced(
   ids: string[],
-  actor: Actor,
+  actor: Pick<Actor, "userId">,
 ): Promise<void> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) {

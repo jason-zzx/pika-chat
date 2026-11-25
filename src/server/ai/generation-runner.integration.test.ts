@@ -17,6 +17,7 @@ import {
   createLiveStreamState,
   type ChatChunk,
 } from "@/server/ai/generation-stream";
+import { prepareRegenerateTurn, prepareSendTurn } from "@/server/ai/generation-turn";
 import { getLiveGeneration } from "@/server/ai/generation-registry";
 import { getDb } from "@/server/db/client";
 import { chatGenerations, chatMessages, files, topics } from "@/server/db/schema";
@@ -24,6 +25,7 @@ import { getFileStorage } from "@/server/files/storage";
 import { uploadFile } from "@/server/files/file.service";
 import { createAssistant, deleteAssistant } from "@/server/services/assistant.service";
 import {
+  admitTurn,
   checkpointGeneration,
   claimGeneration,
   markGenerationStopping,
@@ -512,5 +514,88 @@ describe("generation executor", () => {
     await expect(
       getFileStorage().get(`${actor.userId}/${uploaded.id}.png`),
     ).rejects.toThrow();
+  });
+
+  it("never auto-titles a temporary chat on initial send, follow-up send, or regenerate", async () => {
+    const { actor, assistantId } = await seedChat(provider.baseUrl);
+    provider.deltas = ["Hello"];
+
+    const sendPrep = await prepareSendTurn(
+      {
+        request: {
+          assistantId,
+          temporary: true,
+          providerConfigId: "cfg-local",
+          modelId: "gpt-4o",
+          message: {
+            id: "u-temp-1",
+            role: "user",
+            parts: [{ type: "text", text: "tell me a joke" }],
+          },
+        },
+        defaultTopicTitle: "New topic",
+        actorRole: "user",
+      },
+      actor,
+    );
+    expect(sendPrep.titleCandidate).toBe(false);
+    expect(sendPrep.temporary).toBe(true);
+
+    const { generation: firstGen } = await admitTurn(
+      { requestHash: sendPrep.requestHash },
+      async () => sendPrep,
+      actor,
+    );
+    const topicId = firstGen.topicId;
+    const assistantMessageId = firstGen.assistantMessageId;
+    if (!topicId || !assistantMessageId) {
+      throw new Error("expected admitted generation to create topic and assistant message");
+    }
+    const firstEntry = await ensureGenerationRunning(firstGen.id);
+    await firstEntry?.settled;
+    await waitForPostTurnTasks(topicId);
+
+    const [created] = await db
+      .select({ title: topics.title, temporary: topics.temporary })
+      .from(topics)
+      .where(eq(topics.id, topicId));
+    expect(created).toEqual({ title: "New topic", temporary: true });
+    // Only the answer call ran — no title generation call.
+    expect(provider.calls).toHaveLength(1);
+
+    const followUpPrep = await prepareSendTurn(
+      {
+        request: {
+          assistantId,
+          topicId,
+          providerConfigId: "cfg-local",
+          modelId: "gpt-4o",
+          message: {
+            id: "u-temp-2",
+            role: "user",
+            parts: [{ type: "text", text: "another one" }],
+          },
+        },
+        defaultTopicTitle: "New topic",
+        actorRole: "user",
+      },
+      actor,
+    );
+    expect(followUpPrep.titleCandidate).toBe(false);
+
+    const regenPrep = await prepareRegenerateTurn(
+      {
+        topicId,
+        messageId: assistantMessageId,
+        request: {
+          providerConfigId: "cfg-local",
+          modelId: "gpt-4o",
+        },
+        defaultTopicTitle: "New topic",
+        actorRole: "user",
+      },
+      actor,
+    );
+    expect(regenPrep.titleCandidate).toBe(false);
   });
 });

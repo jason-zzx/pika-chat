@@ -77,6 +77,8 @@ export type PreparedTurn = {
   assistantGroupCreatedAt?: Date;
   /** Default title for a topic created by this send (request locale). */
   defaultTopicTitle: string;
+  /** Send only: create the fresh topic as a temporary chat. */
+  temporary?: boolean;
   /** Whether the turn may generate a title (topic still sentinel-titled). */
   titleCandidate: boolean;
   /** Actor role captured at admission so the background turn resolves the
@@ -397,6 +399,7 @@ async function acceptTurn(
                   id,
                   assistantId: prepared.assistantId,
                   title: prepared.defaultTopicTitle,
+                  temporary: prepared.temporary,
                 })
                 .run(),
           }).id;

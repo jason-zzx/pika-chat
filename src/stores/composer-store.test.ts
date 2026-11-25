@@ -8,13 +8,23 @@ describe("composerDraftKey", () => {
     expect(composerDraftKey("topic-a", "assistant-1")).toBe("topic:topic-a");
     expect(composerDraftKey(undefined, "assistant-1")).toBe("draft:assistant-1");
     expect(composerDraftKey(undefined, undefined)).toBe("draft:none");
+    expect(composerDraftKey("topic-a", "assistant-1", true)).toBe(
+      "temp-topic:topic-a",
+    );
+    expect(composerDraftKey(undefined, "assistant-1", true)).toBe(
+      "temp-draft:assistant-1",
+    );
   });
 });
 
 describe("useComposerStore drafts", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     useComposerStore.setState({
       drafts: {},
+      attachments: {},
+      quotes: {},
+      imageParams: {},
       recentAssistantId: null,
       pickedModel: null,
       reasoningEffort: null,
@@ -41,6 +51,42 @@ describe("useComposerStore drafts", () => {
     expect(useComposerStore.getState().drafts[topicA]).toBe("");
     expect(useComposerStore.getState().drafts[topicB]).toBe("hello B");
     expect(window.localStorage.getItem(`pika.draft:${topicA}`)).toBeNull();
+  });
+
+  it("does not persist temporary draft keys and clears all temporary state together", () => {
+    useComposerStore.getState().setDraft("topic:t-1", "saved");
+    useComposerStore.getState().setDraft("temp-draft:a1", "secret A");
+    useComposerStore.getState().setDraft("temp-draft:a2", "secret B");
+    useComposerStore.getState().setQuote("temp-draft:a1", {
+      messageKey: "m1",
+      text: "quoted",
+      offset: 0,
+    });
+    useComposerStore.getState().setQuote("topic:t-1", {
+      messageKey: "m2",
+      text: "normal quote",
+      offset: 0,
+    });
+    useComposerStore.getState().setImageParams("temp-draft:a1", { size: "1024x1024" });
+    useComposerStore.getState().setImageParams("topic:t-1", { quality: "high" });
+
+    expect(window.localStorage.getItem("pika.draft:topic:t-1")).not.toBeNull();
+    expect(window.localStorage.getItem("pika.draft:temp-draft:a1")).toBeNull();
+    expect(window.localStorage.getItem("pika.draft:temp-draft:a2")).toBeNull();
+
+    useComposerStore.getState().clearTemporaryDrafts();
+
+    expect(useComposerStore.getState().drafts["temp-draft:a1"]).toBeUndefined();
+    expect(useComposerStore.getState().drafts["temp-draft:a2"]).toBeUndefined();
+    expect(useComposerStore.getState().quotes["temp-draft:a1"]).toBeUndefined();
+    expect(useComposerStore.getState().imageParams["temp-draft:a1"]).toBeUndefined();
+    expect(useComposerStore.getState().drafts["topic:t-1"]).toBe("saved");
+    expect(useComposerStore.getState().quotes["topic:t-1"]?.text).toBe(
+      "normal quote",
+    );
+    expect(useComposerStore.getState().imageParams["topic:t-1"]).toEqual({
+      quality: "high",
+    });
   });
 
   it("stores reasoning effort separately from the model pick", () => {

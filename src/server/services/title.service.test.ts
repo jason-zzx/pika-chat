@@ -135,6 +135,32 @@ describe("titleTopicFromFirstMessage", () => {
     expect(generateText).not.toHaveBeenCalled();
   });
 
+  it("skips title generation for a temporary topic", async () => {
+    const tempTopic = {
+      id: "topic-temp",
+      title: "New topic",
+      isFavorite: false,
+      temporary: true,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+    findTopicForActor.mockResolvedValue(tempTopic);
+
+    const result = await titleTopicFromFirstMessage(
+      {
+        topicId: tempTopic.id,
+        providerConfigId: "cfg-1",
+        modelId: "local-llama",
+      },
+      actor,
+    );
+
+    expect(result).toEqual(tempTopic);
+    expect(generateText).not.toHaveBeenCalled();
+    expect(createChatModelHandle).not.toHaveBeenCalled();
+    expect(listTopicMessages).not.toHaveBeenCalled();
+  });
+
   const untitled = {
     id: "topic-2",
     title: "New topic",

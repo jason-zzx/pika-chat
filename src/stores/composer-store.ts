@@ -64,6 +64,7 @@ export type StagedAttachment = {
 type ComposerState = {
   drafts: Record<string, string>;
   setDraft: (key: string, value: string) => void;
+  clearTemporaryDrafts: () => void;
   attachments: Record<string, StagedAttachment[]>;
   updateAttachments: (
     key: string,
@@ -89,15 +90,24 @@ type PersistedComposerState = {
   searchMode: SearchMode;
 };
 
+const TEMP_DRAFT_PREFIX = "temp-";
+
 export function composerDraftKey(
   topicId: string | undefined,
   assistantId: string | undefined | null,
+  temporary = false,
 ): string {
+  const prefix = temporary ? TEMP_DRAFT_PREFIX : "";
   if (topicId) {
-    return `topic:${topicId}`;
+    return `${prefix}topic:${topicId}`;
   }
-  return `draft:${assistantId ?? "none"}`;
+  return `${prefix}draft:${assistantId ?? "none"}`;
 }
+
+const omitTempKeys = <T,>(record: Record<string, T>): Record<string, T> =>
+  Object.fromEntries(
+    Object.entries(record).filter(([key]) => !key.startsWith(TEMP_DRAFT_PREFIX)),
+  );
 
 /**
  * Draft text (only the text) outlives the document: one localStorage item per
@@ -125,6 +135,9 @@ export const useComposerStore = create<ComposerState>()(
         set((state) => ({
           drafts: { ...state.drafts, [key]: value },
         }));
+        if (key.startsWith(TEMP_DRAFT_PREFIX)) {
+          return;
+        }
         const storageKey = DRAFT_STORAGE_PREFIX + key;
         if (!value.trim()) {
           window.localStorage.removeItem(storageKey);
@@ -140,6 +153,13 @@ export const useComposerStore = create<ComposerState>()(
           // for this document, it just will not survive a reload.
         }
       },
+      clearTemporaryDrafts: () =>
+        set((state) => ({
+          drafts: omitTempKeys(state.drafts),
+          attachments: omitTempKeys(state.attachments),
+          quotes: omitTempKeys(state.quotes),
+          imageParams: omitTempKeys(state.imageParams),
+        })),
       attachments: {},
       updateAttachments: (key, updater) =>
         set((state) => ({

@@ -22,6 +22,7 @@ import {
   composerDraftKey,
   useComposerStore,
 } from "@/stores/composer-store";
+import { useTemporaryTopicStore } from "@/stores/temporary-topic-store";
 import {
   renderWithIntl,
   wrapWithIntl,
@@ -57,6 +58,8 @@ vi.mock("./markdown-plugins", () => ({
 const composerProps = vi.hoisted(() => ({
   latest: undefined as
     | {
+        draft?: string;
+        onDraftChange?: (value: string) => void;
         showAssistantPicker?: boolean;
         canSend?: boolean;
         onSend?: () => void;
@@ -70,6 +73,8 @@ const composerProps = vi.hoisted(() => ({
 // Keep the test focused on the history/reseed plumbing.
 vi.mock("./Composer", () => ({
   default: (props: {
+    draft?: string;
+    onDraftChange?: (value: string) => void;
     showAssistantPicker?: boolean;
     onStop?: () => void;
     onCompress?: () => void;
@@ -79,7 +84,20 @@ vi.mock("./Composer", () => ({
     return null;
   },
 }));
-vi.mock("@/components/layout/InsetHeader", () => ({ default: () => null }));
+vi.mock("@/components/layout/InsetHeader", () => ({
+  default: ({
+    title,
+    actions,
+  }: {
+    title?: string | null;
+    actions?: React.ReactNode;
+  }) => (
+    <header>
+      {title ? <h1>{title}</h1> : null}
+      {actions}
+    </header>
+  ),
+}));
 
 vi.mock("@/components/assistant/use-assistants", () => ({
   assistantKeys: { tree: () => ["assistant", "tree"] as const },
@@ -1960,5 +1978,176 @@ describe("ChatView server-owned generation (B3/B4/B5 client)", () => {
     await act(async () => {
       closeRegen?.();
     });
+  });
+});
+
+describe("ChatView temporary chat", () => {
+  const testModel = {
+    configId: "c1",
+    configName: "Test provider",
+    modelId: "m1",
+    provenance: "own" as const,
+    ownerName: null,
+    displayName: "GPT-5",
+    ...defaultModelMetadata(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    nav.pathname = "/assistant/a1";
+    availableModelsMock.data = [testModel];
+    useTemporaryTopicStore.setState({
+      temporaryTopicId: null,
+      leaveRequestCount: 0,
+    });
+    useComposerStore.setState({
+      pickedModel: { configId: "c1", modelId: "m1" },
+      drafts: {},
+      recentAssistantId: null,
+    });
+    vi.mocked(listTopicMessages).mockResolvedValue({ messages: [] });
+  });
+
+  afterEach(() => {
+    availableModelsMock.data = [];
+    useTemporaryTopicStore.setState({
+      temporaryTopicId: null,
+      leaveRequestCount: 0,
+    });
+    useComposerStore.setState({
+      pickedModel: null,
+      drafts: {},
+      recentAssistantId: null,
+    });
+  });
+
+  it("toggles temporary mode on a draft, shows the banner/header, and clears unpersisted drafts on unmount", () => {
+    const view = renderChatView({ assistantId: "a1" });
+
+    const toggle = screen.getByRole("button", { name: "Temporary" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("heading", { name: "New topic" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("heading", { name: "Temporary chat" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Temporary chat — not saved to history and deleted when you leave.",
+    );
+
+    act(() => {
+      composerProps.latest?.onDraftChange?.("secret draft");
+    });
+    expect(composerProps.latest?.draft).toBe("secret draft");
+    expect(
+      window.localStorage.getItem("pika.draft:draft:a1"),
+    ).toBeNull();
+    expect(
+      window.localStorage.getItem("pika.draft:temp-draft:a1"),
+    ).toBeNull();
+
+    view.unmount();
+    expect(useComposerStore.getState().drafts["temp-draft:a1"]).toBeUndefined();
+  });
+
+  it("sends temporary: true, keeps the draft URL across turns, and exits back to a clean draft via the header toggle", () => {
+    const replaceStateSpy = vi.spyOn(window.history, "replaceState");
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderWithIntl(
+      <QueryClientProvider client={client}>
+        <ChatView
+          assistantId="a1"
+          assistantDefaultProviderConfigId="c1"
+          assistantDefaultModelId="m1"
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Temporary" }));
+    act(() => {
+      composerProps.latest?.onDraftChange?.("hello temp");
+    });
+    act(() => {
+      composerProps.latest?.onSend?.();
+    });
+
+    expect(captured.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parts: [{ type: "text", text: "hello temp" }],
+      }),
+      expect.objectContaining({
+        body: expect.objectContaining({
+          assistantId: "a1",
+          temporary: true,
+        }),
+      }),
+    );
+
+    act(() => {
+      captured.onData?.({
+        type: "data-topic",
+        data: { topicId: "t-temp", streamId: "s-temp" },
+      });
+    });
+
+    expect(replaceStateSpy).not.toHaveBeenCalled();
+    expect(useTemporaryTopicStore.getState().temporaryTopicId).toBe("t-temp");
+    const toggle = screen.getByRole("button", { name: "Temporary" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("heading", { name: "Temporary chat" }),
+    ).toBeInTheDocument();
+
+    // Follow-up drafts stay unpersisted and follow-up turns keep the draft URL.
+    act(() => {
+      composerProps.latest?.onDraftChange?.("follow up temp");
+    });
+    expect(window.localStorage.getItem("pika.draft:topic:t-temp")).toBeNull();
+    expect(
+      window.localStorage.getItem("pika.draft:temp-topic:t-temp"),
+    ).toBeNull();
+    act(() => {
+      composerProps.latest?.onSend?.();
+    });
+    act(() => {
+      captured.onData?.({
+        type: "data-topic",
+        data: { topicId: "t-temp", streamId: "s-temp-2" },
+      });
+    });
+    expect(replaceStateSpy).not.toHaveBeenCalled();
+
+    // Clicking the active toggle exits the temporary chat and resets to a normal draft.
+    fireEvent.click(toggle);
+    expect(useTemporaryTopicStore.getState().leaveRequestCount).toBe(1);
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("heading", { name: "New topic" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(
+      useComposerStore.getState().drafts["temp-topic:t-temp"],
+    ).toBeUndefined();
+    replaceStateSpy.mockRestore();
+  });
+
+  it("restores the default document title when toggling temporary off on the home draft", () => {
+    nav.pathname = "/";
+    renderChatView({});
+
+    expect(document.title).toBe("Pika Chat");
+
+    const toggle = screen.getByRole("button", { name: "Temporary" });
+    fireEvent.click(toggle);
+    expect(document.title).toBe("Temporary chat · Pika Chat");
+
+    fireEvent.click(toggle);
+    expect(document.title).toBe("Pika Chat");
   });
 });

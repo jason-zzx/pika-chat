@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql, type SQL } from "drizzle-orm";
 
 import {
   type RenameTopicInput,
@@ -33,7 +33,7 @@ function ownedAssistantIds(actor: Actor) {
 /** `defaultTitle` is the request-locale `Chat.newTopic` sentinel; the route
  * boundary resolves it so this service stays transport-agnostic. */
 export async function createTopicForChat(
-  input: { assistantId: string },
+  input: { assistantId: string; temporary?: boolean },
   actor: Actor,
   defaultTitle: string,
 ): Promise<Topic> {
@@ -48,6 +48,7 @@ export async function createTopicForChat(
           id,
           assistantId: assistant.id,
           title: defaultTitle,
+          ...(input.temporary ? { temporary: true } : {}),
         })
         .returning(topicColumns)
         .get(),
@@ -60,6 +61,7 @@ export async function createTopicForChat(
 }
 
 const TOPIC_PAGE_SIZE = 20;
+export const TEMPORARY_TOPIC_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** `cursor` is `[updatedAtMs, id]` of the last row of the previous page.
  * SQLite stores timestamps in milliseconds, so epoch ms is exact; ties break
@@ -77,6 +79,7 @@ export async function listTopicPage(
       and(
         eq(topics.assistantId, assistantId),
         eq(topics.isFavorite, false),
+        eq(topics.temporary, false),
         cursor
           ? sql`(${topics.updatedAt}, ${topics.id}) < (${cursor[0]}, ${cursor[1]})`
           : undefined,
@@ -100,7 +103,13 @@ export async function listFavoriteTopics(
   return getDb()
     .select(topicColumns)
     .from(topics)
-    .where(and(eq(topics.assistantId, assistantId), eq(topics.isFavorite, true)))
+    .where(
+      and(
+        eq(topics.assistantId, assistantId),
+        eq(topics.isFavorite, true),
+        eq(topics.temporary, false),
+      ),
+    )
     .orderBy(desc(topics.updatedAt), desc(topics.id));
 }
 
@@ -113,7 +122,13 @@ export async function renameTopic(
   const updated = await db
     .update(topics)
     .set({ title: input.title, updatedAt: new Date() })
-    .where(and(eq(topics.id, id), inArray(topics.assistantId, ownedAssistantIds(actor))))
+    .where(
+      and(
+        eq(topics.id, id),
+        eq(topics.temporary, false),
+        inArray(topics.assistantId, ownedAssistantIds(actor)),
+      ),
+    )
     .returning(topicColumns);
   const row = updated[0];
   if (!row) {
@@ -135,7 +150,13 @@ export async function setTopicFavorite(
   const updated = await db
     .update(topics)
     .set({ isFavorite: input.favorite })
-    .where(and(eq(topics.id, id), inArray(topics.assistantId, ownedAssistantIds(actor))))
+    .where(
+      and(
+        eq(topics.id, id),
+        eq(topics.temporary, false),
+        inArray(topics.assistantId, ownedAssistantIds(actor)),
+      ),
+    )
     .returning(topicColumns);
   const row = updated[0];
   if (!row) {
@@ -148,12 +169,12 @@ export async function setTopicFavorite(
   return row;
 }
 
-export async function deleteTopic(id: string, actor: Actor): Promise<void> {
+async function deleteTopicCore(
+  id: string,
+  match: SQL | undefined,
+  owner: Pick<Actor, "userId">,
+): Promise<boolean> {
   const db = getDb();
-  const owned = and(
-    eq(topics.id, id),
-    inArray(topics.assistantId, ownedAssistantIds(actor)),
-  );
   // Deleting a topic cancels its generation (chat task §8): one immediate
   // write transaction marks every generation of the topic as target-deleted
   // (active ones stop) and removes the rows. Write transactions serialize, so
@@ -161,21 +182,24 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
   // below) or finds the topic gone and discards its output.
   const releasedFileIds = db.transaction(
     (tx) => {
-      const owner = tx
+      const target = tx
         .select({ id: topics.id })
         .from(topics)
-        .where(owned)
+        .where(match)
         .get();
-      if (!owner) {
-        throw new AppError("NOT_FOUND", 404, "topic.notFound");
+      if (!target) {
+        return null;
       }
       const fileIds = fileIdsForTopics(tx, [id]);
       markGenerationsForDeletedTopics(tx, [id]);
-      tx.delete(topics).where(owned).run();
+      tx.delete(topics).where(eq(topics.id, id)).run();
       return fileIds;
     },
     { behavior: "immediate" },
   );
+  if (releasedFileIds === null) {
+    return false;
+  }
   // After the commit (the deletion is durable), drop the local producer's
   // content and subscriptions and abort it, so it neither keeps calling the
   // provider for a topic nobody can read nor hands late chunks to a client
@@ -185,8 +209,55 @@ export async function deleteTopic(id: string, actor: Actor): Promise<void> {
   );
   discardGenerationsForTopic(id);
   // References are gone now; drop whatever no other message still needs.
-  await deleteFilesIfUnreferenced(releasedFileIds, actor);
+  await deleteFilesIfUnreferenced(releasedFileIds, owner);
+  return true;
+}
+
+export async function deleteTopic(id: string, actor: Actor): Promise<void> {
+  const owned = and(
+    eq(topics.id, id),
+    inArray(topics.assistantId, ownedAssistantIds(actor)),
+  );
+  if (!(await deleteTopicCore(id, owned, actor))) {
+    throw new AppError("NOT_FOUND", 404, "topic.notFound");
+  }
   logger.info({ userId: actor.userId, topicId: id }, "topic deleted");
+}
+
+/** Deletes temporary topics inactive for more than 24h across all users. */
+export async function purgeIdleTemporaryTopics(
+  now: Date = new Date(),
+): Promise<number> {
+  const db = getDb();
+  const cutoff = new Date(now.getTime() - TEMPORARY_TOPIC_TTL_MS);
+  const stale = await db
+    .select({
+      id: topics.id,
+      ownerId: assistants.ownerId,
+    })
+    .from(topics)
+    .innerJoin(assistants, eq(assistants.id, topics.assistantId))
+    .where(and(eq(topics.temporary, true), lt(topics.updatedAt, cutoff)));
+
+  let purged = 0;
+  for (const row of stale) {
+    const removed = await deleteTopicCore(
+      row.id,
+      and(
+        eq(topics.id, row.id),
+        eq(topics.temporary, true),
+        lt(topics.updatedAt, cutoff),
+      ),
+      { userId: row.ownerId },
+    );
+    if (removed) {
+      purged += 1;
+    }
+  }
+  if (purged > 0) {
+    logger.info({ purged }, "idle temporary topics purged");
+  }
+  return purged;
 }
 
 export async function findTopicForActor(
@@ -230,7 +301,7 @@ export async function findTopicDetailForActor(
 }
 
 export type TopicContext = {
-  topic: { id: string; title: string };
+  topic: { id: string; title: string; temporary: boolean };
   assistant: {
     id: string;
     systemPrompt: string | null;
@@ -249,6 +320,7 @@ export function findTopicContextForActor(
     .select({
       topicId: topics.id,
       topicTitle: topics.title,
+      topicTemporary: topics.temporary,
       assistantId: assistants.id,
       systemPrompt: assistants.systemPrompt,
       defaultProviderConfigId: assistants.defaultProviderConfigId,
@@ -263,7 +335,7 @@ export function findTopicContextForActor(
     return null;
   }
   return {
-    topic: { id: row.topicId, title: row.topicTitle },
+    topic: { id: row.topicId, title: row.topicTitle, temporary: row.topicTemporary },
     assistant: {
       id: row.assistantId,
       systemPrompt: row.systemPrompt,

@@ -1,0 +1,1 @@
+ALTER TABLE `topics` ADD `temporary` integer DEFAULT false NOT NULL;

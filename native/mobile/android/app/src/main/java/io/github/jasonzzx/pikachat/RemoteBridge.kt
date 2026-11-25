@@ -92,6 +92,10 @@ class RemoteBridge(
                             activity.onRemoteNavStateChanged(this)
                         }
                     }
+                    "temporaryTopic" -> when (val topicId = json.opt("topicId")) {
+                        JSONObject.NULL -> activity.saveTemporaryTopic(origin, null)
+                        is String -> if (topicId.length in 1..64) activity.saveTemporaryTopic(origin, topicId)
+                    }
                 }
             }
         }
@@ -127,6 +131,7 @@ class RemoteBridge(
                 notify: (i) => post({ type: "notify", ...i }),
                 showServerMenu: () => post({ type: "menu" }),
                 openServers: (screen) => post({ type: "open", screen }),
+                setTemporaryTopic: (topicId) => post({ type: "temporaryTopic", topicId: topicId ?? null }),
                 navigation,
               });
               // A `download` anchor on a 302-ing /api/files URL would follow the redirect to the storage host, which leaves the app.

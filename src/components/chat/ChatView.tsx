@@ -10,6 +10,7 @@ import {
   uiMessageChunkSchema,
   type FileUIPart,
 } from "ai";
+import { MessageSquareDashedIcon } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 
 import {
@@ -31,6 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import {
   activeGenerationForTopic,
   useActiveGenerations,
@@ -72,12 +74,14 @@ import type {
 import { localTimeZone } from "@/lib/time-zone";
 import type { TranslateTargetLanguageCode } from "@/lib/translate/languages";
 import { consumeHitQueue } from "@/lib/search-hit-queue";
+import { cn } from "@/lib/utils";
 import {
   composerDraftKey,
   useComposerStore,
   type ComposerModelPick,
   type StagedAttachment,
 } from "@/stores/composer-store";
+import { useTemporaryTopicStore } from "@/stores/temporary-topic-store";
 import { imageCapabilityFor } from "@/lib/image-capabilities";
 
 import { useComposerAttachments } from "./use-composer-attachments";
@@ -87,6 +91,7 @@ import ErrorBlock from "./ErrorBlock";
 import MessageList, { type MessageListHandle } from "./MessageList";
 import SearchHitNav from "./SearchHitNav";
 import {
+  abandonTemporaryDraft,
   acquireChat,
   attachChatView,
   clearChatSeeded,
@@ -217,10 +222,13 @@ function ComposerError({ text }: { text: string }) {
  * lose on some navigation paths. Writing document.title always mutates the
  * first <title> element, so there is a single effective writer.
  */
-function DocumentTitle({ name }: { name: string }) {
+function DocumentTitle({ name }: { name: string | null }) {
   const tRoot = useTranslations("RootLayout");
   useEffect(() => {
-    document.title = tRoot("titleTemplate").replace("%s", name);
+    document.title =
+      name === null
+        ? tRoot("title")
+        : tRoot("titleTemplate").replace("%s", name);
   }, [tRoot, name]);
   return null;
 }
@@ -245,6 +253,7 @@ export default function ChatView({
   const appNav = useAppNavigation();
   const t = useTranslations("Chat.MessageList");
   const tChat = useTranslations("Chat");
+  const tTemporary = useTranslations("Chat.Temporary");
   const tCompression = useTranslations("Chat.Compression");
   const tCommon = useTranslations("Common");
   const tFiles = useTranslations("Files");
@@ -256,6 +265,15 @@ export default function ChatView({
   const [createdTopicId, setCreatedTopicId] = useState<string | undefined>(
     undefined,
   );
+  const [draftTemporary, setDraftTemporary] = useState(false);
+  const [prevAssistantProp, setPrevAssistantProp] = useState(assistantId);
+  if (assistantId !== prevAssistantProp) {
+    setPrevAssistantProp(assistantId);
+    if (draftTemporary) {
+      setCreatedTopicId(undefined);
+      setDraftTemporary(false);
+    }
+  }
   // B8: a topic created this session only reaches the URL via
   // history.replaceState, which does not re-render the route — topicId stays
   // undefined and a query keyed on it would never enable. Drive everything
@@ -363,7 +381,13 @@ export default function ChatView({
 
   const assistants = tree.data?.assistants ?? [];
   const resolvedAssistantId = assistantId ?? recentAssistantId ?? assistants[0]?.id;
-  const draftKey = composerDraftKey(activeTopicId, resolvedAssistantId);
+  const isTemporary = draftTemporary;
+  const isTemporaryTopic = Boolean(createdTopicId && draftTemporary);
+  const draftKey = composerDraftKey(
+    activeTopicId,
+    resolvedAssistantId,
+    isTemporary,
+  );
   const draft = useComposerStore((state) => state.drafts[draftKey] ?? "");
   const quote = useComposerStore((state) => state.quotes[draftKey] ?? null);
   const setQuote = useComposerStore((state) => state.setQuote);
@@ -408,9 +432,10 @@ export default function ChatView({
     assistantId === undefined && activeTopicId === undefined;
   // The home draft keeps the bare default tab title; every other chat route
   // (assistant draft, existing or session-created topic) gets a titled tab.
-  const showDocumentTitle = !showAssistantPicker;
-  const headerTitle =
-    topicDetail.data?.title ?? topicTitle ?? tChat("newTopic");
+  const showDocumentTitle = !showAssistantPicker || isTemporary;
+  const headerTitle = isTemporary
+    ? tTemporary("title")
+    : (topicDetail.data?.title ?? topicTitle ?? tChat("newTopic"));
   const headerModel = findAvailableModel(models.data, pickedModel);
   const headerSubtitle = headerModel
     ? `${headerModel.modelId} · ${headerModel.configName}`
@@ -469,6 +494,9 @@ export default function ChatView({
       };
       latestRef.current.topicId = streamTopicId;
       setCreatedTopicId(streamTopicId);
+      if (draftTemporary && createdTopicId === undefined) {
+        useTemporaryTopicStore.getState().setTemporaryTopic(streamTopicId);
+      }
       // The server's confirmation arrived, so the pending receipt has done its
       // job: the durable generation id is the recovery handle from here on.
       forgetSendReceipt();
@@ -478,6 +506,11 @@ export default function ChatView({
       // Later explicit reseeds (regen/delete/select) clear the marker first.
       markChatSeeded(poolEntry, streamTopicId);
       setStreamId(newStreamId);
+      if (draftTemporary) {
+        // Temporary chats stay on the draft URL so reloads, bookmarks, and
+        // browser history never capture an ephemeral topic id.
+        return;
+      }
       const assistant = latestRef.current.assistantId;
       if (assistant.length === 0) {
         return;
@@ -560,6 +593,36 @@ export default function ChatView({
     setCreatedTopicId(undefined);
     setStreamId(null);
   }, [pathname, createdTopicId]);
+
+  const resetTemporaryChat = useStableCallback(() => {
+    if (!isTemporary) {
+      return;
+    }
+    abandonTemporaryDraft();
+    setCreatedTopicId(undefined);
+    setDraftTemporary(false);
+    setStreamId(null);
+    setRegen(null);
+    setActionError(null);
+  });
+
+  useEffect(() => {
+    return useTemporaryTopicStore.subscribe((state, prev) => {
+      if (state.leaveRequestCount !== prev.leaveRequestCount) {
+        resetTemporaryChat();
+      }
+    });
+  }, [resetTemporaryChat]);
+
+  useEffect(() => {
+    if (!isTemporary) {
+      return;
+    }
+    return () => {
+      abandonTemporaryDraft();
+      useComposerStore.getState().clearTemporaryDrafts();
+    };
+  }, [isTemporary]);
 
   useEffect(() => {
     if (
@@ -1594,7 +1657,7 @@ export default function ChatView({
     };
     // Pool bookkeeping for the send: marks the sidebar streaming icon at
     // once for an existing topic (drafts mark on `data-topic`).
-    noteSendStarted(chatId);
+    noteSendStarted(chatId, isTemporary);
     const text = draft.trim();
     // Image models without imageInput never send attachments (the server
     // rejects them); staged chips stay put so switching back to a chat model
@@ -1623,6 +1686,7 @@ export default function ChatView({
     if (outgoingFiles.length > 0) {
       clearAttachments(draftKey);
     }
+    const sendingTemporary = activeTopicId === undefined && draftTemporary;
     setDraft(draftKey, "");
     setQuote(draftKey, null);
     const selected = findAvailableModel(models.data, pickedModel);
@@ -1641,7 +1705,7 @@ export default function ChatView({
     // receipt is stored per account so a lost confirmation can be looked up
     // after a reload instead of re-sending the model call.
     const requestId = newId();
-    if (userId !== null) {
+    if (userId !== null && !isTemporary) {
       rememberPendingGenerationRequest({
         requestId,
         userId,
@@ -1651,6 +1715,7 @@ export default function ChatView({
     const body = {
       assistantId: resolvedAssistantId,
       topicId: activeTopicId,
+      ...(sendingTemporary ? { temporary: true } : {}),
       requestId,
       providerConfigId: pickedModel.configId,
       modelId: pickedModel.modelId,
@@ -1692,10 +1757,47 @@ export default function ChatView({
   const listOnQuote = useStableCallback(handleQuote);
   const listOnQuoteJump = useStableCallback(handleQuoteJump);
 
+  function handleToggleTemporary() {
+    if (isTemporaryTopic) {
+      useTemporaryTopicStore.getState().requestLeaveTemporaryTopic();
+      return;
+    }
+    setDraftTemporary((current) => !current);
+  }
+
+  const temporaryToggle =
+    activeTopicId === undefined || isTemporaryTopic ? (
+      <Button
+        type="button"
+        variant={isTemporary ? "secondary" : "ghost"}
+        size="sm"
+        aria-pressed={isTemporary}
+        disabled={!isTemporaryTopic && inFlight}
+        onClick={handleToggleTemporary}
+        className={cn(
+          "gap-1.5",
+          isTemporary && "border border-border font-medium",
+        )}
+      >
+        <MessageSquareDashedIcon aria-hidden="true" className="size-4" />
+        <span>{tTemporary("toggle")}</span>
+      </Button>
+    ) : null;
+
+  const temporaryBanner = isTemporary ? (
+    <div
+      role="status"
+      className="flex shrink-0 items-center gap-2 border-b bg-muted/50 px-4 py-2 text-xs text-muted-foreground"
+    >
+      <MessageSquareDashedIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      <span>{tTemporary("banner")}</span>
+    </div>
+  ) : null;
+
   if (topicId && history.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        {showDocumentTitle ? <DocumentTitle name={headerTitle} /> : null}
+        <DocumentTitle name={showDocumentTitle ? headerTitle : null} />
         <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
         <EmptyState
           title={t("loadFailedTitle")}
@@ -1718,8 +1820,13 @@ export default function ChatView({
       onDragLeave={handleDragLeave}
       onDrop={handleFileDrop}
     >
-      {showDocumentTitle ? <DocumentTitle name={headerTitle} /> : null}
-      <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
+      <DocumentTitle name={showDocumentTitle ? headerTitle : null} />
+      <InsetHeader
+        title={headerTitle}
+        subtitle={headerSubtitle}
+        actions={temporaryToggle}
+      />
+      {temporaryBanner}
       {historyPending ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <p className="text-base text-muted-foreground md:text-sm">{t("loading")}</p>

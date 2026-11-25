@@ -21,6 +21,7 @@ import {
   appSettings,
   assistants,
   chatMessages,
+  files,
   providerConfigs,
   providerModels,
   sessions,
@@ -28,6 +29,8 @@ import {
   users,
   verifications,
 } from "@/server/db/schema";
+import { uploadFile } from "@/server/files/file.service";
+import { getFileStorage } from "@/server/files/storage";
 import { createAssistant } from "@/server/services/assistant.service";
 import {
   appendUserMessage,
@@ -40,8 +43,10 @@ import {
   findTopicForActor,
   listFavoriteTopics,
   listTopicPage,
+  purgeIdleTemporaryTopics,
   renameTopic,
   setTopicFavorite,
+  TEMPORARY_TOPIC_TTL_MS,
   touchTopicUpdatedAt,
 } from "@/server/services/topic.service";
 
@@ -52,6 +57,7 @@ const DEFAULT_TITLE = "New topic";
 const db = getDb();
 
 async function resetState(): Promise<void> {
+  await db.delete(files);
   await db.delete(chatMessages);
   await db.delete(topics);
   await db.delete(assistants);
@@ -452,5 +458,160 @@ describe("topic.service", () => {
       .from(chatMessages)
       .where(eq(chatMessages.topicId, topic.id));
     expect(leftover).toEqual([]);
+  });
+
+  it("excludes temporary topics from lists/favorites and rejects rename and favorite with 404", async () => {
+    const { userActor } = await seedActors();
+    const assistant = await createAssistant(
+      { name: "Owner", icon: "✨" },
+      userActor,
+    );
+    const normal = await createTopicForChat(
+      { assistantId: assistant.id },
+      userActor,
+      DEFAULT_TITLE,
+    );
+    const temp = await createTopicForChat(
+      { assistantId: assistant.id, temporary: true },
+      userActor,
+      DEFAULT_TITLE,
+    );
+    // Even if an old row somehow had is_favorite=true, favorites list excludes temporary.
+    await db
+      .update(topics)
+      .set({ isFavorite: true })
+      .where(eq(topics.id, temp.id));
+
+    const page = await listTopicPage(assistant.id, null, userActor);
+    expect(page.topics.map((row) => row.id)).toEqual([normal.id]);
+    const favorites = await listFavoriteTopics(assistant.id, userActor);
+    expect(favorites).toEqual([]);
+
+    await expect(
+      renameTopic(temp.id, { title: "Renamed" }, userActor),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
+    await expect(
+      setTopicFavorite(temp.id, { favorite: true }, userActor),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
+  });
+
+  it("purgeIdleTemporaryTopics removes temporary topics idle >24h with their files and keeps recent and normal ones", async () => {
+    const { userActor, otherAdminActor } = await seedActors();
+    const userAssistant = await createAssistant(
+      { name: "User", icon: "✨" },
+      userActor,
+    );
+    const otherAssistant = await createAssistant(
+      { name: "Other", icon: "🔒" },
+      otherAdminActor,
+    );
+    const now = new Date("2026-11-24T12:00:00.000Z");
+    const staleAt = new Date(now.getTime() - TEMPORARY_TOPIC_TTL_MS - 60_000);
+    const freshAt = new Date(now.getTime() - TEMPORARY_TOPIC_TTL_MS + 60_000);
+
+    const staleTemp = await createTopicForChat(
+      { assistantId: userAssistant.id, temporary: true },
+      userActor,
+      DEFAULT_TITLE,
+    );
+    const freshTemp = await createTopicForChat(
+      { assistantId: otherAssistant.id, temporary: true },
+      otherAdminActor,
+      DEFAULT_TITLE,
+    );
+    const staleNormal = await createTopicForChat(
+      { assistantId: userAssistant.id },
+      userActor,
+      DEFAULT_TITLE,
+    );
+
+    const staleFile = await uploadFile(
+      {
+        filename: "stale.txt",
+        mediaType: "text/plain",
+        data: Buffer.from("stale attachment"),
+      },
+      userActor,
+    );
+    const freshFile = await uploadFile(
+      {
+        filename: "fresh.txt",
+        mediaType: "text/plain",
+        data: Buffer.from("fresh attachment"),
+      },
+      otherAdminActor,
+    );
+
+    await appendUserMessage(
+      {
+        topicId: staleTemp.id,
+        message: {
+          id: "msg-stale",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: staleFile.url,
+              mediaType: staleFile.mediaType,
+              filename: staleFile.filename,
+            },
+            { type: "text", text: "stale" },
+          ],
+        },
+      },
+      userActor,
+    );
+    await appendUserMessage(
+      {
+        topicId: freshTemp.id,
+        message: {
+          id: "msg-fresh",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              url: freshFile.url,
+              mediaType: freshFile.mediaType,
+              filename: freshFile.filename,
+            },
+            { type: "text", text: "fresh" },
+          ],
+        },
+      },
+      otherAdminActor,
+    );
+
+    await db
+      .update(topics)
+      .set({ updatedAt: staleAt })
+      .where(eq(topics.id, staleTemp.id));
+    await db
+      .update(topics)
+      .set({ updatedAt: staleAt })
+      .where(eq(topics.id, staleNormal.id));
+    await db
+      .update(topics)
+      .set({ updatedAt: freshAt })
+      .where(eq(topics.id, freshTemp.id));
+
+    const purged = await purgeIdleTemporaryTopics(now);
+    expect(purged).toBe(1);
+
+    expect(await findTopicForActor(staleTemp.id, userActor)).toBeNull();
+    expect(
+      await db.select({ id: files.id }).from(files).where(eq(files.id, staleFile.id)),
+    ).toEqual([]);
+    await expect(
+      getFileStorage().get(`${userActor.userId}/${staleFile.id}.txt`),
+    ).rejects.toThrow();
+
+    expect(await findTopicForActor(freshTemp.id, otherAdminActor)).not.toBeNull();
+    expect(await findTopicForActor(staleNormal.id, userActor)).not.toBeNull();
+    expect(
+      await db.select({ id: files.id }).from(files).where(eq(files.id, freshFile.id)),
+    ).toHaveLength(1);
+
+    // Clean up remaining stored file so the test harness sees empty storage.
+    await deleteTopic(freshTemp.id, otherAdminActor);
   });
 });

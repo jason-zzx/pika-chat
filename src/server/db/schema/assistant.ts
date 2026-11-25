@@ -45,6 +45,11 @@ export const topics = sqliteTable(
     isFavorite: integer("is_favorite", { mode: "boolean" })
       .notNull()
       .default(false),
+    // Temporary chat: set only at creation, hidden from every list and
+    // search, deleted when the user leaves it or after 24h idle.
+    temporary: integer("temporary", { mode: "boolean" })
+      .notNull()
+      .default(false),
     // Rolling history-compression state (会话历史压缩): the summary covers
     // every message up to and including summaryUpToMessageId. All nullable —
     // a topic without them behaves exactly as before.
@@ -69,6 +74,7 @@ export const topicColumns = {
   id: topics.id,
   title: topics.title,
   isFavorite: topics.isFavorite,
+  temporary: topics.temporary,
   createdAt: topics.createdAt,
   updatedAt: topics.updatedAt,
 };

@@ -15,10 +15,10 @@ vi.mock("@/server/auth/actor", () => ({ resolveActor }));
 vi.mock("@/server/services/topic.service", () => ({ findTopicContextForActor }));
 vi.mock("@/components/chat/ChatView", () => ({ default: () => null }));
 
-import AssistantTopicPage from "./page";
+import AssistantTopicPage, { generateMetadata } from "./page";
 
 const context = {
-  topic: { id: "t1", title: "Hello" },
+  topic: { id: "t1", title: "Hello", temporary: false },
   assistant: {
     id: "a1",
     systemPrompt: "be nice",
@@ -77,5 +77,26 @@ describe("AssistantTopicPage", () => {
 
     expect(redirect).not.toHaveBeenCalled();
     expect(notFound).not.toHaveBeenCalled();
+  });
+
+  it("redirects temporary topic URLs to the assistant draft and returns empty metadata", async () => {
+    findTopicContextForActor.mockResolvedValue({
+      ...context,
+      topic: { ...context.topic, temporary: true },
+    });
+
+    await expect(
+      AssistantTopicPage({
+        params: Promise.resolve({ assistantId: "a1", topicId: "t1" }),
+      }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(redirect).toHaveBeenCalledWith("/assistant/a1");
+    expect(notFound).not.toHaveBeenCalled();
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ assistantId: "a1", topicId: "t1" }),
+    });
+    expect(metadata).toEqual({});
   });
 });

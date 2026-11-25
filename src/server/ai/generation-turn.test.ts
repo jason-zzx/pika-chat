@@ -42,6 +42,15 @@ describe("sendRequestHash", () => {
       sendRequestHash(request({ timeZone: "Europe/Berlin" })),
     );
   });
+
+  it("distinguishes temporary creation on a new topic and ignores it for existing topics", () => {
+    expect(sendRequestHash(request({ temporary: true }))).not.toBe(
+      sendRequestHash(request()),
+    );
+    expect(
+      sendRequestHash(request({ topicId: "t-1", temporary: true })),
+    ).toBe(sendRequestHash(request({ topicId: "t-1" })));
+  });
 });
 
 describe("regenerateRequestHash", () => {

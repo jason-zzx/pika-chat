@@ -96,3 +96,21 @@ export async function deleteTopic(id: string): Promise<void> {
   });
   await parseEmpty(response);
 }
+
+/**
+ * Best-effort DELETE for temporary chat teardown (leave, unload, sign-out,
+ * abandoned pre-topic send); resolves even on network or HTTP errors so
+ * cleanup paths never throw.
+ */
+export function deleteTopicBestEffort(
+  id: string,
+  options?: { keepalive?: boolean },
+): Promise<void> {
+  return fetch(`/api/topics/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    keepalive: options?.keepalive ?? false,
+  }).then(
+    () => undefined,
+    () => undefined,
+  );
+}

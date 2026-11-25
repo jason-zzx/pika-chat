@@ -53,6 +53,7 @@ vi.mock("@/lib/api/topic", () => ({
 function topic(partial: Partial<Topic> & Pick<Topic, "id" | "title">): Topic {
   return {
     isFavorite: false,
+    temporary: false,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
     ...partial,

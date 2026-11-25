@@ -367,6 +367,11 @@
       "jump": "Go to the quoted text: {text}",
       "remove": "Remove quote"
     },
+    "Temporary": {
+      "title": "Temporary chat",
+      "toggle": "Temporary",
+      "banner": "Temporary chat — not saved to history and deleted when you leave."
+    },
     "newTopic": "New topic"
   },
   "Topic": {

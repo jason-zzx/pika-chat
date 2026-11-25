@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useStreamingTopics } from "@/lib/streaming-topics";
 
 import {
+  abandonTemporaryDraft,
   acquireChat,
   attachChatView,
   configureChatPool,
@@ -256,6 +257,136 @@ describe("chat pool module-level side effects", () => {
       chatControl.options?.onFinish?.({ isError: true });
     });
     expect(view.onFinish).toHaveBeenCalledWith({ isError: true });
+  });
+
+  it("skips onTopicAnnounced for an active temporary send while forwarding data to the view", () => {
+    const bridge = {
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished: vi.fn(),
+    };
+    const dispose = configureChatPool(bridge);
+    const view = { onData: vi.fn(), onFinish: vi.fn() };
+    attachChatView("draft", view);
+    noteSendStarted("draft", true);
+
+    act(() => {
+      chatControl.options?.onData?.({
+        type: "data-topic",
+        data: { topicId: "t-temp", streamId: "s-temp" },
+      });
+    });
+
+    expect(bridge.onTopicAnnounced).not.toHaveBeenCalled();
+    expect(view.onData).toHaveBeenCalledWith({
+      type: "data-topic",
+      data: { topicId: "t-temp", streamId: "s-temp" },
+    });
+    dispose();
+  });
+
+  it("discards and deletes an abandoned temporary draft when data-topic arrives after detach", () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const bridge = {
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished: vi.fn(),
+    };
+    const dispose = configureChatPool(bridge);
+    const { result } = streamingTopics();
+    try {
+      const detach = attachChatView("draft", {
+        onData: vi.fn(),
+        onFinish: vi.fn(),
+      });
+      chatControl.status = "submitted";
+      noteSendStarted("draft", true);
+      detach();
+
+      act(() => {
+        chatControl.options?.onData?.({
+          type: "data-topic",
+          data: { topicId: "t-abandoned", streamId: "s-abandoned" },
+        });
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith("/api/topics/t-abandoned", {
+        method: "DELETE",
+        keepalive: false,
+      });
+      expect(bridge.onTopicAnnounced).not.toHaveBeenCalled();
+      expect(result.current.has("t-abandoned")).toBe(false);
+      expect(hasLiveChat("t-abandoned")).toBe(false);
+
+      act(() => {
+        chatControl.options?.onFinish?.({ isError: false });
+      });
+      expect(bridge.invalidateAfterFinish).not.toHaveBeenCalled();
+      expect(bridge.notifyReplyFinished).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("abandons an in-flight temporary draft so a new draft gets a fresh chat and the old send deletes on arrival", () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const first = acquireChat("draft");
+      attachChatView("draft", { onData: vi.fn(), onFinish: vi.fn() });
+      const firstOptions = chatControl.options;
+      chatControl.status = "submitted";
+      noteSendStarted("draft", true);
+
+      abandonTemporaryDraft();
+
+      const fresh = acquireChat("draft");
+      expect(fresh.chat).not.toBe(first.chat);
+
+      act(() => {
+        firstOptions?.onData?.({
+          type: "data-topic",
+          data: { topicId: "t-abandoned-reset", streamId: "s-1" },
+        });
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith("/api/topics/t-abandoned-reset", {
+        method: "DELETE",
+        keepalive: false,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not emit desktop reply notifications for temporary chats", () => {
+    const notifyReplyFinished = vi.fn();
+    const dispose = configureChatPool({
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished,
+    });
+    attachChatView("draft", { onData: vi.fn(), onFinish: vi.fn() });
+    noteSendStarted("draft", true);
+    act(() => {
+      chatControl.options?.onData?.({
+        type: "data-topic",
+        data: { topicId: "t-temp-silent", streamId: "s-1" },
+      });
+    });
+    act(() => {
+      chatControl.options?.onFinish?.({ isError: false });
+    });
+    act(() => {
+      noteRegenStarted("t-temp-silent", "gen-2");
+      noteRegenFinished("t-temp-silent", "finish");
+    });
+    expect(notifyReplyFinished).not.toHaveBeenCalled();
+    dispose();
   });
 });
 

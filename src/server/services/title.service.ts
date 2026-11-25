@@ -75,7 +75,7 @@ export async function titleTopicFromFirstMessage(
   if (!topic) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
-  if (!isDefaultTopicTitle(topic.title)) {
+  if (topic.temporary || !isDefaultTopicTitle(topic.title)) {
     return topic;
   }
 
