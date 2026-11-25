@@ -5,6 +5,48 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
+## [1.0.0-rc.4] - 2026-11-25
+
+### Highlights
+
+- **临时对话**：支持从对话顶部栏开启**临时对话**，完整支持多轮回复、停止/恢复、消息版本、附件与上下文压缩，同时保持无独立 URL 并在历史列表、收藏、话题计数、搜索与自动标题中完全隐藏；离开页面、关闭页面、退出登录、退出原生应用/服务器或闲置超过 24 小时后自动删除。
+- **按话题持久化输入框草稿**：未发送的输入文本现按话题与助手新话题草稿分别保存在 `localStorage` 中（侧边栏非当前打开的话题与**新建话题**行显示**草稿**标识），并在超过 14 天、退出/进入登录认证页或原生客户端切换服务器后自动清理。
+- **类原生应用导航与壳层体验升级**：为 Web、桌面端与 Android 补全逻辑导航栈与统一返回处理（优先关闭最上层浮层、Android 预测性返回、桌面端鼠标/触控板/快捷键返回以及切换服务器页面取消后无损返回原服务器），实现 `shell-ui` 与 Android 原生服务器切换弹窗首帧前的主题色同步，并优化移动端聊天输入与图片预览触控手势。
+
+### Feats
+
+- **临时对话（`ChatView`、`TemporaryTopicGuard` 与原生壳）**：
+  - 在新草稿页（`/` 或 `/assistant/:id`）顶部栏新增**临时对话**切换按钮：会话全程停留在草稿 URL（直接访问 `/assistant/:a/:t` 的临时话题将重定向回 `/assistant/:a`）并展示提示横幅，从话题列表、收藏、`topicCount`、搜索结果与自动标题中排除，重命名与收藏接口统一返回 `404`。
+  - 在切换路由、同路由重置（点击**新建话题**、首页图标或顶部栏关闭临时对话）、`pagehide`（`keepalive`）以及 `authClient.signOut()` 退出登录前自动删除当前临时话题及未被引用的附件；服务端每小时清理闲置超过 24 小时（`TEMPORARY_TOPIC_TTL_MS`）的临时话题，且 `temp-*` 草稿不写入本地持久化存储。
+  - 新增 `window.pikaNative.setTemporaryTopic`：桌面端在关闭或移除服务器（清理 Cookie 之前）、退出应用以及安装更新（停止本地服务之前）自动删除当前临时话题，最小化到托盘时保持保留；Android 端在销毁远程 WebView 或划掉/被系统杀死后下次启动（`onCreate`）时清理，仅退入后台（`onStop`）时保持保留；临时对话不触发桌面端回复完成通知。
+- **按话题持久化输入框草稿**：
+  - 按话题与助手新话题草稿将输入文本写入 `localStorage`（`pika.draft:<key>`，水合后恢复以避免 SSR 不一致；附件、引用与图像参数保持仅限当前会话），并在 `AssistantTree` 中为非当前打开的话题行及**新建话题**按钮展示**草稿**标记。
+  - 超过 14 天（`DRAFT_TTL_MS`）、进入认证页面（`discardComposerDrafts`）或早于 `window.pikaNative.connectedSince`（桌面端与 Android 仅在切换到不同服务器时更新该时间戳）的草稿自动过期清除。
+- **类原生应用导航与事务性服务器切换**：
+  - 新增 `NavigationProvider`（`src/lib/navigation-state.ts`、`src/lib/overlay-dismiss.ts`），在原生模式下使用扁平化的 `router.replace` 维护逻辑导航栈（`/` 工作区根路径、最多 20 条话题、独立的 `/settings/*` 分支与认证栈），按返回时优先逐层关闭最上层的 Base UI 浮层（弹窗、确认框、抽屉、气泡或菜单）。
+  - 桌面端打开 `shell-ui` 时保活 `remote.view`（支持 `returnToServer()` 无损回到当前服务器），并通过 `native:back` 统一接管 `browser-backward` 鼠标/应用指令、macOS 右滑返回及 `Alt+Left` / `Cmd+[` / `BrowserBack` 快捷键（同时屏蔽前进快捷键）；Android 端重构为双 WebView 架构（`bridge.webView` 专用于 `shell-ui`，另为已连接服务器创建独立 `remoteWebView`），启用 `android:enableOnBackInvokedCallback="true"` 支持预测性返回，并在 `shell-ui` 内实现子页面栈导航（`native/shell-ui/src/nav-stack.ts`）。
+- **壳层外观实时同步与 Android 原生服务器菜单**：
+  - 将主题色彩 Token 抽离至共享的 `src/app/theme-tokens.css` 供 Web 端与 `native/shell-ui` 共用，桌面端与 Android 持久化记录上次连接服务器的 `pika_theme` 模式与预设，并在 `shell-ui` 首帧绘制前直接注入样式（同时为尚无 `pika_theme` Cookie 的服务器预置当前外观，并通过桌面端重建 `WebContentsView` 与 Android `onPageCommitVisible` 显隐切换避免闪现旧页面帧）。
+  - 重绘 Android 原生服务器切换弹窗（`ServerMenuDialog.kt`），按 `--popover`、`--accent`、`--primary`、`--border` 等同步调色板渲染图标、当前选中对勾及限高可滚动列表。
+- **统一壳层检查更新入口**：
+  - 取消桌面端与 Android 启动时的自动检查更新，将手动**检查更新**统一整合至双端 `shell-ui` 底部栏版本号旁，并移除 `shell-ui` 中独立的 Android `mobileSettings` 页面。
+- **移动端聊天、侧边栏与图片预览体验优化**：
+  - 为 `ImagePreviewDialog` 新增双指捏合缩放（围绕捏合中心锚定，缩放低于 `1x` 时松手回弹至 `1x`）、双击在点击位置切换 `2x` 放大与 `overscroll-none` 滚动隔离，并将最小缩放比例 `MIN_SCALE` 从 `0.1` 调整为 `0.5`。
+  - 在 `Composer` 与 `UserMessageEditor` 中引入 `shouldSendOnEnter`（`src/components/chat/enter-to-send.ts`）：在 Android（无 `desktop` 能力的 `window.pikaNative`）、触屏粗指针浏览器及输入法组字状态下按 `Enter` 改为换行，桌面浏览器与桌面客户端保持 `Enter` 发送、`Shift+Enter` 换行。
+  - 在 `InsetHeader` 中为移动端（`md:hidden`）常规已有话题右上角新增**新建话题**快捷图标按钮（草稿页与临时对话不显示）。
+  - 统一桌面端聊天与设置页的侧边栏折叠行为（移除 `/settings/*` 的 `lockedOpen` 锁定，为 `SettingsNav` 全部条目补充图标并对齐顶部 `SidebarTrigger`）。
+
+### Fixes
+
+- **移动端输入框底部工具栏换行**：将输入框底部工具栏保持为单行横向滚动布局（`flex-nowrap overflow-x-auto`），把展开/收起按钮移至文本域右上角，并在当前话题尚无消息时隐藏**聊天地图**与**压缩上下文**按钮。
+- **嵌套弹窗遮罩缺失**：为 `DialogOverlay` 与 `AlertDialogOverlay` 添加 `forceRender`，修复移动端侧边栏抽屉内触发的助手/话题弹窗等嵌套弹窗打开时缺少背景遮罩的问题。
+- **重新生成与编辑消息的原生回复通知**：在 `ChatView` 中记录流式响应的终态分片（`finish` / `error` / `abort`）并传入 `noteRegenFinished`，使重新生成与编辑重发也能在后台完成或出错时正常触发桌面端与 Android 原生通知，同时保持手动中止与异常断流静默。
+- **Tooltip 样式、触屏长按菜单截断与折叠侧边栏对齐**：将 `TooltipContent` 切换为弹出层色彩 Token 并补充 `color-scheme` 样式规则，通过 `SharedTooltip` / `SharedTooltipHost` 统一提示行为；将 `DropdownMenuLabel` 的 `line-clamp-3` 移至零内边距内部 `span`，修复触屏长按话题菜单标题第 4 行残留露出问题；对齐折叠态侧边栏全部交互条目至 32px 图标轨道并补全右侧 Tooltip。
+
+### Dev
+
+- 更新 `native/desktop/electron-builder.config.mjs`，为 Windows 便携版 `.zip` 产物文件名追加 `-portable` 后缀（`pika-chat-${version}-${os}-${arch}-portable.${ext}`），NSIS 安装包保持 `pika-chat-${version}-${os}-${arch}.${ext}`。
+
 ## [1.0.0-rc.3] - 2026-11-22
 
 ### Highlights

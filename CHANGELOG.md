@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.4] - 2026-11-25
+
+### Highlights
+
+- **Temporary Chat**: Start ephemeral conversations from the chat header (**Temporary**) that support full multi-turn replies, stop/resume, versions, attachments, and context compression while remaining URL-less and excluded from sidebar history, favorites, counts, search, and auto-titling—automatically deleted when leaving, unloading, signing out, closing the native app/server, or after 24 hours idle.
+- **Persistent Per-Topic Composer Drafts**: Unsent composer text is saved per topic and per assistant new-topic draft in `localStorage` (with a **Draft** badge on inactive sidebar items) and automatically expires after 14 days, on auth reset, or when switching servers in native clients.
+- **Native-Like App Navigation & Shell Polish**: Added logical stack navigation across Web, Desktop, and Android (overlay-first Back dismissal, predictive back on Android, mouse/trackpad/keyboard Back on Desktop, and lossless return-to-server switching), pre-first-paint theme sync for `shell-ui` and Android's native server menu dialog, plus mobile chat and touch image-preview refinements.
+
+### Feats
+
+- **Temporary Chat (`ChatView`, `TemporaryTopicGuard`, & Native Shells)**:
+  - Added a **Temporary** toggle in the chat header on new drafts (`/` or `/assistant/:id`) that keeps conversations on the draft URL (redirecting direct `/assistant/:a/:t` visits back to `/assistant/:a`) with an informational banner, excludes them from topic lists, favorites, `topicCount`, search results, and auto-titling, and returns `404` on rename/favorite requests.
+  - Automatically deletes active temporary topics and unreferenced attachments on route changes, same-route resets (**New topic**, home link, or header toggle), `pagehide` (`keepalive`), and before `authClient.signOut()`, backed by an hourly server idle sweep (`TEMPORARY_TOPIC_TTL_MS = 24h`) and non-persisted `temp-*` composer drafts.
+  - Added `window.pikaNative.setTemporaryTopic`: Desktop deletes the active temporary topic on server close, server removal (before clearing cookies), quit, and update install (before shutting down the local server) while keeping it alive when minimizing to tray; Android deletes on remote WebView teardown or on next startup (`onCreate`) after a swipe-away/kill while keeping it alive when backgrounded (`onStop`); desktop reply notifications are skipped for temporary chats.
+- **Persistent Per-Topic Composer Drafts**:
+  - Persisted composer draft text per topic and assistant new-topic draft under `pika.draft:<key>` in `localStorage` (restored post-hydration without SSR mismatches; attachments, quotes, and image parameters stay session-only), displaying a **Draft** indicator on inactive topic rows and **New topic** items in `AssistantTree`.
+  - Automatically prunes drafts older than 14 days (`DRAFT_TTL_MS`), on reaching auth pages (`discardComposerDrafts`), or predating `window.pikaNative.connectedSince` (bumped by Desktop and Android only when connecting to a different server).
+- **Native-Like App Navigation & Transactional Server Switching**:
+  - Added `NavigationProvider` (`src/lib/navigation-state.ts`, `src/lib/overlay-dismiss.ts`) maintaining a logical navigation stack (`/` workspace root, up to 20 topics, isolated `/settings/*` branch, and auth stack) using flat `router.replace` navigation in native mode and dismissing the topmost open Base UI overlay (dialog, alert dialog, sheet, popover, menu) on Back before popping routes.
+  - Kept Desktop's `remote.view` alive while showing `shell-ui` (`returnToServer()`) and hooked `browser-backward`, macOS right-swipe, and `Alt+Left` / `Cmd+[` / `BrowserBack` shortcuts (swallowing forward shortcuts) through `native:back`; switched Android to a dual-WebView layout (`bridge.webView` dedicated to `shell-ui` plus a per-server `remoteWebView`) with `android:enableOnBackInvokedCallback="true"` predictive back and internal `shell-ui` stack navigation (`native/shell-ui/src/nav-stack.ts`).
+- **Synced Shell Appearance & Android Server Menu Dialog**:
+  - Extracted shared CSS color tokens into `src/app/theme-tokens.css` for both the web app and `native/shell-ui`, and synced the last connected server's `pika_theme` mode and preset onto `shell-ui` before its first paint on Desktop and Android (also seeding `pika_theme` on servers without one and hiding stale shell frames behind fresh views / `onPageCommitVisible`).
+  - Styled Android's native server switcher dialog (`ServerMenuDialog.kt`) with synced theme tokens (`popover`, `popoverForeground`, `mutedForeground`, `accent`, `primary`, `border`), leading icons, active checkmark, and capped scrollable list height.
+- **Unified Shell Update Check**:
+  - Disabled automatic update checks on app launch on Desktop and Android, consolidated manual **Check for updates** into a unified `shell-ui` footer alongside the app version across both platforms, and removed the separate Android `mobileSettings` screen from `shell-ui`.
+- **Mobile Chat, Sidebar & Image Preview UX**:
+  - Added touch pinch-zoom (anchored to the pinch midpoint and snapping back to `1x` below `1x`), double-tap `2x` toggle zoom at the tap location, and `overscroll-none` in `ImagePreviewDialog` (raising `MIN_SCALE` from `0.1` to `0.5`).
+  - Added `shouldSendOnEnter` (`src/components/chat/enter-to-send.ts`) to `Composer` and `UserMessageEditor` so `Enter` inserts a newline on Android (`window.pikaNative` without `desktop`), coarse-pointer mobile browsers, and during active IME composition while keeping `Enter`-to-send on desktop.
+  - Added a mobile-only (`md:hidden`) **New topic** icon action in `InsetHeader` on normal existing topics (omitted on drafts and temporary topics).
+  - Unified desktop sidebar collapse across chat and settings (removing `lockedOpen` on `/settings/*`, adding icons to `SettingsNav`, and aligning the header `SidebarTrigger`).
+
+### Fixes
+
+- **Mobile Composer Toolbar Layout**: Kept the composer bottom toolbar on a single horizontally scrollable row (`flex-nowrap overflow-x-auto`) without wrapping, moved the expand/collapse toggle to the top-right corner of the textarea, and hid the **Chat map** and **Compress context** buttons when the active topic has no messages.
+- **Nested Dialog Backdrops**: Added `forceRender` to `DialogOverlay` and `AlertDialogOverlay` so dialogs opened inside another dialog (such as assistant or topic dialogs inside the mobile sidebar sheet) render their backdrop scrim properly.
+- **Native Reply Notifications for Regenerate & Edit**: Recorded the stream's terminal chunk (`finish` / `error` / `abort`) in `ChatView` and passed it to `noteRegenFinished`, firing native completion/error notifications on regenerations and user message edits while keeping aborts and broken streams silent.
+- **Tooltip Styling, Touch Menu Clamp & Collapsed Sidebar Alignment**: Switched `TooltipContent` to popover tokens with `color-scheme` CSS rules, unified tooltip rendering via `SharedTooltip` / `SharedTooltipHost`, moved `line-clamp-3` onto a zero-padding inner span in `DropdownMenuLabel` to prevent partial 4th-line bleed on touch long-press topic menus, and aligned collapsed sidebar items on the 32px icon track with right-side tooltips.
+
+### Dev
+
+- Updated `native/desktop/electron-builder.config.mjs` so Windows portable `.zip` builds use the `-portable` filename suffix (`pika-chat-${version}-${os}-${arch}-portable.${ext}`) while NSIS installers keep `pika-chat-${version}-${os}-${arch}.${ext}`.
+
 ## [1.0.0-rc.3] - 2026-11-22
 
 ### Highlights
