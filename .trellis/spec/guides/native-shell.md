@@ -25,6 +25,7 @@ interface PikaNativeNavigation {
 interface PikaNative {
   serverName: string; // display name of the server this page belongs to
   appVersion?: string; // native shell version (optional for older shells)
+  connectedSince?: number; // epoch ms the shell last switched to this server (optional for older shells)
   notify(input: { title: string; body: string; path: string }): void;
   showServerMenu(anchor: { x: number; y: number }): void; // viewport CSS px
   openServers(screen: "list" | "add"): void;
@@ -69,6 +70,14 @@ interface PikaNative {
   `--background` + border on auth pages, `shell-ui`, and narrow `< 768px` windows).
 - `serverName` reaches the sandboxed preload via
   `webPreferences.additionalArguments` (`--pika-server-name=<encodeURIComponent>`).
+- `connectedSince` marks where the current stay on a server began, so composer drafts
+  do not survive a server switch (the web app drops drafts with an older `updatedAt`).
+  It changes only when a connect targets a server other than `lastServerId`.
+  Reconnecting the same server, reloading, or restarting the app keeps it. Desktop
+  persists it in `config.json` (set in `attachServerView`, passed as
+  `--pika-connected-since=<ms>`). Android stores it as the `connected_since` pref, written
+  in `PikaHostPlugin.connect`, and embeds it as a literal in the `RemoteBridge` script.
+  Removing the last server nulls `lastServerId`, so the next connect always starts a new stay.
 - `path` is an app-relative path (`assistantTopicHref(...)`); it must start
   with `/`.
 - Desktop main accepts `native:notify`, `native:showServerMenu`, `native:openServers`,

@@ -140,7 +140,29 @@ wire shapes, failure behavior and verification requirements.
 **Composer drafts.** Client state, keyed `topic:${topicId}` or
 `draft:${assistantId}` (`none` if the assistant is unresolved). Switching
 conversations restores that key; send writes `""` to the active key. Do not
-persist drafts, and do not copy titles or messages into the store.
+copy titles or messages into the store.
+
+Draft **text** (nothing else: attachments, quotes and image params stay
+session-only) is also written through to localStorage by `setDraft`:
+
+- One item per key, `pika.draft:<draftKey>` → `{ text, updatedAt }`; a
+  whitespace-only value removes the item. Never fold drafts into the
+  `pika-composer` persist blob: a whole-map write from one tab would overwrite
+  another tab's drafts for other topics.
+- Restored once per document by `composer-store.ts` at module load, via
+  `setState` after `create`, so `getInitialState()` keeps `drafts: {}` and
+  zustand's hydration snapshot matches the SSR HTML. Restoring inside the
+  initial state would cause a textarea hydration mismatch.
+- Expiry, applied at restore (expired items are removed): 14 days after the
+  last edit, or `updatedAt < window.pikaNative.connectedSince` (the native
+  shell switched servers since — see the native-shell guide).
+- `discardComposerDrafts()` drops every stored and in-memory draft. The auth
+  layout mounts `DiscardComposerDrafts`, so any arrival on an auth page
+  (sign-out, expired-session full load, mid-session soft redirect) discards
+  the previous session's drafts.
+- The sidebar marks a topic row (`TopicRow`) and the "New topic" button with
+  `Layout.tree.draft` when that key holds non-blank text, except for the chat
+  that is currently open. A stream spinner takes precedence over the marker.
 
 **The current user and role.** Server state. A Server Component that already
 called `resolveActor` should pass the identity down as props — that is the
