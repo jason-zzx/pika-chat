@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Drizzle schema change, migration, immediate transactions, ownership isolation"}
+{"file": ".trellis/spec/backend/chat-generation-lifecycle.md", "reason": "Lazy topic insert at admission, sweep loop, deletion cancelling generations"}
+{"file": ".trellis/spec/backend/topic-list-pagination.md", "reason": "List/favorites/topicCount queries that must exclude temporary topics"}
+{"file": ".trellis/spec/backend/topic-favorites.md", "reason": "Favorite endpoint and updatedAt semantics used by the 24h sweep"}
+{"file": ".trellis/spec/backend/search.md", "reason": "Search queries that must exclude temporary topics"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "File release when a temporary topic is deleted"}
+{"file": ".trellis/spec/backend/local-mode.md", "reason": "Desktop local server shutdown ordering on quit"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand vs Query boundary for the temporary-topic store and composer drafts"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "New toggle/banner strings in both catalogs"}
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "Optional pikaNative bridge contract for setTemporaryTopic on desktop and Android"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Feature spans server, web, desktop and Android shells"}

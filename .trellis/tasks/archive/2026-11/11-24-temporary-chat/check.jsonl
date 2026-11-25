@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend lint/test/forbidden-pattern checks"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend lint/test/accessibility checks"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared Zod contracts for the temporary flag"}
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "Bridge must stay optional; shell/server version compatibility"}
+{"file": ".trellis/spec/backend/search.md", "reason": "Verify temporary topics are excluded from search"}
+{"file": ".trellis/spec/backend/topic-list-pagination.md", "reason": "Verify list/favorites/topicCount exclusion"}
