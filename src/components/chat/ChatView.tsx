@@ -1138,6 +1138,8 @@ export default function ChatView({
         }
       }
     }
+    // Recorded so the teardown can notify like a send's onFinish would.
+    let terminal: "finish" | "error" | "abort" | undefined;
     try {
       const chunkStream = parseJsonEventStream({
         stream: response.body,
@@ -1147,6 +1149,13 @@ export default function ChatView({
           transform(chunk, controller) {
             if (!chunk.success) {
               throw chunk.error;
+            }
+            if (
+              chunk.value.type === "finish" ||
+              chunk.value.type === "error" ||
+              chunk.value.type === "abort"
+            ) {
+              terminal = chunk.value.type;
             }
             controller.enqueue(chunk.value);
           },
@@ -1173,7 +1182,7 @@ export default function ChatView({
     } finally {
       setRegen(null);
       regenStopRequestedRef.current = false;
-      noteRegenFinished(topic);
+      noteRegenFinished(topic, terminal);
       void queryClient.invalidateQueries({ queryKey: assistantKeys.all });
       void queryClient.invalidateQueries({ queryKey: demoUsageKeys.all });
       reseedHistory(topic);

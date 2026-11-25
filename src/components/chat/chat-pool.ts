@@ -311,7 +311,15 @@ export function noteRegenStarted(
   }
 }
 
-export function noteRegenFinished(chatId: string): void {
+/**
+ * `terminal` is the stream's last terminal chunk type. Only `finish` / `error`
+ * notify, mirroring the Chat `onFinish` rule: a stop (`abort`), a broken
+ * stream (none) or a pre-stream failure stays silent.
+ */
+export function noteRegenFinished(
+  chatId: string,
+  terminal?: "finish" | "error" | "abort",
+): void {
   const entry = entries.get(chatId);
   if (!entry) {
     return;
@@ -323,6 +331,9 @@ export function noteRegenFinished(chatId: string): void {
   entry.generationId = null;
   if (entry.topicId) {
     unmarkTopicStreaming(entry.topicId);
+  }
+  if (entry.topicId && (terminal === "finish" || terminal === "error")) {
+    bridge?.notifyReplyFinished(entry.topicId, terminal === "error");
   }
   maybeEvict(entry);
 }

@@ -37,7 +37,10 @@ interface PikaNative {
   `usePikaNative()` (`src/hooks/use-pika-native.ts`: `useSyncExternalStore`, `null`
   server snapshot, so hydration never mismatches); `ChatPoolBridge` also reads it
   directly to call `notify` when a reply finishes (not aborted, not
-  disconnected) while the page is hidden or unfocused. Always handle it being
+  disconnected) while the page is hidden or unfocused. Sends report through the
+  pooled `Chat` `onFinish`; regenerate / edit run a manual stream loop, so they
+  report through `noteRegenFinished(topic, terminal)` with the stream's last
+  terminal chunk (`finish` / `error` notify, `abort` or none stays silent). Always handle it being
   absent (undefined in a browser). No Web Notification fallback.
 - Server switching: the sidebar brand row (`AssistantTree`), the account menu
   (`SidebarUserMenu`, "Switch server…" + shortcut) and the auth layout chip

@@ -366,4 +366,23 @@ describe("chat pool finish notification", () => {
     expect(finishWith({ isAbort: true })).not.toHaveBeenCalled();
     expect(finishWith({ isDisconnect: true })).not.toHaveBeenCalled();
   });
+
+  function regenFinishWith(terminal?: "finish" | "error" | "abort") {
+    const notifyReplyFinished = vi.fn();
+    configureChatPool({
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished,
+    });
+    noteRegenStarted("t1", "gen-9");
+    noteRegenFinished("t1", terminal);
+    return notifyReplyFinished;
+  }
+
+  it("notifies a regeneration by its terminal chunk, like onFinish", () => {
+    expect(regenFinishWith("finish")).toHaveBeenCalledWith("t1", false);
+    expect(regenFinishWith("error")).toHaveBeenCalledWith("t1", true);
+    expect(regenFinishWith("abort")).not.toHaveBeenCalled();
+    expect(regenFinishWith()).not.toHaveBeenCalled();
+  });
 });
