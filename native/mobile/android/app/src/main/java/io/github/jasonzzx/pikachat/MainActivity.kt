@@ -29,9 +29,12 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
+import androidx.webkit.ScriptHandler
+import androidx.webkit.WebViewCompat
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.BridgeWebChromeClient
 import com.getcapacitor.WebViewListener
+import org.json.JSONObject
 
 class MainActivity : BridgeActivity() {
     var isShellVisible: Boolean = true
@@ -44,6 +47,7 @@ class MainActivity : BridgeActivity() {
     private var remoteWebView: WebView? = null
     private var remoteBridge: RemoteBridge? = null
     private var serverMenuDialog: AlertDialog? = null
+    private var shellAppearanceScript: ScriptHandler? = null
 
     private var shellTheme = ThemePalette.defaults(false)
     private var remoteTheme = ThemePalette.defaults(false)
@@ -103,13 +107,22 @@ class MainActivity : BridgeActivity() {
             activity = this,
             webView = shellWebView,
             allowedOrigin = RemoteBridge.SHELL_ORIGIN,
-            onTheme = ::applyShellTheme,
+            onTheme = { palette, _ -> applyShellTheme(palette) },
         )
+        installShellAppearance(hostPlugin.readAppearance())
 
         bridge.addWebViewListener(object : WebViewListener() {
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 recreate()
                 return true
+            }
+
+            // From here on WebView draws only its background or the new shell document, never the stale frame.
+            override fun onPageCommitVisible(view: WebView, url: String) {
+                if (!isShellVisible || view.visibility != View.INVISIBLE) return
+                view.visibility = View.VISIBLE
+                view.requestFocus()
+                remoteWebView?.visibility = View.INVISIBLE
             }
         })
 
@@ -160,7 +173,7 @@ class MainActivity : BridgeActivity() {
             origin = server.url,
             serverName = server.name,
         )
-        rb.install(onTheme = { palette -> applyRemoteTheme(rb, palette) })
+        rb.install(onTheme = { palette, appearance -> applyRemoteTheme(rb, palette, appearance) })
 
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
@@ -234,6 +247,18 @@ class MainActivity : BridgeActivity() {
     fun connectToServer(server: ServerEntry) {
         dismissServerMenuDialog()
         destroyRemoteWebView()
+        // A server never opened here has no theme cookie, so its sign-in page would render the web default.
+        // Seed it with the shell's appearance (the web app's `mode:resolved:preset` format); after sign-in the
+        // account's own preference rewrites it.
+        val cookies = CookieManager.getInstance()
+        if (!Regex("(?:^|;\\s*)pika_theme=").containsMatchIn(cookies.getCookie(server.url).orEmpty())) {
+            val appearance = hostPlugin.readAppearance()
+            val resolved = if (appearanceIsDark(appearance)) "dark" else "light"
+            cookies.setCookie(
+                server.url,
+                "pika_theme=${appearance.mode}:$resolved:${appearance.preset}; Path=/; Max-Age=31536000; SameSite=Lax",
+            )
+        }
         remoteTheme = defaultThemeForConfig()
         val (wv, rb) = createRemoteWebView(server)
         remoteWebView = wv
@@ -269,10 +294,20 @@ class MainActivity : BridgeActivity() {
             hostPlugin.clearConnectedServer()
             destroyRemoteWebView()
         }
+        val fromServer = !isShellVisible && remoteWebView != null
         isShellVisible = true
         shellCanGoBack = remoteWebView != null
-        remoteWebView?.visibility = View.INVISIBLE
-        bridge.webView.visibility = View.VISIBLE
+        if (fromServer) {
+            // The hidden shell WebView still holds its previous document's last frame, painted with the
+            // appearance the shell had then. Keep the server on screen until onPageCommitVisible. shell-ui
+            // mirrors this server's appearance, so keep the server's palette until shell-ui reports its own.
+            shellTheme = remoteTheme
+            bridge.webView.setBackgroundColor(shellTheme.background)
+            bridge.webView.visibility = View.INVISIBLE
+        } else {
+            remoteWebView?.visibility = View.INVISIBLE
+            bridge.webView.visibility = View.VISIBLE
+        }
         bridge.webView.bringToFront()
         bridge.webView.loadUrl("${RemoteBridge.SHELL_ORIGIN}/$query")
         bridge.webView.requestFocus()
@@ -327,9 +362,12 @@ class MainActivity : BridgeActivity() {
         applyBarColor(activeTheme.background)
     }
 
-    private fun defaultThemeForConfig(): ThemePalette {
-        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        return ThemePalette.defaults(night)
+    private fun defaultThemeForConfig() = ThemePalette.defaults(appearanceIsDark(hostPlugin.readAppearance()))
+
+    private fun appearanceIsDark(appearance: ShellAppearance) = when (appearance.mode) {
+        "dark" -> true
+        "light" -> false
+        else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     }
 
     private fun applyShellTheme(palette: ThemePalette) {
@@ -338,11 +376,37 @@ class MainActivity : BridgeActivity() {
         if (isShellVisible) applyBarColor(palette.background)
     }
 
-    private fun applyRemoteTheme(source: RemoteBridge, palette: ThemePalette) {
+    private fun applyRemoteTheme(source: RemoteBridge, palette: ThemePalette, appearance: ShellAppearance?) {
         if (remoteBridge !== source) return
+        if (appearance != null && appearance != hostPlugin.readAppearance()) {
+            hostPlugin.saveAppearance(appearance)
+            installShellAppearance(appearance)
+        }
         remoteTheme = palette
         remoteWebView?.setBackgroundColor(palette.background)
         if (!isShellVisible) applyBarColor(palette.background)
+    }
+
+    // Shell pages take the last server's appearance before their first frame: a light frame painted first would
+    // stay in the hidden WebView after auto-connect and flash on the next showShell. Re-registered on change,
+    // since the shell reloads on every showShell.
+    private fun installShellAppearance(appearance: ShellAppearance) {
+        shellAppearanceScript?.remove()
+        val mode = JSONObject.quote(appearance.mode)
+        shellAppearanceScript = WebViewCompat.addDocumentStartJavaScript(
+            bridge.webView,
+            """
+            {
+              const systemDark = matchMedia("(prefers-color-scheme: dark)");
+              const applyDark = () => document.documentElement.classList.toggle("dark", $mode === "dark" || ($mode === "system" && systemDark.matches));
+              applyDark();
+              systemDark.addEventListener("change", applyDark);
+              // "default" and presets this build does not know match no [data-theme] block: base tokens apply.
+              document.documentElement.dataset.theme = ${JSONObject.quote(appearance.preset)};
+            }
+            """.trimIndent(),
+            setOf(RemoteBridge.SHELL_ORIGIN),
+        )
     }
 
     private fun applyBarColor(color: Int) {

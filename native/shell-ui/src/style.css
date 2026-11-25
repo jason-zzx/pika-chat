@@ -1,43 +1,11 @@
+@import "../../../src/app/theme-tokens.css";
+
 :root {
-  color-scheme: light dark;
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.92 0.006 75);
-  --input: oklch(0.92 0.006 75);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.2 0 0);
-    --popover: oklch(0.2 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.26 0 0);
-    --muted-foreground: oklch(0.712 0 0);
-    --accent: oklch(0.26 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --destructive-foreground: oklch(0.145 0 0);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.552 0 0);
-  }
+:root.dark {
+  color-scheme: dark;
 }
 
 * {
@@ -300,12 +268,20 @@ h1 {
 }
 
 .btn-destructive {
-  background: var(--destructive);
-  color: var(--destructive-foreground);
+  background: color-mix(in oklch, var(--destructive) 10%, transparent);
+  color: var(--destructive);
 }
 
 .btn-destructive:hover {
-  opacity: 0.9;
+  background: color-mix(in oklch, var(--destructive) 20%, transparent);
+}
+
+.dark .btn-destructive {
+  background: color-mix(in oklch, var(--destructive) 20%, transparent);
+}
+
+.dark .btn-destructive:hover {
+  background: color-mix(in oklch, var(--destructive) 30%, transparent);
 }
 
 .btn-secondary {

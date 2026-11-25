@@ -153,6 +153,18 @@ class PikaHostPlugin : Plugin() {
         }
     }
 
+    fun readAppearance() = ShellAppearance(
+        prefs().getString(KEY_APPEARANCE_MODE, null) ?: "system",
+        prefs().getString(KEY_APPEARANCE_PRESET, null) ?: "default",
+    )
+
+    fun saveAppearance(appearance: ShellAppearance) {
+        prefs().edit()
+            .putString(KEY_APPEARANCE_MODE, appearance.mode)
+            .putString(KEY_APPEARANCE_PRESET, appearance.preset)
+            .apply()
+    }
+
     @PluginMethod
     fun setCanGoBack(call: PluginCall) {
         val canGoBack = call.getBoolean("canGoBack") ?: false
@@ -371,6 +383,8 @@ class PikaHostPlugin : Plugin() {
     companion object {
         private const val PREFS_NAME = "pika"
         private const val KEY_STATE = "state"
+        private const val KEY_APPEARANCE_MODE = "appearance_mode"
+        private const val KEY_APPEARANCE_PRESET = "appearance_preset"
 
         fun originOf(uri: Uri?): String? {
             val scheme = uri?.scheme?.lowercase() ?: return null

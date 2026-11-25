@@ -101,6 +101,9 @@ function installThemeObserver() {
     const sidebarEl = document.querySelector('[data-slot="sidebar"]');
     const sidebarActive = sidebarEl !== null && mqDesktop.matches;
     const sidebarBg = sidebarActive ? toCss(readVar("--sidebar"), "", true) : "";
+    // The web app's ThemeSync writes `pika_theme=<mode>:<resolved>:<preset>` (older servers omit `:<preset>`).
+    // A mode switch that changes no class (system -> dark on a dark OS) still rewrites meta[theme-color].
+    const [mode, , preset = "default"] = /(?:^|;\s*)pika_theme=([^;]*)/.exec(document.cookie)?.[1]?.split(":") ?? [];
     const palette = {
       isDark,
       background,
@@ -113,6 +116,8 @@ function installThemeObserver() {
       border: toCss(readVar("--border"), isDark ? "rgba(255, 255, 255, 0.1)" : "#e5e5e5"),
       titlebarBackground: sidebarBg || background,
       titlebarBorderless: sidebarActive && Boolean(sidebarBg) && sidebarEl.getAttribute("data-variant") === "inset",
+      mode,
+      preset,
     };
     probe.remove();
     const key = JSON.stringify(palette);

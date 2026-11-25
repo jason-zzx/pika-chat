@@ -32,6 +32,9 @@ data class ThemePalette(
     }
 }
 
+// The page's `pika_theme` cookie preference; see ShellAppearance in native/shell-ui/src/host.ts.
+data class ShellAppearance(val mode: String, val preset: String)
+
 class RemoteBridge(
     private val activity: MainActivity,
     private val webView: WebView,
@@ -52,7 +55,7 @@ class RemoteBridge(
         webView.evaluateJavascript("window.__pikaDispatchBack?.()", null)
     }
 
-    fun install(onTheme: (ThemePalette) -> Unit) {
+    fun install(onTheme: (ThemePalette, ShellAppearance?) -> Unit) {
         val rules = setOf(origin)
         WebViewCompat.addWebMessageListener(webView, NATIVE_HOST, rules) { _, message, sourceOrigin, isMainFrame, _ ->
             if (!isMainFrame || sourceOrigin.toString() != origin) return@addWebMessageListener
@@ -144,6 +147,8 @@ class RemoteBridge(
         private const val THEME_HOST = "pikaThemeHost"
         private val RGB_HEX_RE = Regex("^#[0-9a-fA-F]{6}$")
         private val ARGB_HEX_RE = Regex("^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+        private val APPEARANCE_MODES = setOf("light", "dark", "system")
+        private val PRESET_RE = Regex("^[a-z0-9-]{1,32}$")
 
         fun supportsRequiredFeatures(): Boolean =
             WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) &&
@@ -153,7 +158,7 @@ class RemoteBridge(
             activity: MainActivity,
             webView: WebView,
             allowedOrigin: String,
-            onTheme: (ThemePalette) -> Unit,
+            onTheme: (ThemePalette, ShellAppearance?) -> Unit,
         ) {
             val rules = setOf(allowedOrigin)
             WebViewCompat.addWebMessageListener(webView, THEME_HOST, rules) { _, message, sourceOrigin, isMainFrame, _ ->
@@ -161,8 +166,11 @@ class RemoteBridge(
                 val raw = message.data ?: return@addWebMessageListener
                 val json = runCatching { JSONObject(raw) }.getOrNull() ?: return@addWebMessageListener
                 val palette = parseThemePalette(json) ?: return@addWebMessageListener
+                val mode = json.optString("mode")
+                val preset = json.optString("preset")
+                val appearance = if (mode in APPEARANCE_MODES && PRESET_RE.matches(preset)) ShellAppearance(mode, preset) else null
                 activity.runOnUiThread {
-                    if (!activity.isFinishing && !activity.isDestroyed) onTheme(palette)
+                    if (!activity.isFinishing && !activity.isDestroyed) onTheme(palette, appearance)
                 }
             }
 
@@ -205,6 +213,10 @@ class RemoteBridge(
                       : document.documentElement.classList.contains("dark") ||
                         (!document.documentElement.classList.contains("light") && window.matchMedia("(prefers-color-scheme: dark)").matches);
                     const background = bgSample ? "#" + hexByte(bgSample[0]) + hexByte(bgSample[1]) + hexByte(bgSample[2]) : null;
+                    // The web app's ThemeSync writes `pika_theme=<mode>:<resolved>:<preset>` (older servers omit `:<preset>`).
+                    // A mode switch that changes no class (system -> dark on a dark OS) still rewrites meta[theme-color].
+                    const themeCookie = /(?:^|;\s*)pika_theme=([^;]*)/.exec(document.cookie);
+                    const [mode, , preset = "default"] = themeCookie ? themeCookie[1].split(":") : [];
                     const payload = {
                       isDark,
                       color: background,
@@ -214,6 +226,8 @@ class RemoteBridge(
                       accent: toHex(readVar("--accent"), false),
                       primary: toHex(readVar("--primary"), false),
                       border: toHex(readVar("--border"), false),
+                      mode,
+                      preset,
                     };
                     probe.remove();
                     const encoded = JSON.stringify(payload);

@@ -4,6 +4,10 @@ export type ServerCheck =
   | { ok: true; version: string | null }
   | { ok: false; reason: "unreachable" | "not-pika" };
 
+// The last connected server's theme preference (its `pika_theme` cookie). Hosts apply it to shell-ui
+// pages before their first frame (`.dark` + `data-theme`).
+export type ShellAppearance = { mode: "light" | "dark" | "system"; preset: string };
+
 export type DesktopThemeColors = {
   isDark: boolean;
   background: string;

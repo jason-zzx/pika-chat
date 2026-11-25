@@ -27,7 +27,7 @@ if (chrome === "titlebar") {
 }
 
 function readShellTheme(): DesktopThemeColors {
-  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const isDark = document.documentElement.classList.contains("dark");
   const probe = document.createElement("div");
   const vars = [
     "--background",
@@ -89,6 +89,7 @@ async function mountShellPages() {
   if (host.desktop) {
     const syncShellTheme = () => host.desktop?.setTheme(readShellTheme());
     syncShellTheme();
+    // Registered after the preload's own listener, so the `.dark` class is already updated here.
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncShellTheme);
   }
 

@@ -30,7 +30,7 @@ import { classifyHealth, normalizeServerUrl } from "@pika/shell-ui/servers";
 import { loadStrings } from "./i18n";
 import { createLocalServer, localPaths } from "./local-server";
 import { clearStorageCategory, desktopLogPath, measureStorageUsage } from "./storage";
-import { closeActionSchema, loadConfig, saveConfig } from "./store";
+import { appearanceSchema, closeActionSchema, loadConfig, saveConfig } from "./store";
 import { createUpdater } from "./updater";
 
 const LOCAL_SERVER_ID = "local";
@@ -153,7 +153,9 @@ function start() {
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
 
-  let currentTheme = defaultTheme(nativeTheme.shouldUseDarkColors);
+  const appearanceIsDark = () =>
+    config.appearance.mode === "system" ? nativeTheme.shouldUseDarkColors : config.appearance.mode === "dark";
+  let currentTheme = defaultTheme(appearanceIsDark());
   let shellTheme = currentTheme;
 
   const saved = config.windowState;
@@ -190,7 +192,7 @@ function start() {
   };
 
   const titlebarView = createShellView("?chrome=titlebar");
-  const shellView = createShellView();
+  let shellView = createShellView();
   const serverMenuView = createShellView("?chrome=menu");
   serverMenuView.setBackgroundColor("#00000000");
 
@@ -352,6 +354,17 @@ function start() {
   // "?connect=<id>" connects to that server, "?failed=<id>" the load error.
   const showShell = (query: string, { dropRemote = false }: { dropRemote?: boolean } = {}) => {
     connectToken++;
+    if (!shellAttached) {
+      // The detached shell view still holds its previous document's last frame, painted with the appearance
+      // the shell had then, and would show it until the new document paints. A fresh view shows only its
+      // background meanwhile. shell-ui mirrors this server's appearance, so keep the server's palette until
+      // shell-ui reports its own.
+      shellView.webContents.close();
+      shellView = createShellView();
+      setupShellView(shellView);
+      shellView.setBackgroundColor(currentTheme.background);
+      shellTheme = currentTheme;
+    }
     if (dropRemote) closeRemote();
     shellAttached = true;
     attach(shellView);
@@ -425,7 +438,6 @@ function start() {
     });
   };
 
-  attachNavInput(shellView.webContents);
   attachNavInput(serverMenuView.webContents);
   attachNavInput(titlebarView.webContents);
 
@@ -456,9 +468,13 @@ function start() {
   attachCrashRecovery(titlebarView.webContents, "titlebarView", () => {
     void titlebarView.webContents.loadURL(`${shellUrl}?chrome=titlebar`);
   });
-  attachCrashRecovery(shellView.webContents, "shellView", () => {
-    void shellView.webContents.loadURL(`${shellUrl}?list`);
-  });
+  const setupShellView = (view: WebContentsView) => {
+    attachNavInput(view.webContents);
+    attachCrashRecovery(view.webContents, "shellView", () => {
+      void view.webContents.loadURL(`${shellUrl}?list`);
+    });
+  };
+  setupShellView(shellView);
   attachCrashRecovery(serverMenuView.webContents, "serverMenuView", closeServerMenu);
 
   app.on("child-process-gone", (_event, details) => {
@@ -594,7 +610,23 @@ function start() {
 
     const server = config.servers.find((candidate) => candidate.id === id);
     if (!server) throw new Error("unknown server");
-    attachServerView(server, `persist:server-${id}`, server.url);
+    const partition = `persist:server-${id}`;
+    // A server never opened here has no theme cookie, so its sign-in page would render the web default.
+    // Seed it with the shell's appearance (the web app's `mode:resolved:preset` format); after sign-in the
+    // account's own preference rewrites it.
+    const cookies = session.fromPartition(partition).cookies;
+    if ((await cookies.get({ url: server.url, name: "pika_theme" })).length === 0) {
+      await cookies.set({
+        url: server.url,
+        name: "pika_theme",
+        value: `${config.appearance.mode}:${appearanceIsDark() ? "dark" : "light"}:${config.appearance.preset}`,
+        path: "/",
+        sameSite: "lax",
+        expirationDate: Date.now() / 1000 + 60 * 60 * 24 * 365,
+      });
+    }
+    if (token !== connectToken || !shellAttached) return;
+    attachServerView(server, partition, server.url);
   };
 
   const applyHotkey = (accelerator: string | null) => {
@@ -701,6 +733,10 @@ function start() {
   handleShell("shell:openDevTools", z.undefined(), openDetachedDevTools);
   handleShell("shell:openDesktopLog", z.undefined(), openDesktopLogFile);
   handleShell("shell:checkForUpdates", z.undefined(), manualUpdateCheck);
+
+  ipcMain.on("shell:getAppearance", (event) => {
+    event.returnValue = event.sender === shellView.webContents ? config.appearance : null;
+  });
 
   ipcMain.on("shell:setTheme", (event, raw: unknown) => {
     if (event.sender !== shellView.webContents) return;
@@ -813,6 +849,12 @@ function start() {
     if (!parsed.success) return;
     remote.theme = parsed.data;
     if (!shellAttached) applyTheme(parsed.data);
+    // The palette also carries the page's `pika_theme` mode/preset; themeInput strips them from remote.theme.
+    const appearance = appearanceSchema.safeParse(raw);
+    if (appearance.success) {
+      config.appearance = appearance.data;
+      saveConfig(config);
+    }
   });
 
   ipcMain.on("native:navState", (event) => {

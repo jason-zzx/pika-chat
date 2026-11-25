@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { DesktopThemeColors, PikaShell, ServerMenuData, TitlebarState } from "@pika/shell-ui/host";
+import type {
+  DesktopThemeColors,
+  PikaShell,
+  ServerMenuData,
+  ShellAppearance,
+  TitlebarState,
+} from "@pika/shell-ui/host";
 
 const subscribe = <T>(channel: string, listener: (payload: T) => void) => {
   const handler = (_event: unknown, payload: T) => listener(payload);
@@ -45,3 +51,25 @@ const shell: PikaShell = {
 };
 
 contextBridge.exposeInMainWorld("pikaShell", shell);
+
+// Shell pages take the last server's appearance before their first frame: a light frame painted first would
+// stay on screen when auto-connect detaches the view, and flash on the next showShell. The preload runs
+// before <html> exists; the mutation callback still runs before the first paint.
+if (!new URLSearchParams(location.search).has("chrome")) {
+  const appearance: ShellAppearance = ipcRenderer.sendSync("shell:getAppearance");
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+  const applyDark = () =>
+    document.documentElement.classList.toggle(
+      "dark",
+      appearance.mode === "dark" || (appearance.mode === "system" && systemDark.matches),
+    );
+  const observer = new MutationObserver(() => {
+    if (!document.documentElement) return;
+    observer.disconnect();
+    // "default" and presets this build does not know match no [data-theme] block: base tokens apply.
+    document.documentElement.dataset.theme = appearance.preset;
+    applyDark();
+    systemDark.addEventListener("change", applyDark);
+  });
+  observer.observe(document, { childList: true });
+}
