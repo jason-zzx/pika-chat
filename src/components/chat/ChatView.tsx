@@ -1794,6 +1794,8 @@ export default function ChatView({
     </div>
   ) : null;
 
+  const hasTopicMessages = Boolean(activeTopicId) && messages.length > 0;
+
   if (topicId && history.isError) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -1926,17 +1928,13 @@ export default function ChatView({
         }}
         reasoningEffort={reasoningEffort}
         onReasoningEffortChange={setReasoningEffort}
-        onOpenChatMap={() => setChatMapOpen(true)}
-        chatMapDisabled={messages.length === 0}
-        onCompress={() => setCompressConfirmOpen(true)}
-        compressDisabled={
-          !activeTopicId ||
-          !pickedModel ||
-          inFlight ||
-          compressing ||
-          // Nothing to fold in: an empty topic would only 400 server-side.
-          messages.length === 0
+        onOpenChatMap={
+          hasTopicMessages ? () => setChatMapOpen(true) : undefined
         }
+        onCompress={
+          hasTopicMessages ? () => setCompressConfirmOpen(true) : undefined
+        }
+        compressDisabled={!pickedModel || inFlight || compressing}
         attachments={attachments}
         onAddFiles={addFiles}
         onRemoveAttachment={removeAttachment}

@@ -36,8 +36,9 @@ function renderComposer(options?: {
   draft?: string;
   models?: AvailableModel[];
   model?: { configId: string; modelId: string };
+  showAssistantPicker?: boolean;
   reasoningEffort?: string | null;
-  chatMapDisabled?: boolean;
+  chatMap?: boolean;
   attachments?: StagedAttachment[];
   onCompress?: () => void;
   compressDisabled?: boolean;
@@ -61,25 +62,25 @@ function renderComposer(options?: {
         <Composer
           draft={options?.draft ?? "hello"}
           onDraftChange={() => undefined}
-        model={options?.model ?? { configId: "cfg", modelId: "local-llama" }}
-        onModelChange={() => undefined}
-        showAssistantPicker={false}
-        inFlight={options?.inFlight ?? false}
-        canSend={options?.canSend ?? true}
-        onSend={onSend}
-        onStop={onStop}
-        reasoningEffort={options?.reasoningEffort ?? null}
-        onReasoningEffortChange={onReasoningEffortChange}
-        onOpenChatMap={onOpenChatMap}
-        chatMapDisabled={options?.chatMapDisabled}
-        onCompress={options?.onCompress}
-        compressDisabled={options?.compressDisabled}
-        attachments={options?.attachments}
-        onAddFiles={onAddFiles}
-        onRemoveAttachment={onRemoveAttachment}
-        onRetryAttachment={onRetryAttachment}
-        imageParams={options?.imageParams}
-        onImageParamsChange={onImageParamsChange}
+          model={options?.model ?? { configId: "cfg", modelId: "local-llama" }}
+          onModelChange={() => undefined}
+          onAssistantChange={() => undefined}
+          showAssistantPicker={options?.showAssistantPicker ?? false}
+          inFlight={options?.inFlight ?? false}
+          canSend={options?.canSend ?? true}
+          onSend={onSend}
+          onStop={onStop}
+          reasoningEffort={options?.reasoningEffort ?? null}
+          onReasoningEffortChange={onReasoningEffortChange}
+          onOpenChatMap={options?.chatMap === false ? undefined : onOpenChatMap}
+          onCompress={options?.onCompress}
+          compressDisabled={options?.compressDisabled}
+          attachments={options?.attachments}
+          onAddFiles={onAddFiles}
+          onRemoveAttachment={onRemoveAttachment}
+          onRetryAttachment={onRetryAttachment}
+          imageParams={options?.imageParams}
+          onImageParamsChange={onImageParamsChange}
         />
         <SharedTooltipHost />
       </TooltipProvider>
@@ -412,12 +413,10 @@ describe("Composer", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("disables the chat map button while the conversation is empty and keeps it left of send", () => {
-    renderComposer({ chatMapDisabled: true });
+  it("keeps the chat map button on the send row, left of send", () => {
+    renderComposer();
 
     const map = screen.getByRole("button", { name: "Chat map" });
-    expect(map).toBeDisabled();
-
     const send = screen.getByRole("button", { name: "Send" });
     expect(send.parentElement).toContainElement(map);
     expect(
@@ -425,7 +424,14 @@ describe("Composer", () => {
     ).toBeTruthy();
   });
 
-  it("places expand on the send row, left of send, with no extra row above the textarea", () => {
+  it("omits the chat map button when onOpenChatMap is not provided", () => {
+    renderComposer({ chatMap: false });
+    expect(
+      screen.queryByRole("button", { name: "Chat map" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("places expand at the top-right of the textarea without occupying the send row", () => {
     const scroll = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       "scrollHeight",
@@ -452,15 +458,22 @@ describe("Composer", () => {
 
       const expand = screen.getByRole("button", { name: "Expand composer" });
       const send = screen.getByRole("button", { name: "Send" });
-      expect(send.parentElement).toContainElement(expand);
-      expect(expand.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const textarea = screen.getByRole("textbox", { name: "Message" });
+      expect(send.parentElement).not.toContainElement(expand);
+      expect(textarea.parentElement).toContainElement(expand);
+      expect(textarea.className).toContain("pr-12");
 
       const box = send.closest(".rounded-2xl");
       expect(box).toBeInstanceOf(HTMLElement);
       if (!(box instanceof HTMLElement)) {
         return;
       }
-      expect(box.firstElementChild).toHaveAttribute("aria-label", "Message");
+      expect(box.firstElementChild?.firstElementChild).toBe(textarea);
+
+      fireEvent.click(expand);
+      expect(
+        screen.getByRole("button", { name: "Collapse composer" }),
+      ).toBeInTheDocument();
     } finally {
       if (scroll) {
         Object.defineProperty(HTMLElement.prototype, "scrollHeight", scroll);
@@ -469,6 +482,46 @@ describe("Composer", () => {
         Object.defineProperty(HTMLElement.prototype, "clientHeight", client);
       }
     }
+  });
+
+  it("keeps the left toolbar non-wrapping and horizontally scrollable when all pickers render", async () => {
+    renderComposer({
+      showAssistantPicker: true,
+      models: [
+        {
+          configId: "cfg",
+          configName: "my-keys",
+          modelId: "local-llama",
+          provenance: "own",
+          ownerName: null,
+          ...defaultModelMetadata({
+            reasoning: true,
+            reasoningOptions: ["low", "high"],
+          }),
+        },
+      ],
+    });
+
+    const reasoning = await screen.findByRole("combobox", {
+      name: "Reasoning effort",
+    });
+    const leftToolbar = reasoning.parentElement;
+    expect(leftToolbar).toBeInstanceOf(HTMLElement);
+    expect(leftToolbar?.className).toContain("flex-nowrap");
+    expect(leftToolbar?.className).toContain("overflow-x-auto");
+    expect(leftToolbar?.className).not.toContain("flex-wrap");
+    expect(leftToolbar).toContainElement(
+      screen.getByRole("combobox", { name: "Assistant" }),
+    );
+    expect(leftToolbar).toContainElement(
+      screen.getByRole("button", { name: "local-llama" }),
+    );
+    expect(leftToolbar).toContainElement(
+      screen.getByRole("button", { name: "Attach files" }),
+    );
+    expect(leftToolbar).toContainElement(
+      screen.getByRole("button", { name: "Web search mode: Off" }),
+    );
   });
 });
 
@@ -853,6 +906,13 @@ describe("Composer attachments", () => {
     expect(
       screen.getByRole("button", { name: "Attach files" }),
     ).toBeDisabled();
+  });
+
+  it("omits compression button when onCompress is not provided", () => {
+    renderComposer();
+    expect(
+      screen.queryByRole("button", { name: "Compress context" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders compression button and triggers onCompress", () => {

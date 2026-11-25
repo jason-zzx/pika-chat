@@ -78,12 +78,11 @@ type ComposerProps = {
   onStop: () => void;
   reasoningEffort: string | null;
   onReasoningEffortChange: (value: string | null) => void;
-  /** Opens the chat map overview listing every message. */
-  onOpenChatMap: () => void;
-  /** No messages yet — there is nothing to jump to. */
-  chatMapDisabled?: boolean;
-  /** Manual history compression (PRD R2). Disabled on drafts (no topic yet)
-   * and while a turn is streaming. */
+  /** Opens the chat map overview listing every message; omitted on empty
+   * drafts where there is nothing to jump to. */
+  onOpenChatMap?: () => void;
+  /** Manual history compression (PRD R2). Omitted on empty drafts; disabled
+   * while a turn is streaming, compressing, or no model is picked. */
   onCompress?: () => void;
   compressDisabled?: boolean;
   /** Attachments staged for the active draft (upload-on-selection). */
@@ -118,7 +117,6 @@ export default function Composer({
   reasoningEffort,
   onReasoningEffortChange,
   onOpenChatMap,
-  chatMapDisabled = false,
   onCompress,
   compressDisabled = false,
   attachments = [],
@@ -250,24 +248,51 @@ export default function Composer({
               className="mx-3 mt-2"
             />
           ) : null}
-          <Textarea
-            ref={textareaRef}
-            aria-label={t("messageLabel")}
-            placeholder={t("messageLabel")}
-            value={draft}
-            onChange={(event) => handleDraftChange(event.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            disabled={inFlight}
-            rows={MIN_ROWS}
-            className={cn(
-              "field-sizing-content flex-1 resize-none overflow-y-auto border-0 bg-transparent leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent",
-              "disabled:bg-transparent dark:disabled:bg-transparent",
-              "thin-scrollbar",
-              "min-h-[3rem] px-3 py-2",
-              expanded ? "min-h-[18rem] max-h-full" : "max-h-[9rem]",
-            )}
-          />
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <Textarea
+              ref={textareaRef}
+              aria-label={t("messageLabel")}
+              placeholder={t("messageLabel")}
+              value={draft}
+              onChange={(event) => handleDraftChange(event.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              disabled={inFlight}
+              rows={MIN_ROWS}
+              className={cn(
+                "field-sizing-content flex-1 resize-none overflow-y-auto border-0 bg-transparent leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent",
+                "disabled:bg-transparent dark:disabled:bg-transparent",
+                "thin-scrollbar",
+                "min-h-[3rem] py-2 pl-3",
+                showExpandToggle ? "pr-12 md:pr-10" : "pr-3",
+                expanded ? "min-h-[18rem] max-h-full" : "max-h-[9rem]",
+              )}
+            />
+            {showExpandToggle ? (
+              <SharedTooltip
+                payload={expanded ? t("collapse") : t("expand")}
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className={cn(
+                      TOOLBAR_ICON_BUTTON_CLASS,
+                      "absolute top-1.5 right-2 z-10",
+                    )}
+                    aria-label={expanded ? t("collapse") : t("expand")}
+                    onClick={() => setExpanded((current) => !current)}
+                  />
+                }
+              >
+                {expanded ? (
+                  <Minimize2Icon aria-hidden="true" />
+                ) : (
+                  <Maximize2Icon aria-hidden="true" />
+                )}
+              </SharedTooltip>
+            ) : null}
+          </div>
           <div className="relative flex items-end justify-between gap-1.5 p-1.5 md:gap-2">
             <button
               type="button"
@@ -278,7 +303,7 @@ export default function Composer({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => textareaRef.current?.focus()}
             />
-            <div className="pointer-events-none relative flex min-w-0 flex-1 flex-wrap items-center gap-1.5 md:gap-2 [&>*]:pointer-events-auto">
+            <div className="pointer-events-none relative -m-1 flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-2 [&>*]:pointer-events-auto">
               {showAssistantPicker && onAssistantChange ? (
                 <AssistantPicker
                   value={assistantId}
@@ -366,43 +391,23 @@ export default function Composer({
                   <ListCollapseIcon aria-hidden="true" />
                 </SharedTooltip>
               ) : null}
-              <SharedTooltip
-                payload={t("chatMap")}
-                render={
-                  <Button
-                    // Composer root is a <form>: without an explicit type this
-                    // would submit the draft.
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className={TOOLBAR_ICON_BUTTON_CLASS}
-                    aria-label={t("chatMap")}
-                    disabled={chatMapDisabled}
-                    onClick={onOpenChatMap}
-                  />
-                }
-              >
-                <MapIcon aria-hidden="true" />
-              </SharedTooltip>
-              {showExpandToggle ? (
+              {onOpenChatMap ? (
                 <SharedTooltip
-                  payload={expanded ? t("collapse") : t("expand")}
+                  payload={t("chatMap")}
                   render={
                     <Button
+                      // Composer root is a <form>: without an explicit type this
+                      // would submit the draft.
                       type="button"
                       variant="ghost"
                       size="icon-sm"
                       className={TOOLBAR_ICON_BUTTON_CLASS}
-                      aria-label={expanded ? t("collapse") : t("expand")}
-                      onClick={() => setExpanded((current) => !current)}
+                      aria-label={t("chatMap")}
+                      onClick={onOpenChatMap}
                     />
                   }
                 >
-                  {expanded ? (
-                    <Minimize2Icon aria-hidden="true" />
-                  ) : (
-                    <Maximize2Icon aria-hidden="true" />
-                  )}
+                  <MapIcon aria-hidden="true" />
                 </SharedTooltip>
               ) : null}
               {inFlight ? (

@@ -64,6 +64,7 @@ const composerProps = vi.hoisted(() => ({
         canSend?: boolean;
         onSend?: () => void;
         onStop?: () => void;
+        onOpenChatMap?: () => void;
         onCompress?: () => void;
         compressDisabled?: boolean;
       }
@@ -77,6 +78,7 @@ vi.mock("./Composer", () => ({
     onDraftChange?: (value: string) => void;
     showAssistantPicker?: boolean;
     onStop?: () => void;
+    onOpenChatMap?: () => void;
     onCompress?: () => void;
     compressDisabled?: boolean;
   }) => {
@@ -455,6 +457,8 @@ describe("ChatView session-created topic history (B8)", () => {
     vi.mocked(listTopicMessages).mockResolvedValue({ messages: [] });
     const view = renderChatView();
     expect(composerProps.latest?.showAssistantPicker).toBe(true);
+    expect(composerProps.latest?.onOpenChatMap).toBeUndefined();
+    expect(composerProps.latest?.onCompress).toBeUndefined();
 
     act(() => {
       captured.onData?.({
