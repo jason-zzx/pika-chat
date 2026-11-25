@@ -1355,3 +1355,29 @@ Switched Windows installer to an assisted NSIS wizard (custom BMP graphics, dire
 ### Status
 
 [OK] **Completed**
+
+
+## Session 50: Native-like app navigation & shell-ui update check
+<!-- trellis-session: v=2 fp=0ec9cb6c5f790e53 -->
+
+**Date**: 2026-11-24
+**Task**: Native-like app navigation & shell-ui update check
+**Branch**: `feat/native-apps`
+
+### Summary
+
+Implemented 4-layer native-like app navigation across Web (logical stack with Home root, isolated Settings branch, overlay-first Back dismissal, auth/deletion hygiene), Desktop (keep-alive remoteView, unified Back/Forward interception), Android (dual-WebView keeping bridge.webView on shell-ui, predictive Back), and shell-ui (internal sub-screen stack and lossless returnToServer). Also removed automatic launch update checks on Desktop and Android, retired shell-ui's mobile Settings sub-page, and consolidated manual update checks into a unified shell-ui footer.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a0633a4` | feat(navigation): add logical navigation state, overlay dismissal, and NavigationProvider |
+| `cd3d38a` | feat(web): adopt app navigation across sidebar, chat, settings, and auth |
+| `1f13200` | feat(native): transactional server switching and native back handling for shell-ui, desktop, and android |
+| `473e81f` | docs(spec): document native navigation and dual-webview contracts |
+| `eec91a2` | refactor(native): move update check into shell-ui footer and disable launch auto-check |
+
+### Status
+
+[OK] **Completed**
