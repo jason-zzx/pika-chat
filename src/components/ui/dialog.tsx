@@ -30,6 +30,9 @@ function DialogOverlay({
 }: DialogPrimitive.Backdrop.Props) {
   return (
     <DialogPrimitive.Backdrop
+      // Base UI skips the backdrop for dialogs nested in another dialog's React
+      // tree (e.g. sidebar dialogs inside the mobile sidebar Sheet).
+      forceRender
       data-slot="dialog-overlay"
       className={cn(
         "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
