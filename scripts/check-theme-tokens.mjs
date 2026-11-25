@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Verifies that every theme preset block in src/app/globals.css declares the
+ * Verifies that every theme preset block in src/app/theme-tokens.css declares the
  * full baseline token set: [data-theme="X"] must cover every custom property
  * defined in :root (radius tokens excepted — they are not redefined per
  * theme) and [data-theme="X"].dark must cover every one in .dark.
@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const css = readFileSync(join(repoRoot, "src/app/globals.css"), "utf8");
+const css = readFileSync(join(repoRoot, "src/app/theme-tokens.css"), "utf8");
 
 // Same-source the preset list from src/lib/theme.ts so the two cannot drift.
 const themeSource = readFileSync(join(repoRoot, "src/lib/theme.ts"), "utf8");
@@ -75,7 +75,7 @@ const problems = [];
 function baseline(selector) {
   const tokens = blocks.get(selector);
   if (!tokens || tokens.size === 0) {
-    problems.push(`baseline block \`${selector}\` not found in globals.css`);
+    problems.push(`baseline block \`${selector}\` not found in theme-tokens.css`);
     return [];
   }
   return [...tokens];
