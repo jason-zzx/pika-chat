@@ -2155,3 +2155,42 @@ describe("ChatView temporary chat", () => {
     expect(document.title).toBe("Pika Chat");
   });
 });
+
+describe("ChatView mobile header new-topic action", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    nav.pathname = "/assistant/a1/t1";
+    vi.mocked(listTopicMessages).mockResolvedValue({ messages: [] });
+  });
+
+  afterEach(() => {
+    useTemporaryTopicStore.setState({
+      temporaryTopicId: null,
+      leaveRequestCount: 0,
+    });
+  });
+
+  it("renders a mobile-only New topic link in the header on a topic page", async () => {
+    renderChatView({ assistantId: "a1", topicId: "t1" });
+    await screen.findByText("Send a message to start this conversation.");
+
+    const link = screen.getByRole("link", { name: "New topic" });
+    expect(link).toHaveAttribute("href", "/assistant/a1");
+    expect(link).toHaveClass("md:hidden");
+  });
+
+  it("omits the New topic link on drafts and temporary topics", () => {
+    nav.pathname = "/assistant/a1";
+    renderChatView({ assistantId: "a1" });
+    expect(screen.queryByRole("link", { name: "New topic" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Temporary" }));
+    act(() => {
+      captured.onData?.({
+        type: "data-topic",
+        data: { topicId: "t-temp", streamId: "s-temp" },
+      });
+    });
+    expect(screen.queryByRole("link", { name: "New topic" })).toBeNull();
+  });
+});

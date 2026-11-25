@@ -2,6 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -10,7 +11,7 @@ import {
   uiMessageChunkSchema,
   type FileUIPart,
 } from "ai";
-import { MessageSquareDashedIcon } from "lucide-react";
+import { MessageSquareDashedIcon, MessageSquarePlusIcon } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 
 import {
@@ -32,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   activeGenerationForTopic,
   useActiveGenerations,
@@ -40,6 +41,7 @@ import {
 import { useAccountUserId } from "@/hooks/use-account-user";
 import { demoUsageKeys } from "@/hooks/use-demo-usage";
 import { useModelPreferences } from "@/hooks/use-model-preferences";
+import { usePikaNative } from "@/hooks/use-pika-native";
 import { useStableCallback } from "@/hooks/use-stable-callback";
 import {
   deleteTopicMessage,
@@ -55,6 +57,7 @@ import {
 } from "@/lib/api/error-message";
 import { compressTopic } from "@/lib/api/topic";
 import {
+  assistantDraftHref,
   assistantTopicHref,
   parseAssistantPath,
 } from "@/lib/assistant-path";
@@ -253,11 +256,13 @@ export default function ChatView({
   const appNav = useAppNavigation();
   const t = useTranslations("Chat.MessageList");
   const tChat = useTranslations("Chat");
+  const tLayout = useTranslations("Layout");
   const tTemporary = useTranslations("Chat.Temporary");
   const tCompression = useTranslations("Chat.Compression");
   const tCommon = useTranslations("Common");
   const tFiles = useTranslations("Files");
   const tErrors = useTranslations("Errors");
+  const isNative = usePikaNative() !== null;
   const tree = useAssistantTree();
   const models = useAvailableModels();
   const modelPreferences = useModelPreferences();
@@ -1765,7 +1770,7 @@ export default function ChatView({
     setDraftTemporary((current) => !current);
   }
 
-  const temporaryToggle =
+  const headerActions =
     activeTopicId === undefined || isTemporaryTopic ? (
       <Button
         type="button"
@@ -1782,6 +1787,19 @@ export default function ChatView({
         <MessageSquareDashedIcon aria-hidden="true" className="size-4" />
         <span>{tTemporary("toggle")}</span>
       </Button>
+    ) : resolvedAssistantId ? (
+      // Mobile-only: desktop creates new topics from the persistent left sidebar.
+      <Link
+        href={assistantDraftHref(resolvedAssistantId)}
+        replace={isNative}
+        aria-label={tLayout("tree.newTopic")}
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "icon-sm" }),
+          "size-9 md:hidden [&_svg]:size-5",
+        )}
+      >
+        <MessageSquarePlusIcon aria-hidden="true" />
+      </Link>
     ) : null;
 
   const temporaryBanner = isTemporary ? (
@@ -1800,7 +1818,11 @@ export default function ChatView({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <DocumentTitle name={showDocumentTitle ? headerTitle : null} />
-        <InsetHeader title={headerTitle} subtitle={headerSubtitle} />
+        <InsetHeader
+          title={headerTitle}
+          subtitle={headerSubtitle}
+          actions={headerActions}
+        />
         <EmptyState
           title={t("loadFailedTitle")}
           description={t("loadFailedDescription")}
@@ -1826,7 +1848,7 @@ export default function ChatView({
       <InsetHeader
         title={headerTitle}
         subtitle={headerSubtitle}
-        actions={temporaryToggle}
+        actions={headerActions}
       />
       {temporaryBanner}
       {historyPending ? (
