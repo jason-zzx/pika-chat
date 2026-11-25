@@ -165,8 +165,9 @@ class PikaHostPlugin : Plugin() {
 
     @PluginMethod
     fun checkForUpdates(call: PluginCall) {
-        Updates.check(activity, manual = true)
-        call.resolve()
+        Updates.check(activity) {
+            call.resolve()
+        }
     }
 
     // Runs on the UI thread for renderer-initiated navigations on bridge.webView (shell-ui only).

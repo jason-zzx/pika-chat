@@ -6,7 +6,6 @@ export type ShellScreen =
   | { kind: "welcome" }
   | { kind: "list" }
   | { kind: "form"; server?: Server; allowCancel: boolean }
-  | { kind: "mobileSettings" }
   | { kind: "connecting"; serverId: string; skipVersionCheck?: boolean }
   | { kind: "versionWarning"; server: Server; serverVersion: string | null }
   | { kind: "error"; serverId: string; reason: "unreachable" | "not-pika"; detail?: string };

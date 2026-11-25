@@ -252,53 +252,82 @@ async function mountShellPages() {
     handleBack();
   });
 
-  function desktopFooter(developerMode: boolean): HTMLElement | null {
+  function shellFooter(developerMode: boolean): HTMLElement {
     const desktop = host.desktop;
-    if (!desktop) return null;
-
     let enabled = developerMode;
     let clicks = 0;
     let timer: number | undefined;
     const footer = el("footer", { className: "shell-footer" });
     const hint = el("span", { className: "footer-hint" });
-    const versionBtn = el("button", {
+    const sep = el("span", { className: "footer-sep", textContent: "·" });
+    sep.setAttribute("aria-hidden", "true");
+
+    const versionNode = desktop
+      ? el("button", {
+          type: "button",
+          className: "footer-action",
+          textContent: `v${host.appVersion}`,
+        })
+      : el("span", {
+          className: "footer-version",
+          textContent: `v${host.appVersion}`,
+        });
+
+    const checkUpdatesButton = el("button", {
       type: "button",
-      className: "version-trigger",
-      textContent: `v${host.appVersion}`,
+      className: "footer-action",
+      textContent: t("checkForUpdates"),
     });
+    checkUpdatesButton.onclick = async () => {
+      checkUpdatesButton.disabled = true;
+      checkUpdatesButton.textContent = t("checkingUpdates");
+      try {
+        await host.checkForUpdates();
+      } finally {
+        if (checkUpdatesButton.isConnected) {
+          checkUpdatesButton.disabled = false;
+          checkUpdatesButton.textContent = t("checkForUpdates");
+        }
+      }
+    };
 
     const paint = () => {
-      const extras = enabled
-        ? [
-            button(t("openDevTools"), () => void desktop.openDevTools(), "ghost"),
-            button(t("openDesktopLog"), () => void desktop.openDesktopLog(), "ghost"),
-          ]
-        : [];
-      footer.replaceChildren(versionBtn, hint, ...extras);
+      const extras =
+        desktop && enabled
+          ? [
+              button(t("openDevTools"), () => void desktop.openDevTools(), "ghost"),
+              button(t("openDesktopLog"), () => void desktop.openDesktopLog(), "ghost"),
+            ]
+          : [];
+      footer.replaceChildren(versionNode, sep, checkUpdatesButton, ...(hint.textContent ? [hint] : []), ...extras);
     };
 
-    versionBtn.onclick = async () => {
-      if (enabled) return;
-      window.clearTimeout(timer);
-      clicks += 1;
-      timer = window.setTimeout(() => {
-        clicks = 0;
-        hint.textContent = "";
-      }, 1500);
-
-      if (clicks >= 5) {
-        clicks = 0;
+    if (desktop && versionNode instanceof HTMLButtonElement) {
+      versionNode.onclick = async () => {
+        if (enabled) return;
         window.clearTimeout(timer);
-        await desktop.setDeveloperMode(true);
-        enabled = true;
-        hint.textContent = t("developerModeEnabled");
-        paint();
-        return;
-      }
-      if (clicks >= 3) {
-        hint.textContent = t("developerModeClicks", { count: String(5 - clicks) });
-      }
-    };
+        clicks += 1;
+        timer = window.setTimeout(() => {
+          clicks = 0;
+          hint.textContent = "";
+          paint();
+        }, 1500);
+
+        if (clicks >= 5) {
+          clicks = 0;
+          window.clearTimeout(timer);
+          await desktop.setDeveloperMode(true);
+          enabled = true;
+          hint.textContent = t("developerModeEnabled");
+          paint();
+          return;
+        }
+        if (clicks >= 3) {
+          hint.textContent = t("developerModeClicks", { count: String(5 - clicks) });
+          paint();
+        }
+      };
+    }
 
     paint();
     return footer;
@@ -389,13 +418,7 @@ async function mountShellPages() {
     }
     toolbarStartChildren.push(el("h1", { textContent: t("servers") }));
 
-    const toolbarActions = host.desktop
-      ? [button(t("addServer"), () => pushAndRender({ kind: "form", allowCancel: true }), "primary")]
-      : [
-          button(t("settings"), () => pushAndRender({ kind: "mobileSettings" }), "ghost"),
-          button(t("addServer"), () => pushAndRender({ kind: "form", allowCancel: true }), "primary"),
-        ];
-    const footer = desktopFooter(devMode);
+    const toolbarActions = [button(t("addServer"), () => pushAndRender({ kind: "form", allowCancel: true }), "primary")];
 
     render(
       el(
@@ -405,7 +428,7 @@ async function mountShellPages() {
         el("div", { className: "actions" }, ...toolbarActions),
       ),
       el("ul", { className: "list" }, ...rows),
-      ...(footer ? [footer] : []),
+      shellFooter(devMode),
     );
   }
 
@@ -588,44 +611,6 @@ async function mountShellPages() {
     );
   }
 
-  function renderMobileSettings() {
-    const checkUpdatesButton = button(t("checkForUpdates"), async () => {
-      checkUpdatesButton.disabled = true;
-      checkUpdatesButton.textContent = t("checkingUpdates");
-      try {
-        await host.checkForUpdates();
-      } finally {
-        if (checkUpdatesButton.isConnected) {
-          checkUpdatesButton.disabled = false;
-          checkUpdatesButton.textContent = t("checkForUpdates");
-        }
-      }
-    });
-    render(
-      el(
-        "div",
-        { className: "toolbar" },
-        el("h1", { textContent: t("settings") }),
-        button(t("back"), handleBack, "ghost", true),
-      ),
-      el(
-        "section",
-        { className: "card" },
-        el(
-          "div",
-          { className: "setting" },
-          el(
-            "div",
-            {},
-            el("div", { className: "row-name", textContent: t("version") }),
-            el("div", { className: "muted", textContent: host.appVersion }),
-          ),
-          checkUpdatesButton,
-        ),
-      ),
-    );
-  }
-
   async function renderTop() {
     const run = ++navigation;
     const screen = shellStack[shellStack.length - 1];
@@ -640,10 +625,6 @@ async function mountShellPages() {
     }
     if (screen.kind === "form") {
       renderForm(run, screen.server, screen.allowCancel);
-      return;
-    }
-    if (screen.kind === "mobileSettings") {
-      renderMobileSettings();
       return;
     }
     if (screen.kind === "versionWarning") {

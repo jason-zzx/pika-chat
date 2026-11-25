@@ -487,25 +487,6 @@ input:focus-visible {
   display: none;
 }
 
-.card {
-  padding: 4px 16px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
-}
-
-.setting + .setting {
-  border-top: 1px solid var(--border);
-}
-
 .status {
   display: flex;
   flex-direction: column;
@@ -545,28 +526,44 @@ input:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 12px;
 }
 
-.version-trigger {
-  border: 0;
+.footer-version,
+.footer-action {
   padding: 2px 6px;
   border-radius: 6px;
-  background: transparent;
   color: var(--muted-foreground);
   font: inherit;
   opacity: 0.7;
+}
+
+.footer-action {
+  border: 0;
+  background: transparent;
   cursor: pointer;
+  transition: opacity 120ms ease, color 120ms ease;
 }
 
-.version-trigger:hover {
+.footer-action:hover:not(:disabled) {
   opacity: 1;
+  color: var(--foreground);
 }
 
+.footer-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.footer-sep,
 .footer-hint {
   color: var(--muted-foreground);
   font-size: 12px;
+}
+
+.footer-sep {
+  opacity: 0.5;
 }
 
 dialog.confirm-dialog {

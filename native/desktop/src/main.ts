@@ -610,7 +610,7 @@ function start() {
   const checkForUpdates = createUpdater(t, localServer.shutdown);
   const manualUpdateCheck = () => {
     showWindow();
-    return checkForUpdates(true);
+    return checkForUpdates();
   };
 
   const openDetachedDevTools = () => {
@@ -966,5 +966,4 @@ function start() {
     logDesktop("warn", `could not register global shortcut ${String(config.hotkey)}`);
   }
   showShell("");
-  void checkForUpdates(false);
 }

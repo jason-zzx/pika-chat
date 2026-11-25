@@ -100,11 +100,12 @@ Defined in `native/shell-ui/src/host.ts`, implemented by the desktop
 methods (`openLocalLog`, `getLocalError`, `setTheme`, `getDeveloperMode`,
 `setDeveloperMode`, `openDevTools`, `openDesktopLog`, `windowControls`, `serverMenu`)
 live under the optional `host.desktop` group; without it shell-ui hides the local row
-and welcome screen, keeps its Settings button (Android update check) and opens the add
-form on first launch. On desktop (`host.desktop` present), shell-ui keeps only server
-management (no Settings screen in the server list, plus a subtle 5-click version footer
-activating `developerMode` without auto-opening DevTools) and also renders `?chrome=titlebar`
-and `?chrome=menu`. Main validates every IPC payload at the handler and answers
+and welcome screen and opens the add form on first launch. On both desktop and Android,
+shell-ui keeps only server management (no Settings screen in the server list) and renders a
+subtle footer showing the app version and a "Check for updates" action (on desktop, clicking
+the version 5 times activates `developerMode` without auto-opening DevTools). When
+`host.desktop` is present, shell-ui also renders `?chrome=titlebar` and `?chrome=menu`. Main
+validates every IPC payload at the handler and answers
 only the matching shell view. Connection logic (health check, version warning, URL
 normalization) lives in shell-ui so Android can reuse it. query modes of `index.html`: none (auto-connect to the last server, `"local"` included, or show
 the welcome screen when there is nothing to auto-connect to and `servers` is
@@ -188,8 +189,8 @@ falls back to the list; only an empty query auto-connects or shows the welcome s
   loads `origin + path` only when that server is still connected. No foreground service: Android
   freezes a backgrounded app after about 10 s, so a completion notification appears only
   while the app is in front or just after leaving it.
-- **Updates**: `Updates.kt` queries the GitHub latest release (silent at launch, dialog on
-  manual check from shell-ui settings).
+- **Updates**: `Updates.kt` queries the GitHub latest release on manual check from the
+  shell-ui footer (no automatic check at launch).
 - **Dev testing**: the Next dev server 403s chunk requests from an unlisted host such as
   `10.0.2.2`, so the page never hydrates; `adb reverse tcp:3000 tcp:3000` and a
   `http://localhost:3000` server avoid it (see `native/mobile/README.md`).

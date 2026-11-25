@@ -115,7 +115,6 @@ class MainActivity : BridgeActivity() {
 
         onBackPressedDispatcher.addCallback(this, backCallback)
         updateBackEnabled()
-        Updates.check(this, manual = false)
     }
 
     internal fun isCurrentRemoteBridge(source: RemoteBridge): Boolean = remoteBridge === source

@@ -24,9 +24,6 @@ function supportsAutoInstall(): boolean {
 // Dialogs have no parent window: an update can finish downloading while the window is hidden in the
 // tray, and a dialog attached to a hidden window may never appear.
 export function createUpdater(t: Strings, beforeInstall: () => Promise<void>) {
-  // Errors from a launch-time check stay silent; a manual check or an install attempt reports them.
-  let reportErrors = false;
-
   const message = (text: string, buttons: string[], type: "info" | "error" = "info") =>
     dialog.showMessageBox({ type, message: text, buttons, defaultId: 0, cancelId: buttons.length - 1 });
 
@@ -39,12 +36,11 @@ export function createUpdater(t: Strings, beforeInstall: () => Promise<void>) {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.on("error", (error) => {
     console.error("updater:", error);
-    if (reportErrors) void reportFailure();
+    void reportFailure();
   });
   autoUpdater.on("update-downloaded", async (info) => {
     const { response } = await message(t.updateReady(info.version), [t.restartInstall, t.later]);
     if (response !== 0) return;
-    reportErrors = true;
     // The installer starts inside quitAndInstall and force-kills every "Pika Chat" process within
     // ~2.6 s, the local server included, and its open files block the overwrite on Windows: stop the
     // server first.
@@ -52,28 +48,26 @@ export function createUpdater(t: Strings, beforeInstall: () => Promise<void>) {
     autoUpdater.quitAndInstall();
   });
 
-  async function checkReleasePrompt(manual: boolean) {
+  async function checkReleasePrompt() {
     const res = await net.fetch(LATEST_API, { headers: { Accept: "application/vnd.github+json" } }).catch(() => null);
     const parsed = res?.ok ? latestRelease.safeParse(await res.json()) : null;
     if (!parsed?.success) {
-      if (manual) await reportFailure();
+      await reportFailure();
       return;
     }
     const release = parsed.data;
     if (!isNewerVersion(release.tag_name, __APP_VERSION__)) {
-      if (manual) await message(t.upToDate(__APP_VERSION__), [t.ok]);
+      await message(t.upToDate(__APP_VERSION__), [t.ok]);
       return;
     }
     const { response } = await message(t.updateAvailable(release.tag_name.replace(/^v/, "")), [t.download, t.later]);
     if (response === 0) await shell.openExternal(release.html_url);
   }
 
-  return async function check(manual: boolean) {
-    if (!app.isPackaged && !manual) return;
-    if (!supportsAutoInstall()) return checkReleasePrompt(manual);
-    reportErrors = manual;
+  return async function check() {
+    if (!supportsAutoInstall()) return checkReleasePrompt();
     const result = await autoUpdater.checkForUpdates().catch(() => undefined);
-    if (!manual || result === undefined) return;
+    if (result === undefined) return;
     if (!result?.isUpdateAvailable) {
       await message(t.upToDate(__APP_VERSION__), [t.ok]);
       return;

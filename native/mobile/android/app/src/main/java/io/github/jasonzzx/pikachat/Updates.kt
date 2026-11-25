@@ -14,34 +14,31 @@ object Updates {
     private const val RELEASES_URL = "https://github.com/jason-zzx/pika-chat/releases/latest"
     private const val LATEST_API = "https://api.github.com/repos/jason-zzx/pika-chat/releases/latest"
 
-    fun check(activity: Activity, manual: Boolean) {
+    fun check(activity: Activity, onComplete: () -> Unit = {}) {
         thread(name = "pika-update-check") {
             val result = fetchLatestRelease()
             activity.runOnUiThread {
+                onComplete()
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                 if (result == null) {
-                    if (manual) {
-                        AlertDialog.Builder(activity)
-                            .setTitle(R.string.update_error_title)
-                            .setMessage(R.string.update_error_body)
-                            .setPositiveButton(R.string.update_download) { _, _ ->
-                                openUrl(activity, RELEASES_URL)
-                            }
-                            .setNegativeButton(R.string.update_later, null)
-                            .show()
-                    }
+                    AlertDialog.Builder(activity)
+                        .setTitle(R.string.update_error_title)
+                        .setMessage(R.string.update_error_body)
+                        .setPositiveButton(R.string.update_download) { _, _ ->
+                            openUrl(activity, RELEASES_URL)
+                        }
+                        .setNegativeButton(R.string.update_later, null)
+                        .show()
                     return@runOnUiThread
                 }
 
                 val (tagName, htmlUrl) = result
                 if (!isNewerVersion(tagName, BuildConfig.VERSION_NAME)) {
-                    if (manual) {
-                        AlertDialog.Builder(activity)
-                            .setTitle(R.string.update_up_to_date_title)
-                            .setMessage(activity.getString(R.string.update_up_to_date_body, BuildConfig.VERSION_NAME))
-                            .setPositiveButton(R.string.ok, null)
-                            .show()
-                    }
+                    AlertDialog.Builder(activity)
+                        .setTitle(R.string.update_up_to_date_title)
+                        .setMessage(activity.getString(R.string.update_up_to_date_body, BuildConfig.VERSION_NAME))
+                        .setPositiveButton(R.string.ok, null)
+                        .show()
                     return@runOnUiThread
                 }
 
