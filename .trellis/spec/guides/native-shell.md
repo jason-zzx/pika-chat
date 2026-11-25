@@ -29,6 +29,7 @@ interface PikaNative {
   notify(input: { title: string; body: string; path: string }): void;
   showServerMenu(anchor: { x: number; y: number }): void; // viewport CSS px
   openServers(screen: "list" | "add"): void;
+  setTemporaryTopic?(topicId: string | null): void; // active temporary chat id for shell teardown (optional for older shells)
   navigation?: PikaNativeNavigation; // logical Back bridge (optional for older shells/servers)
   desktop?: PikaNativeDesktop; // desktop-only settings, storage, updates, diagnostics
 }
@@ -81,9 +82,28 @@ interface PikaNative {
 - `path` is an app-relative path (`assistantTopicHref(...)`); it must start
   with `/`.
 - Desktop main accepts `native:notify`, `native:showServerMenu`, `native:openServers`,
-  `native:theme`, `native:navState`, and `native:desktop:*` only when the sender frame origin equals
+  `native:theme`, `native:navState`, `native:temporaryTopic`, and `native:desktop:*` only when the sender frame origin equals
   the active server origin (payloads zod-validated); clicking a notification focuses the window,
   re-attaches `remote.view` if hidden behind `shellView`, and navigates to `origin + path`.
+  Temporary chats skip desktop reply notifications (clicking one would reload the page and delete the chat).
+- **Temporary chat teardown (`setTemporaryTopic`)**: `TemporaryTopicGuard` mirrors the active temporary
+  topic id (`string | null`) to `window.pikaNative?.setTemporaryTopic?.(...)`. Both shells send
+  `DELETE <origin>/api/topics/<encodeURIComponent(id)>` using the page's session cookies (404 counts as
+  success; the server's 24h sweep is the backstop — see [Temporary Chat](../backend/temporary-chat.md)).
+  - **Desktop**: `preload-remote.ts` forwards `native:temporaryTopic` (`z.string().min(1).max(64).nullable()`)
+    to `remote.temporaryTopicId`. `deleteTemporaryTopic` clears the id first and fetches with a 3 s
+    timeout via `session.fromPartition(remote.partition).fetch(...)`. `closeRemote()` starts the delete
+    and returns its promise so `shell:removeServer` awaits it *before* `clearStorageData()` wipes cookies;
+    `before-quit` and the auto-updater's pre-install hook (`beforeQuit`) await `deleteTemporaryTopic()`
+    *before* `localServer.shutdown()` so local mode answers the delete before stopping. Hiding to the tray
+    does not delete.
+  - **Android**: `RemoteBridge.kt` accepts `{ type: "temporaryTopic", topicId }` (`1..64` string or
+    `null`) and persists `{ origin, topicId }` under `SharedPreferences` `temporary_topic` (`PikaHostPlugin`).
+    `flushTemporaryTopic()` runs on the main thread (synchronously taking/removing the pref and reading
+    the `CookieManager` cookie before sending `DELETE` on a background thread): called from `onCreate`
+    (cleaning up after a swipe-away or system kill) and `destroyRemoteWebView()` (covering server switch,
+    `removeServer` *before* `clearOriginData`, URL change, and activity finish). Backgrounding (`onStop`)
+    never calls `destroyRemoteWebView` and keeps the temporary chat alive.
 - Native navigation (`pikaNative.navigation`): `NavigationProvider` owns a logical stack
   (`src/lib/navigation-state.ts`, persisted in `sessionStorage`) and uses `router.replace`
   in native mode so Chromium's history stays flat, Home (`/`) is always the workspace root,

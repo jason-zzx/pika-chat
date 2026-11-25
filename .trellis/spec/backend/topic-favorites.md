@@ -41,7 +41,7 @@ topic-scoped mutations do not reshuffle the sidebar.
 |---|---|
 | Body missing `favorite` or non-boolean | Zod 400 via `withErrorHandling` |
 | Topic id missing | `requireParam` → 400 |
-| Topic not found OR owned by another user | `AppError("NOT_FOUND", 404)` (indistinguishable, per error-handling spec) |
+| Topic not found, temporary, OR owned by another user | `AppError("NOT_FOUND", 404)` (indistinguishable, per error-handling spec; see [Temporary Chat](./temporary-chat.md)) |
 | Unauthenticated | `requireActor` → 401 |
 
 ### 5. Good/Base/Bad Cases

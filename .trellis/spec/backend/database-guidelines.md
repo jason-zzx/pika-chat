@@ -94,6 +94,11 @@ Rules:
 - Never hand-edit a migration that has been applied anywhere. Write a new one.
 - Never edit schema files without generating the matching migration in the same
   commit. A schema/migration split across commits leaves the tree unbootable.
+- Columns added after the SQLite switch (e.g. `topics.temporary`, migration
+  `0002`) do not exist in a v0.4.2 PostgreSQL source: exclude them from
+  `IMPORT_TABLES` in `src/server/db/import-postgres.ts` (and `finalSchemaColumns`
+  in `import-postgres.test.ts`) so boot imports keep working and leave those
+  columns at their SQLite defaults.
 - A migration must apply cleanly from an **empty** database. Self-hosters
   install fresh far more often than we upgrade.
 - Destructive changes get their own migration, separate from additive ones, so

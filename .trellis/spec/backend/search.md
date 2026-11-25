@@ -10,9 +10,11 @@ UI, or the `?m=` message-anchor navigation.
 
 ## Contracts
 
-- **Ownership**: both queries filter by `assistants.ownerId = actor.userId`
-  in the WHERE clause (topics join assistants directly; messages join
-  topics + assistants). No fetch-then-check.
+- **Ownership & temporary exclusion**: both queries filter by
+  `assistants.ownerId = actor.userId` and `topics.temporary = false` in the
+  WHERE clause (topics join assistants directly; messages join topics +
+  assistants). No fetch-then-check. Temporary chats are never searchable — see
+  [Temporary Chat](./temporary-chat.md).
 - **Matching is SQLite `LIKE` with literal semantics**: `%`, `_`, and `\`
   are escaped (`escapeLike`) and the pattern is a bound parameter used as
   `like ? escape '\'`, so user input never acts as a wildcard. `LIKE` folds

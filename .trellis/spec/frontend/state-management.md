@@ -163,6 +163,19 @@ session-only) is also written through to localStorage by `setDraft`:
 - The sidebar marks a topic row (`TopicRow`) and the "New topic" button with
   `Layout.tree.draft` when that key holds non-blank text, except for the chat
   that is currently open. A stream spinner takes precedence over the marker.
+- Temporary chats use `temp-` prefixed keys (`composerDraftKey(..., true)`):
+  `setDraft` keeps them in memory only (never writes `localStorage`), and
+  `clearTemporaryDrafts()` wipes all `temp-*` entries across `drafts`,
+  `attachments`, `quotes`, and `imageParams` on toggle-off, leave, or unmount.
+
+**Active temporary chat (`src/stores/temporary-topic-store.ts`).** Narrow client
+coordination store holding `temporaryTopicId` and a `leaveRequestCount` trigger
+(never persisted). Because temporary chats intentionally keep the draft URL
+(`/` or `/assistant/:a`) instead of promoting to `/assistant/:a/:t`, this store
+coordinates `ChatView`, `TemporaryTopicGuard` (pathname change, same-route
+New topic / home logo / header toggle clicks, `pagehide`, and
+`window.pikaNative.setTemporaryTopic`), and `signOutAndReset()`. See
+[Temporary Chat](../backend/temporary-chat.md).
 
 **The current user and role.** Server state. A Server Component that already
 called `resolveActor` should pass the identity down as props — that is the

@@ -35,7 +35,7 @@ is easy to break.
 
 ### 3. Contracts
 
-- Page: `is_favorite = false`, `ORDER BY updated_at DESC, id DESC`,
+- Page: `is_favorite = false` and `temporary = false`, `ORDER BY updated_at DESC, id DESC`,
   `LIMIT 21`. Server constant `TOPIC_PAGE_SIZE = 20`; the 21st row only signals
   `nextCursor` and is never returned. The client never sends a limit.
 - Cursor (wire): `base64url(JSON.stringify([updatedAtMs, id]))` of the last
@@ -44,8 +44,11 @@ is easy to break.
   (epoch ms), so the cursor loses nothing and same-millisecond rows tie-break
   by `id`. The comparison is the SQLite row value
   `(updated_at, id) < (${at}, ${id})`.
-- Favorites: every `is_favorite = true` row of the assistant, same order, no
-  limit (favorites are few and must all be visible).
+- Favorites: every `is_favorite = true` and `temporary = false` row of the
+  assistant, same order, no limit (favorites are few and must all be visible).
+- `selectTree`'s `topicCount` left join also filters `topics.temporary = false`
+  so temporary chats never inflate counts or appear in sidebar lists — see
+  [Temporary Chat](./temporary-chat.md).
 - Both endpoints call `requireOwnedAssistant` first.
 
 ### 4. Validation & Error Matrix
