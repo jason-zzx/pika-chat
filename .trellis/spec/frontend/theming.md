@@ -7,11 +7,16 @@
 
 ## Token system
 
-Tailwind 4 theme tokens are CSS custom properties in `src/app/globals.css`:
-the `@theme inline` block maps Tailwind colors onto `--background`,
+Tailwind 4 theme tokens are CSS custom properties. The palettes live in
+`src/app/theme-tokens.css` (imported by `src/app/globals.css`, whose
+`@theme inline` block maps Tailwind colors onto `--background`,
 `--foreground`, `--card`, `--primary`, `--muted`, `--accent`, `--border`,
-`--ring`, `--success`, `--chart-*`, `--sidebar-*`, etc. The baseline palettes
+`--ring`, `--success`, `--chart-*`, `--sidebar-*`, etc.). The baseline palettes
 are the `:root` (light) and `.dark` blocks — both deliberately near-neutral.
+
+`theme-tokens.css` is also imported by the native `shell-ui`
+(`native/shell-ui/src/style.css`), which has no Tailwind: keep it plain CSS
+(custom properties only, no `@apply` / `@theme` / Tailwind functions).
 
 Two orthogonal switches on `<html>`:
 
@@ -19,7 +24,7 @@ Two orthogonal switches on `<html>`:
 - `data-theme="<preset>"` → palette family. **The default preset writes no
   attribute**; tokens fall back to `:root` / `.dark`.
 
-Preset themes are static CSS blocks at the end of `globals.css`:
+Preset themes are static CSS blocks after the baselines in `theme-tokens.css`:
 `[data-theme="paper"]` redefines the full light token set,
 `[data-theme="paper"].dark` the full dark set. No runtime color computation.
 
@@ -64,7 +69,9 @@ The `pika_theme` cookie survives but is demoted to two roles:
    preference, so the cookie's `resolved` segment decides the first paint.
 
 Format is `mode:resolved:preset`; `parseThemeCookie` still accepts the legacy
-two-segment form (preset → `default`). Every local change rewrites the cookie
+two-segment form (preset → `default`). The native shells also read it (it must
+stay non-httpOnly): their theme observers forward `mode` / `preset` so the
+server list mirrors the last connected server (see `../guides/native-shell.md`). Every local change rewrites the cookie
 so anonymous pages stay consistent after sign-out.
 
 Write path: `useUpdateThemePreference` (`src/hooks/`) — optimistic local apply

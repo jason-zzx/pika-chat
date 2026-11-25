@@ -18,7 +18,8 @@ src/
 │   │   ├── settings/               # general / account / users (staff)
 │   │   └── t/[topicId]/page.tsx    # a topic's conversation
 │   ├── layout.tsx                  # root: providers, fonts, theme cookie
-│   └── globals.css                 # Tailwind 4 config lives here
+│   ├── globals.css                 # Tailwind 4 config lives here
+│   └── theme-tokens.css            # color tokens + presets (shared with native shell-ui)
 ├── components/
 │   ├── ui/                         # shadcn/ui primitives — generated (Base UI)
 │   ├── layout/                     # AppShell, sidebar, page chrome

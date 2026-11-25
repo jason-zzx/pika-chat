@@ -117,7 +117,40 @@ otherwise pops to the list), `?connect=<id>` (connect flow for that server
 regardless of the last one, including `"local"`), `?failed=<id>` (load-error
 screen, or local startup error with "Open log" when `id === "local"`),
 `?chrome=titlebar` (desktop frameless top bar), and `?chrome=menu` (desktop
-server switcher overlay). `listServers()` includes `activeServerId` when a kept-alive server
+server switcher overlay).
+
+Appearance: shell-ui imports the web app's `src/app/theme-tokens.css` (no hand-copied
+tokens) and mirrors the **last connected server's** theme preference. Both shells' remote
+theme observers read the page's `pika_theme` cookie (`mode:resolved:preset`) and forward
+`mode` / `preset` as extra fields of the existing theme payload (desktop `native:theme`, whose
+`themeInput` strips them from `remote.theme`; Android `pikaThemeHost`). The host validates it (mode enum, preset `^[a-z0-9-]{1,32}$`, not
+enumerated so newer server presets pass) and persists it (`config.json` `appearance` /
+`SharedPreferences` `appearance_mode` + `appearance_preset`, default `system` + `default`).
+**The host, not shell-ui, applies it, before the shell page's first frame**: it sets
+`data-theme=<preset>` (unknown or `default` match no preset block and fall back to the base
+tokens) and toggles `.dark` (`system` follows `prefers-color-scheme` live). Desktop
+`preload-shell.ts` reads it with `sendSync("shell:getAppearance")` (shell pages only, not
+`?chrome=`) and applies it from a `MutationObserver` on `document`, because `documentElement`
+is still `null` when a preload runs; Android registers a shell-origin document-start script
+(`MainActivity.installShellAppearance`, re-registered whenever the stored appearance changes,
+since shell-ui reloads on every `showShell`). Do not move this back into an async shell-ui
+call: the launch auto-connect detaches/hides the shell while its last frame (and Android's
+`DOMContentLoaded` theme sample) would still follow the OS scheme, and the first `showShell`
+flashes that stale frame. The shell `index.html` files deliberately have no
+`<meta name="color-scheme">`: it would make Android's pre-CSS canvas follow the OS instead of
+the WebView background the host set. shell-ui only reads the `.dark` class when reporting its sampled
+colors. Showing the shell from a server page must not reveal the shell view's previous document either
+(painted with the appearance it had then): desktop `showShell` replaces the detached `shellView`
+with a fresh `WebContentsView` (background = the server's palette, which the shell mirrors);
+Android keeps `remoteWebView` on screen with the shell WebView `INVISIBLE` (background =
+`remoteTheme`) and reveals it in the bridge listener's `onPageCommitVisible`, after which
+WebView never draws the previous document. The hosts also pick the pre-paint window / bar default from the stored mode.
+Connecting to a remote server whose origin has no `pika_theme` cookie yet seeds one
+(`mode:resolved:preset` from the stored appearance, `Path=/`, 1 year, `SameSite=Lax`) so its
+sign-in page matches the shell; after sign-in the account's DB preference rewrites it. A mode
+change that toggles no class (`system` → `dark` on a dark OS) is still caught because
+`persistTheme` always rewrites `meta[name=theme-color]`; the observers run in a later
+microtask, after it has also written the cookie. `listServers()` includes `activeServerId` when a kept-alive server
 can be resumed via `returnToServer()`; `shell-ui` tracks an internal sub-screen stack
 (`native/shell-ui/src/nav-stack.ts`), handles `onBack` / `Escape` (confirm `<dialog>` first),
 and reports `setCanGoBack`. Removing the active server or changing its normalized URL origin
