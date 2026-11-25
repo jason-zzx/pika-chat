@@ -40,6 +40,7 @@ class RemoteBridge(
     private val webView: WebView,
     private val origin: String,
     private val serverName: String,
+    private val connectedSince: Long,
 ) {
     var webNavReady: Boolean = false
         private set
@@ -122,6 +123,7 @@ class RemoteBridge(
               window.pikaNative = Object.freeze({
                 serverName: $quotedName,
                 appVersion: $quotedVersion,
+                connectedSince: $connectedSince,
                 notify: (i) => post({ type: "notify", ...i }),
                 showServerMenu: () => post({ type: "menu" }),
                 openServers: (screen) => post({ type: "open", screen }),

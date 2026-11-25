@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { composerDraftKey, useComposerStore } from "./composer-store";
@@ -32,10 +33,14 @@ describe("useComposerStore drafts", () => {
     expect(useComposerStore.getState().drafts[topicA]).toBe("hello A");
     expect(useComposerStore.getState().drafts[topicB]).toBe("hello B");
     expect(useComposerStore.getState().drafts[draftA]).toBe("new topic");
+    expect(
+      JSON.parse(window.localStorage.getItem(`pika.draft:${topicB}`) ?? "null"),
+    ).toMatchObject({ text: "hello B" });
 
     useComposerStore.getState().setDraft(topicA, "");
     expect(useComposerStore.getState().drafts[topicA]).toBe("");
     expect(useComposerStore.getState().drafts[topicB]).toBe("hello B");
+    expect(window.localStorage.getItem(`pika.draft:${topicA}`)).toBeNull();
   });
 
   it("stores reasoning effort separately from the model pick", () => {

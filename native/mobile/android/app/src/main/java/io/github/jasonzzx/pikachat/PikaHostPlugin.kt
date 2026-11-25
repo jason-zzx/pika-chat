@@ -120,7 +120,7 @@ class PikaHostPlugin : Plugin() {
     @PluginMethod
     fun connect(call: PluginCall) {
         val id = call.getString("id") ?: ""
-        val (servers, _) = readState()
+        val (servers, lastId) = readState()
         val target = servers.find { it.id == id }
         if (target == null) {
             call.reject(context.getString(R.string.unknown_server))
@@ -138,6 +138,8 @@ class PikaHostPlugin : Plugin() {
                 return@runOnUiThread
             }
             connectedServer = target
+            // The web app drops composer drafts written before the shell last switched to this server.
+            if (lastId != target.id) prefs().edit().putLong(KEY_CONNECTED_SINCE, System.currentTimeMillis()).apply()
             writeState(servers, target.id)
             main.connectToServer(target)
             call.resolve()
@@ -152,6 +154,8 @@ class PikaHostPlugin : Plugin() {
             call.resolve()
         }
     }
+
+    fun readConnectedSince() = prefs().getLong(KEY_CONNECTED_SINCE, 0L)
 
     fun readAppearance() = ShellAppearance(
         prefs().getString(KEY_APPEARANCE_MODE, null) ?: "system",
@@ -385,6 +389,7 @@ class PikaHostPlugin : Plugin() {
         private const val KEY_STATE = "state"
         private const val KEY_APPEARANCE_MODE = "appearance_mode"
         private const val KEY_APPEARANCE_PRESET = "appearance_preset"
+        private const val KEY_CONNECTED_SINCE = "connected_since"
 
         fun originOf(uri: Uri?): String? {
             val scheme = uri?.scheme?.lowercase() ?: return null

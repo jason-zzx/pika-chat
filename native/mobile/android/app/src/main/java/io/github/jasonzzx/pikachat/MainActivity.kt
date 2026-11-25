@@ -172,6 +172,7 @@ class MainActivity : BridgeActivity() {
             webView = wv,
             origin = server.url,
             serverName = server.name,
+            connectedSince = hostPlugin.readConnectedSince(),
         )
         rb.install(onTheme = { palette, appearance -> applyRemoteTheme(rb, palette, appearance) })
 

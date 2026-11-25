@@ -48,6 +48,10 @@ declare global {
   interface PikaNative {
     serverName: string;
     appVersion?: string;
+    /** Epoch ms when the shell last switched to this server (reconnecting the
+     * same one keeps it); composer drafts written earlier are discarded.
+     * Absent in older shells. */
+    connectedSince?: number;
     notify(input: { title: string; body: string; path: string }): void;
     showServerMenu(anchor: { x: number; y: number }): void;
     openServers(screen: "list" | "add"): void;

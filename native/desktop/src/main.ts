@@ -575,11 +575,15 @@ function start() {
 
   const attachServerView = (server: Server, partition: string, url: string) => {
     closeRemote();
+    if (config.lastServerId !== server.id) config.connectedSince = Date.now();
     const view = new WebContentsView({
       webPreferences: {
         ...webPreferences("preload-remote.js"),
         partition,
-        additionalArguments: [`--pika-server-name=${encodeURIComponent(server.name)}`],
+        additionalArguments: [
+          `--pika-server-name=${encodeURIComponent(server.name)}`,
+          `--pika-connected-since=${config.connectedSince}`,
+        ],
         // A reply must be able to finish, and notify, while the window sits in the tray.
         backgroundThrottling: false,
       },

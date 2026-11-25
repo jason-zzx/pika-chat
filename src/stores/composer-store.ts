@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { create } from "zustand";
 import {
   createJSONStorage,
@@ -20,9 +21,9 @@ export type ComposerModelPick = {
 /**
  * Image-generation parameter overrides for one draft, mirrored into the
  * `image` request field when the picked model advertises image output.
- * All fields optional: absent means the provider default. Session-only like
- * drafts (not persisted) — switching drafts restores each draft's own picks,
- * matching how draft text and staged attachments behave.
+ * All fields optional: absent means the provider default. Session-only (not
+ * persisted, unlike draft text) — switching drafts restores each draft's own
+ * picks, matching how staged attachments behave.
  */
 export type ComposerImageParams = {
   size?: string;
@@ -69,7 +70,7 @@ type ComposerState = {
     updater: (current: StagedAttachment[]) => StagedAttachment[],
   ) => void;
   /** At most one quote per draft; quoting again replaces it, null removes it.
-   * Session-only like the draft text it belongs to. */
+   * Session-only: unlike the draft text, it is not persisted. */
   quotes: Record<string, ChatQuote | null>;
   setQuote: (key: string, quote: ChatQuote | null) => void;
   recentAssistantId: string | null;
@@ -98,6 +99,16 @@ export function composerDraftKey(
   return `draft:${assistantId ?? "none"}`;
 }
 
+/**
+ * Draft text (only the text) outlives the document: one localStorage item per
+ * draft key, so tabs editing different topics never overwrite each other.
+ * Attachments, quotes and image params stay session-only.
+ */
+const DRAFT_STORAGE_PREFIX = "pika.draft:";
+const DRAFT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+const storedDraftSchema = z.object({ text: z.string(), updatedAt: z.number() });
+
 // Server-side rendering has no localStorage; persist must stay silent there
 // instead of warning on every SSR store creation.
 const noopStorage: StateStorage = {
@@ -110,10 +121,25 @@ export const useComposerStore = create<ComposerState>()(
   persist(
     (set) => ({
       drafts: {},
-      setDraft: (key, value) =>
+      setDraft: (key, value) => {
         set((state) => ({
           drafts: { ...state.drafts, [key]: value },
-        })),
+        }));
+        const storageKey = DRAFT_STORAGE_PREFIX + key;
+        if (!value.trim()) {
+          window.localStorage.removeItem(storageKey);
+          return;
+        }
+        try {
+          window.localStorage.setItem(
+            storageKey,
+            JSON.stringify({ text: value, updatedAt: Date.now() }),
+          );
+        } catch {
+          // Quota exceeded (a huge paste): the draft still lives in memory
+          // for this document, it just will not survive a reload.
+        }
+      },
       attachments: {},
       updateAttachments: (key, updater) =>
         set((state) => ({
@@ -147,8 +173,8 @@ export const useComposerStore = create<ComposerState>()(
       storage: createJSONStorage(() =>
         typeof window === "undefined" ? noopStorage : window.localStorage,
       ),
-      // Drafts, the model pick, and staged attachments stay session-only;
-      // only the search mode survives reloads.
+      // The model pick and staged attachments stay session-only; the search
+      // mode survives reloads here, draft text through its own per-key items.
       partialize: (state): PersistedComposerState => ({
         searchMode: state.searchMode,
       }),
@@ -165,3 +191,35 @@ export const useComposerStore = create<ComposerState>()(
     },
   ),
 );
+
+/** Keeps stored drafts edited at or after `cutoff`, removes the rest, and
+ * makes the kept ones the in-memory drafts. */
+function pruneDrafts(cutoff: number): void {
+  const kept: Record<string, string> = {};
+  for (const storageKey of Object.keys(window.localStorage).filter((key) =>
+    key.startsWith(DRAFT_STORAGE_PREFIX),
+  )) {
+    const stored = storedDraftSchema.safeParse(
+      JSON.parse(window.localStorage.getItem(storageKey) ?? "null"),
+    );
+    if (stored.success && stored.data.updatedAt >= cutoff) {
+      kept[storageKey.slice(DRAFT_STORAGE_PREFIX.length)] = stored.data.text;
+      continue;
+    }
+    window.localStorage.removeItem(storageKey);
+  }
+  useComposerStore.setState({ drafts: kept });
+}
+
+// Restored after `create`, so `getInitialState()` keeps `drafts: {}`: zustand
+// hands that to React as the hydration snapshot, and the stored text applies
+// right after hydration without a mismatch. A draft expires 14 days after its
+// last edit, or when it predates the native shell's last switch to this server.
+if (typeof window !== "undefined") {
+  pruneDrafts(
+    Math.max(Date.now() - DRAFT_TTL_MS, window.pikaNative?.connectedSince ?? 0),
+  );
+}
+
+/** An auth page means the session is gone; its unsent drafts go with it. */
+export const discardComposerDrafts = () => pruneDrafts(Infinity);

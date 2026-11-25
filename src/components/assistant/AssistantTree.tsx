@@ -76,6 +76,7 @@ import type { Assistant } from "@/lib/schemas/assistant";
 import type { Topic } from "@/lib/schemas/topic";
 import { formatTopicAge } from "@/lib/topic-age";
 import { cn } from "@/lib/utils";
+import { composerDraftKey, useComposerStore } from "@/stores/composer-store";
 
 type AssistantTreeProps = {
   showUsers: boolean;
@@ -494,6 +495,13 @@ function AssistantPane({
     topicSectionsServerSnapshot,
   );
   const streamingTopics = useStreamingTopics();
+  // No topic in the URL means this assistant's new-topic draft is the open
+  // chat; its marker only shows once the user has left it.
+  const newTopicHasDraft = useComposerStore(
+    (state) =>
+      activeTopicId !== undefined &&
+      Boolean(state.drafts[composerDraftKey(undefined, assistant.id)]?.trim()),
+  );
 
   function toggleSection(key: keyof TopicSections) {
     setTopicSections({ ...sections, [key]: !sections[key] });
@@ -555,6 +563,11 @@ function AssistantPane({
                 <span className="group-data-[collapsible=icon]:hidden">
                   {t("tree.newTopic")}
                 </span>
+                {newTopicHasDraft ? (
+                  <span className="ml-auto shrink-0 text-xs font-medium text-primary group-data-[collapsible=icon]:hidden">
+                    {t("tree.draft")}
+                  </span>
+                ) : null}
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem className="min-w-0 overflow-hidden">
@@ -775,6 +788,12 @@ function TopicRow({
   const t = useTranslations("Layout");
   const { setOpenMobile } = useSidebar();
   const isNative = usePikaNative() !== null;
+  // Hidden on the open topic: the composer right there already shows it.
+  const hasDraft = useComposerStore(
+    (state) =>
+      !isActive &&
+      Boolean(state.drafts[composerDraftKey(topic.id, assistantId)]?.trim()),
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [openedByLongPress, setOpenedByLongPress] = useState(false);
   const titleRef = useRef<HTMLSpanElement>(null);
@@ -883,6 +902,10 @@ function TopicRow({
               aria-hidden="true"
               className="size-4 shrink-0 animate-spin text-muted-foreground md:size-3.5"
             />
+          ) : hasDraft ? (
+            <span className="shrink-0 text-xs font-medium text-primary">
+              {t("tree.draft")}
+            </span>
           ) : (
             <TopicAgeLabel updatedAt={topic.updatedAt} />
           )}

@@ -1,11 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-const prefix = "--pika-server-name=";
-const serverName = decodeURIComponent(process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) ?? "");
+const argument = (prefix: string) => process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+const serverName = decodeURIComponent(argument("--pika-server-name=") ?? "");
+const connectedSince = Number(argument("--pika-connected-since=") ?? 0);
 
 contextBridge.exposeInMainWorld("pikaNative", {
   serverName,
   appVersion: __APP_VERSION__,
+  connectedSince,
   notify: (input: { title: string; body: string; path: string }) => ipcRenderer.send("native:notify", input),
   showServerMenu: (anchor: { x: number; y: number }) => ipcRenderer.send("native:showServerMenu", anchor),
   openServers: (screen: "list" | "add") => ipcRenderer.send("native:openServers", screen),

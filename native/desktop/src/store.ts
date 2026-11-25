@@ -18,6 +18,8 @@ export const appearanceSchema = z.object({
 const configSchema = z.object({
   servers: z.array(z.object({ id: z.string(), name: z.string(), url: z.string() })).catch([]),
   lastServerId: z.string().nullable().catch(null),
+  // When the shell last switched to lastServerId; the web app drops drafts written before it.
+  connectedSince: z.number().catch(0),
   localPort: z.number().int().positive().nullable().catch(null),
   hotkey: z.string().nullable().catch(DEFAULT_HOTKEY),
   closeAction: closeActionSchema.catch("tray"),

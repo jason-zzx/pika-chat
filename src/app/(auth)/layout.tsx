@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import DesktopServerChip from "@/components/auth/DesktopServerChip";
+import DiscardComposerDrafts from "@/components/auth/DiscardComposerDrafts";
 import PikaMark from "@/components/common/PikaMark";
 import { resolveActor } from "@/server/auth/actor";
 
@@ -20,6 +21,7 @@ export default async function AuthLayout({
 
   return (
     <div className="flex min-h-full flex-1 items-center justify-center p-6">
+      <DiscardComposerDrafts />
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex items-center gap-2.5">
           <PikaMark className="size-9" />
