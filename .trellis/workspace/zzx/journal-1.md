@@ -1381,3 +1381,26 @@ Implemented 4-layer native-like app navigation across Web (logical stack with Ho
 ### Status
 
 [OK] **Completed**
+
+
+## Session 51: Temporary chat implementation, URL-less refinement, and spec updates
+<!-- trellis-session: v=2 fp=456f22315e949a9e -->
+
+**Date**: 2026-11-25
+**Task**: Temporary chat implementation, URL-less refinement, and spec updates
+**Branch**: `feat/native-apps`
+
+### Summary
+
+Completed temporary chat across server (visibility/mutation filters, no auto-title, 24h idle sweep with file cleanup), web (URL-less lifecycle, leave guard, pre-sign-out and pre-data-topic cleanup, unpersisted temp drafts), desktop and android shells, pruned redundant code and tests, and documented cross-layer contracts in .trellis/spec/.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8a5ed2` | feat(chat): add temporary chat across server, web, desktop, and android |
+| `1139a60` | docs(spec): document temporary chat contracts across server, web, and native shells |
+
+### Status
+
+[OK] **Completed**

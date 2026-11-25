@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 50
-- **Last Active**: 2026-11-24
+- **Total Sessions**: 51
+- **Last Active**: 2026-11-25
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1383 | Active |
+| `journal-1.md` | ~1406 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 51 | 2026-11-25 | Temporary chat implementation, URL-less refinement, and spec updates | `d8a5ed2`, `1139a60` | `feat/native-apps` |
 | 50 | 2026-11-24 | Native-like app navigation & shell-ui update check | `a0633a4`, `cd3d38a`, `1f13200`, `473e81f`, `eec91a2` | `feat/native-apps` |
 | 49 | 2026-11-22 | Desktop polish and packaging improvements | `584a5f8`, `c9ffd91`, `e242ef2`, `9952e7e` | `feat/native-apps` |
 | 48 | 2026-11-21 | SQLite migration | `4e5d0f4`, `b70daa4`, `785a5fe`, `cb976bc`, `5d3ae7a`, `dc631aa`, `d7d9362`, `2ed41eb`, `764ab9a`, `d4ebb24`, `58905d4`, `5edc06d`, `17980a1`, `253b05b`, `7047d3b`, `9d819f5`, `eb81439`, `9721bb5` | `feat/native-apps` |
