@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "Contracts for pikaNative, pikaShell, Electron desktop views, and Android Capacitor WebView/RemoteBridge"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer contract discipline across web, shell-ui, desktop, and mobile"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend architecture, shadcn/ui Base UI rules, and Pre-Development Checklist"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Client/server boundary, responsive breakpoints, popup/overlay conventions"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Client state management conventions"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Bilingual copy rules and lint guard for user-facing strings"}

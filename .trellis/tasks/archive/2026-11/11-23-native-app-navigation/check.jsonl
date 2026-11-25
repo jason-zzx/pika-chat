@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/guides/native-shell.md", "reason": "Verify native bridge origin checks, WebView 133 constraints, and shell-ui compatibility"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Verify frontend quality checklist and components/ui untouched constraints"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify lint, typecheck, test, and accessibility standards"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Verify no hardcoded copy and synchronized en/zh-CN catalogs"}
