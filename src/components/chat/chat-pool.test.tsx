@@ -8,6 +8,7 @@ import {
   acquireChat,
   attachChatView,
   configureChatPool,
+  discardChat,
   hasLiveChat,
   noteRegenFinished,
   noteRegenStarted,
@@ -515,5 +516,109 @@ describe("chat pool finish notification", () => {
     expect(regenFinishWith("error")).toHaveBeenCalledWith("t1", true);
     expect(regenFinishWith("abort")).not.toHaveBeenCalled();
     expect(regenFinishWith()).not.toHaveBeenCalled();
+  });
+});
+
+describe("chat pool generating state", () => {
+  it("tracks draft sends from start through migration until finish or error", () => {
+    const onGeneratingChange = vi.fn();
+    configureChatPool({
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished: vi.fn(),
+      onGeneratingChange,
+    });
+
+    noteSendStarted("draft");
+    expect(onGeneratingChange).toHaveBeenCalledTimes(1);
+    expect(onGeneratingChange).toHaveBeenLastCalledWith(true);
+
+    act(() => {
+      chatControl.options?.onData?.({
+        type: "data-topic",
+        data: { topicId: "t1", streamId: "s1" },
+      });
+    });
+    expect(onGeneratingChange).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      chatControl.options?.onFinish?.({ isError: false });
+    });
+    expect(onGeneratingChange).toHaveBeenCalledTimes(2);
+    expect(onGeneratingChange).toHaveBeenLastCalledWith(false);
+
+    noteSendStarted("t1");
+    act(() => {
+      chatControl.options?.onError?.(new Error("network"));
+    });
+    expect(onGeneratingChange.mock.calls).toEqual([
+      [true],
+      [false],
+      [true],
+      [false],
+    ]);
+  });
+
+  it("stays active across overlapping streams until all finish or discard", async () => {
+    const onGeneratingChange = vi.fn();
+    configureChatPool({
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished: vi.fn(),
+      onGeneratingChange,
+    });
+
+    noteSendStarted("t1");
+    noteRegenStarted("t2", "gen-2");
+    expect(onGeneratingChange).toHaveBeenCalledTimes(1);
+    expect(onGeneratingChange).toHaveBeenLastCalledWith(true);
+
+    act(() => {
+      chatControl.byId.get("t1")?.onFinish?.({ isError: false });
+    });
+    expect(onGeneratingChange).toHaveBeenCalledTimes(1);
+
+    noteRegenFinished("t2", "finish");
+    expect(onGeneratingChange).toHaveBeenLastCalledWith(false);
+
+    // Resumes (even 204 empty) and discards also clear the flag cleanly.
+    chatControl.resume = "empty";
+    await resumeGeneration("t3", "gen-3");
+    noteSendStarted("t4");
+    discardChat("t4");
+    expect(onGeneratingChange.mock.calls).toEqual([
+      [true],
+      [false],
+      [true],
+      [false],
+      [true],
+      [false],
+    ]);
+  });
+
+  it("ignores temporary chats for generating keep-alive", () => {
+    const onGeneratingChange = vi.fn();
+    configureChatPool({
+      onTopicAnnounced: vi.fn(),
+      invalidateAfterFinish: vi.fn(),
+      notifyReplyFinished: vi.fn(),
+      onGeneratingChange,
+    });
+
+    attachChatView("draft", { onData: vi.fn(), onFinish: vi.fn() });
+    noteSendStarted("draft", true);
+    act(() => {
+      chatControl.options?.onData?.({
+        type: "data-topic",
+        data: { topicId: "t-temp", streamId: "s-1" },
+      });
+    });
+    act(() => {
+      chatControl.options?.onFinish?.({ isError: false });
+    });
+    noteRegenStarted("t-temp", "gen-2");
+    noteRegenFinished("t-temp", "finish");
+
+    expect(onGeneratingChange).not.toHaveBeenCalled();
   });
 });

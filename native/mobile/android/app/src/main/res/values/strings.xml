@@ -5,6 +5,10 @@
 
     <string name="notification_channel_replies">Replies</string>
     <string name="notification_channel_replies_desc">Notifications when assistant replies finish</string>
+    <string name="notification_channel_streaming">Background replies</string>
+    <string name="notification_channel_streaming_desc">Keeps replies running briefly after leaving the app</string>
+    <string name="notification_streaming_title">Waiting for reply…</string>
+    <string name="notification_streaming_body">Keeping the connection active while the assistant finishes</string>
 
     <string name="webview_unsupported">Please update Android System WebView to connect to a server.</string>
     <string name="unknown_server">Unknown server</string>

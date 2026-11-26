@@ -23,6 +23,7 @@ const configSchema = z.object({
   localPort: z.number().int().positive().nullable().catch(null),
   hotkey: z.string().nullable().catch(DEFAULT_HOTKEY),
   closeAction: closeActionSchema.catch("tray"),
+  notificationsEnabled: z.boolean().catch(true),
   developerMode: z.boolean().catch(false),
   appearance: appearanceSchema.catch({ mode: "system", preset: "default" }),
   windowState: z

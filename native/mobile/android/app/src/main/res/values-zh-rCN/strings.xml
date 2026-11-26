@@ -2,6 +2,10 @@
 <resources>
     <string name="notification_channel_replies">回复通知</string>
     <string name="notification_channel_replies_desc">助手回复完成时发送通知</string>
+    <string name="notification_channel_streaming">后台回复保活</string>
+    <string name="notification_channel_streaming_desc">离开应用后短暂保持连接以等待回复完成</string>
+    <string name="notification_streaming_title">正在等待助手回复…</string>
+    <string name="notification_streaming_body">保持后台连接直至本轮回复完成</string>
 
     <string name="webview_unsupported">请更新 Android System WebView 后再连接服务器。</string>
     <string name="unknown_server">未知服务器</string>

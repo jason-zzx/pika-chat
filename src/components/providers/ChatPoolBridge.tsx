@@ -102,13 +102,18 @@ export default function ChatPoolBridge() {
       ) {
         return;
       }
-      // A failed lookup (deleted topic, offline) shows no notification.
-      const topic = await queryClient
-        .fetchQuery({
-          queryKey: topicKeys.detail(userId, topicId),
-          queryFn: () => getTopic(topicId),
-        })
-        .catch(() => null);
+      // Cache-first avoids an extra network round-trip on backgrounded mobile
+      // devices; a failed cache-miss lookup (deleted topic, offline) stays silent.
+      const topic =
+        queryClient.getQueryData<TopicDetail>(
+          topicKeys.detail(userId, topicId),
+        ) ??
+        (await queryClient
+          .fetchQuery({
+            queryKey: topicKeys.detail(userId, topicId),
+            queryFn: () => getTopic(topicId),
+          })
+          .catch(() => null));
       if (!topic) {
         return;
       }
@@ -121,7 +126,7 @@ export default function ChatPoolBridge() {
   );
 
   useEffect(() => {
-    return configureChatPool({
+    const dispose = configureChatPool({
       onTopicAnnounced: (topicId) => {
         void queryClient.invalidateQueries({ queryKey: assistantKeys.all });
         // The server names the topic beside the answer; the tree refetch above
@@ -146,7 +151,12 @@ export default function ChatPoolBridge() {
       },
       invalidateAfterFinish: (topicId) => refreshAfterGeneration(topicId),
       notifyReplyFinished,
+      onGeneratingChange: (active) => window.pikaNative?.setGenerating?.(active),
     });
+    return () => {
+      dispose();
+      window.pikaNative?.setGenerating?.(false);
+    };
   }, [queryClient, userId, refreshAfterGeneration, notifyReplyFinished]);
 
   // Reload recovery for a request whose confirmation was lost (chat task

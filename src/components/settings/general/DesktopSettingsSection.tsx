@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toast";
 import { SharedTooltip } from "@/components/ui/tooltip";
 import { usePikaNative } from "@/hooks/use-pika-native";
@@ -212,6 +213,25 @@ export default function DesktopSettingsSection() {
                       ))}
                     </SelectContent>
                   </Select>
+                }
+              />
+            ) : null}
+            {desktop.setNotificationsEnabled ? (
+              <SettingsRow
+                label={tDesktop("notifications")}
+                description={tDesktop("notificationsDescription")}
+                control={
+                  <Switch
+                    aria-label={tDesktop("notifications")}
+                    checked={settings?.notificationsEnabled ?? true}
+                    disabled={!settings}
+                    onCheckedChange={(checked) => {
+                      setSettings((prev) =>
+                        prev ? { ...prev, notificationsEnabled: checked } : prev,
+                      );
+                      void desktop.setNotificationsEnabled?.(checked);
+                    }}
+                  />
                 }
               />
             ) : null}

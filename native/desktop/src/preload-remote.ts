@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld("pikaNative", {
     platform: process.platform as "win32" | "linux" | "darwin",
     getSettings: () => ipcRenderer.invoke("native:desktop:getSettings"),
     setCloseAction: (action: "tray" | "quit") => ipcRenderer.invoke("native:desktop:setCloseAction", action),
+    setNotificationsEnabled: (enabled: boolean) =>
+      ipcRenderer.invoke("native:desktop:setNotificationsEnabled", enabled),
     setHotkey: (accelerator: string | null) => ipcRenderer.invoke("native:desktop:setHotkey", accelerator),
     getStorageUsage: () => ipcRenderer.invoke("native:desktop:getStorageUsage"),
     clearStorage: (category: "webCache" | "updaterCache" | "logsAndTemp") =>

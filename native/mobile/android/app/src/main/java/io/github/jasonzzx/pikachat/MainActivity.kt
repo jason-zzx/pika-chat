@@ -52,6 +52,7 @@ class MainActivity : BridgeActivity() {
     private var shellTheme = ThemePalette.defaults(false)
     private var remoteTheme = ThemePalette.defaults(false)
     private var shellCanGoBack = false
+    private var isGenerating = false
 
     private val activeTheme: ThemePalette
         get() = if (isShellVisible) shellTheme else remoteTheme
@@ -96,6 +97,7 @@ class MainActivity : BridgeActivity() {
 
         java.io.File(cacheDir, "open").deleteRecursively()
         createNotificationChannel()
+        GenerationKeepAliveService.ensureChannel(this)
         val defaults = defaultThemeForConfig()
         shellTheme = defaults
         remoteTheme = defaults
@@ -185,6 +187,7 @@ class MainActivity : BridgeActivity() {
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 rb.resetNavState()
+                if (remoteWebView === view) setGenerating(false)
                 updateBackEnabled()
             }
 
@@ -281,6 +284,7 @@ class MainActivity : BridgeActivity() {
         val wv = remoteWebView ?: return
         // Every caller drops the page for good (server switch or removal, finishing, recreate), which leaves its
         // temporary chat. Backgrounding never gets here.
+        setGenerating(false)
         hostPlugin.flushTemporaryTopic()
         remoteWebView = null
         remoteBridge = null
@@ -353,9 +357,22 @@ class MainActivity : BridgeActivity() {
         }
     }
 
+    fun setGenerating(active: Boolean) {
+        isGenerating = active
+        if (!active) GenerationKeepAliveService.stop(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        GenerationKeepAliveService.stop(this)
+    }
+
     override fun onPause() {
         super.onPause()
         CookieManager.getInstance().flush()
+        if (isGenerating && !isChangingConfigurations && !isFinishing) {
+            GenerationKeepAliveService.start(this)
+        }
     }
 
     override fun onDestroy() {

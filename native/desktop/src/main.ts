@@ -825,10 +825,15 @@ function start() {
   handleRemote("native:desktop:getSettings", z.undefined(), () => ({
     closeAction: config.closeAction,
     hotkey: config.hotkey,
+    notificationsEnabled: config.notificationsEnabled,
     developerMode: config.developerMode,
   }));
   handleRemote("native:desktop:setCloseAction", closeActionSchema, (action) => {
     config.closeAction = action;
+    saveConfig(config);
+  });
+  handleRemote("native:desktop:setNotificationsEnabled", z.boolean(), (enabled) => {
+    config.notificationsEnabled = enabled;
     saveConfig(config);
   });
   handleRemote("native:desktop:setHotkey", z.string().min(1).max(100).nullable(), (accelerator) => {
@@ -855,7 +860,7 @@ function start() {
   const notifications = new Set<Notification>();
   ipcMain.on("native:notify", (event, raw: unknown) => {
     const input = notifyInput.safeParse(raw);
-    if (!remote || !fromRemote(event) || !input.success) return;
+    if (!remote || !fromRemote(event) || !config.notificationsEnabled || !input.success) return;
     const server = remote.server;
     const notification = new Notification({ title: input.data.title, body: input.data.body, icon });
     notification.on("click", () => {

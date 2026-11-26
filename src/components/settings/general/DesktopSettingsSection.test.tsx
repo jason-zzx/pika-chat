@@ -12,9 +12,11 @@ function stubDesktop(overrides: Partial<PikaNativeDesktop> = {}): PikaNativeDesk
     getSettings: vi.fn().mockResolvedValue({
       closeAction: "tray",
       hotkey: "CommandOrControl+Shift+Space",
+      notificationsEnabled: true,
       developerMode: false,
     }),
     setCloseAction: vi.fn().mockResolvedValue(undefined),
+    setNotificationsEnabled: vi.fn().mockResolvedValue(undefined),
     setHotkey: vi.fn().mockResolvedValue({ ok: true }),
     getStorageUsage: vi.fn().mockResolvedValue({
       localDataBytes: 2048,
@@ -185,5 +187,49 @@ describe("DesktopSettingsSection", () => {
 
     expect(await screen.findByText("Cmd+Shift+Space")).toBeInTheDocument();
     expect(screen.queryByText("When closing window")).toBeNull();
+  });
+
+  it("toggles desktop reply notifications and hides the switch on older shells", async () => {
+    const desktop = stubDesktop();
+    window.pikaNative = {
+      serverName: "Home",
+      notify: vi.fn(),
+      showServerMenu: vi.fn(),
+      openServers: vi.fn(),
+      desktop,
+    };
+
+    const { unmount } = renderWithIntl(<DesktopSettingsSection />);
+
+    const toggle = await screen.findByRole("switch", {
+      name: "Reply notifications",
+    });
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(desktop.setNotificationsEnabled).toHaveBeenCalledWith(false);
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+    });
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(desktop.setNotificationsEnabled).toHaveBeenCalledWith(true);
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+    });
+
+    unmount();
+
+    window.pikaNative = {
+      serverName: "Home",
+      notify: vi.fn(),
+      showServerMenu: vi.fn(),
+      openServers: vi.fn(),
+      desktop: stubDesktop({ setNotificationsEnabled: undefined }),
+    };
+    renderWithIntl(<DesktopSettingsSection />);
+    expect(await screen.findByText("Ctrl+Shift+Space")).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Reply notifications" })).toBeNull();
   });
 });

@@ -23,6 +23,8 @@ declare global {
   interface DesktopSettings {
     closeAction: DesktopCloseAction;
     hotkey: string | null;
+    /** Absent in older desktop shells (treated as enabled). */
+    notificationsEnabled?: boolean;
     developerMode: boolean;
   }
 
@@ -30,6 +32,8 @@ declare global {
     platform: "win32" | "linux" | "darwin";
     getSettings(): Promise<DesktopSettings>;
     setCloseAction(action: DesktopCloseAction): Promise<void>;
+    /** Absent in older desktop shells. */
+    setNotificationsEnabled?(enabled: boolean): Promise<void>;
     setHotkey(accelerator: string | null): Promise<{ ok: boolean }>;
     getStorageUsage(): Promise<DesktopStorageUsage>;
     clearStorage(category: DesktopStorageCategory): Promise<DesktopStorageUsage>;
@@ -57,6 +61,8 @@ declare global {
     openServers(screen: "list" | "add"): void;
     /** Topic id of the temporary chat open in this page, or null. Optional: older shells lack it. */
     setTemporaryTopic?(topicId: string | null): void;
+    /** Whether this page is currently following a non-temporary generation stream. Optional: older shells lack it. */
+    setGenerating?(active: boolean): void;
     navigation?: PikaNativeNavigation;
     desktop?: PikaNativeDesktop;
   }

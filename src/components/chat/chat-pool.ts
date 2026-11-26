@@ -66,6 +66,10 @@ export type PoolEntry = {
   generationId: string | null;
   /** A reconnect request is open: dedupes discovery-driven re-attempts. */
   resumeInFlight: boolean;
+  /** A send or reconnect request is live on this entry's Chat stream. Tracked
+   * explicitly so a brand-new draft counts immediately at `noteSendStarted`,
+   * before `data-topic` arrives or the SDK flips `chat.status`. */
+  sendActive: boolean;
   /** A regeneration updates messages outside the Chat stream (manual fetch
    * loop), so `chat.status` stays "ready"; this flag keeps the entry alive
    * and the sidebar icon on until the loop's teardown. */
@@ -91,10 +95,27 @@ type ChatPoolBridge = {
   invalidateAfterFinish: (topicId: string | null) => void;
   /** A turn ended on its own (not stopped, not a dropped connection). */
   notifyReplyFinished: (topicId: string, isError: boolean) => void;
+  /** Whether any non-temporary local stream is currently active. */
+  onGeneratingChange?: (active: boolean) => void;
 };
 
 const entries = new Map<string, PoolEntry>();
 let bridge: ChatPoolBridge | null = null;
+let lastReportedGenerating = false;
+
+function syncGeneratingState(): void {
+  const active = [...entries.values()].some(
+    (entry) =>
+      !entry.discarded &&
+      !entry.temporary &&
+      (entry.sendActive || entry.regenActive),
+  );
+  if (active === lastReportedGenerating) {
+    return;
+  }
+  lastReportedGenerating = active;
+  bridge?.onGeneratingChange?.(active);
+}
 
 function createTransport(entry: PoolEntry) {
   return new DefaultChatTransport<ChatUIMessage>({
@@ -163,6 +184,7 @@ function createEntry(chatId: string): PoolEntry {
     topicId: chatId === "draft" ? null : chatId,
     generationId: null,
     resumeInFlight: false,
+    sendActive: false,
     regenActive: false,
     seededFor: null,
     temporary: false,
@@ -208,6 +230,7 @@ function createEntry(chatId: string): PoolEntry {
       if (entry.discarded) {
         return;
       }
+      entry.sendActive = false;
       // The SDK calls onError AND onFinish for a response-body disconnect.
       // Keeping the target only in onError loses it again in this callback.
       if (!event.isDisconnect) {
@@ -228,6 +251,7 @@ function createEntry(chatId: string): PoolEntry {
       ) {
         bridge?.notifyReplyFinished(entry.topicId, event.isError);
       }
+      syncGeneratingState();
       try {
         entry.view?.onFinish({ isError: event.isError });
       } finally {
@@ -238,6 +262,7 @@ function createEntry(chatId: string): PoolEntry {
       if (entry.discarded) {
         return;
       }
+      entry.sendActive = false;
       // A pre-stream failure never reaches onFinish. The generation target is
       // KEPT: a network drop says nothing about the server-side turn, which
       // may still be running — discovery will re-adopt it through the same
@@ -246,6 +271,7 @@ function createEntry(chatId: string): PoolEntry {
       if (entry.topicId) {
         unmarkTopicStreaming(entry.topicId);
       }
+      syncGeneratingState();
       maybeEvict(entry);
     },
   });
@@ -317,11 +343,13 @@ export function attachChatView(
 export function noteSendStarted(chatId: string, temporary = false): void {
   const entry = acquireChat(chatId);
   entry.temporary = temporary;
+  entry.sendActive = true;
   // Existing-topic sends know their topic immediately; drafts mark on
   // `data-topic` when the topic id arrives.
   if (entry.topicId) {
     markTopicStreaming(entry.topicId);
   }
+  syncGeneratingState();
 }
 
 /** A regeneration runs outside the Chat stream; bracket it explicitly. */
@@ -340,6 +368,7 @@ export function noteRegenStarted(
   if (entry.topicId) {
     markTopicStreaming(entry.topicId);
   }
+  syncGeneratingState();
 }
 
 /**
@@ -370,6 +399,7 @@ export function noteRegenFinished(
   ) {
     bridge?.notifyReplyFinished(entry.topicId, terminal === "error");
   }
+  syncGeneratingState();
   maybeEvict(entry);
 }
 
@@ -407,10 +437,14 @@ export async function resumeGeneration(
     markTopicStreaming(entry.topicId);
   }
   entry.resumeInFlight = true;
+  entry.sendActive = true;
+  syncGeneratingState();
   try {
     await entry.chat.resumeStream();
   } finally {
     entry.resumeInFlight = false;
+    entry.sendActive = false;
+    syncGeneratingState();
   }
   if (entry.chat.status === "error") {
     const error = entry.chat.error;
@@ -475,18 +509,23 @@ export function discardChat(topicId: string): void {
     if (key === topicId || entry.topicId === topicId) {
       entry.discarded = true;
       entry.generationId = null;
+      entry.sendActive = false;
       entry.regenActive = false;
       entries.delete(key);
     }
   }
+  syncGeneratingState();
 }
 
 /** Register the app-level bridge; returns the dispose function. */
 export function configureChatPool(api: ChatPoolBridge): () => void {
   bridge = api;
+  lastReportedGenerating = false;
+  syncGeneratingState();
   return () => {
     if (bridge === api) {
       bridge = null;
+      lastReportedGenerating = false;
     }
   };
 }
@@ -495,5 +534,6 @@ export function configureChatPool(api: ChatPoolBridge): () => void {
 export function resetChatPool(): void {
   entries.clear();
   bridge = null;
+  lastReportedGenerating = false;
   resetStreamingTopics();
 }

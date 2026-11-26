@@ -30,6 +30,7 @@ interface PikaNative {
   showServerMenu(anchor: { x: number; y: number }): void; // viewport CSS px
   openServers(screen: "list" | "add"): void;
   setTemporaryTopic?(topicId: string | null): void; // active temporary chat id for shell teardown (optional for older shells)
+  setGenerating?(active: boolean): void; // whether a non-temporary local stream is active (optional for older shells)
   navigation?: PikaNativeNavigation; // logical Back bridge (optional for older shells/servers)
   desktop?: PikaNativeDesktop; // desktop-only settings, storage, updates, diagnostics
 }
@@ -39,7 +40,11 @@ interface PikaNative {
   `usePikaNative()` (`src/hooks/use-pika-native.ts`: `useSyncExternalStore`, `null`
   server snapshot, so hydration never mismatches); `ChatPoolBridge` also reads it
   directly to call `notify` when a reply finishes (not aborted, not
-  disconnected) while the page is hidden or unfocused. Sends report through the
+  disconnected) while the page is hidden or unfocused (reading cached
+  `topicKeys.detail` first to avoid an extra network round-trip on backgrounded
+  mobile devices, falling back to `getTopic` only on cache miss), and to mirror
+  whether any non-temporary local stream is active
+  via `setGenerating?(active)`. Sends report through the
   pooled `Chat` `onFinish`; regenerate / edit run a manual stream loop, so they
   report through `noteRegenFinished(topic, terminal)` with the stream's last
   terminal chunk (`finish` / `error` notify, `abort` or none stays silent). Always handle it being
@@ -56,7 +61,8 @@ interface PikaNative {
 - Desktop settings, storage & diagnostics (`pikaNative.desktop`): rendered inside
   `Settings -> General` (`DesktopSettingsSection`) and `Settings -> About` (`AboutVersionCard`)
   only when `native.desktop` is present. Covers `closeAction` (`"tray"` default / `"quit"`
-  on Win/Linux), global shortcut, 4-category storage breakdown (`localDataBytes`, `webCacheBytes`,
+  on Win/Linux), `notificationsEnabled` (`true` default; checked in `native:notify` and optional
+  on older shells), global shortcut, 4-category storage breakdown (`localDataBytes`, `webCacheBytes`,
   `updaterCacheBytes`, `logsAndTempBytes`) with safe cache/log clearing, manual update checks,
   and a 5-click version trigger that activates `developerMode` (without auto-opening DevTools)
   to expose on-demand detached DevTools and `desktop.log`.
@@ -249,11 +255,17 @@ falls back to the list; only an empty query auto-connects or shows the welcome s
   `--safe-area-inset-*` onto remote pages (it caused a dev hydration mismatch on `<html>`). Because
   `remoteWebView` is added to the same `CoordinatorLayout` parent inside the decor view and calls
   `requestApplyInsets()`, both WebViews inherit the same safe-area / IME resize behavior.
-- **Notifications**: channel `replies`; `POST_NOTIFICATIONS` requested once after the first
-  successful remote page load; the tap intent carries `serverId` + `path` and `onNewIntent`
-  loads `origin + path` only when that server is still connected. No foreground service: Android
-  freezes a backgrounded app after about 10 s, so a completion notification appears only
-  while the app is in front or just after leaving it.
+- **Notifications & background keep-alive**: channel `replies` (`IMPORTANCE_DEFAULT`)
+  for completion alerts and channel `streaming` (`IMPORTANCE_LOW`, silent, no badge) for
+  background keep-alive; `POST_NOTIFICATIONS` requested once after the first successful
+  remote page load; the tap intent carries `serverId` + `path` and `onNewIntent` loads
+  `origin + path` only when that server is still connected. While `isGenerating` is true
+  (driven by `pikaNative.setGenerating`), leaving the activity (`onPause`, guarded against
+  `IllegalStateException` / `ForegroundServiceStartNotAllowedException`) starts
+  `GenerationKeepAliveService` (`FOREGROUND_SERVICE_TYPE_SHORT_SERVICE` on API 34+, 3-minute
+  OS window, `onTimeout` and `onTaskRemoved` call `stopSelf()`). Returning (`onResume`),
+  completion (`setGenerating(false)`), full navigation (`onPageStarted`), server teardown
+  (`destroyRemoteWebView`), or `onDestroy` stops the service immediately.
 - **Updates**: `Updates.kt` queries the GitHub latest release on manual check from the
   shell-ui footer (no automatic check at launch).
 - **Dev testing**: the Next dev server 403s chunk requests from an unlisted host such as

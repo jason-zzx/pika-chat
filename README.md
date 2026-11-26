@@ -263,7 +263,7 @@ An Android app (APK, Android 7.0+) connects to one or more deployed Pika Chat se
 
 - **Install**: download `Pika-Chat-<version>.apk` from [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) and open it; Android asks you to allow installs from your browser or file manager (unknown sources).
 - **Servers**: the first launch opens the add-server form. Switch servers from the sidebar brand row, account menu, or sign-in page chip (a native picker). Each server keeps its own sign-in session.
-- **Notifications**: Android 13+ asks for notification permission after the first connection. Android freezes backgrounded apps after about 10 seconds, so a notification appears only when a reply finishes while the app is open or just after you leave it; reopening the app shows the finished reply.
+- **Notifications**: Android 13+ asks for notification permission after the first connection. While a reply is actively generating after you leave the app, a short-lived silent foreground service (`shortService`, up to 3 minutes on Android 14+) keeps the connection alive so the completion notification can arrive; longer replies still finish on the server and appear when you reopen the app.
 - **Updates**: the app checks GitHub Releases at launch and from Settings, and links to the new APK.
 - **Requirements**: an up-to-date Android System WebView (update it in Google Play); the app shows an error asking for this otherwise.
 
