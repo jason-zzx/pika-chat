@@ -5,164 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0-rc.4] - 2026-11-25
+## [1.0.0] - 2026-11-25
 
 ### Highlights
 
-- **Temporary Chat**: Start ephemeral conversations from the chat header (**Temporary**) that support full multi-turn replies, stop/resume, versions, attachments, and context compression while remaining URL-less and excluded from sidebar history, favorites, counts, search, and auto-titling—automatically deleted when leaving, unloading, signing out, closing the native app/server, or after 24 hours idle.
-- **Persistent Per-Topic Composer Drafts**: Unsent composer text is saved per topic and per assistant new-topic draft in `localStorage` (with a **Draft** badge on inactive sidebar items) and automatically expires after 14 days, on auth reset, or when switching servers in native clients.
-- **Native-Like App Navigation & Shell Polish**: Added logical stack navigation across Web, Desktop, and Android (overlay-first Back dismissal, predictive back on Android, mouse/trackpad/keyboard Back on Desktop, and lossless return-to-server switching), pre-first-paint theme sync for `shell-ui` and Android's native server menu dialog, plus mobile chat and touch image-preview refinements.
+- **Cross-Platform Desktop App (Windows, macOS & Linux)**: Native Electron client supporting both zero-config standalone local mode ("This computer") and multi-server remote connections with isolated sessions. Includes a theme-synced frameless titlebar (`hiddenInset` on macOS) and inset sidebar, custom themed server switcher popover, system tray, global show/hide hotkey, OS reply notifications, in-app updates (Windows/Linux; release prompt on macOS), interactive Windows NSIS installer and portable `.zip`, plus Linux `.AppImage`, `.deb`, and `.rpm` packages.
+- **Android App (APK)**: Native Capacitor 8 client for connecting to deployed Pika Chat servers, featuring origin-scoped native bridge security, live theme-colored system bars and server switcher dialog, keyboard-aware layout, predictive back navigation, attachment upload/download, and a `shortService` foreground keep-alive so reply notifications arrive reliably when backgrounded during streaming.
+- **Single Embedded SQLite Database (`better-sqlite3`) & Automatic PostgreSQL Import**: Replaced PostgreSQL (Docker) and PGlite with embedded SQLite configured via `DATABASE_PATH` (defaulting to `/data/files/pika-chat.db` in Docker and `<userData>/local/pika-chat.db` on Desktop), eliminating the separate database container. Existing `v0.4.0`–`v0.4.2` PostgreSQL instances automatically import into SQLite in a verified read-only snapshot on first boot when keeping their previous Compose configuration.
+- **Temporary Chat**: Start ephemeral conversations from the chat header (**Temporary**) with full multi-turn replies, stop/resume, versions, attachments, and context compression while staying URL-less and excluded from sidebar history, favorites, topic counts, search, and auto-titling—automatically deleted on navigation, reset, page unload, sign-out, native exit/server close, or after 24 hours idle.
+- **Message Text Quoting & Jump-to-Source**: Select text in any user or assistant message body to attach a removable **Quote** card to the composer (passed to the model as `<quote>` context while keeping your message intact), and click any quote card to center and flash-highlight the exact source passage.
+- **Paginated Sidebar Topics & Persistent Composer Drafts**: Assistant topic lists now load favorites in full and regular topics in 20-item infinite-scroll pages with compact relative timestamps, hover-overlay actions, and touch long-press menus; unsent composer text is saved per topic and assistant draft in `localStorage` (showing a **Draft** indicator) and expires after 14 days, auth resets, or server switches.
+- **Native-Like App Navigation & Installable PWA**: Added logical stack navigation with overlay-first Back dismissal across Web, Desktop (mouse/trackpad/keyboard Back and lossless return-to-server switching), and Android (dual-WebView shell), paired with an installable Web App Manifest, safe-area support, dynamic `theme-color` tracking, touch pinch-zoom and double-tap image preview, and mobile Enter-to-newline input ergonomics.
 
 ### Feats
 
-- **Temporary Chat (`ChatView`, `TemporaryTopicGuard`, & Native Shells)**:
-  - Added a **Temporary** toggle in the chat header on new drafts (`/` or `/assistant/:id`) that keeps conversations on the draft URL (redirecting direct `/assistant/:a/:t` visits back to `/assistant/:a`) with an informational banner, excludes them from topic lists, favorites, `topicCount`, search results, and auto-titling, and returns `404` on rename/favorite requests.
-  - Automatically deletes active temporary topics and unreferenced attachments on route changes, same-route resets (**New topic**, home link, or header toggle), `pagehide` (`keepalive`), and before `authClient.signOut()`, backed by an hourly server idle sweep (`TEMPORARY_TOPIC_TTL_MS = 24h`) and non-persisted `temp-*` composer drafts.
-  - Added `window.pikaNative.setTemporaryTopic`: Desktop deletes the active temporary topic on server close, server removal (before clearing cookies), quit, and update install (before shutting down the local server) while keeping it alive when minimizing to tray; Android deletes on remote WebView teardown or on next startup (`onCreate`) after a swipe-away/kill while keeping it alive when backgrounded (`onStop`); desktop reply notifications are skipped for temporary chats.
-- **Persistent Per-Topic Composer Drafts**:
-  - Persisted composer draft text per topic and assistant new-topic draft under `pika.draft:<key>` in `localStorage` (restored post-hydration without SSR mismatches; attachments, quotes, and image parameters stay session-only), displaying a **Draft** indicator on inactive topic rows and **New topic** items in `AssistantTree`.
-  - Automatically prunes drafts older than 14 days (`DRAFT_TTL_MS`), on reaching auth pages (`discardComposerDrafts`), or predating `window.pikaNative.connectedSince` (bumped by Desktop and Android only when connecting to a different server).
-- **Native-Like App Navigation & Transactional Server Switching**:
-  - Added `NavigationProvider` (`src/lib/navigation-state.ts`, `src/lib/overlay-dismiss.ts`) maintaining a logical navigation stack (`/` workspace root, up to 20 topics, isolated `/settings/*` branch, and auth stack) using flat `router.replace` navigation in native mode and dismissing the topmost open Base UI overlay (dialog, alert dialog, sheet, popover, menu) on Back before popping routes.
-  - Kept Desktop's `remote.view` alive while showing `shell-ui` (`returnToServer()`) and hooked `browser-backward`, macOS right-swipe, and `Alt+Left` / `Cmd+[` / `BrowserBack` shortcuts (swallowing forward shortcuts) through `native:back`; switched Android to a dual-WebView layout (`bridge.webView` dedicated to `shell-ui` plus a per-server `remoteWebView`) with `android:enableOnBackInvokedCallback="true"` predictive back and internal `shell-ui` stack navigation (`native/shell-ui/src/nav-stack.ts`).
-- **Synced Shell Appearance & Android Server Menu Dialog**:
-  - Extracted shared CSS color tokens into `src/app/theme-tokens.css` for both the web app and `native/shell-ui`, and synced the last connected server's `pika_theme` mode and preset onto `shell-ui` before its first paint on Desktop and Android (also seeding `pika_theme` on servers without one and hiding stale shell frames behind fresh views / `onPageCommitVisible`).
-  - Styled Android's native server switcher dialog (`ServerMenuDialog.kt`) with synced theme tokens (`popover`, `popoverForeground`, `mutedForeground`, `accent`, `primary`, `border`), leading icons, active checkmark, and capped scrollable list height.
-- **Unified Shell Update Check**:
-  - Disabled automatic update checks on app launch on Desktop and Android, consolidated manual **Check for updates** into a unified `shell-ui` footer alongside the app version across both platforms, and removed the separate Android `mobileSettings` screen from `shell-ui`.
-- **Mobile Chat, Sidebar & Image Preview UX**:
-  - Added touch pinch-zoom (anchored to the pinch midpoint and snapping back to `1x` below `1x`), double-tap `2x` toggle zoom at the tap location, and `overscroll-none` in `ImagePreviewDialog` (raising `MIN_SCALE` from `0.1` to `0.5`).
-  - Added `shouldSendOnEnter` (`src/components/chat/enter-to-send.ts`) to `Composer` and `UserMessageEditor` so `Enter` inserts a newline on Android (`window.pikaNative` without `desktop`), coarse-pointer mobile browsers, and during active IME composition while keeping `Enter`-to-send on desktop.
-  - Added a mobile-only (`md:hidden`) **New topic** icon action in `InsetHeader` on normal existing topics (omitted on drafts and temporary topics).
-  - Unified desktop sidebar collapse across chat and settings (removing `lockedOpen` on `/settings/*`, adding icons to `SettingsNav`, and aligning the header `SidebarTrigger`).
+- **Desktop Storage Manager, Preferences & Diagnostics**: Added desktop controls in **Settings → General** (close-to-tray vs. quit on Windows/Linux, global shortcut recorder, and reply notification toggle), a 4-category client **Storage** manager with safe cache and log cleanup (preserving login sessions and local SQLite data), and a 5-click version trigger for on-demand `developerMode` diagnostics (detached DevTools and desktop logs).
+- **Pre-First-Paint Shell Theme Sync & Unified Update Entry**: Extracted shared CSS color tokens (`theme-tokens.css`) so `shell-ui` mirrors the last connected server's light/dark mode and preset before first paint, disabled automatic update checks at launch, and consolidated manual **Check for updates** into a unified `shell-ui` footer (also available in **Settings → About** on desktop).
+- **Settings → About & Client Version**: Added `/settings/about` displaying version info, Local/Demo mode badges, one-click **Copy version**, project links, and MIT License details, alongside `window.pikaNative.appVersion` reporting for connected Desktop and Android clients.
+- **Batch Upstream Model Sync**: Upgraded provider model discovery ("Fetch from upstream") into a two-tab comparison dialog (**Available** and **Not returned**) with **Keep all** / **Uncheck all** batch controls, empty-upstream warnings, and atomic server sync.
+- **Mobile Typography & Header Quick Action**: Increased mobile Markdown prose sizing (`16px`) and touch-friendly list spacing across sidebars, menus, and sheets, and added a mobile-only **New topic** icon button in the chat header on regular existing topics.
+- **Consistent Dialogs & Confirmations**: Standardized external link prompts (including search result links), admin password resets, search provider deletions, manual context compression confirmations, and `shell-ui` server removal onto themed `Dialog` / `AlertDialog` flows.
+- **Server Health Version Check**: Extended `GET /api/health` to report the server version for native client compatibility checks.
 
 ### Fixes
 
-- **Mobile Composer Toolbar Layout**: Kept the composer bottom toolbar on a single horizontally scrollable row (`flex-nowrap overflow-x-auto`) without wrapping, moved the expand/collapse toggle to the top-right corner of the textarea, and hid the **Chat map** and **Compress context** buttons when the active topic has no messages.
-- **Nested Dialog Backdrops**: Added `forceRender` to `DialogOverlay` and `AlertDialogOverlay` so dialogs opened inside another dialog (such as assistant or topic dialogs inside the mobile sidebar sheet) render their backdrop scrim properly.
-- **Native Reply Notifications for Regenerate & Edit**: Recorded the stream's terminal chunk (`finish` / `error` / `abort`) in `ChatView` and passed it to `noteRegenFinished`, firing native completion/error notifications on regenerations and user message edits while keeping aborts and broken streams silent.
-- **Tooltip Styling, Touch Menu Clamp & Collapsed Sidebar Alignment**: Switched `TooltipContent` to popover tokens with `color-scheme` CSS rules, unified tooltip rendering via `SharedTooltip` / `SharedTooltipHost`, moved `line-clamp-3` onto a zero-padding inner span in `DropdownMenuLabel` to prevent partial 4th-line bleed on touch long-press topic menus, and aligned collapsed sidebar items on the 32px icon track with right-side tooltips.
+- **Chat Reconnect & Native Reply Notifications**: Allowed discovery refreshes to retry failed reconnects after clearing transcript errors, and ensured native reply notifications fire on regenerations and user message edits (staying silent on manual aborts and broken streams) while checking cached topic metadata first.
+- **Windows Minimize/Restore Rendering & Crash Recovery**: Prevented white screens after minimizing/restoring from the Windows taskbar, added renderer and GPU crash auto-recovery, and added rotated `desktop.log` logging with append-mode `local/server.log` truncation.
+- **Desktop & Linux Packaging**: Added multi-size PNG icons (`16x16`–`512x512`) so Linux `.rpm`, `.deb`, and `.AppImage` packages install standard `hicolor` icon sizes, and fixed Windows standalone symlink unwrapping and retry handling.
+- **Mobile Composer Toolbar**: Kept the composer bottom toolbar on a single horizontally scrollable row on mobile, moved the expand toggle to the textarea corner, and hid **Chat map** and **Compress context** buttons on empty topics.
+- **Overlays, Sidebar & Search UI**: Fixed `DropdownMenuContent` portal z-index stacking and nested dialog backdrops (`forceRender`), fixed touch long-press topic menu title clamping, aligned collapsed sidebar icons across chat and settings, unified tooltip styling and hover highlights, synced `SearchDialog` hover/keyboard selection with an inline clear button, prevented `FilesList` checkbox layout jumps, and avoided RSC redirect errors on `/settings`.
+- **Update SemVer Comparison**: Fixed SemVer pre-release comparison in Android and macOS update checks.
 
 ### Dev
 
-- Updated `native/desktop/electron-builder.config.mjs` so Windows portable `.zip` builds use the `-portable` filename suffix (`pika-chat-${version}-${os}-${arch}-portable.${ext}`) while NSIS installers keep `pika-chat-${version}-${os}-${arch}.${ext}`.
-
-## [1.0.0-rc.3] - 2026-11-22
-
-### Highlights
-
-- **Theme-Synced Frameless Desktop Titlebar, Inset Shell & Custom Server Popover**: Replaced the thick OS window frame on Windows and Linux (and switched macOS to `hiddenInset`) with a `34px` theme-synced titlebar paired with an inset sidebar layout (`variant="inset"`), and replaced the OS-native server switcher menu with a custom themed floating popover.
-- **Desktop Preferences, Storage Manager & Diagnostics in Web Settings**: Moved desktop settings (close-to-tray vs. quit on Windows and Linux, global shortcut) and a 4-category client storage breakdown with safe cache/log cleanup into **Settings → General**, and added desktop update checks plus a 5-click developer mode trigger in **Settings → About**.
-- **Windows Assisted Installer, Portable Zip & Linux RPM Icon Fixes**: Switched the Windows NSIS installer to an interactive wizard with optional user-data cleanup on uninstall, added a portable `.zip` build, and fixed Linux RPM application icon sizes.
-
-### Feats
-
-- **Frameless Titlebar & Theme-Synced Shell Chrome**:
-  - Switched Windows and Linux to `frame: false` with a shell-rendered `34px` `titlebarView` (`?chrome=titlebar`, hidden in fullscreen) displaying the Pika Chat icon, active window title, and window controls; switched macOS to `titleBarStyle: "hiddenInset"` with native traffic lights.
-  - Observed active web CSS tokens (`--background`, `--foreground`, `--muted-foreground`, `--popover`, `--accent`, `--border`, `--sidebar`, and `meta[name="theme-color"]`) in `preload-remote.ts` and `shell-ui` to keep the window background, titlebar, and server menu synchronized across all light/dark theme presets.
-  - Updated `AppSidebar` to `variant="inset"` (removing `SidebarRail`) with desktop-aware `SidebarInset` framing (`data-chrome="desktop"`) and `pika:chrome-sync` updates so the titlebar blends seamlessly with the sidebar.
-- **Custom Themed Server Selector Popover**:
-  - Replaced `Menu.buildFromTemplate` in `native:showServerMenu` with a transparent `WebContentsView` popover (`?chrome=menu` in `native/shell-ui/src/server-menu.ts`), featuring viewport-clamped positioning, keyboard navigation, right-aligned active checkmarks, and clean alignment for **Add server…** and **Manage servers…**, while keeping the server list isolated from remote pages.
-- **Desktop Preferences & Client Storage Manager (`Settings → General`)**:
-  - Added `DesktopSettingsSection` (visible only when `window.pikaNative?.desktop` is present): **When closing window** (`Minimize to tray` default or `Quit app` on Windows and Linux) and **Global shortcut** key recorder (`src/lib/desktop-hotkey.ts`) with **Clear**.
-  - Added a 4-category **Storage** view (`native/desktop/src/storage.ts` and `storage-fs.ts`) measuring **Local mode data** (with **Open folder**), **Web & media cache**, **Updater cache**, and **Logs & temporary files** (with **Clear cache** / **Clear** actions that preserve login sessions, cookies, `Local Storage`, `IndexedDB`, and local SQLite data, plus **Refresh**).
-  - Removed non-server desktop preferences from desktop `shell-ui` server management while keeping `shell-ui` Settings on Android.
-- **Update Check & On-Demand Developer Diagnostics (`Settings → About` & `shell-ui`)**:
-  - Added **Check for updates** to **Settings → About** (`AboutVersionCard`) on desktop.
-  - Added a 5-click trigger on the version number (in **Settings → About** and desktop `shell-ui`'s footer) to enable `developerMode` without auto-opening DevTools, revealing **Open DevTools** (detached), **Open desktop log**, and **Disable** actions alongside the tray and View menus while hiding default DevTools shortcuts when disabled.
-- **Windows Assisted Installer & Portable Zip (`native/desktop`)**:
-  - Configured NSIS with `oneClick: false`, `allowToChangeInstallationDirectory: true`, custom Pika Chat sidebar/header BMP graphics (`installerSidebar.bmp` and `installerHeader.bmp`), and `installer.nsh` (automatically removing the `*-updater` cache on real uninstalls while providing an unchecked-by-default checkbox on the uninstall welcome page to optionally delete `%AppData%\Pika Chat`).
-  - Added Windows `{ target: "zip", arch: ["x64"] }` portable builds sharing `%AppData%\Pika Chat` and falling back to GitHub Release download prompts when `app-update.yml` or the NSIS uninstaller is absent.
-
-### Fixes
-
-- **Windows Taskbar Minimize/Restore White Screen & Crash Recovery**: Skipped `0x0` `layout()` bounds updates when minimized, re-synced view bounds and called `invalidate()` on `show`, `restore`, `maximize`, `unmaximize`, and `leave-full-screen`, added `render-process-gone` auto-reload / `?failed=<id>` fallback and GPU `child-process-gone` repaint recovery, and added rotated `<userData>/desktop.log` logging (`1 MiB` cap) with append-mode `local/server.log` writes for reliable log truncation.
-- **Linux RPM Application Icons**: Generated multi-size PNG icons (`16x16` through `512x512`) under `native/desktop/assets/icons/` and set `linux.icon` to `"icons"` so RPM, deb, and AppImage packages install standard `hicolor` icon sizes instead of only `1024x1024`.
-
-### Dev
-
-- Added unit tests for desktop storage calculation/cleanup (`native/desktop/src/storage-fs.test.ts` via `pnpm -C native/desktop test`) alongside desktop hotkey, settings, and about tests.
-- Updated `native/desktop/scripts/build.mjs` to copy only runtime assets into `dist/assets/`, and updated `.github/workflows/ci.yml` and `.github/workflows/release.yml` to build and upload Windows portable `.zip` artifacts alongside NSIS installers.
-- Replaced single-runner QEMU multi-arch Docker builds in `.github/workflows/release.yml` with parallel native `ubuntu-latest` (`linux/amd64`) and `ubuntu-24.04-arm` (`linux/arm64`) digest builds merged via `docker buildx imagetools create`, using per-architecture cache scopes and job timeouts.
-
-## [1.0.0-rc.2] - 2026-11-21
-
-### Highlights
-
-- **Single Embedded SQLite Database (`better-sqlite3`) & Automatic PostgreSQL Upgrade**: Replaced PostgreSQL (Docker deployments) and embedded PGlite (desktop local mode and CI) with a single embedded `better-sqlite3` database configured via `DATABASE_PATH` (defaulting to `/data/files/pika-chat.db` on the existing `/data/files` volume in Docker and `<userData>/local/pika-chat.db` in desktop local mode), removing the separate database container. Existing PostgreSQL instances (`v0.4.0`–`v1.0.0-rc.1`) automatically import into SQLite on first boot when keeping their previous compose file and `DATABASE_URL` / `POSTGRES_*` configuration.
-- **Message Text Quoting & Jump-to-Source**: Select text in any user or assistant message body to show a floating **Quote** button, attach the excerpt as an atomic card in the composer (passed to the model as `<quote>` context while keeping your typed message intact), and click any quote card to center and flash-highlight the exact source passage.
-- **Paginated Sidebar Topics & Quieter Topic Rows**: Assistant topic lists now load favorites in full and non-favorite topics in pages of 20 with infinite scroll, compact relative last-active timestamps, hover-overlay actions on pointer devices, and long-press menus on touch devices.
-
-### Feats
-
-- **Embedded SQLite Engine & Upgrade Importer**:
-  - **SQLite Runtime & Indexing**: Configured `better-sqlite3` with WAL mode, `foreign_keys = ON`, `busy_timeout = 5000`, synchronous `immediate` write transactions, automatic boot-time schema migrations, a deterministic `file_category` SQLite UDF for attachment filtering, `(updated_at, id)` keyset cursor pagination, `json_set` merges, and `AFTER INSERT` / `AFTER UPDATE OF parts` triggers on `chat_messages` maintaining the `WITHOUT ROWID` `message_file_refs` index table so attachment reference checks and topic/assistant deletions never scan message payloads.
-  - **One-Time PostgreSQL Boot Importer**: When `DATABASE_URL` or legacy `POSTGRES_*` variables are configured and SQLite has no `postgres_import` marker, startup reads PostgreSQL in a single read-only `repeatable read` snapshot, validates columns against the `v0.4.0`–`v1.0.0-rc.1` schema (instructing older instances to upgrade to `v0.4.2` first), copies all tables in one transaction, verifies per-table row counts and `PRAGMA foreign_key_check`, and records the import marker without modifying PostgreSQL (refusing non-empty SQLite targets or mismatched schemas; once imported, subsequent boots ignore PostgreSQL settings).
-  - **Docker & Compose Simplification**: Removed the `postgres` service and `postgres_prod_data` volume from `docker-compose.full.yml`, removed `docker-compose.dev.yml`, `docker/postgres/`, and `scripts/migrate.ts`, and started the container directly with `node server.js` using boot-time instrumentation migrations.
-  - **Desktop Local Mode (`native/desktop`)**: Switched local mode from PGlite to SQLite (`<userData>/local/pika-chat.db`), added graceful SQLite WAL checkpoint shutdown via `utilityProcess.parentPort`, and verified `better-sqlite3` N-API prebuild loading under Electron in `build-server.mjs`.
-- **Message Text Quoting**:
-  - Added a floating **Quote** button (`QuoteSelectionButton`) positioned above single-message body selections (or below when near the top of the scroll container and on touch devices), attaching one removable two-line `QuoteCard` per draft while still requiring text or attachments to send.
-  - Persists quotes as `data-quote` message parts (replayed to models as `<quote>` text context, rendered above sent user bubbles, and removable during in-place user message editing), and jumps back to the exact occurrence by stored offset with whole-message flash fallback when edited or unmatched.
-- **Paginated Sidebar Topics & Row Redesign**:
-  - Replaced full-tree topic preloading with `topicCount` metadata in `GET /api/assistants`, dedicated `GET /api/assistants/[id]/topics/favorites`, and cursor-paginated `GET /api/assistants/[id]/topics` (20 rows per page, auto-loading on scroll with Retry on error), while keeping chat header titles, desktop notifications, and delete-assistant topic counts accurate for unloaded topics.
-  - Added minute-ticking relative last-active labels (`formatTopicAge`, replaced by a spinner while streaming), pointer hover/focus overlay actions that do not shift title truncation, truncated-title tooltips, and a ~500 ms touch long-press menu with a full-title header and native selection suppression.
-- **Batch Upstream Model Sync**:
-  - Upgraded provider model discovery ("Fetch from upstream") into a two-tab comparison dialog (**Available** and **Not returned**) with **Keep all** / **Uncheck all** batch controls, an empty-upstream warning, and atomic `POST /api/providers/[id]/models/sync` batch additions/removals using single-pass catalog metadata lookup.
-- **About Settings Page & Native Client Version**:
-  - Added **Settings → About** (`/settings/about`) with version summary, Local/Demo mode badge, one-click **Copy version**, project/release/issue links, and MIT License details; exposed `window.pikaNative.appVersion` in Electron (`preload-remote.ts`) and Android (`RemoteBridge.kt`) so remote native clients show both Server version and Client version.
-
-### Fixes
-
-- **Dropdown Menu Backdrop Stacking**: Set `relative z-50` on `DropdownMenuContent`'s `MenuPrimitive.Portal` so modal dropdown backdrops stack properly above z-indexed containers such as the sidebar and mobile sheets.
-- **Unified Hover & Search Palette Interactions**: Unified row hover highlights across the sidebar user/settings row, assistant profile/delete row, `ToolCallShell` overlay headers, `QuoteCard` jump button, and `ProviderConfigsScreen` model delete buttons (`XIcon` with dark-mode contrast); synced `SearchDialog` active highlight with pointer hover and added an inline clear button.
-- **Consistent Dialogs & Confirmations**: Aligned `ExternalLinkDialog` with standard `AlertDialog` primitives and extended it to `SearchToolCall` result links; replaced `window.prompt()` password resets in `AdminUsersScreen` with a validated password `Dialog` (plus destructive `Ban` styling and table row hover), added delete confirmations in `SearchProvidersScreen` and manual context compression confirmations in `ChatView`, and aligned `TwoFactorCard` with `SettingsSection` / `SettingsCard`.
-- **Settings Layout, Sidebar & Editor Ergonomics**: Hid the redundant desktop top header (`md:hidden`) in Settings while keeping the mobile drawer trigger, kept the Settings sidebar expanded without overwriting the chat view's collapsed state, improved `SidebarMenu` spacing (`md:gap-0.5`), fixed `PaneHeader` title truncation and icon-collapsed states (`ThemeControl`, `LoadingRows`, hidden topics group), refined `Composer` / `UserMessageEditor` focus rings and mobile hit targets, prevented vertical layout jumps during file selection in `FilesList`, and disabled **Reset all** in `ModelPreferencesScreen` when no defaults are set.
-- **Native Shell UI (`native/shell-ui`)**: Unified full-row hover and layered action highlights on server list rows, replaced `window.confirm()` server removal with a styled in-app `<dialog>`, suppressed the initial auto-focus ring on the server list, restored `cursor: pointer`, collapsed empty status messages, and added pending feedback while checking for updates.
-
-### Dev
-
-- Switched Vitest integration tests (`:memory:` SQLite per worker) and GitHub Actions (`ci.yml`, `release.yml`) to SQLite, removing the PostgreSQL service container and separate PGlite job, dropping build-time C++ compilation tools from `Dockerfile`, and adding a `workflow_dispatch`-only 4-target `desktop-smoke` packaging matrix in `ci.yml`.
-
-## [1.0.0-rc.1] - 2026-11-19
-
-### Highlights
-
-- **Cross-Platform Desktop App (Windows, macOS, Linux)**: Native Electron client supporting both zero-config standalone local mode ("This computer" powered by embedded PGlite) and multi-server remote mode with isolated sessions, tray icon, global hotkey, reply notifications, and auto-update.
-- **Android App (APK)**: Native Android shell built on Capacitor 8 for connecting to deployed Pika Chat servers, featuring origin-scoped native bridge injection, live theme-colored system bars, keyboard-aware layout, hardware back navigation, native server switching, and reply notifications.
-- **Installable PWA & Mobile Polish**: Web App Manifest, safe-area support, dynamic `theme-color` tracking, and refined mobile typography and list spacing for browser and iOS PWA users.
-
-### Feats
-
-- **Desktop App (`native/desktop`)**:
-  - **Local Mode ("This computer")**: Launches a bundled Next.js standalone server bound strictly to `127.0.0.1` using an embedded PGlite database and local disk storage under `<userData>/local/`. Automatically generates and encrypts secrets with Electron `safeStorage`, silently signs into a local super-admin account (hiding `/setup`, login, sign-out, 2FA, and user management), persists the local port across restarts, and shuts down cleanly on quit and before update installs.
-  - **Multi-Server Remote Mode**: Connects to one or more remote Pika Chat servers with per-server cookie/session isolation (`persist:server-<id>`), `/api/health` version compatibility checks (major.minor mismatch warnings), and seamless switching between local and remote instances without interrupting background generations.
-  - **Native Desktop Integration**: Adds a system tray icon with close-to-tray behavior, a customizable global show/hide hotkey (default `Ctrl+Shift+Space`), saved window bounds, native completion notifications that focus and open the target topic, safe attachment opening (document/media types open in the OS default app while scripts/executables are only revealed in the file manager), and in-app updates via `electron-updater` on Windows and Linux (plus release prompts on macOS).
-- **Android App (`native/mobile`)**:
-  - **Remote Server Shell**: Connects to deployed Pika Chat servers with native server list persistence, CORS-free health checks, per-origin cookie isolation (cookies cleared on server removal), and a native single-choice server-switcher dialog reachable from the sidebar brand row, account menu, and sign-in page chip.
-  - **Origin-Scoped Native Bridge**: Injects `window.pikaNative` exclusively into the connected server's main frame via `androidx.webkit` `WebMessageListener` and document-start scripts with native origin and payload validation (refusing to connect if Android System WebView lacks required features instead of falling back to an all-origins bridge).
-  - **System Bars, Keyboard & Navigation**: Renders edge-to-edge with live `theme-color` tinting across status and navigation bars (supporting `oklch`/`lab` theme tokens and automatic light/dark icon contrast), keeps the composer above the soft keyboard, routes in-app history and server-list returns through `OnBackPressedCallback` (supporting predictive back), opens external origins in the system browser, handles file uploads and `DownloadManager`/chooser attachment downloads, recovers from WebView renderer crashes, posts reply notifications (while active or shortly before Android freezes backgrounded apps), and checks GitHub Releases for updates.
-- **Installable PWA & Responsive UX**:
-  - Added `/manifest.webmanifest`, launcher and maskable icons, `apple-web-app` metadata, `viewport-fit=cover`, `interactive-widget=resizes-content`, safe-area padding across sidebar/toasts/image preview, and live `<meta name="theme-color">` updates matching the user's in-app theme mode and preset.
-  - Improved mobile typography (`16px` markdown prose with relaxed line height) and touch-friendly row heights/spacing across the sidebar, message list, dropdown menus, selects, and sheets without altering desktop sizing.
-- **Server & Web Bridge**:
-  - Extended `GET /api/health` to return the server `version` from `package.json` for shell compatibility checks, while keeping `window.pikaNative` strictly optional so plain browser behavior remains unchanged.
-
-### Fixes
-
-- **Chat Reconnect Retry**: Treated a chat as attached only while submitted/streaming so a discovery refresh retries dropped reconnects after `clearError()` resets status to `ready`.
-- **Settings Navigation in Dev Mode**: Moved the `/settings` to `/settings/general` redirect to `next.config.ts` and linked the sidebar entry directly, avoiding RSC `NEXT_REDIRECT` `performance.measure` negative-timestamp errors under clock skew.
-- **Update Version Comparison**: Used proper SemVer pre-release comparison in Android and macOS update checks (`native/shell-ui` and `Updates.kt`).
-
-### Dev
-
-- Added an isolated `native/` pnpm workspace (`@pika/shell-ui`, `pika-chat-desktop`, and `@pika/mobile`) excluded from root `tsconfig.json` and Docker builds.
-- Added CI checks for the `native` workspace, unsigned Android debug APK builds (`ci.yml`), and running the integration test suite against PGlite.
-- Expanded `release.yml` to build desktop installers (Windows NSIS, Intel/Apple Silicon macOS `.dmg`, Linux `.AppImage`/`.deb`/`.rpm` bundling the standalone local server) and signed Android APKs alongside multi-arch Docker images, keep prerelease tags off Docker `latest`, and mark hyphenated tags as GitHub prereleases.
+- **SQLite Test Suite & Simplified CI**: Switched Vitest integration tests to per-worker `:memory:` SQLite, removed PostgreSQL/PGlite CI services and Dockerfile C++ build tools, and split multi-arch Docker release builds onto native `amd64` and `arm64` runners merged via `imagetools`.
+- **Native Workspace & Release Pipeline**: Added the isolated `native/` pnpm workspace (`@pika/shell-ui`, `pika-chat-desktop`, `@pika/mobile`) with unit and type checks, automated multi-OS Electron builds (plus a manual `desktop-smoke` workflow) and signed Android APK builds, and kept prerelease tags off Docker `latest`.
+- **API & TypeScript Cleanup**: Replaced deprecated framework and schema APIs and resolved TypeScript warnings across the codebase.
 
 ### Chore
 
-- Standardized the product name spelling to **Pika Chat** across localizations, icon metadata, and Better Auth settings.
-- Added Desktop and Android installation, usage, and development documentation to `README.md` and `README.zh-CN.md`.
+- **Compose File Consolidation**: Renamed `docker-compose.standalone.yml` to `docker-compose.yml` and `docker-compose.full.yml` to `docker-compose.rustfs.yml` (removing the PostgreSQL service and `docker-compose.dev.yml`).
+- **Brand Standardization & Documentation**: Standardized the product spelling to **Pika Chat** across localizations, icons, and auth settings, and updated `README.md` / `README.zh-CN.md` with SQLite migration, Desktop, and Android documentation.
+- **Dependency Upgrades**: Updated root and native workspace dependencies (including Next.js 16.4, React 19.3, Better Auth 1.7.28, Electron 45.5, AI SDK, Streamdown, and Vitest 5).
 
 ## [0.4.2] - 2026-11-16
 

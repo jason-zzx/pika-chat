@@ -5,164 +5,48 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 且本项目严格遵循 [语义化版本 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
-## [1.0.0-rc.4] - 2026-11-25
+## [1.0.0] - 2026-11-25
 
 ### Highlights
 
-- **临时对话**：支持从对话顶部栏开启**临时对话**，完整支持多轮回复、停止/恢复、消息版本、附件与上下文压缩，同时保持无独立 URL 并在历史列表、收藏、话题计数、搜索与自动标题中完全隐藏；离开页面、关闭页面、退出登录、退出原生应用/服务器或闲置超过 24 小时后自动删除。
-- **按话题持久化输入框草稿**：未发送的输入文本现按话题与助手新话题草稿分别保存在 `localStorage` 中（侧边栏非当前打开的话题与**新建话题**行显示**草稿**标识），并在超过 14 天、退出/进入登录认证页或原生客户端切换服务器后自动清理。
-- **类原生应用导航与壳层体验升级**：为 Web、桌面端与 Android 补全逻辑导航栈与统一返回处理（优先关闭最上层浮层、Android 预测性返回、桌面端鼠标/触控板/快捷键返回以及切换服务器页面取消后无损返回原服务器），实现 `shell-ui` 与 Android 原生服务器切换弹窗首帧前的主题色同步，并优化移动端聊天输入与图片预览触控手势。
+- **跨平台桌面客户端（Windows、macOS 与 Linux）**：全新 Electron 原生客户端，支持免配置的本地独立运行模式（「此电脑」，内置 SQLite 数据库）与多远程服务器连接及会话隔离；提供跟随主题的无边框顶部标题栏（macOS 采用 `hiddenInset`）与内嵌式侧边栏、自定义主题服务器切换浮层、系统托盘、全局显示/隐藏快捷键、系统回复通知、应用内更新（Windows/Linux 支持自动更新，macOS 弹窗引导下载）、Windows 向导式安装包与便携版 `.zip`，以及 Linux `.AppImage` / `.deb` / `.rpm` 安装包。
+- **Android 客户端（APK）**：基于 Capacitor 8 构建的原生客户端，用于连接已部署的 Pika Chat 服务器，支持仅限当前连接源的原生桥接注入、跟随主题色的系统栏与原生服务器切换弹窗、输入法避让布局、系统预测性返回导航、附件上传与下载，并在后台流式回复期间通过 `shortService` 前台保活保障回复完成通知及时送达。
+- **统一嵌入式 SQLite 数据库（`better-sqlite3`）与 PostgreSQL 自动导入**：将 Docker 部署中的 PostgreSQL 与桌面本地模式及 CI 中的 PGlite 统一替换为单一嵌入式 SQLite 数据库，通过 `DATABASE_PATH` 配置（Docker 默认为 `/data/files/pika-chat.db`，桌面本地模式为 `<userData>/local/pika-chat.db`），无需单独运行数据库容器。`v0.4.0`–`v0.4.2` 的 PostgreSQL 实例在保持原有 Compose 配置首次启动时，会在只读快照校验后自动将数据导入 SQLite。
+- **临时对话**：支持从对话顶部栏开启**临时对话**，完整支持多轮回复、停止/恢复、消息版本、附件与上下文压缩，同时不生成独立话题 URL 并在侧边栏历史、收藏、话题计数、搜索与自动标题中隐藏；离开页面、重置、关闭页面、退出登录、退出原生应用/关闭服务器或闲置超过 24 小时后自动删除。
+- **消息文本引用与定位跳转**：在任意用户或助手消息正文中选中文本即可在输入框附着可移除的**引用**卡片（作为 `<quote>` 上下文传给模型而不改动用户输入），点击卡片即可居中定位并高亮闪烁原始文本段落。
+- **侧边栏话题分页加载与输入框草稿持久化**：助手侧边栏现全量加载收藏话题，并以每页 20 条滚动分页加载普通话题，提供紧凑的相对最后活跃时间、指针悬停浮层操作与触屏长按菜单；未发送的输入文本按话题与助手草稿持久化保存至 `localStorage`（显示**草稿**标识），并在超过 14 天、退出/进入认证页或切换服务器后自动清理。
+- **类原生应用导航与可安装 PWA**：为 Web、桌面端（鼠标/触控板/快捷键返回与无损返回当前服务器）及 Android（双 WebView 壳层）补全逻辑导航栈与浮层优先关闭的返回体验；新增 Web App Manifest、安全区留白、实时 `theme-color` 同步、图片预览双指捏合与双击缩放以及移动端回车换行适配。
 
 ### Feats
 
-- **临时对话（`ChatView`、`TemporaryTopicGuard` 与原生壳）**：
-  - 在新草稿页（`/` 或 `/assistant/:id`）顶部栏新增**临时对话**切换按钮：会话全程停留在草稿 URL（直接访问 `/assistant/:a/:t` 的临时话题将重定向回 `/assistant/:a`）并展示提示横幅，从话题列表、收藏、`topicCount`、搜索结果与自动标题中排除，重命名与收藏接口统一返回 `404`。
-  - 在切换路由、同路由重置（点击**新建话题**、首页图标或顶部栏关闭临时对话）、`pagehide`（`keepalive`）以及 `authClient.signOut()` 退出登录前自动删除当前临时话题及未被引用的附件；服务端每小时清理闲置超过 24 小时（`TEMPORARY_TOPIC_TTL_MS`）的临时话题，且 `temp-*` 草稿不写入本地持久化存储。
-  - 新增 `window.pikaNative.setTemporaryTopic`：桌面端在关闭或移除服务器（清理 Cookie 之前）、退出应用以及安装更新（停止本地服务之前）自动删除当前临时话题，最小化到托盘时保持保留；Android 端在销毁远程 WebView 或划掉/被系统杀死后下次启动（`onCreate`）时清理，仅退入后台（`onStop`）时保持保留；临时对话不触发桌面端回复完成通知。
-- **按话题持久化输入框草稿**：
-  - 按话题与助手新话题草稿将输入文本写入 `localStorage`（`pika.draft:<key>`，水合后恢复以避免 SSR 不一致；附件、引用与图像参数保持仅限当前会话），并在 `AssistantTree` 中为非当前打开的话题行及**新建话题**按钮展示**草稿**标记。
-  - 超过 14 天（`DRAFT_TTL_MS`）、进入认证页面（`discardComposerDrafts`）或早于 `window.pikaNative.connectedSince`（桌面端与 Android 仅在切换到不同服务器时更新该时间戳）的草稿自动过期清除。
-- **类原生应用导航与事务性服务器切换**：
-  - 新增 `NavigationProvider`（`src/lib/navigation-state.ts`、`src/lib/overlay-dismiss.ts`），在原生模式下使用扁平化的 `router.replace` 维护逻辑导航栈（`/` 工作区根路径、最多 20 条话题、独立的 `/settings/*` 分支与认证栈），按返回时优先逐层关闭最上层的 Base UI 浮层（弹窗、确认框、抽屉、气泡或菜单）。
-  - 桌面端打开 `shell-ui` 时保活 `remote.view`（支持 `returnToServer()` 无损回到当前服务器），并通过 `native:back` 统一接管 `browser-backward` 鼠标/应用指令、macOS 右滑返回及 `Alt+Left` / `Cmd+[` / `BrowserBack` 快捷键（同时屏蔽前进快捷键）；Android 端重构为双 WebView 架构（`bridge.webView` 专用于 `shell-ui`，另为已连接服务器创建独立 `remoteWebView`），启用 `android:enableOnBackInvokedCallback="true"` 支持预测性返回，并在 `shell-ui` 内实现子页面栈导航（`native/shell-ui/src/nav-stack.ts`）。
-- **壳层外观实时同步与 Android 原生服务器菜单**：
-  - 将主题色彩 Token 抽离至共享的 `src/app/theme-tokens.css` 供 Web 端与 `native/shell-ui` 共用，桌面端与 Android 持久化记录上次连接服务器的 `pika_theme` 模式与预设，并在 `shell-ui` 首帧绘制前直接注入样式（同时为尚无 `pika_theme` Cookie 的服务器预置当前外观，并通过桌面端重建 `WebContentsView` 与 Android `onPageCommitVisible` 显隐切换避免闪现旧页面帧）。
-  - 重绘 Android 原生服务器切换弹窗（`ServerMenuDialog.kt`），按 `--popover`、`--accent`、`--primary`、`--border` 等同步调色板渲染图标、当前选中对勾及限高可滚动列表。
-- **统一壳层检查更新入口**：
-  - 取消桌面端与 Android 启动时的自动检查更新，将手动**检查更新**统一整合至双端 `shell-ui` 底部栏版本号旁，并移除 `shell-ui` 中独立的 Android `mobileSettings` 页面。
-- **移动端聊天、侧边栏与图片预览体验优化**：
-  - 为 `ImagePreviewDialog` 新增双指捏合缩放（围绕捏合中心锚定，缩放低于 `1x` 时松手回弹至 `1x`）、双击在点击位置切换 `2x` 放大与 `overscroll-none` 滚动隔离，并将最小缩放比例 `MIN_SCALE` 从 `0.1` 调整为 `0.5`。
-  - 在 `Composer` 与 `UserMessageEditor` 中引入 `shouldSendOnEnter`（`src/components/chat/enter-to-send.ts`）：在 Android（无 `desktop` 能力的 `window.pikaNative`）、触屏粗指针浏览器及输入法组字状态下按 `Enter` 改为换行，桌面浏览器与桌面客户端保持 `Enter` 发送、`Shift+Enter` 换行。
-  - 在 `InsetHeader` 中为移动端（`md:hidden`）常规已有话题右上角新增**新建话题**快捷图标按钮（草稿页与临时对话不显示）。
-  - 统一桌面端聊天与设置页的侧边栏折叠行为（移除 `/settings/*` 的 `lockedOpen` 锁定，为 `SettingsNav` 全部条目补充图标并对齐顶部 `SidebarTrigger`）。
+- **桌面端存储管理、偏好设置与开发者诊断**：在**设置 → 通用**新增桌面端偏好（Windows/Linux 窗口关闭行为、全局快捷键录制器与回复通知开关）以及 4 类客户端**存储空间**统计与安全缓存/日志清理（保留登录会话与本地 SQLite 数据）；在**设置 → 关于**与 `shell-ui` 新增连续点击 5 次版本号开启 `developerMode` 调试入口（独立 DevTools 与桌面日志）。
+- **壳层首帧前外观同步与统一更新入口**：抽离共享主题色彩 Token（`theme-tokens.css`），使 `shell-ui` 在首帧绘制前同步上次连接服务器的明暗模式与主题预设；取消启动时自动检查更新，并将手动**检查更新**统一整合至 `shell-ui` 底部栏（桌面端亦可在**设置 → 关于**触发）。
+- **「关于」设置页与客户端版本展示**：新增 `/settings/about` 页面，展示版本摘要、本地/演示模式徽章、一键**复制版本信息**、仓库发布链接与 MIT 协议信息，并支持在连接桌面端与 Android 客户端时同时展示客户端版本号（`window.pikaNative.appVersion`）。
+- **批量同步上游模型列表**：将服务商「从上游获取」升级为双页签对比弹窗（**现有模型**与**未返回模型**），支持**全部保留** / **全部取消勾选**快捷操作、空列表提示与单事务原子同步。
+- **移动端排版与顶部快捷新建**：提升移动端 Markdown 正文字号（`16px`）并优化侧边栏、菜单与抽屉的触控间距；在移动端（`md:hidden`）常规已有话题顶部栏右侧新增**新建话题**快捷按钮。
+- **弹窗规范与确认流程统一**：将外链确认（含搜索结果链接）、管理员重置密码、搜索服务商删除、手动上下文压缩确认与 `shell-ui` 移除服务器操作统一规范为带主题样式的 `Dialog` / `AlertDialog` 交互。
+- **服务端健康检查版本接口**：扩展 `GET /api/health` 返回服务端版本号，供原生客户端在连接前校验版本兼容性。
 
 ### Fixes
 
-- **移动端输入框底部工具栏换行**：将输入框底部工具栏保持为单行横向滚动布局（`flex-nowrap overflow-x-auto`），把展开/收起按钮移至文本域右上角，并在当前话题尚无消息时隐藏**聊天地图**与**压缩上下文**按钮。
-- **嵌套弹窗遮罩缺失**：为 `DialogOverlay` 与 `AlertDialogOverlay` 添加 `forceRender`，修复移动端侧边栏抽屉内触发的助手/话题弹窗等嵌套弹窗打开时缺少背景遮罩的问题。
-- **重新生成与编辑消息的原生回复通知**：在 `ChatView` 中记录流式响应的终态分片（`finish` / `error` / `abort`）并传入 `noteRegenFinished`，使重新生成与编辑重发也能在后台完成或出错时正常触发桌面端与 Android 原生通知，同时保持手动中止与异常断流静默。
-- **Tooltip 样式、触屏长按菜单截断与折叠侧边栏对齐**：将 `TooltipContent` 切换为弹出层色彩 Token 并补充 `color-scheme` 样式规则，通过 `SharedTooltip` / `SharedTooltipHost` 统一提示行为；将 `DropdownMenuLabel` 的 `line-clamp-3` 移至零内边距内部 `span`，修复触屏长按话题菜单标题第 4 行残留露出问题；对齐折叠态侧边栏全部交互条目至 32px 图标轨道并补全右侧 Tooltip。
+- **聊天断线重连与原生回复通知**：修复错误清除后重连失败不再重试的问题；完善重新生成与编辑重发在后台完成或报错时的原生回复通知（手动中止与异常断流保持静默），并在发送通知前优先读取本地缓存的话题信息。
+- **Windows 最小化/还原白屏与崩溃恢复**：修复 Windows 任务栏最小化还原后的界面白屏，新增渲染进程与 GPU 进程异常恢复机制，以及按上限轮转的 `desktop.log` 与追加模式的 `local/server.log` 日志截断。
+- **桌面端与 Linux 安装包修复**：补全 `16x16` 至 `512x512` 多尺寸应用图标以适配 Linux `.rpm` / `.deb` / `.AppImage` 的 `hicolor` 图标规范，并修复 Windows 独立服务端打包时的软链接解析与文件占用重试。
+- **移动端输入框底部工具栏**：保持输入框底部工具栏在移动端单行横向滚动不换行，将展开/收起按钮移至文本域右上角，并在空话题时隐藏**聊天地图**与**压缩上下文**按钮。
+- **浮层遮罩、侧边栏与搜索交互**：修复 `DropdownMenuContent` 遮罩层级与嵌套弹窗遮罩缺失（`forceRender`），修复触屏长按话题菜单标题截断溢出，统一聊天与设置页的折叠侧边栏对齐与 Tooltip 样式，同步 `SearchDialog` 悬停与键盘选中态并新增清空按钮，消除 `FilesList` 勾选跳动，并修复开发模式设置页重定向报错。
+- **更新 SemVer 比较**：修复 Android 与 macOS 更新检查中的语义化预发布版本号比较逻辑。
 
 ### Dev
 
-- 更新 `native/desktop/electron-builder.config.mjs`，为 Windows 便携版 `.zip` 产物文件名追加 `-portable` 后缀（`pika-chat-${version}-${os}-${arch}-portable.${ext}`），NSIS 安装包保持 `pika-chat-${version}-${os}-${arch}.${ext}`。
-
-## [1.0.0-rc.3] - 2026-11-22
-
-### Highlights
-
-- **跟随主题的无边框桌面标题栏、内嵌式侧边栏与自定义服务器菜单**：在 Windows 与 Linux 上移除厚重的系统原生窗口边框（macOS 改为 `hiddenInset`），替换为 `34px` 跟随应用主题同步的顶部标题栏并配合内嵌式侧边栏布局（`variant="inset"`）；同时将系统原生服务器切换菜单重构为与主题一致的浮动弹出菜单。
-- **Web 设置页集成桌面端偏好、存储空间管理与诊断入口**：将桌面端设置（Windows/Linux 窗口关闭行为与全局快捷键）及 4 类客户端磁盘占用明细与安全缓存清理迁入**设置 → 通用**，并在**设置 → 关于**新增桌面端检查更新按钮与连续点击 5 次版本号开启开发者模式的触发入口。
-- **Windows 向导式安装包、便携版 Zip 与 Linux RPM 图标修复**：将 Windows NSIS 安装包切换为支持自选安装目录的交互式向导（卸载时支持可选清理个人数据），新增 Windows 便携版 `.zip` 分发包，并补全 Linux RPM 安装包的多尺寸应用图标。
-
-### Feats
-
-- **无边框标题栏与主题同步壳层**：
-  - 在 Windows 与 Linux 上启用 `frame: false`，通过壳层渲染 `34px` 高的 `titlebarView`（`?chrome=titlebar`，全屏时自动隐藏）展示 Pika Chat 图标、当前窗口标题及最小化/最大化/关闭按钮；macOS 采用 `titleBarStyle: "hiddenInset"` 保留原生红绿灯控制按钮。
-  - 在 `preload-remote.ts` 与 `shell-ui` 中实时监听 Web 端 CSS 主题变量（`--background`、`--foreground`、`--muted-foreground`、`--popover`、`--accent`、`--border`、`--sidebar` 与 `meta[name="theme-color"]`），使窗口背景、顶部标题栏及服务器弹出菜单在全部明暗主题预设间保持一致。
-  - 将 `AppSidebar` 调整为 `variant="inset"`（移除 `SidebarRail`），为桌面端补充 `data-chrome="desktop"` 下的 `SidebarInset` 边框样式并通过 `pika:chrome-sync` 同步状态，使标题栏与侧边栏自然衔接。
-- **自定义主题服务器切换弹出菜单**：
-  - 将 `native:showServerMenu` 中的原生 `Menu.buildFromTemplate` 替换为透明背景的 `WebContentsView` 浮层（`native/shell-ui/src/server-menu.ts`，`?chrome=menu`），支持视口边界自动夹紧、键盘方向键与 `Esc` 导航、右侧对勾选中指示，以及对齐一致的**添加服务器…** / **管理服务器…**条目，同时保持远端页面无法获取已保存的服务器列表。
-- **桌面端偏好与客户端存储空间管理（设置 → 通用）**：
-  - 新增 `DesktopSettingsSection`（仅在存在 `window.pikaNative?.desktop` 时渲染）：支持配置**关闭主窗口时**（Windows 与 Linux 可选**最小化到系统托盘**或**退出应用**）及**全局快捷键**录制器（`src/lib/desktop-hotkey.ts`）与清除操作。
-  - 新增 4 项客户端**存储空间**统计（`native/desktop/src/storage.ts` 与 `storage-fs.ts`）：**本地模式数据**（提供**打开目录**）、**网页与媒体缓存**、**更新安装包缓存**与**日志与临时文件**，支持按类安全**清理缓存**/**清理**（不删除登录会话、Cookie、`Local Storage`、`IndexedDB` 与本地 SQLite 数据）及一键**刷新**。
-  - 精简桌面端 `shell-ui` 服务器管理页面，移除非服务器相关的桌面偏好项（Android 端仍保留 `shell-ui` 设置页以检查更新）。
-- **检查更新与按需开发者诊断（设置 → 关于与 `shell-ui`）**：
-  - 在桌面端的**设置 → 关于**（`AboutVersionCard`）新增**检查更新**按钮。
-  - 在**设置 → 关于**版本号及桌面端 `shell-ui` 底部版本号上新增连续点击 5 次开启 `developerMode` 的触发机制（不自动弹出控制台），开启后展示**打开控制台**（独立窗口）、**打开桌面日志**与**关闭**按钮，并在托盘及视图菜单同步显示相应调试入口，未开启时隐藏默认 DevTools 快捷键。
-- **Windows 向导式安装包与便携版 Zip（`native/desktop`）**：
-  - 为 NSIS 配置 `oneClick: false`、`allowToChangeInstallationDirectory: true`、Pika Chat 定制侧边栏/页头 BMP 位图（`installerSidebar.bmp` 与 `installerHeader.bmp`）及 `installer.nsh`（真实卸载时自动清理 `*-updater` 更新缓存，并在卸载欢迎页提供默认未勾选的复选框以可选删除 `%AppData%\Pika Chat` 个人数据）。
-  - 新增 Windows `{ target: "zip", arch: ["x64"] }` 便携版压缩包，与安装版共用 `%AppData%\Pika Chat` 数据目录；当缺少 `app-update.yml` 或 NSIS 卸载程序时自动回退至 GitHub Release 下载提示。
-
-### Fixes
-
-- **Windows 任务栏最小化/还原白屏与崩溃恢复**：在窗口最小化时跳过 `0x0` 的 `layout()` 尺寸更新，并在 `show`、`restore`、`maximize`、`unmaximize` 与 `leave-full-screen` 时重新同步视图边界与 `invalidate()` 重绘；新增 `render-process-gone` 自动重载（10 秒内连续崩溃回退至 `?failed=<id>`）与 GPU `child-process-gone` 重绘恢复，增加按 `1 MiB` 上限轮转的 `<userData>/desktop.log` 日志，并将 `local/server.log` 改为清空后以追加模式打开以确保清理截断可靠生效。
-- **Linux RPM 应用图标尺寸缺失**：从 `icon.png` 生成 `16x16` 至 `512x512` 多尺寸 PNG 图标（`native/desktop/assets/icons/`）并将 `linux.icon` 设为 `"icons"`，使 RPM、deb 与 AppImage 包安装完整的 `hicolor` 图标集而非仅含 `1024x1024`。
-
-### Dev
-
-- 新增桌面端存储空间统计与清理单元测试（`native/desktop/src/storage-fs.test.ts`，通过 `pnpm -C native/desktop test` 运行）以及全局快捷键、桌面设置和关于页测试。
-- 精简 `native/desktop/scripts/build.mjs` 仅拷贝运行时所需资源到 `dist/assets/`，并更新 `.github/workflows/ci.yml` 与 `.github/workflows/release.yml` 在构建和发布中同步产出并上传 Windows 便携版 `.zip`。
-- 将 `.github/workflows/release.yml` 中的单节点 QEMU 多架构 Docker 构建替换为并行的原生 `ubuntu-latest`（`linux/amd64`）与 `ubuntu-24.04-arm`（`linux/arm64`）分架构按摘要构建，随后通过 `docker buildx imagetools create` 合并推送多架构 Manifest，并为各架构隔离缓存作用域与添加任务超时限制。
-
-## [1.0.0-rc.2] - 2026-11-21
-
-### Highlights
-
-- **统一嵌入式 SQLite 数据库（`better-sqlite3`）与 PostgreSQL 自动升级导入**：将容器部署中的 PostgreSQL 与桌面端本地模式及 CI 中的 PGlite 统一替换为单一嵌入式 `better-sqlite3` 数据库，通过 `DATABASE_PATH` 配置（Docker 默认为现有 `/data/files` 数据卷上的 `/data/files/pika-chat.db`，桌面本地模式为 `<userData>/local/pika-chat.db`），无需单独运行数据库容器。`v0.4.0`–`v1.0.0-rc.1` 的 PostgreSQL 实例在首次启动时保持原有 compose 文件与 `DATABASE_URL` / `POSTGRES_*` 配置即可自动将数据导入 SQLite。
-- **消息文本引用与定位跳转**：在任意用户或助手消息正文中选中文本即可显示浮动**引用**按钮，将摘录作为独立卡片附着到输入框（作为 `<quote>` 上下文传给模型，同时保持用户输入文本原样不变），点击引用卡片即可居中定位并高亮闪烁原始文本段落。
-- **侧边栏话题分页加载与更清爽的话题行交互**：助手侧边栏现全量加载收藏话题，并以每页 20 条滚动分页加载普通话题，同时提供紧凑的相对最后活跃时间、指针设备悬停浮层操作按钮与触屏长按菜单。
-
-### Feats
-
-- **嵌入式 SQLite 引擎与升级导入器**：
-  - **SQLite 运行时与索引优化**：为 `better-sqlite3` 启用 WAL 模式、`foreign_keys = ON`、`busy_timeout = 5000`、同步 `immediate` 写事务与启动自动迁移；注册确定性 `file_category` UDF 支持附件分类筛选，保留 `(updated_at, id)` 游标分页与 `json_set` 增量合并，并为 `chat_messages` 添加 `AFTER INSERT` 与 `AFTER UPDATE OF parts` 触发器维护 `WITHOUT ROWID` 索引表 `message_file_refs`，使附件引用检查与话题/助手删除直接查询索引表而非扫描消息正文。
-  - **PostgreSQL 一次性启动导入**：当配置了 `DATABASE_URL` 或旧版 `POSTGRES_*` 变量且 SQLite 中尚无 `postgres_import` 标记时，启动阶段会在单个只读 `repeatable read` 快照中读取 PostgreSQL，校验列结构是否匹配 `v0.4.0`–`v1.0.0-rc.1`（更早版本会提示先升级至 `v0.4.2`），在单事务内复制全部数据表，校验每张表的行数与 `PRAGMA foreign_key_check` 并写入导入标记；全程不写入 PostgreSQL，目标 SQLite 非空或表结构不匹配时直接拒绝启动，导入完成后后续启动将忽略 PostgreSQL 配置。
-  - **精简 Docker 与 Compose 编排**：移除 `docker-compose.full.yml` 中的 `postgres` 服务与 `postgres_prod_data` 数据卷，删除 `docker-compose.dev.yml`、`docker/postgres/` 与 `scripts/migrate.ts`，容器直接通过 `node server.js` 启动并在 instrumentation 阶段完成自动迁移。
-  - **桌面端本地模式（`native/desktop`）**：将本地模式从 PGlite 切换至 SQLite（`<userData>/local/pika-chat.db`），通过 `utilityProcess.parentPort` 优雅关闭并完成 WAL checkpoint，并在 `build-server.mjs` 中内置 Electron 环境下 `better-sqlite3` N-API 预编译产物的加载冒烟校验。
-- **消息文本引用**：
-  - 在单条消息正文中选区时，在选区上方（靠近视口顶部或触屏设备上则在下方）显示浮动**引用**按钮（`QuoteSelectionButton`），每份草稿最多附带一张可移除的两行预览 `QuoteCard`，且仅含引用时不允许发送。
-  - 引用以 `data-quote` part 持久化并作为 `<quote>` 上下文回放给模型，在已发送用户气泡上方展示，且在就地编辑用户消息时支持移除；点击卡片可按记录偏移量定位回源文本并用逐行高亮闪烁（若源消息已编辑或无法匹配，则回退为整条消息闪烁）。
-- **侧边栏话题分页与行设计重构**：
-  - 将 `GET /api/assistants` 改为返回包含 `topicCount` 的助手列表，拆出 `GET /api/assistants/[id]/topics/favorites` 与游标分页的 `GET /api/assistants/[id]/topics`（每页 20 条，滚到底部自动加载，失败时展示重试按钮），并确保未在侧边栏加载的话题仍能正确显示聊天页标题、桌面完成通知及删除助手时的话题数统计。
-  - 话题行右侧展示每分钟自动刷新的紧凑相对活跃时间（`formatTopicAge`，流式生成中切换为加载动画），指针设备悬停或聚焦时以右对齐浮层展示收藏与 `...` 按钮而不挤动标题截断，截断标题悬停展示完整标题 Tooltip；触屏设备隐藏行内按钮，长按约 500 ms 弹出带完整标题头部的操作菜单并屏蔽系统选区与默认菜单。
-- **批量同步上游模型列表**：
-  - 将服务商「从上游获取」升级为双页签对比弹窗（**现有模型**与**未返回模型**），支持**全部保留** / **全部取消勾选**快捷操作、上游返回 0 个模型时的风险提示，以及通过 `POST /api/providers/[id]/models/sync` 在单事务内原子完成批量新增与移除（整批仅加载一次目录元数据）。
-- **「关于」设置页与原生客户端版本展示**：
-  - 新增**设置 → 关于**（`/settings/about`）页面，展示当前版本、本地/演示模式徽章、一键**复制版本信息**按钮、GitHub 仓库/发布日志/问题反馈入口与 MIT 开源协议信息；同时在桌面端（`preload-remote.ts`）与 Android 端（`RemoteBridge.kt`）注入 `window.pikaNative.appVersion`，远程连接时可同时查看并复制服务端与客户端版本号。
-
-### Fixes
-
-- **下拉菜单遮罩层级**：为 `DropdownMenuContent` 的 `MenuPrimitive.Portal` 补充 `relative z-50`，避免模态下拉菜单遮罩被侧边栏或移动端抽屉等带 `z-index` 的容器遮挡或错层。
-- **统一悬停高亮与搜索面板交互**：统一侧边栏用户/设置行、助手资料/删除行、`ToolCallShell` 浮层头部、`QuoteCard` 跳转按钮与 `ProviderConfigsScreen` 模型删除按钮（改用 `XIcon` 并修复暗色对比度）的行级与按钮悬停状态；让 `SearchDialog` 的键盘高亮与鼠标悬停保持同步，并在搜索框内增加一键清空按钮。
-- **弹窗规范与确认流程统一**：将 `ExternalLinkDialog` 重构为标准 `AlertDialog` 组件并扩展至 `SearchToolCall` 搜索结果链接；将 `AdminUsersScreen` 的密码重置从 `window.prompt()` 改为带校验的 `Dialog` 表单（并为「封禁」操作补充危险样式与表格行悬停），为 `SearchProvidersScreen` 删除操作与 `ChatView` 手动压缩历史新增 `AlertDialog` 二次确认，并将 `TwoFactorCard` 对齐至 `SettingsSection` / `SettingsCard` 结构。
-- **设置页布局、侧边栏与编辑器细节**：在桌面端设置页隐藏冗余的 `<InsetHeader />`（保留移动端抽屉入口），进入 `/settings/*` 时保持桌面端侧边栏展开且不覆盖聊天页原有的折叠状态；微调 `SidebarMenu` 间距（`md:gap-0.5`），修复 `PaneHeader` 长标题换行及图标折叠状态（`ThemeControl`、`LoadingRows` 与话题分组），优化 `Composer` / `UserMessageEditor` 聚焦环与移动端触控热区，修复 `FilesList` 勾选文件时的纵向跳动，并在未配置任何默认模型时禁用 `ModelPreferencesScreen` 的**全部重置**按钮。
-- **原生壳界面（`native/shell-ui`）**：统一服务器列表整行悬停与右侧操作按钮的叠层悬停效果，将移除服务器的 `window.confirm()` 替换为自定义样式的 `<dialog>` 确认弹窗，去除进入列表时的默认首行焦点框并收敛到 `:focus-visible`，恢复 `cursor: pointer`，折叠空状态提示占位，并在检查更新时显示进行中状态。
-
-### Dev
-
-- 将 Vitest 集成测试（每 Worker 独立 `:memory:` SQLite）与 GitHub Actions（`ci.yml`、`release.yml`）全面切换为 SQLite，移除 PostgreSQL 服务容器与单独的 PGlite 任务，精简 `Dockerfile` 中不再需要的 C++ 编译工具链，并在 `ci.yml` 新增仅限手动触发（`workflow_dispatch`）的四平台 `desktop-smoke` 打包验证矩阵。
-
-## [1.0.0-rc.1] - 2026-11-19
-
-### Highlights
-
-- **跨平台桌面客户端（Windows、macOS、Linux）**：全新 Electron 原生桌面应用，支持免配置的本地独立运行模式（「此电脑」，内置 PGlite 数据库）与多远程服务器连接，提供独立会话隔离、系统托盘、全局快捷键、回复完成通知及应用更新能力。
-- **Android 客户端（APK）**：基于 Capacitor 8 构建的 Android 原生壳，连接已部署的 Pika Chat 服务端，支持仅限当前连接源的原生桥接注入、跟随主题色的系统栏、键盘避让布局、系统返回手势/按键导航、原生服务器切换弹窗与回复完成通知。
-- **可安装 PWA 与移动端体验升级**：新增 Web App Manifest、安全区适配、跟随应用内主题变化的动态 `theme-color`，并全面优化移动端正文字号、行距与列表触控间距。
-
-### Feats
-
-- **桌面端应用（`native/desktop`）**：
-  - **本地模式（「此电脑」）**：通过内置 PGlite 数据库与 `<userData>/local/` 本地磁盘存储启动打包的 Next.js 独立服务端，仅监听 `127.0.0.1` 并复用持久化端口。使用 Electron `safeStorage` 加密保存自动生成的实例密钥，静默登录本地超级管理员（自动隐藏 `/setup`、登录、退出、2FA 与用户管理页面），并在退出应用及安装更新前优雅关闭本地服务。
-  - **多服务器远程模式**：支持添加并连接多个 Pika Chat 服务端，按服务器隔离会话与 Cookie（`persist:server-<id>`），连接前通过 `/api/health` 校验服务端主次版本兼容性并给出非阻塞提示；本地模式与远程模式数据互不干扰，切换时后台生成仍持续运行。
-  - **原生桌面能力**：支持系统托盘与关闭最小化到托盘、可自定义的全局显示/隐藏快捷键（默认 `Ctrl+Shift+Space`）、窗口位置尺寸记忆、回复完成系统通知（点击唤起窗口并直达对应话题）、安全的附件打开策略（文档与媒体文件交由系统默认应用打开，脚本与可执行文件仅在文件管理器中定位），以及 Windows/Linux 应用内自动更新与 macOS 新版本跳转提示。
-- **Android 应用（`native/mobile`）**：
-  - **远程服务器壳**：支持原生持久化保存多个服务端、无跨域限制的健康检查、按源隔离的 Cookie 会话（移除服务器时自动清理对应源 Cookie），以及从侧边栏品牌行、账户菜单和登录页芯片唤起的原生单选服务器切换弹窗。
-  - **源隔离的原生桥接**：仅向已连接服务器的主框架通过 `androidx.webkit` `WebMessageListener` 与 document-start 脚本注入 `window.pikaNative`，在原生层严格校验来源与参数边界（若 Android System WebView 缺少所需特性则直接报错提示更新，不回退到全源开放桥接）。
-  - **系统栏、键盘与导航适配**：实现全屏 Edge-to-Edge 沉浸式布局，状态栏与导航栏背景及深浅图标对比度实时跟随页面 `theme-color`（兼容 `oklch`/`lab` 色彩 token）；输入法弹出时自动调整视口保持输入框不被遮挡；基于 `OnBackPressedCallback` 实现优先回退应用内历史、再返回服务器列表、最后退至后台的返回逻辑（兼容预测性返回手势）；外部域名跳转系统浏览器，附件支持文件选择器上传与 `DownloadManager`/系统打开方式下载，支持 WebView 渲染进程崩溃恢复、回复完成通知（在应用前台或刚切后台冻结前生效，点击直达话题）与 GitHub Release 更新检测。
-- **可安装 PWA 与移动端响应式优化**：
-  - 新增 `/manifest.webmanifest`、桌面与可遮罩（maskable）应用图标、`apple-web-app` 元信息、`viewport-fit=cover`、`interactive-widget=resizes-content`、侧边栏/弹窗/图片预览安全区留白，以及随应用内明暗模式和主题预设实时同步的 `<meta name="theme-color">` 。
-  - 优化移动端排版与触控体验：Markdown 正文在移动端提升至 `16px` 并放宽行高，调整消息列表间距及侧边栏、下拉菜单、选择器、抽屉等组件的行高与间距，同时保持桌面端显示不变。
-- **服务端与 Web 桥接**：
-  - 扩展 `GET /api/health` 返回来自 `package.json` 的服务端 `version` 以供客户端做版本兼容检查；保持 `window.pikaNative` 完全可选，普通浏览器行为不受任何影响。
-
-### Fixes
-
-- **聊天断线重连**：修复流式重连失败后状态短暂锁住的问题，改为仅在 `submitted`/`streaming` 状态下视作已连接，确保 `clearError()` 重置状态后发现刷新能够正常重试断开的重连。
-- **开发模式设置页重定向报错**：将 `/settings` 到 `/settings/general` 的重定向迁移至 `next.config.ts`，并让侧边栏设置按钮直接链接到 `/settings/general`，避免服务端与浏览器时钟偏差时 RSC `NEXT_REDIRECT` 触发 React Flight `performance.measure` 负时间戳报错。
-- **客户端更新 SemVer 比较**：为 Android 与桌面 macOS 的更新检查补齐完整的 SemVer 预发布版本号比较逻辑（`native/shell-ui` 与 `Updates.kt`）。
-
-### Dev
-
-- 新增独立隔离的 `native/` pnpm 工作区（含 `@pika/shell-ui`、`pika-chat-desktop` 与 `@pika/mobile`），排除于根目录 `tsconfig.json` 与 Docker 构建上下文之外。
-- 新增 `native` 工作区检查、Android Debug APK 编译验证及基于 PGlite 的集成测试 CI 任务。
-- 扩展 `release.yml` 发布流水线：在构建多架构 Docker 镜像的同时，产出包含本地独立服务端的 Windows/macOS（Intel 与 Apple Silicon）/Linux 桌面安装包与签名版 Android APK；预发布标签不覆盖 Docker `latest`，且带连字符的 tag 自动标记为 GitHub Prerelease。
+- **SQLite 测试套件与 CI 精简**：将 Vitest 集成测试切换为每 Worker 独立的 `:memory:` SQLite，移除 PostgreSQL/PGlite 测试服务及 Dockerfile C++ 编译工具链，并将多架构 Docker 发布构建拆分为原生的 `amd64` 与 `arm64` 节点并行构建后合并 Manifest。
+- **原生工作区与多平台发布流水线**：新增独立隔离的 `native/` pnpm 工作区（`@pika/shell-ui`、`pika-chat-desktop`、`@pika/mobile`）及单元测试与类型检查，打通多平台桌面安装包（含手动 `desktop-smoke` 验证矩阵）与签名 Android APK 自动发布，并确保预发布标签不覆盖 Docker `latest`。
+- **API 与 TypeScript 清理**：替换已废弃的框架与 Schema API 并清理全仓 TypeScript 编译告警。
 
 ### Chore
 
-- 统一英文与简体中文文案、应用图标及 Better Auth 配置中的品牌拼写为 **Pika Chat**。
-- 在 `README.md` 与 `README.zh-CN.md` 中补充桌面端与 Android 客户端的安装、使用及开发说明。
+- **Compose 编排文件整理**：将 `docker-compose.standalone.yml` 重命名为 `docker-compose.yml`、`docker-compose.full.yml` 重命名为 `docker-compose.rustfs.yml`（并移除独立 PostgreSQL 服务与 `docker-compose.dev.yml`）。
+- **品牌拼写统一与文档更新**：统一全站文案、图标与认证配置中的 **Pika Chat** 品牌拼写，并更新 `README.md` 与 `README.zh-CN.md` 的 SQLite 迁移、桌面端及 Android 使用指南。
+- **依赖版本升级**：更新根目录与原生工作区依赖包（包括 Next.js 16.4、React 19.3、Better Auth 1.7.28、Electron 45.5、AI SDK、Streamdown 与 Vitest 5 等）。
 
 ## [0.4.2] - 2026-11-16
 
