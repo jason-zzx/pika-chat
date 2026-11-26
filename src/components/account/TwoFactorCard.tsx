@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ type EnrollPanelProps = {
   secret: string;
   pending: boolean;
   onCopySecret: () => void;
-  onConfirm: (event: FormEvent<HTMLFormElement>) => void;
+  onConfirm: (event: SubmitEvent<HTMLFormElement>) => void;
   onCancel: () => void;
 };
 
@@ -159,7 +159,7 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
     }
   }
 
-  async function onStart(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function onStart(event: SubmitEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setError(null);
     setNotice(null);
@@ -210,7 +210,7 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
     }
   }
 
-  async function onConfirm(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function onConfirm(event: SubmitEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setError(null);
     setNotice(null);
@@ -243,7 +243,7 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
   }
 
   async function onRegenerate(
-    event: FormEvent<HTMLFormElement>,
+    event: SubmitEvent<HTMLFormElement>,
   ): Promise<void> {
     event.preventDefault();
     setError(null);
@@ -269,7 +269,7 @@ export default function TwoFactorCard({ enabled }: TwoFactorCardProps) {
     }
   }
 
-  async function onDisable(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function onDisable(event: SubmitEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setError(null);
     setNotice(null);

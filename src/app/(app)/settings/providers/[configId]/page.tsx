@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -8,7 +9,7 @@ import ProviderConfigsScreen from "@/components/provider/ProviderConfigsScreen";
 import { isStaffRole } from "@/lib/auth-hierarchy";
 import { resolveActor } from "@/server/auth/actor";
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Settings.Providers"))("title"),
 });
 

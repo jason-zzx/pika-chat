@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import { useRenameTopic } from "@/components/assistant/use-assistants";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ export default function RenameTopicDialog({
   const [title, setTitle] = useState(topic?.title ?? "");
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!topic) {
       return;

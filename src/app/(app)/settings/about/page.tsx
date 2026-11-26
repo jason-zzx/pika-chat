@@ -5,6 +5,7 @@ import {
   ScaleIcon,
   TagIcon,
 } from "lucide-react";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -49,7 +50,7 @@ const PROJECT_LINKS = [
   },
 ] as const;
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Settings.About"))("title"),
 });
 

@@ -2,7 +2,7 @@
 
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { type SubmitEvent, useState } from "react";
 
 import EmptyState from "@/components/common/EmptyState";
 import SettingsCard from "@/components/settings/SettingsCard";
@@ -343,7 +343,7 @@ function ProviderFormDialog({
   const [baseUrl, setBaseUrl] = useState(setting?.baseUrl ?? "");
   const isEdit = setting !== null;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     onError(null);
     try {

@@ -21,26 +21,22 @@ const MODELS_DEV_URL = "https://models.dev/api.json";
 const FETCH_TIMEOUT_MS = 20_000;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const catalogModelSchema = z
-  .object({
-    reasoning: z.boolean().optional(),
-    reasoning_options: z.array(z.unknown()).optional(),
-    modalities: z
-      .object({
-        input: z.array(z.string()).optional(),
-        output: z.array(z.string()).optional(),
-      })
-      .passthrough()
-      .optional(),
-    limit: z
-      .object({
-        context: z.number().optional(),
-        output: z.number().optional(),
-      })
-      .passthrough()
-      .optional(),
-  })
-  .passthrough();
+const catalogModelSchema = z.looseObject({
+  reasoning: z.boolean().optional(),
+  reasoning_options: z.array(z.unknown()).optional(),
+  modalities: z
+    .looseObject({
+      input: z.array(z.string()).optional(),
+      output: z.array(z.string()).optional(),
+    })
+    .optional(),
+  limit: z
+    .looseObject({
+      context: z.number().optional(),
+      output: z.number().optional(),
+    })
+    .optional(),
+});
 
 type CatalogModel = z.infer<typeof catalogModelSchema>;
 

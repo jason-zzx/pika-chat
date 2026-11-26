@@ -235,7 +235,7 @@ export async function prepareSendTurn(
   let summary: PreparedTurn["summary"] = null;
 
   if (topicId !== null) {
-    const context = await findTopicContextForActor(topicId, actor);
+    const context = findTopicContextForActor(topicId, actor);
     if (!context || context.assistant.id !== request.assistantId) {
       throw new AppError("NOT_FOUND", 404, "topic.notFound");
     }
@@ -339,7 +339,7 @@ export async function prepareRegenerateTurn(
   );
   const isImage = selected.outputModalities.includes("image");
 
-  const topicContext = await findTopicContextForActor(topicId, actor);
+  const topicContext = findTopicContextForActor(topicId, actor);
   if (!topicContext) {
     throw new AppError("NOT_FOUND", 404, "topic.notFound");
   }
@@ -600,7 +600,7 @@ async function runTextTurn(
     input.reasoningEffort,
   );
 
-  const context = await findTopicContextForActor(topicId, actor);
+  const context = findTopicContextForActor(topicId, actor);
   if (!context) {
     // Deleted between admission and start: nothing to generate into.
     await hooks.finalize({

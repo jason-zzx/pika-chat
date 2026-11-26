@@ -43,7 +43,7 @@ describe("AssistantTopicPage", () => {
   });
 
   it("lands on the assistant's draft when the topic is deleted or unknown", async () => {
-    findTopicContextForActor.mockResolvedValue(null);
+    findTopicContextForActor.mockReturnValue(null);
 
     await expect(
       AssistantTopicPage({
@@ -56,7 +56,7 @@ describe("AssistantTopicPage", () => {
   });
 
   it("lands on the assistant's draft when the topic belongs elsewhere", async () => {
-    findTopicContextForActor.mockResolvedValue(context);
+    findTopicContextForActor.mockReturnValue(context);
 
     await expect(
       AssistantTopicPage({
@@ -69,7 +69,7 @@ describe("AssistantTopicPage", () => {
   });
 
   it("renders the topic while the URL matches its assistant", async () => {
-    findTopicContextForActor.mockResolvedValue(context);
+    findTopicContextForActor.mockReturnValue(context);
 
     await AssistantTopicPage({
       params: Promise.resolve({ assistantId: "a1", topicId: "t1" }),
@@ -80,7 +80,7 @@ describe("AssistantTopicPage", () => {
   });
 
   it("redirects temporary topic URLs to the assistant draft and returns empty metadata", async () => {
-    findTopicContextForActor.mockResolvedValue({
+    findTopicContextForActor.mockReturnValue({
       ...context,
       topic: { ...context.topic, temporary: true },
     });

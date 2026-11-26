@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -74,7 +74,7 @@ export default function UserQuotaDialog({
   const canSave =
     parsed !== undefined && !quota.isPending && !mutation.isPending;
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (parsed === undefined) {
       return;

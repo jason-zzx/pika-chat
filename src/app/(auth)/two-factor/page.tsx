@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -5,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 import TwoFactorForm from "@/components/auth/TwoFactorForm";
 import { isChallengeCookie } from "@/lib/two-factor";
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Auth"))("twoFactor.title"),
 });
 

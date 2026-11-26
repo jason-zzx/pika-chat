@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -7,7 +8,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import SearchProvidersScreen from "@/components/search/SearchProvidersScreen";
 import { resolveActor } from "@/server/auth/actor";
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Settings.Search"))("title"),
 });
 

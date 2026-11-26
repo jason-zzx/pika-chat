@@ -64,7 +64,7 @@ function demoBeforeHook(ipHeader: string) {
       if (existing?.user.isAnonymous) {
         return;
       }
-      const allowed = await consumeDemoQuota({
+      const allowed = consumeDemoQuota({
         subject: `ip:${ip}`,
         kind: "guest",
         limit: getEnv().DEMO_GUESTS_PER_IP_DAILY,

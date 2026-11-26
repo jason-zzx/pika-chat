@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import SettingsCard from "@/components/settings/SettingsCard";
@@ -60,7 +60,7 @@ export default function StorageQuotaCard() {
     !mutation.isPending &&
     parsed !== quotaMb;
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (parsed === undefined) {
       return;

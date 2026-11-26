@@ -2,7 +2,7 @@
 
 import { BrainIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode, type SubmitEvent } from "react";
 
 import ModelVendorIcon from "@/components/provider/ModelVendorIcon";
 import { Button } from "@/components/ui/button";
@@ -201,7 +201,7 @@ export default function ModelEditorDialog({
     await addModel.mutateAsync({ configId, input });
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsedContext = parseContext();
     if (parsedContext === null) {

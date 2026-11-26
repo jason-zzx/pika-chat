@@ -14,8 +14,6 @@ interface PdfObject {
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
-/** Characters per line; stays clear of the right page edge at 12pt Helvetica. */
-const LINE_CHARS = 72;
 const LINES_PER_PAGE = 50;
 
 function escapePdfString(value: string): string {
@@ -109,6 +107,7 @@ function singlePagePdf(
 
 /** A PDF with a real (uncompressed) text layer, paginated like a document. */
 export function buildTextPdf(text: string): Buffer {
+  // 72 chars per line stays clear of the right page edge at 12pt Helvetica.
   const lines = text.match(/[\s\S]{1,72}/g) ?? [""];
   const pages: string[] = [];
   for (let start = 0; start < lines.length; start += LINES_PER_PAGE) {

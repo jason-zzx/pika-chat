@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import ModelPicker from "@/components/chat/ModelPicker";
 import { pairFromIds, sameModelPick } from "@/components/chat/model-pick";
@@ -88,7 +88,7 @@ export default function AssistantEditorDialog({
 
   const pending = create.isPending || update.isPending;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedPrompt = systemPrompt.trim();
     const input: CreateAssistantInput = {

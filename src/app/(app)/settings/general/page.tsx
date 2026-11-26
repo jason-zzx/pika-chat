@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -14,7 +15,7 @@ import DesktopSettingsSection from "@/components/settings/general/DesktopSetting
 import { resolveActor } from "@/server/auth/actor";
 import { getUserThemePreference } from "@/server/services/user-preferences.service";
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Settings.General"))("title"),
 });
 

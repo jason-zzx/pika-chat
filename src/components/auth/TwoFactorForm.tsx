@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export default function TwoFactorForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function onSubmit(event: SubmitEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setError(null);
     setPending(true);

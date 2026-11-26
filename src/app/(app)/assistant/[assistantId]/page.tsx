@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -11,7 +12,7 @@ type AssistantDraftPageProps = {
   params: Promise<{ assistantId: string }>;
 };
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Chat"))("newTopic"),
 });
 

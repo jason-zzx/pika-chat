@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-const emptyToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+const emptyToUndefined = <T extends z.ZodType>(schema: T) =>
   z.preprocess((val) => (val === "" ? undefined : val), schema);
 
 /**

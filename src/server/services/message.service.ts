@@ -206,7 +206,7 @@ export async function messageVersionMetadata(
   topicId: string,
   messageId: string,
 ): Promise<VersionInfo | null> {
-  const rows = await listTopicRows(topicId);
+  const rows = listTopicRows(topicId);
   const target = rows.find((row) => row.id === messageId);
   if (!target) {
     return null;

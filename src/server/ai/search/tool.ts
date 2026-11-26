@@ -120,7 +120,7 @@ export function createSearchWebTool(
     inputSchema: searchWebToolInputSchema,
     execute: async ({ query }, { abortSignal }): Promise<SearchWebToolOutput> => {
       if (guestUserId) {
-        const allowed = await consumeDemoQuota({
+        const allowed = consumeDemoQuota({
           subject: guestUserId,
           kind: "search",
           limit: getEnv().DEMO_DAILY_SEARCH_CALLS,
@@ -183,7 +183,7 @@ export function createFetchPageTool(
     inputSchema: fetchPageToolInputSchema,
     execute: async ({ url }, { abortSignal }): Promise<FetchPageToolOutput> => {
       if (guestUserId) {
-        const allowed = await consumeDemoQuota({
+        const allowed = consumeDemoQuota({
           subject: guestUserId,
           kind: "search",
           limit: getEnv().DEMO_DAILY_SEARCH_CALLS,

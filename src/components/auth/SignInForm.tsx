@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import { useAppNavigation } from "@/components/providers/NavigationProvider";
 import { usePikaNative } from "@/hooks/use-pika-native";
@@ -43,7 +43,7 @@ export default function SignInForm({ allowRegistration }: SignInFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setPending(true);

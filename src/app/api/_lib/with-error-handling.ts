@@ -1,5 +1,4 @@
-import { ZodError } from "zod";
-import type { ZodIssue } from "zod";
+import { ZodError, type core } from "zod";
 
 import type {
   ApiErrorEnvelope,
@@ -18,7 +17,7 @@ type Handler = (
 ) => Promise<Response> | Response;
 
 /** Maps a Zod issue onto the `Validation` catalog without leaking its text. */
-function fieldErrorFor(issue: ZodIssue): ValidationFieldError {
+function fieldErrorFor(issue: core.$ZodIssue): ValidationFieldError {
   switch (issue.code) {
     case "invalid_type":
       // Zod 4 does not expose the offending input here, so "missing" and

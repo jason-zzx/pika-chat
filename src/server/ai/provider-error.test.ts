@@ -384,7 +384,7 @@ describe("describeProviderError against a real retried 503", () => {
     });
 
     let error: unknown;
-    for await (const part of result.fullStream) {
+    for await (const part of result.stream) {
       if (part.type === "error") {
         error = part.error;
       }

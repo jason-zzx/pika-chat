@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -10,7 +11,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { resolveActor } from "@/server/auth/actor";
 import { isLocalMode } from "@/server/env";
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Settings.Users"))("title"),
 });
 

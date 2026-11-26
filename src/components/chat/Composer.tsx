@@ -13,8 +13,8 @@ import {
 import { useTranslations } from "next-intl";
 import {
   type ClipboardEvent,
-  type FormEvent,
   type KeyboardEvent,
+  type SubmitEvent,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -177,7 +177,7 @@ export default function Composer({
     onDraftChange(value);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (inFlight) {
       onStop();

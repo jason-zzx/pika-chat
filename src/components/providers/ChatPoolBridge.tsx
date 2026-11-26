@@ -87,7 +87,7 @@ export default function ChatPoolBridge() {
       .getQueryCache()
       .find({ queryKey: chatKeys.history(userId, topicId), exact: true });
     if (query && !query.isActive()) {
-      void queryClient.fetchQuery({
+      void queryClient.query({
         queryKey: chatKeys.history(userId, topicId),
         queryFn: () => listTopicMessages(topicId),
       });
@@ -109,7 +109,7 @@ export default function ChatPoolBridge() {
           topicKeys.detail(userId, topicId),
         ) ??
         (await queryClient
-          .fetchQuery({
+          .query({
             queryKey: topicKeys.detail(userId, topicId),
             queryFn: () => getTopic(topicId),
           })

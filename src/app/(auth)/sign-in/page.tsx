@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -5,7 +6,7 @@ import DemoEntry from "@/components/auth/DemoEntry";
 import SignInForm from "@/components/auth/SignInForm";
 import { getInstanceState } from "@/server/services/instance-settings.service";
 
-export const generateMetadata = async () => ({
+export const generateMetadata = async (): Promise<Metadata> => ({
   title: (await getTranslations("Auth"))("signIn.title"),
 });
 

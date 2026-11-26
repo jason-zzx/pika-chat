@@ -280,11 +280,11 @@ export async function uploadFile(
   if (
     actor.isGuest &&
     !options?.skipSizeLimit &&
-    !(await consumeDemoQuota({
+    !consumeDemoQuota({
       subject: actor.userId,
       kind: "upload",
       limit: getEnv().DEMO_DAILY_UPLOADS,
-    }))
+    })
   ) {
     throw new AppError("RATE_LIMITED", 429, "demo.uploadLimit");
   }
@@ -438,11 +438,11 @@ export async function completeFile(
   }
   if (
     actor.isGuest &&
-    !(await consumeDemoQuota({
+    !consumeDemoQuota({
       subject: actor.userId,
       kind: "upload",
       limit: getEnv().DEMO_DAILY_UPLOADS,
-    }))
+    })
   ) {
     await discardRejectedDirectUpload(storage, file.storageKey, fileId);
     throw new AppError("RATE_LIMITED", 429, "demo.uploadLimit");

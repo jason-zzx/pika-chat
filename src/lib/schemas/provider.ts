@@ -132,7 +132,7 @@ export const addProviderModelSchema = z
   .object({
     modelId: z.string().trim().min(1),
   })
-  .merge(updateProviderModelSchema.omit({ resetFromCatalog: true }));
+  .extend(updateProviderModelSchema.omit({ resetFromCatalog: true }).shape);
 export type AddProviderModelInput = z.infer<typeof addProviderModelSchema>;
 
 export const discoverModelsResponseSchema = z.object({

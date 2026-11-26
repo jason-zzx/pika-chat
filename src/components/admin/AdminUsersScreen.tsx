@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import SettingsCard from "@/components/settings/SettingsCard";
@@ -115,7 +115,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
       setError(apiErrorMessage(caught, tErrors, "actions.createUser")),
   });
 
-  async function onCreate(event: FormEvent<HTMLFormElement>) {
+  async function onCreate(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
@@ -417,7 +417,7 @@ function ResetPasswordDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const next = String(new FormData(event.currentTarget).get("password") ?? "").trim();
     if (!next || pending) {
