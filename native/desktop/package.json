@@ -24,11 +24,11 @@
   },
   "devDependencies": {
     "@pika/shell-ui": "workspace:*",
-    "@types/node": "22.19.1",
-    "electron": "45.3.4",
+    "@types/node": "22.20.7",
+    "electron": "45.5.0",
     "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
     "typescript": "5.9.3",
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   }
 }

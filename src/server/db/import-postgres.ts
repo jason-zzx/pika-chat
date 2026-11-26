@@ -191,10 +191,14 @@ export async function importFromPostgres(
 
   const openSource = options?.openSource ?? openPostgresSource;
   return openSource(databaseUrl, async (source) => {
+    // `accounts.issuer` existed in v0.4.2 PostgreSQL (Better Auth 1.7.2) and
+    // was dropped from SQLite after Better Auth 1.7.3 removed the column.
     const pgColumns = await source.listColumns();
     for (const table of IMPORT_TABLES) {
       const sqliteColumns = table.columns.map((column) => column.name);
-      const pgTableColumns = pgColumns[table.name] ?? [];
+      const pgTableColumns = (pgColumns[table.name] ?? []).filter(
+        (name) => !(table.name === "accounts" && name === "issuer"),
+      );
       const missing = sqliteColumns.filter(
         (name) => !pgTableColumns.includes(name),
       );

@@ -32,18 +32,18 @@ function freshSqlite(): Database.Database {
 }
 
 // What `information_schema.columns` reports for a PostgreSQL database on the
-// final (v0.4.2) schema: the migrated SQLite tables minus the columns added
-// after the SQLite switch.
+// final (v0.4.2) schema: the migrated SQLite tables minus columns added after
+// the SQLite switch (`topics.temporary`) plus `accounts.issuer` (dropped later).
 function finalSchemaColumns(sqlite: Database.Database): Record<string, string[]> {
   return Object.fromEntries(
-    PG_IMPORT_TABLES.map((table) => [
-      table,
-      sqlite
+    PG_IMPORT_TABLES.map((table) => {
+      const columns = sqlite
         .prepare<[], string>(`select name from pragma_table_info('${table}')`)
         .pluck()
         .all()
-        .filter((name) => !(table === "topics" && name === "temporary")),
-    ]),
+        .filter((name) => !(table === "topics" && name === "temporary"));
+      return [table, table === "accounts" ? [...columns, "issuer"] : columns];
+    }),
   );
 }
 
@@ -275,6 +275,24 @@ describe("import", () => {
     const source = fakeSource(finalSchemaColumns(sqlite), {
       app_settings: [sourceAppSettings],
       users: [sourceUser],
+      accounts: [
+        {
+          id: "acc_1",
+          issuer: "credential",
+          account_id: "u1",
+          provider_id: "credential",
+          user_id: "u1",
+          access_token: null,
+          refresh_token: null,
+          id_token: null,
+          access_token_expires_at: null,
+          refresh_token_expires_at: null,
+          scope: null,
+          password: "hash",
+          created_at: createdAt,
+          updated_at: createdAt,
+        },
+      ],
       assistants: [
         {
           id: "agt_1",
@@ -348,7 +366,7 @@ describe("import", () => {
     );
     expect(first).toMatchObject({
       status: "imported",
-      rowCounts: { users: 1, chat_messages: 1, demo_usage_counters: 1_250 },
+      rowCounts: { users: 1, accounts: 1, chat_messages: 1, demo_usage_counters: 1_250 },
     });
     expect(source.batchSizes.every((size) => size === 1_000)).toBe(true);
     expect(foreignKeysOn(sqlite)).toBe(1);

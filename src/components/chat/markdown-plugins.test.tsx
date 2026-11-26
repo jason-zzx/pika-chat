@@ -1,26 +1,27 @@
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createMathPlugin } from "@streamdown/math";
-
-import { textNeedsMermaid, useStreamdownPlugins } from "./markdown-plugins";
+import { textNeedsMermaid } from "./markdown-plugins";
 
 // Stub the plugin packages: the real modules pull in shiki/katex/mermaid,
 // which must never load in the test runtime.
-vi.mock("@streamdown/code", () => ({
-  code: { name: "code", type: "code-highlighter" },
-}));
-vi.mock("@streamdown/math", () => ({
-  createMathPlugin: vi.fn((options: unknown) => ({
+const { mockCreateMathPlugin, mockMermaidModuleLoaded } = vi.hoisted(() => ({
+  mockCreateMathPlugin: vi.fn((options: unknown) => ({
     name: "math",
     type: "math",
     options,
   })),
+  mockMermaidModuleLoaded: vi.fn(),
+}));
+vi.mock("@streamdown/code", () => ({
+  code: { name: "code", type: "code-highlighter" },
+}));
+vi.mock("@streamdown/math", () => ({
+  createMathPlugin: mockCreateMathPlugin,
 }));
 vi.mock("@streamdown/cjk", () => ({
   cjk: { name: "cjk" },
 }));
-const mockMermaidModuleLoaded = vi.fn();
 vi.mock("@streamdown/mermaid", () => {
   mockMermaidModuleLoaded();
   return {
@@ -60,7 +61,12 @@ describe("textNeedsMermaid", () => {
 });
 
 describe("useStreamdownPlugins", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
   it("starts undefined (plain rendering) then resolves base plugins", async () => {
+    const { useStreamdownPlugins } = await import("./markdown-plugins");
     const { result } = renderHook(() => useStreamdownPlugins("hello"));
 
     expect(result.current).toBeUndefined();
@@ -73,19 +79,25 @@ describe("useStreamdownPlugins", () => {
   });
 
   it("creates the math plugin with singleDollarTextMath enabled", async () => {
+    const { useStreamdownPlugins } = await import("./markdown-plugins");
     const { result } = renderHook(() => useStreamdownPlugins("$E=mc^2$"));
     await waitFor(() => expect(result.current).toBeDefined());
 
-    expect(vi.mocked(createMathPlugin)).toHaveBeenCalledWith({
+    expect(mockCreateMathPlugin).toHaveBeenCalledWith({
       singleDollarTextMath: true,
     });
   });
 
-  it("does not load the mermaid chunk for text without a mermaid fence", () => {
+  it("does not load the mermaid chunk for text without a mermaid fence", async () => {
+    const { useStreamdownPlugins } = await import("./markdown-plugins");
+    const { result } = renderHook(() => useStreamdownPlugins("just plain text"));
+    await waitFor(() => expect(result.current).toBeDefined());
+
     expect(mockMermaidModuleLoaded).not.toHaveBeenCalled();
   });
 
   it("adds the mermaid plugin when the text has a mermaid fence", async () => {
+    const { useStreamdownPlugins } = await import("./markdown-plugins");
     const { result } = renderHook(() =>
       useStreamdownPlugins("```mermaid\ngraph TD\n```"),
     );
@@ -96,6 +108,7 @@ describe("useStreamdownPlugins", () => {
   });
 
   it("upgrades when streaming text gains a mermaid fence", async () => {
+    const { useStreamdownPlugins } = await import("./markdown-plugins");
     const { result, rerender } = renderHook(
       ({ text }) => useStreamdownPlugins(text),
       { initialProps: { text: "drawing a diagram:" } },

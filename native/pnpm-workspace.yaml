@@ -6,4 +6,4 @@ allowBuilds:
   electron-winstaller: false
   esbuild: true
 minimumReleaseAgeExclude:
-  - electron@45.3.4
+  - '@types/node@22.20.7'
