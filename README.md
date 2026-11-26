@@ -42,77 +42,6 @@ Try Pika Chat directly in your browser without creating an account: **[https://p
 
 ---
 
-## Highlights
-
-- **Zero-Maintenance Philosophy**: Ships with sensible defaults out of the box — local disk storage, auto-migrating database schemas, auto-creating S3 buckets, and automatic orphan file cleanup.
-- **Privacy & Security First**: Provider API keys encrypted with authenticated AES-256-GCM at rest; role-based access control, TOTP 2-Factor Authentication, and isolated storage quotas.
-- **Universal Multimodal Support**: Drag-and-drop images, documents (PDF, DOCX, XLSX, PPTX, EPUB, TXT, Markdown), audio, and video with instant text extraction and dynamic model conversion.
-- **High-Performance Architecture**: Next.js 16 App Router, React 19, Tailwind CSS v4, server-managed background generation with stream recovery, smooth scroll pinning, and optional direct S3 byte transfers.
-
----
-
-## Key Features
-
-### 🤖 Multi-Provider & Model Orchestration
-- **Universal Endpoint Support**: Connect OpenAI, Anthropic (Claude), Google Gemini, Ollama, OpenRouter, DeepSeek, Groq, Mistral, Moonshot, or any OpenAI-compatible API gateway.
-- **Endpoint Auto-Discovery**: Fetch available models directly from your endpoint (`/v1/models`) with one click.
-- **Granular Model Settings**: Customize context window limits, reasoning effort (thinking tokens), input modalities, and custom vendor icons per model.
-- **Credential Encryption**: API keys are encrypted at rest with authenticated AES-256-GCM (`CREDENTIAL_ENCRYPTION_SECRET`). Keys are never exposed to clients or logged.
-- **Default Models**: Choose personal default models for chat, title generation, context compression, and translation — applied automatically across all sessions.
-- **Private & Shared Configurations**: Share vetted provider configs across all instance members, or keep custom keys personal.
-
-### 💬 Seamless Conversational Experience
-- **Background Generation & Stream Recovery**: Generations run as server-managed tasks that survive tab closes, refreshes, topic switching, and sign-outs — returning to a topic picks up live streaming or shows the finished result without re-running the model, with periodic checkpoints and no extra deployment components required.
-- **In-Place User Message Editing**: Edit any sent user message (text and attachments) directly in the conversation to create a new switchable version and automatically regenerate the assistant reply below it without truncating later turns.
-- **Non-Tail Regeneration**: Regenerate any prior assistant turn without truncating or modifying subsequent conversation turns. Branching message versions are tracked via `group_id` and server-persisted selection states.
-- **Per-Message Token & Latency Stats**: Each assistant reply displays input/output token counts and output speed (TPS), with an expandable card on hover or tap showing cache-hit tokens, hit rate, time to first token (TTFT), and total duration.
-- **Rich Markdown & Code Rendering**: Powered by Streamdown with real-time KaTeX math formulas, interactive Mermaid diagrams, syntax-highlighted code blocks with one-click copying, and CJK-friendly typography.
-- **Context History Compression**: Automatically compresses long conversations into rolling summaries at ~80% of the model context budget, with one-click manual compression and collapsible summary views in the message list.
-- **On-Demand Message Translation**: Translate any question or answer into 8 languages with per-version persistent caching and preserved citation links.
-- **Smart Scroll Management**: Tail message reserve space prevents layout jumps during streaming, while gesture-based unpinning respects wheel, touch, and scrollbar drag interactions.
-- **Mobile-First UX**: Responsive split-column layout, tap-to-reveal message actions (no hover-only dependencies), and non-modal dropdowns designed for touch interactions.
-- **Assistants & Topics**: Create custom assistants with dedicated system instructions and default models. Pin topics, sync tab titles with active conversations, and export dialogues.
-- **Full-Text Message Search**: Instantly jump to any topic or message with global full-text search, a `Ctrl+K` command palette, and in-topic hit navigation.
-
-### 📎 Multimodal Attachments & Document Parsing
-- **Wide Format Support**:
-  - **Documents**: PDF, Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`), EPUB, Plain Text, and Markdown.
-  - **Media**: JPEG, PNG, GIF, WebP, WAV, MP3, MPEG, MP4, WebM.
-- **Upload-Time Document Extraction**: Documents are parsed at upload time with page counts, word statistics, and C0 control byte sanitization, displayed as preview chips before sending.
-- **Dynamic Model Replay**: Automatically supplies native multimodal payloads to vision/audio models and falls back to parsed text when switching to text-only models across turns.
-- **Provider Files API Integration**: Native support for Gemini and Anthropic Files APIs with expiration tracking and lazy re-upload handling.
-
-### 🎨 AI Image Generation & Editing
-- **Multi-Family Image Models**: Text-to-image and image editing across OpenAI gpt-image, Google Gemini image models, ByteDance Seedream, and Alibaba Wan / Qwen-Image.
-- **Per-Model Parameter Presets**: Resolution, aspect ratio, quality, and batch count options validated against each model family's real constraints.
-- **Reference-Image Editing**: Reuse any existing attachment as an edit reference — no re-uploads needed.
-- **Quota-Aware Persistence**: Generated images are stored as first-class attachments under the same per-user storage quotas.
-
-### 🔍 Real-Time Web Search with Citations
-- **LLM Function Calling**: The model autonomously decides when external search is required.
-- **Multi-Provider Search**: Plug in Brave Search, Tavily, Exa, or Firecrawl with configurable fallback priority chains.
-- **Deep Page Scraping**: Uses `fetchPage` tool extraction to retrieve full web page contents for in-depth answers.
-- **Deterministic Citations**: Unique, turn-wide sequential citation tags (`[1]`, `[2]`) linked to verified web sources.
-
-### 🗄️ Pluggable Storage: Local Disk & S3-Compatible
-- **Zero-Config Local Storage**: Attachments default to local disk storage (`.data/files`) without any third-party infrastructure required.
-- **S3-Compatible Object Storage**: Point `S3_BUCKET` to AWS S3, MinIO, Cloudflare R2, or RustFS. The bucket is automatically bootstrapped on first access.
-- **Direct S3 Access (`S3_DIRECT_ACCESS=1`)**: Offload app server bandwidth — browsers upload directly to the bucket via presigned POST policies and download/preview via 302 presigned GET redirects.
-- **Bundled RustFS Compose**: One command deploys an all-in-one stack with self-hosted S3-compatible storage.
-
-### 🛡️ Authentication, RBAC & Storage Quotas
-- **Better Auth Engine**: Built-in credential authentication with email/password and TOTP Two-Factor Authentication (2FA).
-- **First-Run Setup Wizard**: Guided initial setup at `/setup` to bootstrap the first Super Admin safely without database fiddling.
-- **Role Hierarchy**: Strict permission gates for Super Admin, Admin, and Member roles.
-- **Storage Quotas**: Per-user storage limits and instance-wide global quotas (default 5 GiB) with automatic orphan cleanup sweeps.
-- **Instance Governance**: Toggle registration status (open/closed), ban malicious accounts, and reset user credentials from the admin dashboard.
-
-### 🌐 Themes & Internationalization
-- **Curated Theme Presets**: 6 built-in presets (Paper, Graphite, Ocean, Forest, Rose, Violet) alongside the neutral default, each with light and dark palettes, persisted per user with flash-free server rendering.
-- **Bilingual i18n**: Ships with complete **English** and **Simplified Chinese** (简体中文) localizations, switchable instantly per browser under **Settings → General**.
-
----
-
 ## Screenshots
 
 | 🎨 AI Image Generation & Editing | 🌈 Theme Presets |
@@ -126,45 +55,33 @@ Try Pika Chat directly in your browser without creating an account: **[https://p
 
 ---
 
-## Quick Start
+## Features
 
-### Option 1: Production All-in-One (`docker-compose.full.yml`, Recommended)
+### 💬 Chat & Workflow
+- **Background Generation & Resume**: Replies run on the server and survive tab closes, refreshes, topic switches, and sign-outs — returning resumes live streaming without extra worker infrastructure.
+- **Non-Destructive Editing & Regeneration**: Edit any sent user message or regenerate any past reply as switchable versions without truncating later turns.
+- **Temporary Chat & Drafts**: Start ephemeral **Temporary** chats (auto-deleted on exit or after 24h) alongside persistent unsent drafts per topic and assistant.
+- **Quote, Search & Overview**: Quote message excerpts and jump back to source passages, overview turns with **Chat map**, or search across all messages (`Ctrl+K`).
+- **Compression, Translation & Stats**: Auto-compress long contexts into rolling summaries, translate messages into 8 languages with caching, and inspect per-message TPS, TTFT, and cache hits.
 
-Runs Pika Chat (with embedded SQLite stored on the `/data/files` volume at `/data/files/pika-chat.db`) and RustFS (S3-compatible attachment storage) together with persistent volumes and automatic database migrations on boot. Pulls the official prebuilt image (`ghcr.io/jason-zzx/pika-chat:latest`) by default.
+### 🎨 Multimodal, Image & Search
+- **Built-in File Parsing & Multimodal Replay**: Parse PDF, DOCX, XLSX, PPTX, EPUB, text, images, audio, and video at upload — automatically falling back to extracted text on text-only models, with Gemini and Anthropic Files API support.
+- **AI Image Generation & Editing**: Generate and edit images across OpenAI `gpt-image`, Gemini, Seedream, and Wan / Qwen-Image, reusing existing attachments as edit references.
+- **Autonomous Web Search**: Multi-provider web search and deep page scraping (`Brave`, `Tavily`, `Exa`, `Firecrawl`) with configurable fallback chains and inline citations.
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/jason-zzx/pika-chat.git
-   cd pika-chat
-   ```
-
-2. **Configure environment variables**:
-   ```bash
-   cp .env.example .env
-   ```
-   Open `.env` and configure your instance secrets. Generate 32+ character secrets with:
-   ```bash
-   openssl rand -base64 48
-   ```
-   Fill them into `.env`:
-   ```env
-   CREDENTIAL_ENCRYPTION_SECRET=your-generated-encryption-secret
-   BETTER_AUTH_SECRET=your-generated-auth-secret
-   ```
-
-3. **Launch all-in-one stack**:
-   ```bash
-   docker compose -f docker-compose.full.yml up -d
-   ```
-
-4. **Initialize Super Admin**:
-   Open **`http://localhost:3000/setup`** in your browser to create the first administrator account.
+### 🔐 Providers, Storage & Access
+- **Multi-Provider Orchestration**: Connect OpenAI, Anthropic, Gemini, Ollama, OpenRouter, DeepSeek, or any OpenAI-compatible gateway, sync models from `/v1/models`, encrypt API keys with AES-256-GCM, and share vetted configs or keep personal keys.
+- **Zero-Config SQLite & Pluggable Storage**: Runs on embedded SQLite and local disk out of the box, or switches to S3-compatible object storage (AWS S3, MinIO, R2, RustFS) with optional direct browser transfers (`S3_DIRECT_ACCESS=1`).
+- **RBAC, 2FA & Quotas**: Role-based access control (`Super Admin`, `Admin`, `Member`), TOTP 2FA, and per-user/global storage quotas with automatic orphan cleanup.
+- **Themes & Clients**: 7 light/dark theme presets, English & Simplified Chinese UI, installable PWA, plus native Desktop (with zero-setup local mode) and Android apps.
 
 ---
 
-### Option 2: Production Standalone (`docker-compose.standalone.yml`)
+## Quick Start
 
-Run the application container alone without launching redundant storage containers — using embedded SQLite (`/data/files/pika-chat.db`) and local disk or optional external S3 storage:
+### Option 1: Production Standalone (`docker-compose.yml`, Recommended)
+
+Runs Pika Chat with embedded SQLite (`/data/files/pika-chat.db`) and local disk attachment storage (or optional external S3) with persistent volume storage and automatic database migrations on boot.
 
 1. **Clone the repository**:
    ```bash
@@ -175,6 +92,10 @@ Run the application container alone without launching redundant storage containe
 2. **Configure environment variables**:
    ```bash
    cp .env.example .env
+   ```
+   Generate 32+ character instance secrets with:
+   ```bash
+   openssl rand -base64 48
    ```
    Edit `.env` to set your instance secrets and optional external S3 storage:
    ```env
@@ -187,10 +108,25 @@ Run the application container alone without launching redundant storage containe
    # S3_SECRET_ACCESS_KEY=...
    ```
 
-3. **Launch standalone application**:
+3. **Launch the application**:
    ```bash
-   docker compose -f docker-compose.standalone.yml up -d
+   docker compose up -d
    ```
+
+4. **Initialize Super Admin**:
+   Open **`http://localhost:3000/setup`** in your browser to create the first administrator account.
+
+---
+
+### Option 2: Production All-in-One with RustFS (`docker-compose.rustfs.yml`)
+
+Includes a bundled RustFS container for S3-compatible attachment storage. Using the same `.env` setup above, start the stack with:
+
+```bash
+docker compose -f docker-compose.rustfs.yml up -d
+```
+
+Then open **`http://localhost:3000/setup`** to create the first administrator account.
 
 ---
 
@@ -230,42 +166,31 @@ An instance keeps all of its data in the `/data/files` volume (`files_prod_data`
 
 ### Backups
 
-- **While stopped**: stop the app, copy the whole volume, then start it again:
+- **While stopped**: stop the app, copy the whole volume, then start it again (add `-f docker-compose.rustfs.yml` if you deployed with RustFS):
   ```bash
-  docker compose -f docker-compose.full.yml stop app
+  docker compose stop app
   docker run --rm -v pika-chat_files_prod_data:/data -v "$PWD":/backup alpine tar czf /backup/pika-chat-data.tgz -C /data .
-  docker compose -f docker-compose.full.yml start app
+  docker compose start app
   ```
 - **While running**: make a consistent copy of the database with `sqlite3 /data/files/pika-chat.db ".backup <target-file>"`, then copy the attachments. The app image does not include the `sqlite3` CLI, so run it from another container or host that mounts the volume. Copying only `pika-chat.db` from a running instance can miss the newest writes, which are still in `pika-chat.db-wal`.
 
 ### Upgrading from PostgreSQL
 
-Releases up to v1.0.0-rc.1 stored data in PostgreSQL. This version copies that database into SQLite by itself on its first boot:
+Releases before v1.0.0 stored data in PostgreSQL. On first boot, this version automatically imports your PostgreSQL data into SQLite (upgrade older instances to v0.4.2 first):
 
-1. **Change only the image.** Keep your current compose file and `.env` (or your existing container environment) unchanged for this first boot, so PostgreSQL keeps running and its connection settings still reach the app. If you pin the image with `PIKA_IMAGE`, set the new tag, then pull and restart with the compose file you deployed with:
-   ```bash
-   docker compose -f docker-compose.full.yml pull
-   docker compose -f docker-compose.full.yml up -d
-   ```
-2. **The import runs at boot.** When the server finds the previous PostgreSQL connection settings and SQLite has no import marker, it reads PostgreSQL in one read-only snapshot, copies every table into `/data/files/pika-chat.db` in a single transaction, checks row counts and foreign keys, records the marker, and only then starts serving. The logs report each table. PostgreSQL is never written to.
-3. **If the import fails**, the server does not start and logs the reason (for example, PostgreSQL is unreachable or the SQLite database already holds data). SQLite stays empty, so fixing the cause and restarting tries again. PostgreSQL must be on the v0.4.0 – v1.0.0-rc.1 schema; upgrade older instances to v0.4.2 first.
-4. **After the import**, later boots ignore the PostgreSQL settings. Switch to the current compose file (it has no `postgres` service) and run `docker compose -f docker-compose.full.yml up -d --remove-orphans`. Keep the old PostgreSQL volume until you have checked your data; going back only takes the previous image and compose file.
+1. **Update only the image first.** Keep your previous compose file and `.env` unchanged, pull the new image, and restart (`docker compose -f <your-compose-file> pull && docker compose -f <your-compose-file> up -d`). The server reads PostgreSQL and migrates everything into `/data/files/pika-chat.db` before serving.
+2. **Switch to the current compose file.** Once the import completes, switch to `docker-compose.yml` (or `docker-compose.rustfs.yml`) and run `docker compose up -d --remove-orphans`. Keep the old PostgreSQL volume until you have verified your data.
 
-> **Switch compose files only after the import.** The current compose files no longer connect to PostgreSQL, so booting with them first starts a fresh install, and once `/setup` is completed the import refuses the non-empty database. To recover, stop the app, delete `pika-chat.db*` from the volume, and start again with your previous compose file.
-
-The desktop app does not migrate local-mode data from v1.0.0-rc.1: local mode starts with a fresh database at `<userData>/local/pika-chat.db`, and the old data stays untouched in `<userData>/local/db/`.
+> **Switch compose files only after the import.** The new compose files no longer include PostgreSQL, so booting with them first starts an empty database. If that happens, stop the app, remove `pika-chat.db*` from the volume, and restart with your previous compose file.
 
 ---
 
 ## Android App
 
-An Android app (APK, Android 7.0+) connects to one or more deployed Pika Chat servers. It follows the theme colour in the system bars, keeps the composer above the keyboard, supports the back button, and posts reply notifications. There is no on-device server; use a remote one.
+An Android app for connecting to one or more deployed Pika Chat servers, with theme-synced system bars, keyboard-aware layout, and system back navigation. There is no on-device server; use a remote one.
 
-- **Install**: download `Pika-Chat-<version>.apk` from [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) and open it; Android asks you to allow installs from your browser or file manager (unknown sources).
-- **Servers**: the first launch opens the add-server form. Switch servers from the sidebar brand row, account menu, or sign-in page chip (a native picker). Each server keeps its own sign-in session.
-- **Notifications**: Android 13+ asks for notification permission after the first connection. While a reply is actively generating after you leave the app, a short-lived silent foreground service (`shortService`, up to 3 minutes on Android 14+) keeps the connection alive so the completion notification can arrive; longer replies still finish on the server and appear when you reopen the app.
-- **Updates**: the app checks GitHub Releases at launch and from Settings, and links to the new APK.
-- **Requirements**: an up-to-date Android System WebView (update it in Google Play); the app shows an error asking for this otherwise.
+- **Install**: download `Pika-Chat-<version>.apk` from [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) and install it.
+- **Multi-Server**: add and switch between multiple Pika Chat servers anytime, each with its own sign-in session.
 
 Developing the Android app: see [`native/mobile/README.md`](native/mobile/README.md).
 
@@ -273,15 +198,14 @@ Developing the Android app: see [`native/mobile/README.md`](native/mobile/README
 
 ## Desktop App
 
-A native desktop client (Electron) for Windows, macOS, and Linux runs Pika Chat locally on this computer with no server setup or connects to one or more remote Pika Chat servers, and adds a tray icon, a global show/hide hotkey, reply notifications, and auto-update.
+A native desktop client (Electron) for Windows, macOS, and Linux that runs Pika Chat locally with no server setup or connects to remote Pika Chat servers, with system tray and global show/hide hotkey support.
 
-- **Download** from the [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases) page: Windows installer (`.exe`), macOS `.dmg` (Intel and Apple Silicon), Linux `.AppImage`, `.deb`, or `.rpm`.
-- **Use locally ("This computer")**: choose "Use on this computer" on first launch to start a bundled local server (embedded SQLite database + Next standalone server) bound to `127.0.0.1` only. Conversations, uploaded files, credentials, and logs are stored locally under your OS app data directory (`<userData>/local/`) and survive app updates.
-- **Connect to remote servers**: choose "Connect to a server" or switch anytime from the sidebar server switcher, account menu, or tray. Each server keeps its own sign-in session; switching between local and remote keeps both sides' data intact, and the local server stays running in the background until you quit.
-- **Updates**: Windows and Linux update in-app. `.deb` / `.rpm` installs ask for your administrator password when you choose "Restart and install". On macOS the app shows a prompt linking to the new release.
+- **Download** from [GitHub Releases](https://github.com/jason-zzx/pika-chat/releases).
+- **Local Mode ("This computer")**: choose "Use on this computer" on first launch to run Pika Chat privately on your device with zero setup; data is stored under `<userData>/local/`.
+- **Remote Servers**: connect to and switch between one or more remote Pika Chat servers anytime, each with an isolated sign-in session.
 - **Windows**: builds are unsigned; on the SmartScreen dialog choose "More info" → "Run anyway".
 - **macOS**: builds are unsigned; after moving the app to Applications run `xattr -dr com.apple.quarantine "/Applications/Pika Chat.app"` once.
-- **Linux**: GNOME needs the AppIndicator extension to show the tray icon. Without a tray, launching the app again or pressing the global hotkey (default `Ctrl+Shift+Space`) shows the window.
+- **Linux**: GNOME needs the AppIndicator extension for the tray icon. Without a tray, relaunching the app shows the window.
 
 Developing the desktop app (separate pnpm workspace under `native/`):
 
@@ -362,10 +286,11 @@ Configure Pika Chat through environment variables in your `.env` file or deploym
 - **AI Integration**: [Vercel AI SDK](https://sdk.vercel.ai/) (`ai`, `@ai-sdk/openai-compatible`, `@ai-sdk/anthropic`, `@ai-sdk/google`)
 - **Database & ORM**: [SQLite](https://www.sqlite.org/) ([better-sqlite3](https://github.com/WiseLibs/better-sqlite3)), [Drizzle ORM](https://orm.drizzle.team/)
 - **Authentication**: [Better Auth](https://better-auth.com/) with TOTP Two-Factor Authentication
-- **Content & Markdown**: [Streamdown](https://github.com/streamdown/streamdown), KaTeX, Mermaid, `@streamdown/cjk`, `@streamdown/math`, `@streamdown/mermaid`
+- **Content & Markdown**: [Streamdown](https://github.com/streamdown/streamdown), KaTeX, Mermaid, `@streamdown/cjk`, `@streamdown/code`, `@streamdown/math`, `@streamdown/mermaid`
 - **Document Extractors**: `unpdf` (PDF), `mammoth` (DOCX), `xlsx` (Excel), `jszip` (EPUB/PPTX)
 - **Object Storage**: `@aws-sdk/client-s3`, `@aws-sdk/s3-presigned-post`, `@aws-sdk/s3-request-presigner`
 - **Internationalization**: [next-intl](https://next-intl.dev/)
+- **Native Clients**: [Electron](https://www.electronjs.org/) (`electron-updater`), [Capacitor 8](https://capacitorjs.com/) (Android)
 - **Testing**: [Vitest](https://vitest.dev/), React Testing Library, `:memory:` SQLite integration test harness
 
 ---
