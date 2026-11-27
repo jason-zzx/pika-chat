@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "Verify hierarchy matrix and disabled endpoints match spec"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify cascade decision and transaction rules"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality and test expectations"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality checks"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "No literal strings, both locales updated"}
