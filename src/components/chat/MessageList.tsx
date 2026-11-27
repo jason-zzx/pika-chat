@@ -300,6 +300,8 @@ export default function MessageList({
   // reserve height; see handleScroll.
   const lastAssistantElRef = useRef<HTMLElement | null>(null);
   const spacerLeftRef = useRef(0);
+  // Last container height handled by the ResizeObserver.
+  const containerHeightRef = useRef(0);
   // Mirror for the once-created ResizeObserver callback. Outside an active
   // stream (`!streaming`) a pinned view also follows growth, so a topic
   // opened at the bottom stays there while mermaid diagrams, math, and
@@ -362,18 +364,14 @@ export default function MessageList({
     // Clamps to the scrollable maximum until the spacer renders; the
     // ResizeObserver below then lands the message at the top.
     container.scrollTop = Math.max(0, top - 16);
-    const spacer = Math.max(
-      0,
-      container.clientHeight - userEl.offsetHeight - 48,
-    );
+    // 48 = container vertical padding (32) + row gap (16): with this
+    // reserved height, scroll-to-bottom coincides with the sent message
+    // pinned at the viewport top until the reply outgrows the reserve.
+    // The ref keeps the unclamped value (negative when the sent message is
+    // taller than the viewport) so container resizes stay exact.
+    const spacer = container.clientHeight - userEl.offsetHeight - 48;
     spacerLeftRef.current = spacer;
-    setSendTurn({
-      userId: tailUserId,
-      // 48 = container vertical padding (32) + row gap (16): with this
-      // reserved height, scroll-to-bottom coincides with the sent message
-      // pinned at the viewport top until the reply outgrows the reserve.
-      spacer,
-    });
+    setSendTurn({ userId: tailUserId, spacer: Math.max(0, spacer) });
   }, [sendSignal, tailUserId]);
 
   // Track the tail user message already seen so the send effect above only
@@ -422,13 +420,38 @@ export default function MessageList({
     if (!container || !content || typeof ResizeObserver === "undefined") {
       return;
     }
+    containerHeightRef.current = container.clientHeight;
     const observer = new ResizeObserver(() => {
-      if (pinnedRef.current && followRef.current) {
+      // Container resized (soft keyboard): the reserve follows Δ, then a view
+      // that sat at the bottom re-lands there. Measured, not the pin: a
+      // reserve drain releases the pin while the view stays at the bottom.
+      // See spec chat-scroll-behavior.md.
+      const delta = container.clientHeight - containerHeightRef.current;
+      const wasAtBottom =
+        container.scrollHeight -
+          prevScrollTopRef.current -
+          containerHeightRef.current <
+        BOTTOM_THRESHOLD;
+      containerHeightRef.current = container.clientHeight;
+      if (delta !== 0) {
+        spacerLeftRef.current += delta;
+        const reserve = Math.max(0, spacerLeftRef.current);
+        if (lastAssistantElRef.current) {
+          lastAssistantElRef.current.style.minHeight = `${reserve}px`;
+        }
+        setSendTurn((turn) => turn && { ...turn, spacer: reserve });
+      }
+      if (
+        (pinnedRef.current && followRef.current) ||
+        (delta !== 0 && wasAtBottom)
+      ) {
         container.scrollTop = container.scrollHeight;
       }
+      prevScrollTopRef.current = container.scrollTop;
       syncAtBottom();
     });
     observer.observe(content);
+    observer.observe(container);
     return () => observer.disconnect();
   }, [hasMessages, syncAtBottom]);
 
@@ -443,7 +466,13 @@ export default function MessageList({
       return;
     }
     const top = container.scrollTop;
-    const movedUp = top < prevScrollTopRef.current;
+    // A scroll under a container height the ResizeObserver has not handled
+    // yet is the clamp of a growing container (soft keyboard closing), not a
+    // user scroll: it must not drain the reserve, and prevScrollTopRef keeps
+    // the pre-resize offset the observer measures "was at the bottom" from.
+    // When the observer runs first it resyncs prevScrollTopRef itself.
+    const resized = container.clientHeight !== containerHeightRef.current;
+    const movedUp = !resized && top < prevScrollTopRef.current;
     // Once the reply is complete, upward scrolling eats the reserved space
     // by the scrolled distance (matching ChatGPT/LobeHub). The shrink is
     // written straight to the article's style instead of going through
@@ -476,7 +505,9 @@ export default function MessageList({
         setSendTurn(null);
       }
     }
-    prevScrollTopRef.current = top;
+    if (!resized) {
+      prevScrollTopRef.current = top;
+    }
     // Re-engage the pin only on downward scrolls that reach the bottom. An
     // upward scroll must never re-pin: while the reserve drains, the
     // distance-to-bottom stays near zero by design, and re-pinning here

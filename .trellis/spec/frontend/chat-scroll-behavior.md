@@ -69,6 +69,49 @@ The once-created observer callback follows growth when
   streaming one) must never match — yanking the view to the bottom while the
   user watches an older message regenerate is a bug.
 
+## Container resize (soft keyboard / composer growth)
+
+The ResizeObserver watches the scroll **container** as well as the content
+node. A soft keyboard (`interactive-widget=resizes-content`, or the Android
+shell padding the decor view by the IME inset) or a growing composer shrinks
+the container without changing the content size, and browsers keep
+`scrollTop` (top-anchored) — so with only the content observed, nothing
+re-lands a pinned view and the tail ends up under the keyboard. Any
+"sometimes it does move up" observed on devices is Chromium scroll anchoring
+reacting to an unrelated layout change, not this code.
+
+On a container height change Δ (`containerHeightRef` holds the last handled
+height):
+
+- The send reserve moves by Δ first: `spacerLeftRef += Δ`, rendered value
+  `max(0, spacerLeftRef)` written synchronously to the reply article and
+  mirrored into `sendTurn.spacer` (covers the submitted-phase spacer and an
+  article mounting later). This keeps "at the bottom" equal to "sent message
+  at the viewport top"; a pinned scroll-to-bottom without it pushes a short
+  reply out of view. `spacerLeftRef` stores the **unclamped** value (the send
+  effect no longer floors it), so a sent message taller than the keyboard-open
+  viewport gets the exact reserve back when the viewport grows.
+- A view that sat at the bottom is re-landed there: the follow branch
+  (`pinned && follow`) **or** a measured pre-resize distance-to-bottom
+  `< BOTTOM_THRESHOLD` (`scrollHeight − prevScrollTopRef − old height`, read
+  before the reserve write). The measured disjunct is required because a
+  reserve drain releases the pin (upward touch) while the drain invariant
+  keeps the view at the bottom — pin-only, the keyboard then covers the
+  reply although the view looks (and `atBottom` reports) at the bottom. A view
+  away from the bottom (reading history) is deliberately left where the
+  browser keeps it — product decision, do not bottom-anchor it.
+- The clamp scroll of a growing container is not a user scroll and must not
+  drain the reserve. Its scroll event can arrive **before or after** the
+  observer callback (both orders observed in Chromium), so both sides guard:
+  the observer resyncs `prevScrollTopRef` at the end of every callback (it
+  runs after the frame's scroll events, so outside resizes this only hides
+  layout-driven clamps / scroll anchoring, which are not user scrolls), and
+  `handleScroll` treats a scroll whose `clientHeight` differs from
+  `containerHeightRef` as not moved up **and leaves `prevScrollTopRef`
+  untouched**, so the observer still measures the pre-resize offset. Without
+  either guard, closing the keyboard at the bottom drains the reserve in a
+  clamp cascade.
+
 ## Jump/positioning operations must release the pin first
 
 Any operation that moves the view somewhere other than the bottom (chat-map
@@ -156,4 +199,8 @@ real layout) cannot cover it. Verify in a real browser with scroll-position
 sampling (see the task's `implement.md` for the recipe), at minimum:
 send-to-top position, stream follow, wheel-up unpin, reserve drain with zero
 programmatic scrollTop write-backs, and topic entry landing at the bottom
-while async renderers settle.
+while async renderers settle. Soft-keyboard behavior can be simulated with
+`page.setViewportSize` height changes on a mobile/touch context: cycle
+open/close at the bottom (idle, after a short reply, after a long reply) and
+while scrolled up, sampling distance-to-bottom, the sent message's top offset
+and the reply article's `min-height`.
