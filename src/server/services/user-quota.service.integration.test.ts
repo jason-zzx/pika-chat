@@ -99,6 +99,22 @@ describe("updateUserQuota target hierarchy", () => {
     expect(result.quotaBytes).toBe(10 * BYTES_PER_MB);
   });
 
+  it("lets a super_admin set their own override", async () => {
+    const actor = await seedUser("super_admin");
+
+    const result = await updateUserQuota(actor.userId, 10, actor);
+
+    expect(result.quotaBytes).toBe(10 * BYTES_PER_MB);
+  });
+
+  it("rejects an admin targeting themselves", async () => {
+    const actor = await seedUser("admin");
+
+    await expect(
+      updateUserQuota(actor.userId, 10, actor),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
   it("rejects a regular user actor", async () => {
     const actor = await seedUser("user");
     const target = await seedUser("user");

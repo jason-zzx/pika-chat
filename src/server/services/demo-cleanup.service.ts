@@ -3,10 +3,9 @@ import "server-only";
 import { and, eq, gte, lt, notInArray } from "drizzle-orm";
 
 import { getDb } from "@/server/db/client";
-import { demoUsageCounters, files, sessions, users } from "@/server/db/schema";
-import { deleteProviderFileReferences } from "@/server/files/provider-delete";
-import { getFileStorage } from "@/server/files/storage";
+import { demoUsageCounters, sessions, users } from "@/server/db/schema";
 import { logger } from "@/server/logger";
+import { deleteUserAccount } from "@/server/services/user-delete.service";
 import { utcDayString } from "@/server/services/demo-usage.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -43,42 +42,12 @@ export async function purgeInactiveGuests(
     )
     .limit(PURGE_BATCH_SIZE);
 
-  const storage = getFileStorage();
   let deletedGuests = 0;
 
   for (const guest of staleGuests) {
-    const guestFiles = await db
-      .select({
-        id: files.id,
-        storageKey: files.storageKey,
-        providerReferences: files.providerReferences,
-      })
-      .from(files)
-      .where(eq(files.userId, guest.id));
-
-    let failed = false;
-    for (const file of guestFiles) {
-      try {
-        await storage.delete(file.storageKey);
-        await db.delete(files).where(eq(files.id, file.id));
-        await deleteProviderFileReferences(file);
-      } catch (error) {
-        failed = true;
-        logger.warn(
-          { err: error, userId: guest.id, fileId: file.id },
-          "failed to delete inactive guest attachment",
-        );
-      }
+    if (await deleteUserAccount(guest.id)) {
+      deletedGuests += 1;
     }
-
-    // Only delete the user row once all its files are cleaned up, so a
-    // transient storage failure leaves the guest selectable on the next sweep
-    // rather than orphaning blobs.
-    if (failed) {
-      continue;
-    }
-    await db.delete(users).where(eq(users.id, guest.id));
-    deletedGuests += 1;
   }
 
   // Drop usage ledger rows older than yesterday (UTC).

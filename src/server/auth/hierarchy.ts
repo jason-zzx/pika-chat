@@ -13,13 +13,10 @@ import {
   canAdminister,
   parseActorRole,
   requestedRoleFromBody,
-  updateUserPayload,
 } from "@/lib/auth-hierarchy";
 import { getDb } from "@/server/db/client";
 import { users } from "@/server/db/schema";
 import { logger } from "@/server/logger";
-
-type HookAction = AdminAction | "update-user";
 
 const PATH_ACTION = {
   "/admin/set-role": "set-role",
@@ -27,10 +24,9 @@ const PATH_ACTION = {
   "/admin/unban-user": "unban",
   "/admin/set-user-password": "set-user-password",
   "/admin/create-user": "create-user",
-  "/admin/update-user": "update-user",
-} as const satisfies Record<string, HookAction>;
+} as const satisfies Record<string, AdminAction>;
 
-function hierarchyAction(path: string | undefined): HookAction | undefined {
+function hierarchyAction(path: string | undefined): AdminAction | undefined {
   if (!path || !(path in PATH_ACTION)) {
     return undefined;
   }
@@ -69,42 +65,6 @@ async function loadTarget(userId: string): Promise<Actor | null> {
     return null;
   }
   return { userId: row.id, role: parseActorRole(row.role) };
-}
-
-function rejectUpdateUser(actor: Actor, target: Actor, body: unknown): void {
-  const data = updateUserPayload(body);
-  if (!data) {
-    return;
-  }
-
-  if ("role" in data) {
-    if (!canAdminister(actor, target, "set-role", data.role)) {
-      logger.info(
-        {
-          userId: actor.userId,
-          action: "update-user",
-          targetUserId: target.userId,
-        },
-        "admin action rejected by role hierarchy",
-      );
-      forbidden();
-    }
-  }
-
-  if ("banned" in data || "banReason" in data || "banExpires" in data) {
-    const banAction = data.banned === false ? "unban" : "ban";
-    if (!canAdminister(actor, target, banAction)) {
-      logger.info(
-        {
-          userId: actor.userId,
-          action: "update-user",
-          targetUserId: target.userId,
-        },
-        "admin action rejected by role hierarchy",
-      );
-      forbidden();
-    }
-  }
 }
 
 export function roleHierarchy() {
@@ -157,11 +117,6 @@ export function roleHierarchy() {
 
             const target = await loadTarget(targetId);
             if (!target) {
-              return;
-            }
-
-            if (action === "update-user") {
-              rejectUpdateUser(actor, target, ctx.body);
               return;
             }
 

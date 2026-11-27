@@ -604,7 +604,12 @@
     "quotaGlobalDescription": "Applies to users without an individual override. Leave blank for unlimited.",
     "quotaGlobalLabel": "Default quota (MB)",
     "quotaGlobalUnlimited": "Unlimited",
-    "quotaGlobalValue": "{value} per user"
+    "quotaGlobalValue": "{value} per user",
+    "deleteAction": "Delete",
+    "deleteTitle": "Delete {name}",
+    "deleteDescription": "This permanently deletes the user's conversations, attachments, provider configurations and assistants. This cannot be undone.",
+    "deleteConfirmLabel": "Type {name} to confirm",
+    "deleting": "Deleting…"
   },
   "Provider": {
     "loading": "Loading…",
@@ -768,6 +773,7 @@
       "guestForbidden": "This action is not available in demo mode",
       "userNotFound": "User not found",
       "targetNotAllowed": "You cannot manage this user",
+      "userDeleteFailed": "Unable to delete the user's data. Please try again.",
       "signInFailed": "Invalid username, email, or password",
       "invalidTwoFactorCode": "That code was not accepted"
     },
@@ -910,6 +916,7 @@
       "setRole": "Unable to change role",
       "updateBan": "Unable to update ban",
       "resetPassword": "Unable to reset password",
+      "deleteUser": "Unable to delete user",
       "enableTwoFactor": "Unable to start two-factor setup",
       "disableTwoFactor": "Unable to turn off two-factor authentication",
       "verifyTwoFactor": "Unable to verify the code",

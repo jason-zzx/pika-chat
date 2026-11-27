@@ -12,7 +12,8 @@ export type AdminAction =
   | "unban"
   | "set-user-password"
   | "set-quota"
-  | "create-user";
+  | "create-user"
+  | "remove-user";
 
 export function isStaffRole(role: ActorRole): boolean {
   return role === "super_admin" || role === "admin";
@@ -62,13 +63,6 @@ export function requestedRoleFromBody(body: unknown): unknown {
   return undefined;
 }
 
-export function updateUserPayload(body: unknown): Record<string, unknown> | null {
-  if (!isRecord(body) || !isRecord(body.data)) {
-    return null;
-  }
-  return body.data;
-}
-
 export function canAdminister(
   actor: Actor,
   target: Actor | null,
@@ -91,7 +85,7 @@ export function canAdminister(
     return false;
   }
   if (target.role === "super_admin") {
-    return false;
+    return action === "set-quota" && actor.userId === target.userId;
   }
   if (action === "set-role" && actor.userId === target.userId) {
     return false;

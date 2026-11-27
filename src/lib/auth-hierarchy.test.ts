@@ -102,9 +102,21 @@ describe("canAdminister", () => {
   it("applies the target hierarchy to set-quota", () => {
     expect(canAdminister(superAdmin, member, "set-quota")).toBe(true);
     expect(canAdminister(superAdmin, admin, "set-quota")).toBe(true);
-    expect(canAdminister(superAdmin, superAdmin, "set-quota")).toBe(false);
+    expect(canAdminister(superAdmin, superAdmin, "set-quota")).toBe(true);
+    expect(canAdminister(admin, superAdmin, "set-quota")).toBe(false);
     expect(canAdminister(admin, member, "set-quota")).toBe(true);
     expect(canAdminister(admin, otherAdmin, "set-quota")).toBe(false);
     expect(canAdminister(admin, admin, "set-quota")).toBe(false);
+  });
+
+  it("applies the ban hierarchy to remove-user", () => {
+    expect(canAdminister(superAdmin, admin, "remove-user")).toBe(true);
+    expect(canAdminister(superAdmin, member, "remove-user")).toBe(true);
+    expect(canAdminister(superAdmin, superAdmin, "remove-user")).toBe(false);
+    expect(canAdminister(admin, member, "remove-user")).toBe(true);
+    expect(canAdminister(admin, admin, "remove-user")).toBe(false);
+    expect(canAdminister(admin, otherAdmin, "remove-user")).toBe(false);
+    expect(canAdminister(admin, superAdmin, "remove-user")).toBe(false);
+    expect(canAdminister(member, member, "remove-user")).toBe(false);
   });
 });

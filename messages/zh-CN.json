@@ -604,7 +604,12 @@
     "quotaGlobalDescription": "适用于未单独设置配额的用户。留空表示不限。",
     "quotaGlobalLabel": "默认配额（MB）",
     "quotaGlobalUnlimited": "不限",
-    "quotaGlobalValue": "每用户 {value}"
+    "quotaGlobalValue": "每用户 {value}",
+    "deleteAction": "删除",
+    "deleteTitle": "删除 {name}",
+    "deleteDescription": "这将永久删除该用户的对话、附件、供应商配置和助手，且无法撤销。",
+    "deleteConfirmLabel": "输入 {name} 以确认",
+    "deleting": "删除中…"
   },
   "Provider": {
     "loading": "加载中…",
@@ -768,6 +773,7 @@
       "guestForbidden": "演示模式下不支持此操作",
       "userNotFound": "用户不存在",
       "targetNotAllowed": "你无法管理该用户",
+      "userDeleteFailed": "无法删除该用户的数据，请重试",
       "signInFailed": "用户名、邮箱或密码无效",
       "invalidTwoFactorCode": "该验证码不正确"
     },
@@ -910,6 +916,7 @@
       "setRole": "无法更改角色",
       "updateBan": "无法更新封禁状态",
       "resetPassword": "无法重置密码",
+      "deleteUser": "无法删除用户",
       "enableTwoFactor": "无法开始两步验证设置",
       "disableTwoFactor": "无法关闭两步验证",
       "verifyTwoFactor": "无法验证该验证码",
