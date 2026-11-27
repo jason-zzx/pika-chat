@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 51
-- **Last Active**: 2026-11-25
+- **Total Sessions**: 52
+- **Last Active**: 2026-11-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1406 | Active |
+| `journal-1.md` | ~1429 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 52 | 2026-11-27 | Admin user management: hard delete, super-admin self quota, close unguarded admin endpoints | `1f8cb35`, `b3ea230` | `feat/admin-user-management` |
 | 51 | 2026-11-25 | Temporary chat implementation, URL-less refinement, and spec updates | `d8a5ed2`, `1139a60` | `feat/native-apps` |
 | 50 | 2026-11-24 | Native-like app navigation & shell-ui update check | `a0633a4`, `cd3d38a`, `1f13200`, `473e81f`, `eec91a2` | `feat/native-apps` |
 | 49 | 2026-11-22 | Desktop polish and packaging improvements | `584a5f8`, `c9ffd91`, `e242ef2`, `9952e7e` | `feat/native-apps` |
