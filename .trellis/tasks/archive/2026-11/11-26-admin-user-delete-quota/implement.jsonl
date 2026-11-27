@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/auth-guidelines.md", "reason": "Role hierarchy, hook coverage, disabledPaths, project-owned admin mutations"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Cascade delete rule and no network I/O inside transactions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AppError messageKey contract for new route"}
+{"file": ".trellis/spec/backend/chat-attachments.md", "reason": "Attachment storage/provider reference deletion ordering"}
+{"file": ".trellis/spec/backend/demo-mode.md", "reason": "Guest purge behavior that shares the extracted deletion logic"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Dialog/AlertDialog component conventions"}
+{"file": ".trellis/spec/frontend/i18n.md", "reason": "Admin and Errors message catalog conventions (en + zh-CN)"}
