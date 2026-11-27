@@ -189,7 +189,16 @@ export function createAuthInstance() {
       trustedProxyHeaders: true,
       ...(demo ? { ipAddress: { ipAddressHeaders: [ipHeader] } } : {}),
     },
-    disabledPaths: ["/sign-up/email"],
+    disabledPaths: [
+      "/sign-up/email",
+      "/admin/remove-user",
+      "/admin/impersonate-user",
+      "/admin/stop-impersonating",
+      "/admin/list-user-sessions",
+      "/admin/revoke-user-session",
+      "/admin/revoke-user-sessions",
+      "/admin/update-user",
+    ],
     telemetry: {
       enabled: false,
     },

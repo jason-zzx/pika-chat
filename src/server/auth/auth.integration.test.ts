@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { requireActor } from "@/server/auth/actor";
 import { updateInstanceSettings } from "@/server/services/instance-settings.service";
+import { removeUser } from "@/server/services/user-delete.service";
 import {
   adminCredentials,
   authGet,
@@ -167,36 +168,6 @@ const adminEndpoints: { method: string; path: string; body?: unknown }[] = [
     method: "POST",
     path: "/api/auth/admin/set-user-password",
     body: { userId: "not-a-real-id", newPassword: "password2" },
-  },
-  {
-    method: "POST",
-    path: "/api/auth/admin/update-user",
-    body: { userId: "not-a-real-id", data: { name: "nope" } },
-  },
-  {
-    method: "POST",
-    path: "/api/auth/admin/list-user-sessions",
-    body: { userId: "not-a-real-id" },
-  },
-  {
-    method: "POST",
-    path: "/api/auth/admin/revoke-user-session",
-    body: { sessionToken: "not-a-real-token" },
-  },
-  {
-    method: "POST",
-    path: "/api/auth/admin/revoke-user-sessions",
-    body: { userId: "not-a-real-id" },
-  },
-  {
-    method: "POST",
-    path: "/api/auth/admin/impersonate-user",
-    body: { userId: "not-a-real-id" },
-  },
-  {
-    method: "POST",
-    path: "/api/auth/admin/remove-user",
-    body: { userId: "not-a-real-id" },
   },
 ];
 
@@ -464,6 +435,34 @@ describe("auth", () => {
     ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
+  it("rejects the deleted user's next request", async () => {
+    const { cookie: adminCookie } = await setupAdmin();
+    await patchAdminSettings(
+      jsonRequest("/api/admin/settings", {
+        method: "PATCH",
+        cookie: adminCookie,
+        body: { allowRegistration: true },
+      }),
+    );
+    const registered = await postRegistration(
+      jsonRequest("/api/registration", { body: userCredentials }),
+    );
+    const member = await readJson(registered);
+    const memberCookie = cookiesFrom(registered);
+    await expect(
+      requireActor(jsonRequest("/", { cookie: memberCookie }).headers),
+    ).resolves.toMatchObject({ userId: readUserId(member) });
+
+    await removeUser(
+      readUserId(member),
+      await requireActor(jsonRequest("/", { cookie: adminCookie }).headers),
+    );
+
+    await expect(
+      requireActor(jsonRequest("/", { cookie: memberCookie }).headers),
+    ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
   it("changes password only when the current password is correct", async () => {
     const { cookie } = await setupAdmin();
 
@@ -619,15 +618,6 @@ describe("auth", () => {
     expect(createSuperViaData.status).toBe(403);
     expectForbiddenCode(asObject(await readJson(createSuperViaData)));
 
-    const updateToSuper = await authPost(
-      jsonRequest("/api/auth/admin/update-user", {
-        cookie: superCookie,
-        body: { userId: memberId, data: { role: "super_admin" } },
-      }),
-    );
-    expect(updateToSuper.status).toBe(403);
-    expectForbiddenCode(asObject(await readJson(updateToSuper)));
-
     const signedInAdmin = await signInEmail(
       staffAdminCredentials.email,
       staffAdminCredentials.password,
@@ -758,15 +748,6 @@ describe("auth", () => {
       }),
     );
     expect(resetUser.status).toBe(200);
-
-    const updateOtherAdmin = await authPost(
-      jsonRequest("/api/auth/admin/update-user", {
-        cookie: adminCookie,
-        body: { userId: otherAdminId, data: { role: "user" } },
-      }),
-    );
-    expect(updateOtherAdmin.status).toBe(403);
-    expectForbiddenCode(asObject(await readJson(updateOtherAdmin)));
   });
 
   it("forbids ban and admin password-reset against the super_admin", async () => {
@@ -810,15 +791,6 @@ describe("auth", () => {
     expect(reset.status).toBe(403);
     expectForbiddenCode(asObject(await readJson(reset)));
 
-    const updateBan = await authPost(
-      jsonRequest("/api/auth/admin/update-user", {
-        cookie: adminCookie,
-        body: { userId: superId, data: { banned: true } },
-      }),
-    );
-    expect(updateBan.status).toBe(403);
-    expectForbiddenCode(asObject(await readJson(updateBan)));
-
     const ownPassword = await authPost(
       jsonRequest("/api/auth/change-password", {
         cookie: superCookie,
@@ -837,6 +809,27 @@ describe("auth", () => {
     expect(oldPassword.status).toBe(401);
     const newPassword = await signInEmail(adminCredentials.email, "password2");
     expect(newPassword.status).toBe(200);
+  });
+
+  it("returns 404 for closed admin endpoints, even for the super admin", async () => {
+    const { cookie } = await setupAdmin();
+    for (const name of [
+      "remove-user",
+      "impersonate-user",
+      "stop-impersonating",
+      "list-user-sessions",
+      "revoke-user-session",
+      "revoke-user-sessions",
+      "update-user",
+    ]) {
+      const response = await authPost(
+        jsonRequest(`/api/auth/admin/${name}`, {
+          cookie,
+          body: { userId: "not-a-real-id" },
+        }),
+      );
+      expect(response.status, name).toBe(404);
+    }
   });
 
   it("returns 404 for /api/auth/sign-in/anonymous when DEMO_MODE is unset", async () => {

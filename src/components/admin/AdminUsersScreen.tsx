@@ -7,6 +7,16 @@ import { useState, type SubmitEvent } from "react";
 
 import SettingsBadge from "@/components/settings/SettingsBadge";
 import SettingsCard from "@/components/settings/SettingsCard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { deleteAdminUser } from "@/lib/api/admin-users";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import {
   type Actor,
@@ -80,6 +91,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [quotaUser, setQuotaUser] = useState<AdminUser | null>(null);
   const [resetUser, setResetUser] = useState<AdminUser | null>(null);
+  const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
   const users = useQuery({
     queryKey: ["admin-users"],
     queryFn: listAdminUsers,
@@ -219,6 +231,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                     "set-user-password",
                   );
                   const showQuota = canAdminister(actor, target, "set-quota");
+                  const showDelete = canAdminister(actor, target, "remove-user");
                   const roleLabel =
                     target.role === "super_admin"
                       ? t("roleSuperAdmin")
@@ -269,7 +282,7 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {showSetRole || showBan || showReset || showQuota ? (
+                        {showSetRole || showBan || showReset || showQuota || showDelete ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger
                               aria-label={t("userActions", {
@@ -311,6 +324,14 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
                                   onClick={() => void onToggleBan(user)}
                                 >
                                   {user.banned ? t("unban") : t("ban")}
+                                </DropdownMenuItem>
+                              ) : null}
+                              {showDelete ? (
+                                <DropdownMenuItem
+                                  variant={TONE_DESTRUCTIVE}
+                                  onClick={() => setDeleteUser(user)}
+                                >
+                                  {t("deleteAction")}
                                 </DropdownMenuItem>
                               ) : null}
                             </DropdownMenuContent>
@@ -398,7 +419,78 @@ export default function AdminUsersScreen({ actor }: AdminUsersScreenProps) {
           onClose={() => setResetUser(null)}
         />
       ) : null}
+      {deleteUser ? (
+        <DeleteUserDialog
+          key={deleteUser.id}
+          userId={deleteUser.id}
+          label={deleteUser.username ?? deleteUser.name}
+          onClose={() => setDeleteUser(null)}
+          onDeleted={() => void invalidate()}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function DeleteUserDialog({
+  userId,
+  label,
+  onClose,
+  onDeleted,
+}: {
+  userId: string;
+  label: string;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const t = useTranslations("Admin");
+  const tCommon = useTranslations("Common");
+  const tErrors = useTranslations("Errors");
+  const [confirmation, setConfirmation] = useState("");
+  const remove = useMutation({
+    mutationFn: () => deleteAdminUser(userId),
+    onSuccess: () => {
+      onDeleted();
+      onClose();
+    },
+  });
+
+  return (
+    <AlertDialog open onOpenChange={onClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("deleteTitle", { name: label })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("deleteDescription")}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="delete-user-confirm">
+            {t("deleteConfirmLabel", { name: label })}
+          </Label>
+          <Input
+            id="delete-user-confirm"
+            autoComplete="off"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+          />
+        </div>
+        {remove.error ? (
+          <p className="text-sm text-destructive">
+            {apiErrorMessage(remove.error, tErrors, "actions.deleteUser")}
+          </p>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+          <AlertDialogAction
+            type="button"
+            variant="destructive"
+            disabled={remove.isPending || confirmation !== label}
+            onClick={() => remove.mutate()}
+          >
+            {remove.isPending ? t("deleting") : t("deleteAction")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
