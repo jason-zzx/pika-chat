@@ -29,20 +29,24 @@ contains `admin`, otherwise `user`.
 
 Three roles. Setup is the only way to mint `super_admin`. Create-user and
 set-role never assign it afterwards, and a `super_admin` row is never a
-target of set-role, ban, unban, or admin password-reset.
+target of set-role, ban, unban, admin password-reset, or delete.
 
-| Actor | Change role / ban / reset password of |
-|---|---|
-| `super_admin` | any `admin` or `user`; never a `super_admin` (including themselves) |
-| `admin` | `user` only — not other admins, not the super admin, not themselves |
-| `user` | nobody |
+| Actor | Change role / ban / reset password / delete | Set storage quota |
+|---|---|---|
+| `super_admin` | any `admin` or `user`; never a `super_admin` (including themselves) | any `admin` or `user`, **and themselves** |
+| `admin` | `user` only — not other admins, not the super admin, not themselves | `user` only |
+| `user` | nobody | nobody |
+
+The only super-admin target `canAdminister` accepts is `set-quota` by that
+same super admin (`return action === "set-quota" && actor.userId ===
+target.userId`). A quota cannot lock anyone out, so the D-ROLE-1 lockout rule
+does not apply to it; `admin` still cannot raise its own quota.
 
 The same target hierarchy is enforced for project-owned admin mutations that
-live outside Better Auth's routes — currently `set-quota`
-(`PATCH /api/admin/users/[userId]/quota`) via
-`canAdminister(actor, target, "set-quota")` in `src/lib/auth-hierarchy.ts`.
-Better Auth knows nothing about the `users.file_quota_bytes` column, so the
-service, not the library, is the gate.
+live outside Better Auth's routes — `set-quota`
+(`PATCH /api/admin/users/[userId]/quota`) and `remove-user`
+(`DELETE /api/admin/users/[userId]`) via `canAdminister` in
+`src/lib/auth-hierarchy.ts`. The service, not the library, is the gate.
 
 Staff (`super_admin` and `admin`) can both list users, create `admin`/`user`
 accounts, and flip the registration toggle.
@@ -52,15 +56,27 @@ The admin plugin is configured with
 inside Better Auth. Target hierarchy is **not** the plugin's job. It lives in
 `src/server/auth/hierarchy.ts` as a `hooks.before` matcher on
 `/admin/set-role`, `/admin/ban-user`, `/admin/unban-user`,
-`/admin/set-user-password`, `/admin/create-user`, and `/admin/update-user`. The hook calls
+`/admin/set-user-password`, and `/admin/create-user`. The hook calls
 `canAdminister` and throws `FORBIDDEN`. Hiding buttons in the admin UI is
 not a substitute.
 
 Better Auth's `createUser` applies `body.role ?? body.data.role`. The hook
 must read the same pair; checking only the top-level `role` lets a crafted
-`data.role: "super_admin"` through. `/admin/update-user` can also write
-`role` and `banned`, so the hook treats those fields as set-role / ban /
-unban.
+`data.role: "super_admin"` through.
+
+Every other mutating admin-plugin endpoint is **disabled** (see "Disabled
+paths" below) rather than guarded. Each `/admin/*` endpoint must be in exactly
+one bucket:
+
+| Bucket | Endpoints |
+|---|---|
+| Hierarchy hook | `set-role`, `ban-user`, `unban-user`, `set-user-password`, `create-user` |
+| Disabled (404) | `update-user`, `remove-user`, `impersonate-user`, `stop-impersonating`, `list-user-sessions`, `revoke-user-session`, `revoke-user-sessions` |
+| Read-only, staff | `list-users`, `get-user`, `has-permission` |
+
+When upgrading Better Auth, diff `plugins/admin/routes.mjs` for new
+`createAuthEndpoint("/admin/…")` entries and put each one in a bucket. An
+unlisted endpoint is reachable by any `admin` against the super admin.
 
 `canAdminister` is a pure function in `src/lib/auth-hierarchy.ts` so the UI
 can hide the same actions the hook would reject.
@@ -97,11 +113,81 @@ user. Existing chat SSE responses are authorized on connection only, without
 periodic session checks; revocation rejects new requests/reconnects but need not
 close a previously authorized stream. See [Chat Generation Lifecycle](./chat-generation-lifecycle.md).
 
-## Disabled public sign-up
+## Disabled paths
 
-`disabledPaths: ["/sign-up/email"]` makes `POST /api/auth/sign-up/email` a 404
-at the transport layer. Server-side `auth.api.*` calls are unaffected, which
-is how gated registration still creates users.
+`disabledPaths` in `src/server/auth/index.ts` makes each listed path a
+plain-text 404 in Better Auth's router `onRequest`, before session lookup, so
+the caller's role is irrelevant. Server-side `auth.api.*` calls are
+unaffected, which is how gated registration still creates users.
+
+- `/sign-up/email` — public sign-up; registration goes through
+  `/api/registration` instead.
+- The seven admin endpoints in the "Disabled (404)" bucket above — unused by
+  any client and not covered by the hierarchy hook. `update-user` was only
+  partially guarded (role/ban fields), letting an `admin` rename the super
+  admin; `remove-user` let an `admin` delete the super admin.
+
+## Scenario: admin user deletion
+
+### 1. Scope / Trigger
+- Project-owned endpoint replacing Better Auth's `/admin/remove-user`, because
+  stored objects and provider file references must be removed before the
+  user row, and Better Auth's `deleteUser` runs inside a transaction (no
+  network I/O allowed there, see `database-guidelines.md`).
+
+### 2. Signatures
+- `DELETE /api/admin/users/[userId]` → `204` (`src/app/api/admin/users/[userId]/route.ts`)
+- `removeUser(userId: string, actor: Actor): Promise<void>` and
+  `deleteUserAccount(userId: string): Promise<boolean>` in
+  `src/server/services/user-delete.service.ts`
+- Client: `deleteAdminUser(userId)` in `src/lib/api/admin-users.ts`
+
+### 3. Contracts
+- No request body. `deleteUserAccount` deletes, per file row: stored object →
+  `files` row → `deleteProviderFileReferences`; only when every file succeeded
+  does it delete the `users` row, which cascades sessions, accounts, topics →
+  messages, provider configs, assistants, preferences. Returns `false` and
+  keeps the user when any file failed.
+- `purgeInactiveGuests` (demo mode) reuses `deleteUserAccount`.
+
+### 4. Validation & Error Matrix
+| Condition | Result |
+|---|---|
+| caller not staff | 403 `auth.adminRequired` (`requireAdmin`) |
+| unknown `userId` | 404 `auth.userNotFound` |
+| `canAdminister(actor, target, "remove-user")` false | 403 `auth.targetNotAllowed` |
+| a stored-object delete failed | 500 `auth.userDeleteFailed`, user row kept, retry allowed |
+
+### 5. Good / Base / Bad Cases
+- Good: super admin deletes an admin; all their rows and stored objects are
+  gone and their old session's next request is `UNAUTHENTICATED`.
+- Base: deleting an admin removes their shared provider configs; other users'
+  references become `null` (accepted product behavior).
+- Bad: an admin targets the super admin, another admin, or themselves → 403,
+  nothing changes.
+- Accepted race: a file created by the target after the files snapshot loses
+  its row via cascade and leaves its stored object behind. Ban first to avoid it.
+
+### 6. Tests Required
+- `src/lib/auth-hierarchy.test.ts`: `remove-user` / `set-quota` matrix.
+- `src/server/services/user-delete.service.integration.test.ts`: success
+  (rows + stored object gone), one forbidden pairing (the full matrix lives
+  in the unit test), unknown id, storage
+  failure keeps the user row.
+- `src/server/auth/auth.integration.test.ts`: deleted user's next request is
+  rejected; every disabled admin path is 404 even for the super admin.
+
+### 7. Wrong vs Correct
+#### Wrong
+```ts
+await db.delete(users).where(eq(users.id, userId)); // blobs orphaned
+```
+#### Correct
+```ts
+if (!(await deleteUserAccount(userId))) {
+  throw new AppError("INTERNAL", 500, "auth.userDeleteFailed");
+}
+```
 
 ---
 

@@ -248,6 +248,8 @@ with `WAL`, `synchronous = NORMAL`, `foreign_keys = ON`, and `busy_timeout = 500
 - `SELECT *` into an API response. Project explicitly; it is how key columns
   and password hashes escape.
 - Cascading deletes on message data without an explicit product decision.
+  Approved: deleting a user through `deleteUserAccount` (`src/server/services/user-delete.service.ts`, used by
+  admin deletion and the demo guest purge), which clears stored objects first.
 - `async` transaction callbacks, `.for("update")`, and network I/O inside a
   transaction (see above).
 - PostgreSQL-only syntax in `sql` fragments (`::` casts, `ilike`, `jsonb_*`,

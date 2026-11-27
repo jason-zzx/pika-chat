@@ -65,7 +65,7 @@ review blocker, not a style nit.
 | Guide | Description |
 |-------|-------------|
 | [Directory Structure](./directory-structure.md) | Layering, where code goes, the transport/domain split |
-| [Auth Guidelines](./auth-guidelines.md) | Actor contract, headerless `createUser`, cookie-cache prohibition, adding a Better Auth plugin (schema → migration → adapter map → client), TOTP 2FA contract and its cookie-bound challenge |
+| [Auth Guidelines](./auth-guidelines.md) | Actor contract, role hierarchy and admin-endpoint buckets (hook / disabled / read-only), admin user deletion, headerless `createUser`, cookie-cache prohibition, adding a Better Auth plugin (schema → migration → adapter map → client), TOTP 2FA contract and its cookie-bound challenge |
 | [Database Guidelines](./database-guidelines.md) | SQLite engine, Drizzle schema, boot migrations, synchronous `immediate` transactions (the event loop is the lock), PostgreSQL boot import constraint, ownership isolation, credential encryption |
 | [Error Handling](./error-handling.md) | Typed errors, boundary translation, streaming failures |
 | [Chat Generation Lifecycle](./chat-generation-lifecycle.md) | Single-instance background execution, admission/receipts, connect-time auth, current-state SSE resume, checkpoints and restart recovery |
