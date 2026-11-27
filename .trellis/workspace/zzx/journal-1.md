@@ -1404,3 +1404,26 @@ Completed temporary chat across server (visibility/mutation filters, no auto-tit
 ### Status
 
 [OK] **Completed**
+
+
+## Session 52: Admin user management: hard delete, super-admin self quota, close unguarded admin endpoints
+<!-- trellis-session: v=2 fp=be54b09b982c61c1 -->
+
+**Date**: 2026-11-27
+**Task**: Admin user management: hard delete, super-admin self quota, close unguarded admin endpoints
+**Branch**: `feat/admin-user-management`
+
+### Summary
+
+Traced why super admin could not set own quota (set-quota inherited the super_admin-target guard) and why users could only be banned (phase-1 deferral). Found that /admin/remove-user, impersonate, revoke-session(s), list-user-sessions and update-user bypassed the role-hierarchy hook. Added DELETE /api/admin/users/[userId] with shared deleteUserAccount (blobs + provider refs before user row, reused by demo purge), typed-username confirm dialog, disabled 7 admin endpoints, allowed super admin self quota. Accepted: narrow delete/upload race; deleting an admin drops their shared provider configs. Spec: auth-guidelines endpoint buckets + deletion contract, database-guidelines cascade approval. Also archived 11-16-native-apps.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1f8cb35` | feat(admin): add hard user deletion, let super admin set own quota, close unguarded admin endpoints |
+| `b3ea230` | docs(spec): document admin endpoint buckets and user deletion contract |
+
+### Status
+
+[OK] **Completed**
